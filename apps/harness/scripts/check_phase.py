@@ -678,6 +678,7 @@ _SCRIPT_SRC_RE = re.compile(r"<script[^>]*\bsrc\s*=\s*[\"']([^\"']+)[\"']", re.I
 _LINK_HREF_RE = re.compile(r"<link[^>]*\bhref\s*=\s*[\"']([^\"']+)[\"']", re.I)
 _DATA_AXIS_RE = re.compile(r"<section[^>]*\bdata-axis\s*=\s*[\"']([^\"']+)[\"'][^>]*>", re.I)
 _DATA_V_RE = re.compile(r"data-v\s*=\s*[\"'](A|B|C)[\"']", re.I)
+_DATA_EXISTING_V_RE = re.compile(r"data-v\s*=\s*[\"'](A|B|C|D)[\"']", re.I)
 _CLASS_LABEL_RE = re.compile(r'class\s*=\s*"[^"]*\blabel\b[^"]*"')
 _FRAME_390_RE = re.compile(r"(width\s*:\s*390px|--frame-w\s*:\s*390px)")
 _DB_USE_RE = re.compile(r"claude\.use\(\s*[\"']db[\"']\s*\)")
@@ -710,6 +711,8 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
             rep.fail("readable", f, "파일을 읽을 수 없음")
             continue
         base = os.path.basename(f)
+        if base in {"hub.html", "hub-share.html"}:
+            continue
 
         # 외부 스크립트 금지
         scripts = _SCRIPT_SRC_RE.findall(content)
@@ -731,13 +734,16 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
         circled_count = len(CIRCLED_RE.findall(content))
         label_count = circled_count if circled_count > 0 else len(_CLASS_LABEL_RE.findall(content))
         is_existing = base.startswith("existing") or base.startswith("elements")
-        if base.startswith("structure"):
-            rep.ok("label-count", f, "structure 설문은 면제")
+        is_survey = base.startswith("structure") or base.startswith("story")
+        is_reference = base.startswith("reference")
+        is_flow = base.startswith("flow")
+        if is_survey:
+            rep.ok("label-count", f, "설문은 면제")
         elif is_existing:
             if label_count < 1:
-                rep.fail("label-count", f, f"existing 시안에 원문자/class=label 라벨이 {label_count}개 (1~5개)")
+                rep.fail("label-count", f, f"existing 시안에 원문자/class=label 라벨이 {label_count}개 (1~5개/장)")
             else:
-                rep.ok("label-count", f, "existing는 1~5")
+                rep.ok("label-count", f, "existing는 장당 1~5")
         elif label_count < 5:
             rep.fail("label-count", f, f"원문자/class=label 라벨이 {label_count}개 (5개 이상 필요)")
         else:
@@ -762,15 +768,23 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
                     )
             rep.ok_if_no_fail_since(mark, "axis-variants-valid", f)
 
+        if is_existing and not base.startswith("elements"):
+            variants = set(_DATA_EXISTING_V_RE.findall(content))
+            missing = sorted({"A", "B", "C", "D"} - {v.upper() for v in variants})
+            if missing:
+                rep.fail("existing-variants-abcd", f, f"existing 시안에 data-v {missing} 누락")
+            else:
+                rep.ok("existing-variants-abcd", f)
+
         # 프레임 폭. 처음부터는 390. 고치기(existing)는 --frame-w 실측.
         _FRAME_W_RE = re.compile(r"--frame-w\s*:\s*\d+px")
-        if base.startswith("structure"):
-            rep.ok("frame-390", f, "structure 설문은 면제")
-        elif is_existing:
+        if is_survey:
+            rep.ok("frame-390", f, "설문은 면제")
+        elif is_existing or is_reference or is_flow:
             if _FRAME_W_RE.search(content) or _FRAME_390_RE.search(content):
-                rep.ok("frame-390", f, "existing는 --frame-w 허용")
+                rep.ok("frame-390", f, "existing/reference는 --frame-w 허용")
             else:
-                rep.fail("frame-390", f, "existing 시안에 --frame-w:<n>px 또는 390 프레임이 없음")
+                rep.fail("frame-390", f, "시안에 --frame-w:<n>px 또는 390 프레임이 없음")
         elif not _FRAME_390_RE.search(content):
             rep.fail("frame-390", f, "width:390px 또는 --frame-w:390px 를 찾을 수 없음")
         else:
@@ -936,4 +950,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

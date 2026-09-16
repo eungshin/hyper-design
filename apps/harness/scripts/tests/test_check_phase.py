@@ -21,7 +21,7 @@ def run_cli(phase, design_dir, extra=None):
     cmd = [sys.executable, SCRIPT, "--phase", phase, "--design-dir", design_dir]
     if extra:
         cmd += extra
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -296,7 +296,10 @@ class PolishTrackTests(unittest.TestCase):
             os.makedirs(probes)
             html = """<!doctype html><html><body>
 <style>:root{--frame-w:880px;--frame-h:520px}</style>
-<div class="label">①</div>
+<figure data-v="A"><div class="label">①</div></figure>
+<figure data-v="B"><div class="label">①</div></figure>
+<figure data-v="C"><div class="label">①</div></figure>
+<figure data-v="D"><div class="label">①</div></figure>
 <script>const db = await claude.use("db"); db.set("feedback/existing-1", {})</script>
 </body></html>"""
             with open(os.path.join(probes, "existing.html"), "w", encoding="utf-8") as f:
@@ -304,6 +307,104 @@ class PolishTrackTests(unittest.TestCase):
             results = cp.check_probes(tmp)
             fails = [r for r in results if not r.ok]
             self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_story_probe_is_survey_exempt(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<h1>이 화면의 일</h1>
+<script>const db = await claude.use("db"); db.set("feedback/story-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "story.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_reference_probe_allows_custom_frame(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<style>:root{--frame-w:1440px}</style>
+<span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span>
+<script>const db = await claude.use("db"); db.set("feedback/app-deepl", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "reference.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_existing_probe_requires_four_variants(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<style>:root{--frame-w:880px}</style>
+<figure data-v="A"><div class="label">①</div></figure>
+<figure data-v="B"><div class="label">①</div></figure>
+<script>const db = await claude.use("db"); db.set("feedback/existing-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "existing.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertTrue(
+                any(r.name.endswith("existing-variants-abcd") for r in fails),
+                [r.name + " " + r.detail for r in fails],
+            )
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_check_probes_skips_hub_shell(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            existing = """<!doctype html><html><body>
+<style>:root{--frame-w:880px;--frame-h:520px}</style>
+<figure data-v="A"><div class="label">①</div></figure>
+<figure data-v="B"><div class="label">①</div></figure>
+<figure data-v="C"><div class="label">①</div></figure>
+<figure data-v="D"><div class="label">①</div></figure>
+<script>const db = await claude.use("db"); db.set("feedback/existing-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "existing.html"), "w", encoding="utf-8") as f:
+                f.write(existing)
+            with open(os.path.join(probes, "hub.html"), "w", encoding="utf-8") as f:
+                f.write("<!doctype html><html><body><p>hub shell</p></body></html>")
+            with open(os.path.join(probes, "hub-share.html"), "w", encoding="utf-8") as f:
+                f.write("<!doctype html><html><body><p>share</p></body></html>")
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+            files = {r.file for r in results}
+            self.assertTrue(any(p.endswith("existing.html") for p in files))
+            self.assertFalse(any(p.endswith("hub.html") for p in files))
+            self.assertFalse(any(p.endswith("hub-share.html") for p in files))
         finally:
             shutil.rmtree(tmp)
 

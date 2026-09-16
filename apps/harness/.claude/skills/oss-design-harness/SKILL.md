@@ -45,7 +45,7 @@ design/
 | 5. 생성 | `figma-builder`: 토큰 → 컴포넌트 → 화면. 단계마다 사용자 확인 | Figma, build-log.md | `.claude/agents/figma-builder.md` |
 | 6. 검증 | `design-auditor`: A단계(속성 수치) + C단계(스크린샷) → 실패 시 라우팅 | build-log.md | `.claude/agents/design-auditor.md` |
 
-고치기 루트는 이 표를 1부터 타지 않는다. `[0' 섭취] → [3b] → [4 델타] → [5] → [6]`. `references/polish-route.md`.
+고치기 루트는 이 표를 1부터 타지 않는다. `[0' 섭취] → [3a' 일 설문] → [3a-ref 레퍼런스 3] → [3b 시안 A/B/C/D] → [4 델타] → [5] → [6]`. 5축 취향은 건너뛴다. 레퍼런스 찾기는 건너뛰지 않는다. `references/polish-route.md`.
 
 1~4단계의 질문과 해석은 이 스킬이 메인 대화에서 직접 한다. HTML 페이지 제작은 `probe-renderer` 서브 에이전트에게 넘기되 **서브 에이전트는 배포하지 않는다** — 파일만 만들고, 메인 대화가 `design/probes/hub.json`에 탭을 추가한 뒤 `python3 scripts/build_hub.py`로 허브를 다시 만들어 **같은 URL로 재배포**한다(`capabilities: {db: {}}`). 병렬로 만든 탭들은 전부 끝난 뒤 한 번에 합쳐 링크 하나만 준다. 사용자 반응은 페이지 안 의견 패널에 저장되고(Artifact `db`, 컬렉션 `feedback`), 사용자가 "다 봤어"라고 하면 메인 대화가 `Artifact(action:"read_db", db_op:"list", collection:"feedback")`로 읽어 반환된 라벨 지도로 `marks`를 영역 이름으로 푼다. 의견이 0건일 때만 터미널로 묻는다. 5~6단계는 서브 에이전트에게 넘기되, **사용자 확인 게이트는 항상 메인 대화에서** 연다.
 
@@ -60,7 +60,7 @@ design/
    feature는 시작 선택지에 넣지 않는다. 고치기 범위가 커진 것으로 취급한다. 소스 종류(HTML/URL/창)도 묻지 않는다. `references/polish-route.md` 분류표.
 4. 사용자에게 흐름을 루트에 맞게 말한다. 공통: "질문은 한 번에 최대 4개, 모르면 '모르겠어요'를 고르면 기본값으로 진행합니다. 화면은 링크 하나(허브)에 탭으로 쌓이고, 탭마다 제가 추천을 표시해두니 '추천대로'만 눌러도 됩니다".
 5. **처음부터:** `references/interview-rules.md`를 읽고 1단계를 시작한다. 화면 인벤토리 표를 먼저 만든 뒤 `probe-renderer`에 `KIND=structure OUT=design/probes/structure.html`로 설문 탭을 만들게 하고, hub.json 첫 탭으로 넣어 허브를 배포한다. 사용자가 "다 봤어"라고 하면 `read_db`(`feedback/structure-1`, `structure-2`, `structure-overall`)를 읽어 brief.md §1을 채우고 `check_phase.py --phase structure`를 돌린다. 의견 0건일 때만 터미널 질문(최대 4개).
-6. **고치기:** `references/polish-route.md`대로 `[0']` 섭취(소스 분류는 하네스) → 디자인 요소 질문(해당될 때만) → `KIND=existing` 허브 탭 → `[3b]`. 변경 범위 기본은 preserve — 메뉴·위치를 번호 없이 옮기지 않는다. rebuild는 말이 있거나 `[3b]`가 배치 전체를 가리킬 때만. 그때 현재 vs 추천 배치 1장. `[1][2][3a][4.5]`는 만들지 않고 가정 로그에 건너뛴 이유를 남긴다. `check_phase.py --phase all`은 structure/flow/taste를 건너뛴다.
+6. **고치기:** `references/polish-route.md`대로 `[0']` 섭취(소스 분류는 하네스, 웹이면 메뉴·경로를 구성 표로 뽑음) → 디자인 요소 질문(해당될 때만) → `KIND=story` 일 설문(구성 표 + 질문 4개) → `KIND=reference` 경쟁 3개(`reference-sourcing.md` §고치기) → `KIND=existing` 시안 A/B/C/D **대표 1장**. 변경 범위 기본은 preserve. D를 고르면 rebuild. 시작에서 보존/재배치를 묻지 않는다. 「왜 어색한지」·빈 사이트맵을 타이핑하게 하지 않는다. `[5]`는 표에 남은 화면에 고른 결을 적용한다. `[1][2][3a 취향 5축][4.5]`는 만들지 않고 가정 로그에 건너뛴 이유를 남긴다. 레퍼런스 탭은 만든다. `check_phase.py --phase all`은 structure/flow/taste를 건너뛴다.
 
 ## 질문 규칙 (요약. 전문은 references/interview-rules.md)
 
@@ -136,7 +136,7 @@ Agent(subagent_type: "figma-builder",
 | 링크 | 항상 **허브 하나**(`design/probes/hub.html`, `capabilities: {db: {}}`). 탭은 단계마다 hub.json에 추가하고 같은 URL로 재배포. 외부 공유가 필요하면 `python3 scripts/build_hub.py --share` → `hub-share.html`을 **별도 artifact**(`capabilities: {}`, 공개 가능)로 배포. 공유본 저장은 보는 사람 브라우저에만 남는다고 사용자에게 말한다 |
 | 저장 확인 | 사용자가 "저장했다"고 하면 믿지 말고 `read_db`로 확인한다. 허브 db 브리지는 postMessage RPC(build_hub.py가 주입) — 자식 페이지는 `claude.use("db")`만 쓴다. 탭 배지 카운트는 hub.json `prefix`/`prefixes`로 센다 |
 | 선택 UI | 추천은 텍스트("추천: B — 이유"), 선택은 화면 클릭 또는 "전체 추천대로/괜찮아요" 버튼 하나. "다르게 할래요"·"전체 의견"·섹션별 👍·번호 칩 세부 패널은 **없다**. 용어에는 `.plain` 쉬운 설명 한 줄 |
-| 탭 구성 | **처음부터:** 구조 · 따라가 보기 · 레퍼런스 · 색상 · 모양·간격 · 글자·달력 · 아이콘 · 규칙 미리보기 · 최종 미리보기. **고치기:** 현재 화면 · (선택) 디자인 요소 · (rebuild만) 현재 vs 배치 1개 · 규칙 델타. 두 루트의 탭을 섞지 않는다 |
+| 탭 구성 | **처음부터:** 구조 · 따라가 보기 · 레퍼런스 · 색상 · 모양·간격 · 글자·달력 · 아이콘 · 규칙 미리보기 · 최종 미리보기. **고치기:** 내 화면 · 방향 3중1 · 예상 디자인 · 이 결로 따라가기 · (선택) 디자인 요소 · 규칙 델타. 두 루트의 탭을 섞지 않는다. 고치기에 5축 취향 탭은 없다 |
 | 안내 문구 | 페이지에 범례·설명 문장 금지. 제목 아래 한 줄만 |
 | 브라우저 | 허브 시안 검사에 claude-in-chrome·chrome-devtools 금지. 고치기 섭취는 polish-route 캡처 사다리 |
 | Figma | 번호 라벨 없음. tokens·components 스크린샷은 사용자에게 안 보냄. screens는 병렬 + 화면당 스크린샷 1장 즉시 전송. components STAGE는 사용자가 "필요 없다"고 하면 중단하고 화면은 자리표시(실제 문구)로 만든 뒤 fix STAGE에서 교체 |
@@ -148,7 +148,7 @@ Agent(subagent_type: "figma-builder",
 
 | 에이전트 | 언제 | 호출 형태 | 주의 |
 |---|---|---|---|
-| `probe-renderer` | 허브 탭 하나 만들 때마다 | `Agent(subagent_type:"probe-renderer", prompt:"KIND=<structure|flow|reference|taste|icons|rules|preview|existing> OUT=design/probes/<file>.html …")` | 배포 안 함(파일만). 여러 탭은 **동시에** 띄운다. 고치기는 KIND=existing. 반환된 라벨 지도를 보관 |
+| `probe-renderer` | 허브 탭 하나 만들 때마다 | `Agent(subagent_type:"probe-renderer", prompt:"KIND=<structure|story|flow|reference|taste|icons|rules|preview|existing> OUT=design/probes/<file>.html …")` | 배포 안 함(파일만). 여러 탭은 **동시에** 띄운다. 고치기는 KIND=story → KIND=reference(3개) → KIND=existing(A/B/C/D). 반환된 라벨 지도를 보관 |
 | `general-purpose` | 레퍼런스 앱 검색·스크린샷 수집, 조사 작업 | 사용자 답과 무관한 조사는 인터뷰 중에 **미리** 돌린다 | 결과는 `design/references/candidates.md`처럼 별도 파일로 받는다 |
 | `figma-builder` | STAGE 하나씩. screens는 화면 3~4개씩 에이전트 2~3개 | `STAGE=screens` + 담당 화면 번호 + x 위치(번호×470) + 스크린샷 파일명 규칙 | build-log는 에이전트별 파일. 스냅샷·audit은 마지막 하나만. 변경 사항(색 값 등)은 `SendMessage`로 진행 중인 에이전트에 바로 알린다 |
 | `design-auditor` | screens + figma_audit 통과 후 | 결함을 국소/방향/반복 셋 중 하나로 라우팅 | 국소 결함만 `STAGE=fix`에 넘긴다 |
