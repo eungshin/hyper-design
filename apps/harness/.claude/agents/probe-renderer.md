@@ -1,6 +1,6 @@
 ---
 name: probe-renderer
-description: 취향 시안(taste), 따라가 보기 투어(flow), 규칙 미리보기(rules), 레퍼런스(reference) HTML 페이지를 만들어 design/probes/에 저장하고 Artifact로 배포해 링크를 돌려준다. 모든 페이지에 "페이지 안에서 고르고 저장하는" 의견 패널(db)을 넣는다. 사용자 질문은 하지 않는다. oss-design-harness 스킬이 2·3·4단계에서 호출한다.
+description: 취향 시안(taste), 따라가 보기 투어(flow), 규칙 미리보기(rules), 레퍼런스(reference) HTML 페이지를 만들어 design/probes/에 저장한다. 배포는 하지 않는다 — 메인 대화가 build_hub.py로 허브에 합쳐 배포한다. 모든 페이지에 "페이지 안에서 고르고 저장하는" 의견 패널(db)을 넣는다. 사용자 질문은 하지 않는다. oss-design-harness 스킬이 2·3·4단계에서 호출한다.
 ---
 
 # probe-renderer

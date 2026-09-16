@@ -320,13 +320,141 @@ class PolishTrackTests(unittest.TestCase):
             os.makedirs(probes)
             html = """<!doctype html><html><body>
 <h1>이 화면의 일</h1>
-<script>const db = await claude.use("db"); db.set("feedback/story-1", {})</script>
+<script>const db = await claude.use("db"); db.set("feedback/story-1", {}); db.set("feedback/story-map", {})</script>
 </body></html>"""
             with open(os.path.join(probes, "story.html"), "w", encoding="utf-8") as f:
                 f.write(html)
             results = cp.check_probes(tmp)
             fails = [r for r in results if not r.ok]
             self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_story_probe_requires_story_map(self):
+        # story-map이 없으면 구성 표의 '이번엔 빼요' 행을 read_db로 못 읽는다
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<h1>이 화면의 일</h1>
+<script>const db = await claude.use("db"); db.set("feedback/story-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "story.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertTrue(
+                any(r.name.endswith("story-map") for r in fails),
+                [r.name + " " + r.detail for r in fails],
+            )
+        finally:
+            shutil.rmtree(tmp)
+
+    POLISH_RULES_MD = """status: confirmed
+confirmed_at: 2026-09-16
+
+# Design Rules
+
+## A. 토큰
+
+| 키 | 값 | 출처 |
+|---|---|---|
+| color.bg | #FFFFFF | 기존 화면 |
+| color.accent | #2563EB | rebuild |
+| device.frame | 1440×900 | 0' 실측 |
+
+## B. 컴포넌트 규칙
+
+| 키 | 값 | 출처 | 사용 여부 |
+|---|---|---|---|
+| button.sizes | sm 36h / px12 / text14 · md 44h / px16 / text15 · lg 52h / px20 / text16 | 기존 화면 | |
+"""
+
+    def test_polish_rules_accepts_polish_sources(self):
+        # polish 델타는 출처가 '기존 화면'/'rebuild'/'0''여도 통과해야 한다
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(tmp, "brief.md"), "w", encoding="utf-8") as f:
+                f.write("- 트랙: polish\n")
+            with open(os.path.join(tmp, "design-rules.md"), "w", encoding="utf-8") as f:
+                f.write(self.POLISH_RULES_MD)
+            results = cp.check_rules(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_greenfield_rules_reject_polish_sources(self):
+        # brief가 없으면 greenfield로 읽고 '기존 화면' 출처는 실패해야 한다
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(tmp, "design-rules.md"), "w", encoding="utf-8") as f:
+                f.write(self.POLISH_RULES_MD)
+            results = cp.check_rules(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertTrue(
+                any(r.name.endswith("source-stage-mark") for r in fails),
+                [r.name + " " + r.detail for r in fails],
+            )
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_polish_probe_allows_custom_frame_on_non_exempt_file(self):
+        # polish의 규칙 델타 탭처럼 면제 prefix가 아닌 파일도 --frame-w 실측을 허용
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(tmp, "brief.md"), "w", encoding="utf-8") as f:
+                f.write("- 트랙: polish\n")
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<style>:root{--frame-w:1440px}</style>
+<span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span>
+<script>const db = await claude.use("db"); db.set("feedback/section-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "rules-preview.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_greenfield_probe_requires_390_on_non_exempt_file(self):
+        # 같은 파일이 greenfield 트랙이면 frame-390 실패
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<style>:root{--frame-w:1440px}</style>
+<span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span>
+<script>const db = await claude.use("db"); db.set("feedback/section-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "rules-preview.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertTrue(
+                any(r.name.endswith("frame-390") for r in fails),
+                [r.name + " " + r.detail for r in fails],
+            )
         finally:
             shutil.rmtree(tmp)
 

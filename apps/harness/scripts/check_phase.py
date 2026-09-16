@@ -530,6 +530,10 @@ B_VALIDATORS = {
 }
 
 _STAGE_MARK_RE = re.compile(r"축\s*\d|[123]단계|레퍼런스")
+# 고치기 루트는 출처 어휘가 다르다: 안 바꾼 칸은 '기존 화면', rebuild·섭취·시안 단계 표기 허용
+_POLISH_STAGE_MARK_RE = re.compile(
+    r"축\s*\d|[123]단계|레퍼런스|기존 화면|rebuild|preserve|0'|3a|3b|existing|델타"
+)
 _NO_STAGE_NEEDED = {"기본값", "고정", "자동", ""}
 
 
@@ -654,16 +658,23 @@ def check_rules(design_dir: str) -> Optional[List[Result]]:
 
     # 출처 단계 표기 검사 (A/B/C 공통)
     if source_rows:
+        polish = read_track(design_dir) == "polish"
+        stage_re = _POLISH_STAGE_MARK_RE if polish else _STAGE_MARK_RE
+        stage_desc = (
+            "축 n/1~3단계/레퍼런스/기존 화면/rebuild/0'/3a/3b"
+            if polish
+            else "축 n/1~3단계/레퍼런스"
+        )
         mark = len(rep.results)
         for key, src, val, table_name in source_rows:
             src_norm = src.strip()
             if src_norm in _NO_STAGE_NEEDED:
                 continue
-            if not _STAGE_MARK_RE.search(src_norm):
+            if not stage_re.search(src_norm):
                 rep.fail(
                     "source-stage-mark",
                     path,
-                    f"{table_name}.[{key}] 출처에 단계 표기(축 n/1~3단계/레퍼런스) 없음: {src_norm!r}",
+                    f"{table_name}.[{key}] 출처에 단계 표기({stage_desc}) 없음: {src_norm!r}",
                 )
         rep.ok_if_no_fail_since(mark, "source-stage-valid", path)
 
@@ -704,6 +715,7 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
     if not files:
         return None
     rep = Reporter("probes")
+    polish = read_track(design_dir) == "polish"
 
     for f in files:
         content = read_file(f)
@@ -776,13 +788,13 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
             else:
                 rep.ok("existing-variants-abcd", f)
 
-        # 프레임 폭. 처음부터는 390. 고치기(existing)는 --frame-w 실측.
+        # 프레임 폭. 처음부터는 390. 고치기는 --frame-w 실측(어떤 탭이든).
         _FRAME_W_RE = re.compile(r"--frame-w\s*:\s*\d+px")
         if is_survey:
             rep.ok("frame-390", f, "설문은 면제")
-        elif is_existing or is_reference or is_flow:
+        elif is_existing or is_reference or is_flow or polish:
             if _FRAME_W_RE.search(content) or _FRAME_390_RE.search(content):
-                rep.ok("frame-390", f, "existing/reference는 --frame-w 허용")
+                rep.ok("frame-390", f, "고치기/실측 프레임은 --frame-w 허용")
             else:
                 rep.fail("frame-390", f, "시안에 --frame-w:<n>px 또는 390 프레임이 없음")
         elif not _FRAME_390_RE.search(content):
@@ -803,6 +815,17 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
             rep.fail("feedback-path", f, "db 문서 경로 'feedback/…'가 없음")
         else:
             rep.ok("feedback-panel", f)
+
+        # story 설문: 구성 표 행 제외를 읽으려면 story-map 저장이 필요
+        if base.startswith("story"):
+            if "story-map" in content:
+                rep.ok("story-map", f)
+            else:
+                rep.fail(
+                    "story-map",
+                    f,
+                    "story 설문에 feedback/story-map 저장 코드가 없음 — 구성 표 '이번엔 빼요'를 읽을 수 없음",
+                )
 
         # 투어형 플로우: 장면 구조 + 상태 세그먼트
         if base.startswith("flow"):
@@ -950,6 +973,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
