@@ -493,7 +493,7 @@ def validate_tap_min(v: str) -> bool:
 
 
 def validate_device_frame(v: str) -> bool:
-    return "390" in v
+    return bool(re.search(r"\d+\s*[×x]\s*\d+", v))
 
 
 def validate_zscale_ascending(v: str) -> bool:
@@ -730,8 +730,14 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
         # 번호 라벨 5개 이상
         circled_count = len(CIRCLED_RE.findall(content))
         label_count = circled_count if circled_count > 0 else len(_CLASS_LABEL_RE.findall(content))
+        is_existing = base.startswith("existing") or base.startswith("elements")
         if base.startswith("structure"):
             rep.ok("label-count", f, "structure 설문은 면제")
+        elif is_existing:
+            if label_count < 1:
+                rep.fail("label-count", f, f"existing 시안에 원문자/class=label 라벨이 {label_count}개 (1~5개)")
+            else:
+                rep.ok("label-count", f, "existing는 1~5")
         elif label_count < 5:
             rep.fail("label-count", f, f"원문자/class=label 라벨이 {label_count}개 (5개 이상 필요)")
         else:
@@ -756,9 +762,15 @@ def check_probes(design_dir: str) -> Optional[List[Result]]:
                     )
             rep.ok_if_no_fail_since(mark, "axis-variants-valid", f)
 
-        # 390 프레임 폭 (structure 설문 탭은 폰 프레임이 없으므로 면제)
+        # 프레임 폭. 처음부터는 390. 고치기(existing)는 --frame-w 실측.
+        _FRAME_W_RE = re.compile(r"--frame-w\s*:\s*\d+px")
         if base.startswith("structure"):
             rep.ok("frame-390", f, "structure 설문은 면제")
+        elif is_existing:
+            if _FRAME_W_RE.search(content) or _FRAME_390_RE.search(content):
+                rep.ok("frame-390", f, "existing는 --frame-w 허용")
+            else:
+                rep.fail("frame-390", f, "existing 시안에 --frame-w:<n>px 또는 390 프레임이 없음")
         elif not _FRAME_390_RE.search(content):
             rep.fail("frame-390", f, "width:390px 또는 --frame-w:390px 를 찾을 수 없음")
         else:
@@ -814,12 +826,24 @@ PHASE_HINT_FILE = {
 }
 
 PHASE_ORDER = ["structure", "flow", "taste", "rules", "probes"]
+POLISH_SKIP_PHASES = frozenset({"structure", "flow", "taste"})
+_TRACK_RE = re.compile(r"^-\s*트랙:\s*(greenfield|polish)\b", re.M)
+
+
+def read_track(design_dir: str) -> str:
+    text = read_file(os.path.join(design_dir, "brief.md")) or ""
+    m = _TRACK_RE.search(text)
+    return m.group(1) if m else "greenfield"
 
 
 def run_all(design_dir: str) -> Tuple[List[Result], List[str]]:
     all_results: List[Result] = []
     skipped: List[str] = []
+    track = read_track(design_dir)
     for name in PHASE_ORDER:
+        if track == "polish" and name in POLISH_SKIP_PHASES:
+            skipped.append(name)
+            continue
         res = PHASE_FUNCS[name](design_dir)
         if res is None:
             skipped.append(name)
@@ -828,9 +852,12 @@ def run_all(design_dir: str) -> Tuple[List[Result], List[str]]:
     return all_results, skipped
 
 
-def print_text(phase: str, results: List[Result], skipped: List[str]) -> None:
+def print_text(phase: str, results: List[Result], skipped: List[str], track: str = "greenfield") -> None:
     for name in skipped:
-        print(f"[SKIP] {name} — 파일 없음: {PHASE_HINT_FILE[name]}")
+        if track == "polish" and name in POLISH_SKIP_PHASES:
+            print(f"[SKIP] {name} — polish 트랙")
+        else:
+            print(f"[SKIP] {name} — 파일 없음: {PHASE_HINT_FILE[name]}")
     for r in results:
         if r.ok:
             print(f"[OK] {r.name}")
@@ -868,7 +895,7 @@ def main() -> int:
                 )
             )
         else:
-            print_text("all", results, skipped)
+            print_text("all", results, skipped, track=read_track(design_dir))
         if not results:
             return 2
         return 0 if passed else 1

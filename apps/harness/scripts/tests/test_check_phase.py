@@ -196,7 +196,9 @@ class RulesUnitTests(unittest.TestCase):
         self.assertFalse(cp.validate_tap_min("40×40"))
 
         self.assertTrue(cp.validate_device_frame("390×844 기준"))
-        self.assertFalse(cp.validate_device_frame("375×812 기준"))
+        self.assertTrue(cp.validate_device_frame("880×520"))
+        self.assertTrue(cp.validate_device_frame("375×812 기준"))
+        self.assertFalse(cp.validate_device_frame("desktop window"))
 
         self.assertTrue(cp.validate_zscale_ascending("0 100 200 200 300"))
         self.assertFalse(cp.validate_zscale_ascending("0 100 50 300"))
@@ -255,6 +257,55 @@ class MarkdownParsingUnitTests(unittest.TestCase):
         titles = [s["title"] for s in sections]
         self.assertIn("A", titles)
         self.assertIn("B", titles)
+
+
+class PolishTrackTests(unittest.TestCase):
+    def test_read_track_defaults_greenfield(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            self.assertEqual(cp.read_track(tmp), "greenfield")
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_run_all_skips_structure_flow_taste_on_polish(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(tmp, "brief.md"), "w", encoding="utf-8") as f:
+                f.write("- 트랙: polish\n")
+            results, skipped = cp.run_all(tmp)
+            self.assertIn("structure", skipped)
+            self.assertIn("flow", skipped)
+            self.assertIn("taste", skipped)
+            self.assertEqual(results, [])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_existing_probe_accepts_custom_frame_and_few_labels(self):
+        import shutil
+        import tempfile
+
+        tmp = tempfile.mkdtemp()
+        try:
+            probes = os.path.join(tmp, "probes")
+            os.makedirs(probes)
+            html = """<!doctype html><html><body>
+<style>:root{--frame-w:880px;--frame-h:520px}</style>
+<div class="label">①</div>
+<script>const db = await claude.use("db"); db.set("feedback/existing-1", {})</script>
+</body></html>"""
+            with open(os.path.join(probes, "existing.html"), "w", encoding="utf-8") as f:
+                f.write(html)
+            results = cp.check_probes(tmp)
+            fails = [r for r in results if not r.ok]
+            self.assertEqual(fails, [], [r.name + " " + r.detail for r in fails])
+        finally:
+            shutil.rmtree(tmp)
 
 
 if __name__ == "__main__":
