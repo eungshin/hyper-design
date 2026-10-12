@@ -80,10 +80,10 @@ def main():
 {json.dumps(fails, ensure_ascii=False, indent=1)}
 
 파일 `{rel}`을 직접 열어 고친다."""
-        r = subprocess.run(["claude", "-p", "--model", RESEARCH_MODEL, "--dangerously-skip-permissions", "--output-format", "json"],
-                           input=prompt, capture_output=True, text=True, cwd=ROOT)
-        try: txt = json.loads(r.stdout).get("result", "")
-        except Exception: txt = r.stdout[-500:]
+        try: txt = E.claude(prompt, RESEARCH_MODEL, cwd=ROOT)
+        except E.Limit as e:
+            sh("git", "checkout", "--", str(rel)); log([datetime.datetime.now().isoformat(timespec="minutes"), it, tgt, "-", "-", "-", "-", "-", "-", "stop:limit", str(e)[:80]])
+            print("사용 한도로 중단:", e); return
         hyp = next((l.split("HYPOTHESIS:", 1)[1].strip() for l in reversed(txt.splitlines()) if "HYPOTHESIS:" in l), "(가설 없음)")
         changed = [l[3:] for l in sh("git", "status", "--porcelain").stdout.splitlines()
                    if l.strip() and "__pycache__" not in l and "loop/voicetone/" not in l]
@@ -100,10 +100,14 @@ def main():
         hits, size = E.leak_check(tgt, split, items)
         if size > cap[tgt]: revert(f"size{size}"); continue
         if set(hits) - base_leak[tgt]: revert(f"leak:{','.join(sorted(set(hits) - base_leak[tgt]))}"); continue
-        r1 = E.run("dev", 1000 + it, tag=f"iter{it}")
+        try: r1 = E.run("dev", 1000 + it, tag=f"iter{it}")
+        except E.Limit as e:
+            sh("git", "checkout", "--", str(rel)); log([now, it, tgt, "-", "-", "-", "-", "-", "-", "stop:limit", hyp]); print("사용 한도로 중단:", e); return
         dec = "discard" if r1["gate_ok"] else "reject:gate"
         if r1["gate_ok"] and r1["score"] > best + T["sigma"]:                      # 1차 선별: σ보다 크게 좋아짐
-            r2 = E.run("dev", 2000 + it, tag=f"iter{it}-confirm")  # 확인: 두 번 평균이 1.5σ 넘게 좋아야 유지
+            try: r2 = E.run("dev", 2000 + it, tag=f"iter{it}-confirm")
+            except E.Limit as e:
+                sh("git", "checkout", "--", str(rel)); log([now, it, tgt, "-", "-", "-", "-", "-", "-", "stop:limit", hyp]); print("사용 한도로 중단:", e); return  # 확인: 두 번 평균이 1.5σ 넘게 좋아야 유지
             s = avg_score([r1, r2])
             if s > best + 1.5 * T["sigma"] and r2["gate_ok"]:
                 dec = "keep"; best = s; best_run = r1
@@ -117,6 +121,7 @@ def main():
          "| 회사 | V1 | 바닥 | 합격선 | 천장 | 판정 |", "|---|---|---|---|---|---|"]
     for co in ("toss", "daangn"):
         v = rt["per"][co]["V1"]; t = T[co]
+        if v is None: L.append(f"| {E_name(co)} | 측정 실패 | | | | |"); continue
         L.append(f"| {E_name(co)} | {v:.2f} | {t['floor']:.2f} | {t['pass']:.2f} | {t['ceiling']:.2f} | {'통과' if v >= t['pass'] else '미달'} |")
     L += [f"\nU1 {rt['U1']:.3f} (≥0.98) · U2 {rt['U2']:.3f} (=1) · 판정 2회 일치 {rt['agree']:.2f}", "\n기록: `loop/voicetone/runs.tsv`, 합격선: `thresholds.json`"]
     (D / "SUMMARY.md").write_text("\n".join(L) + "\n", encoding="utf-8")

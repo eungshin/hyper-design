@@ -17,11 +17,17 @@ GEN_MODEL, JUDGE_MODEL, AUX_MODEL = "claude-sonnet-5-5", "claude-opus-5-5", "cla
 SIZE_CAP = 9000  # 프리셋 JSON 바이트 상한 — 정답을 외워 넣는 과적합 방지
 
 
-def claude(prompt, model):
+class Limit(Exception): pass
+
+
+def claude(prompt, model, cwd="/tmp"):
     r = subprocess.run(["claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json"],
-                       input=prompt, capture_output=True, text=True, cwd="/tmp")
-    try: return json.loads(r.stdout).get("result", "")
+                       input=prompt, capture_output=True, text=True, cwd=cwd)
+    try: d = json.loads(r.stdout)
     except Exception: return r.stdout + r.stderr
+    if d.get("is_error") and (d.get("api_error_status") == 429 or "limit" in str(d.get("result", "")).lower()):
+        raise Limit(d.get("result"))                        # 사용 한도 — 조용히 0점으로 넘어가지 않고 멈춘다
+    return d.get("result", "")
 
 
 def parse_json(txt):
