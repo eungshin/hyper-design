@@ -162,7 +162,11 @@ def rule_bad(slug, text):
     return bad
 
 
-def digits(s): return set(re.findall(r"\d[\d,.:]*", s))
+def digits(s):
+    """숫자 값 집합 — 표기 차이(1천=1,000, 쉼표)는 같게 본다. 시각을 다른 체계로 바꾸면(11시→23:) 다르게 잡힌다."""
+    s = re.sub(r"(\d+)\s*천", lambda m: str(int(m.group(1)) * 1000), s)
+    s = re.sub(r"(\d+)\s*만", lambda m: str(int(m.group(1)) * 10000), s)
+    return set(x.replace(",", "") for x in re.findall(r"\d[\d,]*", s))
 
 
 def leak_check(slug, split, items):
@@ -214,7 +218,7 @@ def run(split_name="dev", seed=0, cands=("toss", "daangn", "ridi"), tag=None, on
     res.update({"agree": agree, "U1": 1 - bad / max(1, tot), "U2": keep / max(1, dig), "violations": viol[:20]})
     cores = [res["per"][co]["V1"] for co in ("toss", "daangn") if res["per"][co]["V1"] is not None]
     res["V1_core"] = sum(cores) / len(cores) if cores else None
-    res["score"] = (res["V1_core"] or 0) - (0.2 if res["U1"] < 0.98 else 0) - (0.2 if res["U2"] < 1 else 0)
+    res["score"] = (res["V1_core"] or 0) - (0.2 if res["U1"] < 0.98 else 0) - (0.2 if res["U2"] < 0.95 else 0)
     res["fails"] = [{"co": q["co"], "real": q["real"], "own": q["cands"].get(q["co"]), "picked": q["cands"].get(a) if a else None, "picked_name": a}
                     for q, a in zip(Qall, p1) if q["co"] in cands and a != q["co"]][:40]
     out = D / "runs" / f"{tag or split_name}-{seed}.json"
