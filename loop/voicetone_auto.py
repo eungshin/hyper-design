@@ -51,14 +51,19 @@ def main():
     if not all(T[co]["discriminates"] for co in ("toss", "daangn")):
         (D / "SUMMARY.md").write_text("# 중단: 측정이 변별하지 못함\n\n천장−바닥 < 0.15 — 평가 방식부터 다시 설계해야 한다.\n" + json.dumps(T, ensure_ascii=False, indent=1))
         return
-    cur_runs = [json.loads(p.read_text()) for p in sorted((D / "runs").glob("cal-current-*.json"))]
+    start = 1
+    if TSV.exists():                                              # 이어 하기: 지금 프리셋을 새로 재서 출발점으로
+        start = max(int(l.split("\t")[1]) for l in TSV.read_text().splitlines()[1:]) + 1
+        cur_runs = [E.run("dev", 500 + start + k, tag=f"resume{start}-{k}") for k in range(2)]
+    else:
+        cur_runs = [json.loads(p.read_text()) for p in sorted((D / "runs").glob("cal-current-*.json"))]
     best = avg_score(cur_runs); best_run = cur_runs[-1]
     base_leak = {s: set(E.leak_check(s, split, items)[0]) for s in E.SLUGS}
     cap = {s: E.leak_check(s, split, items)[1] + 1500 for s in E.SLUGS}
     log([datetime.datetime.now().isoformat(timespec="minutes"), 0, "-", f"{best:.3f}", *(f"{statistics.mean(r['per'][c]['V1'] for r in cur_runs):.3f}" for c in TARGETS),
-         f"{statistics.mean(r['U1'] for r in cur_runs):.3f}", f"{statistics.mean(r['U2'] for r in cur_runs):.3f}", f"{statistics.mean(r['agree'] for r in cur_runs):.2f}", "baseline", f"σ={T['sigma']:.3f}"])
+         f"{statistics.mean(r['U1'] for r in cur_runs):.3f}", f"{statistics.mean(r['U2'] for r in cur_runs):.3f}", f"{statistics.mean(r['agree'] for r in cur_runs):.2f}", "baseline" if start == 1 else "resume", f"σ={T['sigma']:.3f}"])
     program = (ROOT / "loop/voicetone_program.md").read_text()
-    for it in range(1, a.iters + 1):
+    for it in range(start, start + a.iters):
         tgt = TARGETS[(it - 1) % len(TARGETS)]
         path = E.VOICES / f"{tgt}.json"; rel = path.relative_to(ROOT)
         fails = [f for f in best_run["fails"] if f["co"] == tgt][:15]
@@ -96,11 +101,11 @@ def main():
         if size > cap[tgt]: revert(f"size{size}"); continue
         if set(hits) - base_leak[tgt]: revert(f"leak:{','.join(sorted(set(hits) - base_leak[tgt]))}"); continue
         r1 = E.run("dev", 1000 + it, tag=f"iter{it}")
-        dec = "discard"
-        if r1["score"] > best + T["sigma"]:                      # 1차 선별: σ보다 크게 좋아짐
+        dec = "discard" if r1["gate_ok"] else "reject:gate"
+        if r1["gate_ok"] and r1["score"] > best + T["sigma"]:                      # 1차 선별: σ보다 크게 좋아짐
             r2 = E.run("dev", 2000 + it, tag=f"iter{it}-confirm")  # 확인: 두 번 평균이 1.5σ 넘게 좋아야 유지
             s = avg_score([r1, r2])
-            if s > best + 1.5 * T["sigma"]:
+            if s > best + 1.5 * T["sigma"] and r2["gate_ok"]:
                 dec = "keep"; best = s; best_run = r1
                 sh("git", "add", str(rel)); sh("git", "commit", "-qm", f"보이스톤 루프 iter {it} ({tgt}): {hyp}\n\ndev score {s:.3f}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")
         if dec != "keep": sh("git", "checkout", "--", str(rel))
