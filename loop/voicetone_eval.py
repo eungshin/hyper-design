@@ -20,8 +20,13 @@ SIZE_CAP = 9000  # 프리셋 JSON 바이트 상한 — 정답을 외워 넣는 �
 class Limit(Exception): pass
 
 
-def claude(prompt, model, cwd="/tmp"):
-    r = subprocess.run(["claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json"],
+LEAN = ["--system-prompt", "You are a careful Korean UX writing assistant. Follow the user's instructions exactly.",
+        "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--no-session-persistence"]   # 호출당 고정 비용 2만→600 토큰
+
+
+def claude(prompt, model, cwd="/tmp", tools=False):
+    extra = ["--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--dangerously-skip-permissions"] if tools else LEAN
+    r = subprocess.run(["claude", "-p", "--model", model, *extra, "--output-format", "json"],
                        input=prompt, capture_output=True, text=True, cwd=cwd)
     try: d = json.loads(r.stdout)
     except Exception: return r.stdout + r.stderr

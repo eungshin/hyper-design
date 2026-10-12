@@ -80,7 +80,7 @@ def main():
 {json.dumps(fails, ensure_ascii=False, indent=1)}
 
 파일 `{rel}`을 직접 열어 고친다."""
-        try: txt = E.claude(prompt, RESEARCH_MODEL, cwd=ROOT)
+        try: txt = E.claude(prompt, RESEARCH_MODEL, cwd=ROOT, tools=True)
         except E.Limit as e:
             sh("git", "checkout", "--", str(rel)); log([datetime.datetime.now().isoformat(timespec="minutes"), it, tgt, "-", "-", "-", "-", "-", "-", "stop:limit", str(e)[:80]])
             print("사용 한도로 중단:", e); return
