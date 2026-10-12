@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""목소리 프리셋 검증 1단계(기계) + Q5 회사다움 — docs/voice-experiment.md.
+"""보이스톤 프리셋 검증 1단계(기계) + Q5 회사다움 — docs/voice-experiment.md.
 
 python3 loop/voice_exp.py gen      # 다시 쓰기(v18 재료) + 상황만 주고 쓰기(실제 문구 상황) — claude -p 병렬
-python3 loop/voice_exp.py judge    # Q1 목소리 맞히기 · Q5 회사 맞히기(실제 문구 기준선 포함)
+python3 loop/voice_exp.py judge    # Q1 보이스톤 맞히기 · Q5 회사 맞히기(실제 문구 기준선 포함)
 python3 loop/voice_exp.py report   # Q2 규칙 준수 · Q5 말투 지문 · 판정 표 → loop/voice_exp/REPORT.md
 """
 import sys, json, re, random, subprocess, pathlib, collections, concurrent.futures as cf
@@ -16,7 +16,7 @@ COMPANY = {"toss": "토스", "daangn": "당근", "ridi": "리디"}
 GEN_MODEL, JUDGE_MODEL = "claude-sonnet-5-5", "claude-opus-5-5"
 LABEL_SLOTS = {"button", "tab", "badge", "label", "section", "row", "dialog_buttons", "marketing"}
 
-COMMON = """공통 문법(목소리와 무관하게 항상 지킨다):
+COMMON = """공통 문법(보이스톤과 무관하게 항상 지킨다):
 - 이름표 자리(화면 제목이 이름일 때·섹션 제목·라벨·배지·탭·큰 숫자의 라벨)는 명사구로 끝낸다. 조건절(~하면/~나면)·조사(은/는/을/를)로 끝내지 않는다.
 - 한 문장에는 메시지 하나. 줄표(—)로 두 문장을 잇지 않는다 — 제목과 본문으로 나누거나 '·'로 사실을 잇는다.
 - 번역투를 쓰지 않는다: ~로 인한, ~을 통해, ~에 대한, ~이 가능합니다, 유효하지 않은, 처리가 완료되었습니다, 당신.
@@ -45,8 +45,8 @@ def preset(slug):
 
 
 def voice_block(v):
-    if v == "none": return "목소리 프리셋 없음 — 공통 문법만 지켜 자연스러운 한국어 앱 문구로 쓴다(해요체)."
-    return "목소리 프리셋(이 회사의 말투로 쓴다 — 규칙·자리별 형태·버튼 쌍·예시 쌍의 이유를 따른다):\n" + json.dumps(preset(v), ensure_ascii=False, indent=1)
+    if v == "none": return "보이스톤 프리셋 없음 — 공통 문법만 지켜 자연스러운 한국어 앱 문구로 쓴다(해요체)."
+    return "보이스톤 프리셋(이 회사의 말투로 쓴다 — 규칙·자리별 형태·버튼 쌍·예시 쌍의 이유를 따른다):\n" + json.dumps(preset(v), ensure_ascii=False, indent=1)
 
 
 GEN_PROMPT = """너는 한국어 앱 UX 라이터다. 아래 항목들의 화면 문구를 쓴다.
@@ -110,14 +110,14 @@ def groups(texts, k=5):
     return [texts[i:i + k] for i in range(0, len(texts) - k + 1, k)] or ([texts] if texts else [])
 
 
-JUDGE_Q1 = """아래 문구 묶음들은 각각 어떤 앱 하나의 화면 문구다. 묶음마다 어느 목소리로 쓰였는지 고른다.
-목소리:
+JUDGE_Q1 = """아래 문구 묶음들은 각각 어떤 앱 하나의 화면 문구다. 묶음마다 어느 보이스톤으로 쓰였는지 고른다.
+보이스톤:
 {voices}
 
 묶음:
 {groups}
 
-JSON만: {{"<묶음 번호>": "<목소리 기호 A/B/C>", ...}}"""
+JSON만: {{"<묶음 번호>": "<보이스톤 기호 A/B/C>", ...}}"""
 
 JUDGE_Q5 = """아래 문구 묶음들은 각각 한국 앱 하나의 실제 화면 문구다(오류·확인창·토스트·안내 등). 묶음마다 토스·당근·리디 중 어느 회사 앱의 문구인지 고른다. 앱마다 말투가 다르다 — 문체·경어·버튼 짝·마침표·어휘로 판단한다.
 
@@ -250,9 +250,9 @@ def q2_check(v, slot, text):
 
 def report():
     M = json.loads((OUT / "materials.json").read_text(encoding="utf-8"))
-    L = ["# 목소리 프리셋 검증 결과\n", "계획: `docs/voice-experiment.md`. 생성 sonnet, 판정 opus, `claude -p`.\n"]
+    L = ["# 보이스톤 프리셋 검증 결과\n", "계획: `docs/voice-experiment.md`. 생성 sonnet, 판정 opus, `claude -p`.\n"]
     # Q2
-    L.append("## Q2 충실 — 프리셋 규칙·공통 문법 준수\n\n| 목소리 | 문구 | 위반 | 준수율 |\n|---|---|---|---|")
+    L.append("## Q2 충실 — 프리셋 규칙·공통 문법 준수\n\n| 보이스톤 | 문구 | 위반 | 준수율 |\n|---|---|---|---|")
     viol = []
     for v in ["none"] + SLUGS:
         n = bad = 0
@@ -283,7 +283,7 @@ def report():
     J = json.loads((OUT / "judge.json").read_text(encoding="utf-8"))
     inv = {v: k for k, v in J["sym"].items()}
     acc = lambda R: (sum(r["truth"] == r["pred"] for r in R) / len(R) * 100) if R else 0
-    L.append("\n## Q1 구별 — 목소리 이름·한 줄 설명만 보고 맞히기(문구 5개 묶음)\n")
+    L.append("\n## Q1 구별 — 보이스톤 이름·한 줄 설명만 보고 맞히기(문구 5개 묶음)\n")
     L.append(f"정답률 **{acc(J['q1']):.0f}%** (우연 33%, {len(J['q1'])}묶음)\n\n| 정답 \\ 예측 | " + " | ".join(COMPANY[s] for s in SLUGS) + " |\n|---|---|---|---|")
     for s in SLUGS:
         row = [sum(1 for r in J["q1"] if inv.get(r["truth"]) == s and inv.get(r["pred"]) == p) for p in SLUGS]
