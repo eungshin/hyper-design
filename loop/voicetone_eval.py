@@ -31,6 +31,17 @@ def parse_json(txt):
     return json.JSONDecoder().raw_decode(s[min(starts):])[0]
 
 
+def kv(xs, val="text"):
+    """[{"id":..., "text":...}] → dict. 모델이 키를 조금 틀려도(" text") 읽는다."""
+    out = {}
+    for x in xs if isinstance(xs, list) else []:
+        if not isinstance(x, dict): continue
+        k = {re.sub(r"\s", "", kk): v for kk, v in x.items()}
+        v = k.get(val) or next((vv for kk, vv in k.items() if kk != "id" and isinstance(vv, str)), None)
+        if k.get("id") and v: out[k["id"]] = v
+    return out
+
+
 def pmap(f, xs, n=8):
     with cf.ThreadPoolExecutor(n) as ex: return list(ex.map(f, xs))
 
@@ -59,7 +70,7 @@ def prepare():
         if not q: return {}
         txt = claude("""For each Korean app UI string, write a plain English meaning memo: what the screen tells or asks the user, keeping every fact, number, name and option, but NO tone, politeness level, sentence ending style, punctuation style or exclamation. Neutral, like a spec. Do not quote Korean.
 """ + json.dumps(q, ensure_ascii=False, indent=1) + '\nJSON array only: [{"id": "...", "memo": "..."}]', AUX_MODEL)
-        try: return {x["id"]: x["memo"] for x in parse_json(txt)}
+        try: return kv(parse_json(txt), "memo")
         except Exception: return {}
 
     def orc(batch):
@@ -67,7 +78,7 @@ def prepare():
         if not q: return {}
         txt = claude("""아래 한국어 앱 문구를 **말투는 그대로** 두고 표현만 바꿔 쓴다 — 문체(해요/합니다), 경어, 문장 끝 모양, 마침표·느낌표, 길이, 버튼 짝 형식을 원문과 같게. 단어·어순만 다르게, 뜻과 데이터는 유지.
 """ + json.dumps(q, ensure_ascii=False, indent=1) + '\nJSON 배열만: [{"id": "...", "text": "..."}]', AUX_MODEL)
-        try: return {x["id"]: x["text"] for x in parse_json(txt)}
+        try: return kv(parse_json(txt))
         except Exception: return {}
     for m in pmap(memo, todo): memos.update(m)
     for m in pmap(orc, todo): oracle.update(m)
@@ -114,7 +125,7 @@ def generate(slug, rows, memos):
 {json.dumps(q, ensure_ascii=False, indent=1)}
 
 JSON 배열만: [{{"id": "...", "text": "..."}}]""", GEN_MODEL)
-        try: return {x["id"]: x["text"] for x in parse_json(txt)}
+        try: return kv(parse_json(txt))
         except Exception: return {}
     batches = [rows[i:i + 20] for i in range(0, len(rows), 20)]
     for m in pmap(one, batches): out.update(m)
