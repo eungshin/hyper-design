@@ -92,8 +92,10 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 .flow{padding-top:90px}
 .glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap}
 .cards{display:flex;gap:84px;align-items:flex-start}
-.card{flex:none;width:375px}
-.phone{position:relative;width:375px;height:812px;border-radius:28px;overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
+.card{flex:none;width:375px;position:relative}
+.phone{position:relative;width:375px;height:812px;border-radius:28px;overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10);transition:height .2s ease}
+.card.xp{z-index:6}
+.card.xp>:not(.phone):not(.anno){visibility:hidden}
 .phone iframe{display:block;width:375px;height:812px;border:0;pointer-events:none;background:#fff}
 .cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:28px;cursor:pointer}
 .cover:hover,.cover:focus-visible{outline:4px solid #2563eb;outline-offset:0}
@@ -105,10 +107,10 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 .more summary,.foot summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
 .more .pol{margin-top:0}
 svg.ar{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
-svg.ar path.ln{fill:none;stroke:var(--c-brand,#2563eb);stroke-width:var(--lw,3);marker-start:url(#hd-dot);marker-end:url(#hd-head)}
-svg.ar marker path,svg.ar marker circle{fill:var(--c-brand,#2563eb)}
-.alabel{position:absolute;transform:translate(-50%,-100%);background:#fff;border:1.5px solid var(--c-brand,#2563eb);color:var(--c-brand-text,#1d4ed8);font-size:17px;font-weight:600;padding:4px 12px;border-radius:999px;white-space:nowrap;pointer-events:none}
-.alabel.side{transform:translate(-100%,-50%);white-space:normal;max-width:220px;text-align:right;border-radius:14px}
+svg.ar path.ln{fill:none;stroke:#A3A7A0;stroke-width:var(--lw,2);stroke-linecap:round;stroke-linejoin:round;marker-start:url(#hd-dot);marker-end:url(#hd-head)}
+svg.ar marker path,svg.ar marker circle{fill:#A3A7A0}
+/* 갈래 이름표: 평소엔 숨김(선만). 연결 보기에서 화면 안 링크 답이 없을 때만 출발 카드 오른쪽에 */
+.alabel{position:absolute;display:none;background:#fff;border:2px solid #8a8d86;color:#4a4c47;font-size:17px;font-weight:700;padding:3px 12px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.10)}
 .foot{padding:20px 0 120px;font-size:17px;color:#777;max-width:1500px}
 .foot p{margin:0 0 6px}
 .foot ul{margin:4px 0 0;padding-left:22px;line-height:1.6}
@@ -120,34 +122,53 @@ svg.ar marker path,svg.ar marker circle{fill:var(--c-brand,#2563eb)}
 #modal .box{position:relative;border-radius:30px;overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
 #modal iframe{display:block;width:390px;height:844px;border:0;transform-origin:0 0;background:#fff}
 #modal .close{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;min-width:44px;min-height:44px;padding:0 16px;border:0;border-radius:12px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;z-index:2}
-#modal .mpick{flex:none;margin-top:12px;min-width:44px;min-height:44px;padding:0 22px;border:2px solid #fff;border-radius:999px;background:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
-#modal .mpick:hover{background:#F5F5F2}
-#modal .mpick[aria-pressed="true"]{background:var(--c-brand,#2563eb);border-color:#fff;color:#fff}
+#modal .mpick{flex:none;margin:48px 0 12px;min-width:44px;min-height:44px;padding:0 26px;border:2px solid #fff;border-radius:999px;background:var(--c-brand,#2563eb);color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+#modal .mpick:hover{filter:brightness(1.08)}
+#modal .mpick[aria-pressed="true"]{background:#fff;color:var(--c-brand-text,#1d4ed8);border-color:var(--c-brand,#2563eb)}
 
 /* ---------- 연결 보기: 화살표 켜고 끄기 · Shift+클릭 강조 ---------- */
 .vbtn[aria-pressed="false"]{color:#999;text-decoration:line-through}
 #rows.noarrows path.ln,#rows.noarrows .alabel{display:none}
 #rows.focusing .card{opacity:.22}
 #rows.focusing .card.hl{opacity:1}
-#rows.focusing .card.hl .phone{box-shadow:0 0 0 6px var(--c-brand,#2563eb),0 3px 14px rgba(0,0,0,.10)}
+#rows.focusing .card.hl .phone{box-shadow:0 0 0 6px #8a8d86,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.focus .phone{box-shadow:0 0 0 10px #1c1c1c,0 3px 14px rgba(0,0,0,.10)}
-#rows.focusing path.ln,#rows.focusing .alabel{opacity:.1}
-#rows.focusing path.ln.on{opacity:1;stroke-width:calc(var(--lw,3) * 2.3);display:inline}
-#rows.focusing path.ln.rep,#rows.focusing .alabel.rep{display:none}
-svg.ar path.lk{fill:none;stroke-width:calc(var(--lw,3) * 1.4);pointer-events:stroke;cursor:default}
-svg.ar path.lk.em{stroke-width:calc(var(--lw,3) * 2.6)}
-svg.ar path.lk.dim{opacity:.15}
-svg.ar circle.lkd{pointer-events:none}
-svg.ar circle.lkd.dim{opacity:.15}
+#rows.focusing path.ln{opacity:.1}
+#rows.focusing path.ln.on{opacity:1;stroke:#6b6e68;stroke-width:calc(var(--lw,2) * 1.25);display:inline}
+#rows.focusing path.ln.rep{display:none}
+#rows.focusing:not(.haslk):not(.lkwait) .alabel.on{display:block}
 #rows.focusing .card.lt .phone{box-shadow:0 0 0 8px var(--ring),0 3px 14px rgba(0,0,0,.10)}
-#rows.focusing .card.lt.dim .phone{box-shadow:0 0 0 4px var(--ring),0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.lt.em .phone{box-shadow:0 0 0 14px var(--ring),0 3px 14px rgba(0,0,0,.10)}
+#rows.focusing .card.lt.dim{opacity:.3}
+/* 색 링크 층: 카드(펼친 카드 포함) 위에 선·칩 */
+svg.lks{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
+svg.lks path.lk{fill:none;stroke-width:calc(var(--lw,2) * 1.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:default;transition:opacity .15s}
+svg.lks path.lk.em{stroke-width:calc(var(--lw,2) * 2)}
+svg.lks path.lk.dim{opacity:.15}
+#lkl{position:absolute;left:0;top:0;width:0;height:0;z-index:8}
+.lchip{position:absolute;left:0;top:0;visibility:hidden;background:#fff;border:2px solid currentColor;border-radius:999px;padding:3px 12px;font-size:17px;line-height:1.35;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.14);cursor:default;transition:opacity .15s}
+.lchip.on{visibility:visible}
+.lchip.em{box-shadow:0 0 0 3px currentColor}
+.lchip.dim{opacity:.15}
 .lnum{position:absolute;left:10px;top:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ring);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
-#rows.focusing .alabel.on{opacity:1;display:block}
 .nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:#e5484d;color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
+/* 범례(연결 보기 중에만): 쌍마다 켜고 끄기 · 채도 */
+#legend{position:absolute;right:12px;bottom:10px;z-index:4;width:360px;max-height:calc(100% - 20px);overflow:auto;background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.14);padding:12px 14px;font-size:13px;cursor:default;touch-action:auto;-webkit-user-select:none;user-select:none}
+#legend[hidden],body.modal-open #legend{display:none}
+#legend .lgt{margin:0 0 8px;font-size:13px;font-weight:700;color:#1c1c1c}
+#legend .lgrow{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;cursor:pointer}
+#legend .lgrow:hover,#legend .lgrow.em{background:#F4F5F3}
+#legend .lgdot{width:12px;height:12px;border-radius:50%;flex:none}
+#legend .lgtx{flex:1;line-height:1.35;color:#333}
+#legend .lgtx i{font-style:normal;color:#777}
+#legend input[type=checkbox]{accent-color:#444;width:16px;height:16px}
+#legend .lgsat{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#777}
+#legend .lgsat input{flex:1}
 
-/* 카드 위 주석 버튼 · 단축키 안내 */
-.anno{position:absolute;top:10px;right:10px;z-index:2;min-width:44px;min-height:40px;padding:0 14px;border:0;border-radius:999px;background:var(--c-brand,#2563eb);color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none}
+/* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
+.anno{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
+.anno::before{content:"\270E\00a0";font-weight:400}
+.anno::after{content:'';position:absolute;left:0;right:0;top:100%;height:10px}
 .card:hover .anno,.anno:focus-visible{display:block}
 #khint{position:absolute;left:12px;bottom:10px;z-index:3;pointer-events:none;font-size:13px;color:#6b6b66;background:rgba(255,255,255,.82);border-radius:8px;padding:5px 10px;white-space:nowrap}
 body.modal-open #khint{display:none}
@@ -209,6 +230,8 @@ body.modal-open #khint{display:none}
       <div class="foot" id="foot"></div>
     </div>
     <div id="khint">Shift+클릭 연결 보기 · A 화살표 · 0 전체 보기 · 클릭 크게 보기</div>
+    <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div>
+      <label class="lgsat">채도 <input id="lgSat" type="range" min="0.2" max="1.2" step="0.05" value="0.7"></label></div>
   </section>
   <section class="pane" id="foundation" hidden><iframe class="doc" title="Foundation — 색·글자·여백" data-src="foundation.html"></iframe></section>
   <section class="pane" id="components" hidden><iframe class="doc" title="Components — 이 앱이 쓴 부품" data-src="components.html"></iframe></section>
@@ -216,8 +239,8 @@ body.modal-open #khint{display:none}
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="mtitle" id="mtitle"></div>
   <button class="close" id="mclose">닫기</button>
-  <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
   <button class="mpick" id="mpick" aria-pressed="false" title="화면 안 요소를 눌러 주석 남기기 (P) · Shift+클릭으로 여러 개">주석 달기</button>
+  <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
 </div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
   <div class="ptitle" id="ptitle"></div>
@@ -288,13 +311,14 @@ var html = '<svg class="ar" id="ar" width="1" height="1"><defs><marker id="hd-he
       pol.slice(3).map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></details>' : '';
     html += '<div class="card" data-id="' + esc(s.id) + '"><div class="phone"><iframe scrolling="no" tabindex="-1" title="' + esc(s.title) +
       '" data-src="' + esc(s.file) + '"></iframe><button class="cover" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" aria-label="' + esc(s.title) + ' 크게 보기"></button><button class="anno" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" title="이 화면에 주석 달기" aria-label="' + esc(s.title) + ' 주석 달기">주석</button></div>' +
+      '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="anno" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
+      '" title="이 화면에 주석 달기" aria-label="' + esc(s.title) + ' 주석 달기">주석</button>' +
       '<div class="ftitle">' + (s.state ? '<span class="state">상태</span>' : '') + esc(s.title) + '</div>' +
       (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + (shown ? '<ul class="pol">' + shown + '</ul>' : '') + more + '</div>';
   });
   html += '</div></div>';
 });
+html += '<svg class="ar lks" id="lks" width="1" height="1"><defs></defs></svg><div id="lkl"></div>';   // 색 링크 층(카드 위)
 rowsEl.innerHTML = html;
 rowsEl.style.paddingLeft = LEFT + 'px';
 
@@ -314,22 +338,105 @@ if (D.credits && D.credits.length) {
 $('#foot').innerHTML = foot;
 $('#foot').style.marginLeft = LEFT + 'px';
 
-/* ---------- 화살표: 갈래(branches)에만. 같은 줄은 위쪽 호, 다른 줄은 왼쪽 통로로 우회 ---------- */
+/* ======================================================================
+   연결 보기(갈래 화살표 · Shift+클릭 색 링크) — Model / ViewModel / View 로 나눈다.
+   ====================================================================== */
+// ── Model: 순수 데이터 + 순수 함수(DOM 없음)
+var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(색상각이 서로 다름)
+var RADIUS = 18;                                   // 꺾이는 곳 둥근 반지름(짧은 쪽 선의 절반까지 줄어듦)
 var contentLeft = LEFT;
-function roundPath(pts, r) {
-  var d = 'M' + pts[0][0] + ',' + pts[0][1];
-  for (var i = 1; i < pts.length - 1; i++) {
-    var p = pts[i - 1], c = pts[i], n = pts[i + 1];
-    var l1 = Math.hypot(c[0] - p[0], c[1] - p[1]), l2 = Math.hypot(n[0] - c[0], n[1] - c[1]);
-    var rr = Math.min(r, l1 / 2, l2 / 2);
-    if (rr < 1) { d += ' L' + c[0] + ',' + c[1]; continue; }
-    var a = [c[0] - (c[0] - p[0]) / l1 * rr, c[1] - (c[1] - p[1]) / l1 * rr];
-    var b = [c[0] + (n[0] - c[0]) / l2 * rr, c[1] + (n[1] - c[1]) / l2 * rr];
-    d += ' L' + a[0].toFixed(1) + ',' + a[1].toFixed(1) + ' Q' + c[0] + ',' + c[1] + ' ' + b[0].toFixed(1) + ',' + b[1].toFixed(1);
-  }
-  var e = pts[pts.length - 1];
-  return d + ' L' + e[0] + ',' + e[1];
+function hueOf(hx) {
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m) return null;
+  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (d < 0.08) return null;                       // 회색 계열은 색상각이 없다
+  var h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
 }
+function hueGap(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+function satHex(hx, s) {                           // 채도만 s 배(HSL)
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m || s == null) return hx;
+  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, sa = 0;
+  if (d) { sa = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+  sa = Math.max(0, Math.min(1, sa * s));
+  var c = (1 - Math.abs(2 * l - 1)) * sa, x = c * (1 - Math.abs((h / 60) % 2 - 1)), o = l - c / 2;
+  var q = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return '#' + q.map(function (t) { return ('0' + Math.max(0, Math.min(255, Math.round((t + o) * 255))).toString(16)).slice(-2); }).join('');
+}
+// 링크마다 색: 같은 대상 = 같은 색, 문서에 처음 나온 순서, 앱 강조색 ±30° 는 건너뜀, 모자라면 번호
+function assignColors(links, accentHex, palette) {
+  palette = palette || LINK_COLORS;
+  var ah = hueOf(accentHex);
+  var pal = palette.filter(function (c) { var h = hueOf(c); return ah == null || h == null || hueGap(h, ah) >= 30; });
+  if (!pal.length) pal = palette.slice();
+  var order = [];
+  (links || []).forEach(function (l) { if (order.indexOf(l.to) < 0) order.push(l.to); });
+  var numbered = order.length > pal.length, targets = {};
+  order.forEach(function (t, i) { targets[t] = {color: pal[i % pal.length], n: numbered ? i + 1 : 0, ci: i}; });
+  return {order: order, targets: targets, items: (links || []).map(function (l) {
+    var g = targets[l.to];
+    return {to: l.to, path: l.path, text: l.text, rect: l.rect, color: g.color, n: g.n, ci: g.ci};
+  })};
+}
+// 같은 카드를 Shift+클릭할 때마다: 색1 → 색2 → … → 전체(0) → 색1. 색이 하나뿐이면 늘 전체.
+function cycleNext(stage, n) {
+  if (!(n > 1)) return 0;
+  if (stage == null || stage === 0) return 1;
+  return stage >= n ? 0 : stage + 1;
+}
+// 꺾은선 → 꺾는 곳마다 원호(Q) 하나. 반지름은 짧은 쪽 선의 절반까지.
+function roundPath(pts, r) {
+  var p = [];
+  pts.forEach(function (q) {
+    var a = [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10], l = p[p.length - 1];
+    if (l && l[0] === a[0] && l[1] === a[1]) return;
+    var l2 = p[p.length - 2];
+    if (l2 && ((l2[0] === l[0] && l[0] === a[0]) || (l2[1] === l[1] && l[1] === a[1]))) p.pop();   // 한 줄 위의 가운데 점은 뺀다
+    p.push(a);
+  });
+  var f = function (v) { return String(Math.round(v * 10) / 10); };
+  var d = 'M' + f(p[0][0]) + ',' + f(p[0][1]);
+  for (var i = 1; i < p.length - 1; i++) {
+    var a = p[i - 1], c = p[i], n = p[i + 1];
+    var l1 = Math.hypot(c[0] - a[0], c[1] - a[1]), l2 = Math.hypot(n[0] - c[0], n[1] - c[1]);
+    var rr = Math.min(r, l1 / 2, l2 / 2);
+    if (rr < 0.5) { d += ' L' + f(c[0]) + ',' + f(c[1]); continue; }
+    var s = [c[0] - (c[0] - a[0]) / l1 * rr, c[1] - (c[1] - a[1]) / l1 * rr];
+    var e = [c[0] + (n[0] - c[0]) / l2 * rr, c[1] + (n[1] - c[1]) / l2 * rr];
+    d += ' L' + f(s[0]) + ',' + f(s[1]) + ' Q' + f(c[0]) + ',' + f(c[1]) + ' ' + f(e[0]) + ',' + f(e[1]);
+  }
+  var z = p[p.length - 1];
+  return d + ' L' + f(z[0]) + ',' + f(z[1]);
+}
+/* 둥근 직각 연결선(가로·세로만, 꺾임 ≤ 3, 되돌아가는 고리 없음). 끝은 늘 아래로 대상 카드 위 가운데에 들어간다.
+   src.dir 'up'   : 카드 위에서 위로 → 줄 위 통로(lift+apex) → 가로 → 아래로
+   src.dir 'right': 칩 오른쪽에서 가로로 → 위로 통로 → 가로 → 아래로(대상이 한참 아래면 가로 → 아래) */
+function routeCurve(src, dst, o) {
+  o = o || {};
+  var r = o.r || RADIUS, lift = o.lift == null ? 44 : o.lift, apex = o.apex || 0, k = o.k || 0;
+  var sx = src.x, sy = src.y, tx = dst.x, ty = dst.y, pts;
+  if (src.dir === 'up') {
+    var top = Math.min(sy, ty) - lift - apex;
+    pts = [[sx, sy], [sx, top], [tx, top], [tx, ty]];
+  } else {
+    var g = 18 + 14 * k, vx;                       // 칩에서 오른쪽으로 나가는 거리(쌍마다 엇갈리게)
+    if (ty > sy + 4 * r) {                         // 대상이 아래 줄
+      if (tx >= sx + g + r) pts = [[sx, sy], [tx, sy], [tx, ty]];
+      else {
+        vx = Math.max(sx + g, tx + 2 * r + 4);
+        var my = Math.max(sy + 2 * r, ty - lift - apex);
+        pts = [[sx, sy], [vx, sy], [vx, my], [tx, my], [tx, ty]];
+      }
+    } else {                                       // 같은 줄·위 줄: 줄 위 통로로 넘어간다
+      var lane = Math.min(sy, ty) - lift - apex;
+      vx = tx >= sx + g + 2 * r ? sx + g : Math.max(sx + g, tx + 2 * r + 4);
+      pts = [[sx, sy], [vx, sy], [vx, lane], [tx, lane], [tx, ty]];
+    }
+  }
+  return roundPath(pts, r);
+}
+// 갈래(branches) 화살표: 같은 둥근 직각 규칙. 이름표는 출발 카드 오른쪽(평소 숨김).
 function drawArrows() {
   var svg = $('#ar'), box = {};
   $$('.card', rowsEl).forEach(function (c) {
@@ -337,32 +444,26 @@ function drawArrows() {
   });
   $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
   $$('path.ln', svg).forEach(function (n) { n.remove(); });
-  var paths = '', labels = '', k = 0, minX = LEFT;
+  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {};
+  (D.arrows || []).forEach(function (a) { per[a.from] = (per[a.from] || 0) + 1; });
   (D.arrows || []).forEach(function (a) {
     var s = box[a.from], t = box[a.to]; if (!s || !t) return;
-    var d, lx, ly, side = false;
-    if (s.row === t.row) {
-      var ax = s.x + CARD.w / 2, cx = t.x + CARD.w / 2, y = s.y - 10, peak = s.y - 58;
-      d = 'M' + ax + ',' + y + ' C' + ax + ',' + peak + ' ' + cx + ',' + peak + ' ' + cx + ',' + (y - 2);
-      lx = (ax + cx) / 2; ly = peak + 6;
-    } else {
-      var lane = LEFT - 56 - 22 * (k % 4), off = 22 + 12 * (k % 4);
-      var sx = s.x + 60 + 24 * (k % 3), tx = t.x + 60 + 24 * (k % 3);
-      var sg = s.y - off, tg = t.y - off;
-      d = roundPath([[sx, s.y - 6], [sx, sg], [lane, sg], [lane, tg], [tx, tg], [tx, t.y - 8]], 18);
-      lx = lane - 12; ly = (sg + tg) / 2; side = true; k++;
-      minX = Math.min(minX, lane - 240);
-    }
+    var j = seen[a.from] || 0, n = per[a.from]; seen[a.from] = j + 1;
+    var sx = s.x + CARD.w / 2 + (j - (n - 1) / 2) * 28, tx = t.x + CARD.w / 2;
+    if (Math.abs(sx - tx) < 3 * RADIUS) sx = tx + (tx > s.x + CARD.w / 2 - 1 ? -1 : 1) * (CARD.w / 2 - 40);   // 같은 칸(위아래 줄): 세로선이 겹치지 않게
+    var same = s.row === t.row;
+    var d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 10}, {lift: same ? 36 : 72, apex: same ? 14 * j : 14 * (cross++ % 4)});
     var ft = ' data-from="' + esc(a.from) + '" data-to="' + esc(a.to) + '"';
     paths += '<path class="ln"' + ft + ' d="' + d + '"/>';
-    if (a.label) labels += '<div class="alabel' + (side ? ' side' : '') + '"' + ft + ' style=""left:' + lx + 'px;top:' + ly + 'px">' + esc(a.label) + '</div>';
+    if (a.label) {
+      var li = lab[a.from] || 0; lab[a.from] = li + 1;
+      labels += '<div class="alabel"' + ft + ' style="left:' + (s.x + CARD.w + 10) + 'px;top:' + (s.y + 24 + li * 44) + 'px">' + esc(a.label) + '</div>';
+    }
   });
   svg.insertAdjacentHTML('beforeend', paths);
   rowsEl.insertAdjacentHTML('beforeend', labels);
-  if (labels) $$('.alabel.side', rowsEl).forEach(function (n) { minX = Math.min(minX, n.offsetLeft - n.offsetWidth); });
-  contentLeft = Math.max(0, minX - 24);
-  applyFocus();
-  if (lk) drawLinks();
+  contentLeft = Math.max(0, LEFT - 24);
+  renderLinks();
 }
 
 /* ---------- 이동·확대 ---------- */
@@ -371,7 +472,7 @@ function apply() {
   stage.style.transform = 'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + z.toFixed(4) + ')';
   stage.dataset.zoom = z.toFixed(4);
   $('#zoom').textContent = Math.round(z * 100) + '%';
-  rowsEl.style.setProperty('--lw', Math.max(3, 1.5 / z).toFixed(2));   // 작게 봐도 선이 1.5px 아래로 가늘어지지 않게
+  rowsEl.style.setProperty('--lw', Math.max(2, 1.2 / z).toFixed(2));   // 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
   scheduleVisible();
 }
 var fitMin = ZMIN;                                // 전체 보기가 ZMIN 보다 작아야 하면 그만큼은 허용
@@ -454,11 +555,14 @@ pane.addEventListener('pointerup', endPtr);
 pane.addEventListener('pointercancel', endPtr);
 pane.addEventListener('click', function (e) {
   if (justDragged) { justDragged = false; e.preventDefault(); e.stopPropagation(); return; }
-  var an = e.target.closest && e.target.closest('.anno');
-  if (an) { e.preventDefault(); e.stopPropagation(); openModal(an.dataset.file, an.dataset.title, true); return; }
-  var c = e.target.closest && e.target.closest('.cover');
-  if (c && e.shiftKey) { e.preventDefault(); setFocus(focusId === c.closest('.card').dataset.id ? null : c.closest('.card').dataset.id); return; }
-  if (c) openModal(c.dataset.file, c.dataset.title);
+  var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
+  if (cl('#legend')) return;                       // 범례 안 조작은 연결 보기를 끄지 않는다
+  var an = cl('.anno');
+  if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) setFocus(null); openModal(an.dataset.file, an.dataset.title, true); return; }
+  var c = cl('.cover');
+  if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; if (focusId === id) cycle(); else setFocus(id); return; }
+  if (c) { if (focusId) setFocus(null); openModal(c.dataset.file, c.dataset.title); return; }
+  if (focusId && !e.shiftKey && !cl('.card, .lchip, path.lk')) setFocus(null);   // 빈 판을 그냥 누르면 연결 보기 끝
 }, true);
 
 /* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) ---------- */
@@ -484,7 +588,6 @@ function sizeModal() {
   mscale = s;
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
   mbox.style.width = Math.floor(MW * s) + 'px'; mbox.style.height = Math.floor(MH * s) + 'px';
-  mbox.style.marginTop = '48px';
 }
 function openModal(file, title, pick) {
   sizeModal(); $('#mtitle').textContent = title || '';
@@ -546,7 +649,55 @@ if (P && P.options && P.options.length) {
   setPalette(start);
 }
 
-/* ---------- 연결 보기: 화살표 켜고 끄기(A) · Shift+클릭 강조(Esc 해제) ---------- */
+// ── ViewModel: Model + UI 상태(단계·체크·마우스·채도) → 보일 것. DOM 없음.
+function deriveView(m, ui) {
+  ui = ui || {};
+  var out = {pairs: [], legend: null, rings: {}, dimCards: [], stage: 0, nColors: 0, visible: []};
+  if (!m || !m.items || !m.items.length) return out;
+  var n = m.order.length, stage = n <= 1 ? 0 : ui.stage == null ? 1 : ui.stage > n ? 0 : ui.stage;
+  var sat = ui.sat == null ? 0.7 : ui.sat, hv = ui.hover == null ? null : ui.hover;
+  var title = function (id) { return (m.titles && m.titles[id]) || id; };
+  var col = m.items.map(function (it) { return satHex(it.color, sat); });
+  var vis = m.items.map(function (it, k) { return ui.on ? !!ui.on[k] : stage === 0 || it.ci === stage - 1; });
+  if (hv != null && !vis[hv]) hv = null;
+  out.stage = stage; out.nColors = n; out.visible = vis;
+  out.legend = {title: title(m.from) + ' · ' + (stage === 0 ? '전체 ' + m.items.length + '개' : stage + '/' + n + ' ' + title(m.order[stage - 1])),
+    rows: m.items.map(function (it, k) { return {k: k, color: col[k], from: title(m.from), text: it.text || '(링크)', to: title(it.to), checked: vis[k], emph: hv === k}; })};
+  var hvTo = hv == null ? null : m.items[hv].to;
+  m.items.forEach(function (it, k) {
+    if (vis[k] && !out.rings[it.to]) out.rings[it.to] = {color: col[k], n: it.n, emph: hvTo === it.to, dim: hvTo != null && hvTo !== it.to};
+  });
+  m.order.forEach(function (t) { if (!out.rings[t]) out.dimCards.push(t); });
+  var g = m.geom, placed = [], idx = 0;
+  var list = m.items.map(function (it, k) { return k; }).filter(function (k) { return vis[k]; });
+  if (g) list.sort(function (a, b) { return (m.items[a].rect.y - m.items[b].rect.y) || a - b; });
+  list.forEach(function (k) {
+    var it = m.items[k];
+    var p = {k: k, from: m.from, to: it.to, color: col[k], n: it.n, text: it.text, chip: null, path: null, emph: hv === k, dim: hv != null && hv !== k};
+    if (g) {
+      var S = g.src, sc = S.sc || 1, r = it.rect, sz = (g.chips && g.chips[k]) || {w: 120, h: 30};
+      var ex = S.x + r.x * sc, ey = S.y + r.y * sc, eh = r.h * sc, bot = S.y + S.h;
+      var cy = Math.max(S.y + 4 + sz.h / 2, Math.min(bot - 4 - sz.h / 2, ey + eh / 2));
+      var lim = S.limit == null ? Infinity : S.limit;
+      var c = S.x + S.w + 8 + sz.w <= lim - 4
+        ? {x: S.x + S.w + 8, y: cy - sz.h / 2, w: sz.w, h: sz.h, side: 'out'}          // 카드 오른쪽 바깥, 요소 높이
+        : {x: Math.max(S.x + 6, Math.min(S.x + S.w - sz.w - 6, ex)), y: Math.max(S.y + 4, Math.min(bot - sz.h - 4, ey - 4 - sz.h)), w: sz.w, h: sz.h, side: 'in'};   // 옆 카드를 덮으면 요소 바로 위(카드 안)
+      for (var guard = 0; guard < 60; guard++) {   // 칩끼리 안 겹치게 4px 띄워 쌓는다
+        var hit = placed.filter(function (q) { return c.x < q.x + q.w && q.x < c.x + c.w && c.y < q.y + q.h + 4 && q.y < c.y + c.h + 4; })[0];
+        if (!hit) break;
+        c.y = hit.y + hit.h + 4;
+      }
+      placed.push(c); p.chip = c;
+      var T = g.targets && g.targets[it.to];
+      if (T) p.path = routeCurve({x: c.x + c.w, y: c.y + c.h / 2, dir: 'right'}, {x: T.x + T.w / 2, y: T.y - 10}, {apex: idx * 16, k: idx});
+      idx++;
+    }
+    out.pairs.push(p);
+  });
+  return out;
+}
+
+// ── View: DOM/SVG 는 여기서만. 이벤트 → 의도(focus · cycle · exitFocus · toggleColor · hover · setSat)
 var focusId = null, arrowsOn = true;
 try { arrowsOn = localStorage.getItem('hd-arrows') !== '0'; } catch (e) {}
 function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
@@ -556,144 +707,206 @@ function setArrows(on) {
   $('#arrows').setAttribute('aria-pressed', String(arrowsOn));
   try { localStorage.setItem('hd-arrows', arrowsOn ? '1' : '0'); } catch (e) {}
 }
-function applyFocus() {
-  rowsEl.classList.toggle('focusing', !!focusId);
-  var linked = {};
-  if (focusId) linked[focusId] = 1;
-  $$('path.ln, .alabel', rowsEl).forEach(function (n) {
-    var on = !!focusId && (n.getAttribute('data-from') === focusId || n.getAttribute('data-to') === focusId);
-    n.classList.toggle('on', on);
-    var rp = on && !!lk && n.getAttribute('data-from') === focusId && !!lk.targets[n.getAttribute('data-to')];   // 색 링크 화살표가 대신 그린다
-    n.classList.toggle('rep', rp);
-    if (rp) n.classList.remove('on');
-    if (on) { linked[n.getAttribute('data-from')] = 1; linked[n.getAttribute('data-to')] = 1; }
-  });
-  $$('.card', rowsEl).forEach(function (c) {
-    var t = lk && lk.targets[c.dataset.id];
-    c.classList.toggle('hl', !!focusId && (!!linked[c.dataset.id] || !!t));
-    c.classList.toggle('focus', c.dataset.id === focusId);
-    c.classList.toggle('lt', !!t);
-    if (t) c.style.setProperty('--ring', t.color); else c.style.removeProperty('--ring');
-  });
-}
-
-/* ---------- 연결 보기 2: Shift+클릭한 화면의 링크마다 색 하나(같은 대상 = 같은 색) ---------- */
-var LINK_COLORS = ['#EA580C', '#16A34A', '#9333EA', '#DB2777', '#0D9488', '#CA8A04', '#DC2626', '#92400E'];
-var lk = null, lkDeadline = 0, lkHover = null;
+var lk = null, lkDeadline = 0, lkWaitT = 0, curView = null, xpId = null, satRaf = 0;
+var ui = {stage: 1, on: null, hover: null, sat: 0.7};
+try { var sv0 = parseFloat(localStorage.getItem('hd-link-sat')); if (sv0 >= 0.2 && sv0 <= 1.2) ui.sat = sv0; } catch (e) {}
+var TITLES = {};
+(D.rows || []).forEach(function (row) { row.screens.forEach(function (s) { TITLES[s.id] = s.title; }); });
 function cardEl(id) { return $$('.card', rowsEl).filter(function (c) { return c.dataset.id === id; })[0] || null; }
 function frameOf(id) { var c = cardEl(id); return c ? $('.phone iframe', c) : null; }
 function postTo(id, msg) { var f = frameOf(id); try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); } catch (e) {} }
-function hueOf(hx) {
-  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m) return null;
-  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
-  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  if (d < 0.08) return null;                       // 회색 계열은 색상각이 없다
-  var h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return (h * 60 + 360) % 360;
-}
-function hueGap(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
 function requestLinks(id) {
   var f = frameOf(id); if (!f) return;
-  lkDeadline = performance.now() + 1500;            // 1.5초 안에 답이 없으면(palette.js 없음 등) 예전 강조만
+  lkDeadline = performance.now() + 1500;            // 1.5초 안에 답이 없으면(palette.js 없음 등) 갈래 이름표로
   if (f.hasAttribute('data-src')) { f.src = f.getAttribute('data-src'); f.removeAttribute('data-src'); }
   var ask = function () { if (focusId === id) postTo(id, {type: 'hd-links', on: true}); };
   f.addEventListener('load', ask, {once: true});
   ask();
 }
-function setLinks(d) {
+function buildModel(d) {
   var ids = {};
   $$('.card', rowsEl).forEach(function (c) { ids[c.dataset.id] = 1; });
   var items = (d.links || []).filter(function (l) { return l && ids[l.to] && l.to !== focusId && l.rect; });
-  if (!items.length) { lk = null; return; }
-  var ah = hueOf(d.accent);
-  var pal = LINK_COLORS.filter(function (c) { return ah == null || hueGap(hueOf(c), ah) >= 30; });
-  if (!pal.length) pal = LINK_COLORS.slice();
-  var order = [];
-  items.forEach(function (l) { if (order.indexOf(l.to) < 0) order.push(l.to); });   // 문서에 처음 나온 순서
-  var numbered = order.length > pal.length, targets = {};
-  order.forEach(function (t, i) { targets[t] = {color: pal[i % pal.length], n: numbered ? i + 1 : 0}; });
-  lk = {from: focusId, accent: d.accent || '', order: order, targets: targets, items: items.map(function (l) {
-    return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect, color: targets[l.to].color, n: targets[l.to].n};
-  })};
-  postTo(focusId, {type: 'hd-links-paint', items: lk.items.map(function (i) { return {path: i.path, color: i.color, n: i.n || undefined}; })});
+  if (!items.length) return null;
+  var m = assignColors(items.map(function (l) { return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect}; }), d.accent, LINK_COLORS);
+  m.from = focusId; m.accent = d.accent || ''; m.titles = TITLES; m.docHeight = +d.docHeight || 0;
+  return m;
+}
+function applyFocus() {
+  var v = curView;
+  rowsEl.classList.toggle('focusing', !!focusId);
+  rowsEl.classList.toggle('haslk', !!(focusId && lk));
+  var linked = {};
+  if (focusId) linked[focusId] = 1;
+  $$('path.ln, .alabel', rowsEl).forEach(function (n) {
+    var on = !!focusId && (n.getAttribute('data-from') === focusId || n.getAttribute('data-to') === focusId);
+    n.classList.toggle('on', on);
+    var rp = on && !!lk && n.getAttribute('data-from') === focusId && !!lk.targets[n.getAttribute('data-to')];   // 색 링크가 대신 그린다
+    n.classList.toggle('rep', rp);
+    if (rp) n.classList.remove('on');
+    if (on) { linked[n.getAttribute('data-from')] = 1; linked[n.getAttribute('data-to')] = 1; }
+  });
+  var rings = v ? v.rings : {};
+  $$('.card', rowsEl).forEach(function (c) {
+    var t = rings[c.dataset.id];
+    c.classList.toggle('hl', !!focusId && (!!linked[c.dataset.id] || !!t));
+    c.classList.toggle('focus', c.dataset.id === focusId);
+    c.classList.toggle('lt', !!t);
+    if (t) c.style.setProperty('--ring', t.color); else { c.style.removeProperty('--ring'); c.classList.remove('em', 'dim'); }
+  });
 }
 function clearLinkLayer() {
-  var svg = $('#ar');
-  $$('path.lk, circle.lkd, marker.lkm', svg).forEach(function (n) { n.remove(); });
+  var svg = $('#lks');
+  $$('path.lk, marker.lkm', svg).forEach(function (n) { n.remove(); });
+  $('#lkl').innerHTML = '';
   $$('.lnum', rowsEl).forEach(function (n) { n.remove(); });
 }
-function drawLinks() {
+function renderLegend(v) {
+  var lg = $('#legend');
+  if (!v || !v.legend || !focusId) { lg.hidden = true; return; }
+  $('#lgTitle').textContent = v.legend.title;
+  $('#lgRows').innerHTML = v.legend.rows.map(function (r) {
+    return '<label class="lgrow" data-k="' + r.k + '"><span class="lgdot" style="background:' + r.color + '"></span><span class="lgtx">' + esc(r.from) +
+      ' › <b>[' + esc(r.text) + ']</b><br><i>→ ' + esc(r.to) + '</i></span><input type="checkbox"' + (r.checked ? ' checked' : '') + '></label>';
+  }).join('');
+  $('#lgSat').value = String(ui.sat);
+  lg.hidden = false;
+}
+function renderLinks() {
   clearLinkLayer();
-  if (!lk || lk.from !== focusId) return;
-  var svg = $('#ar'), src = cardEl(lk.from); if (!src) return;
-  var ph = $('.phone', src), sc = ph.offsetWidth / CARD.w, sx0 = src.offsetLeft, sy0 = src.offsetTop;
-  var defs = '', paths = '', cols = [];
-  lk.items.forEach(function (it) {
-    var tc = cardEl(it.to); if (!tc) return;
-    var ci = cols.indexOf(it.color); if (ci < 0) { ci = cols.length; cols.push(it.color); }
-    var r = it.rect, sx = sx0 + (r.x + r.w / 2) * sc, sy = sy0 + (r.y + r.h / 2) * sc;
-    var tx = tc.offsetLeft, ty = tc.offsetTop, w = CARD.w, h = CARD.h, ex, ey, d;
-    if (tc.parentNode === src.parentNode) {          // 같은 줄: 옆으로
-      ex = tx > sx0 ? tx - 12 : tx + w + 12;
-      ey = Math.max(ty + 40, Math.min(ty + h - 40, sy));
-      var mx = (sx + ex) / 2;
-      d = 'M' + sx.toFixed(1) + ',' + sy.toFixed(1) + ' C' + mx.toFixed(1) + ',' + sy.toFixed(1) + ' ' + mx.toFixed(1) + ',' + ey.toFixed(1) + ' ' + ex.toFixed(1) + ',' + ey.toFixed(1);
-    } else {                                          // 다른 줄: 위·아래로
-      ex = tx + w / 2; ey = ty > sy0 ? ty - 12 : ty + h + 12;
-      var my = (sy + ey) / 2;
-      d = 'M' + sx.toFixed(1) + ',' + sy.toFixed(1) + ' C' + sx.toFixed(1) + ',' + my.toFixed(1) + ' ' + ex.toFixed(1) + ',' + my.toFixed(1) + ' ' + ex.toFixed(1) + ',' + ey.toFixed(1);
-    }
-    var ft = ' data-from="' + esc(lk.from) + '" data-to="' + esc(it.to) + '"';
-    paths += '<path class="lk"' + ft + ' stroke="' + it.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + d + '"><title>' + esc(it.text) + ' → ' + esc(it.to) + '</title></path>' +
-      '<circle class="lkd"' + ft + ' cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="7" fill="' + it.color + '" stroke="#fff" stroke-width="2"/>';
+  var src = lk && lk.from === focusId ? cardEl(lk.from) : null;
+  if (!src) { curView = null; applyFocus(); renderLegend(null); return; }
+  var layer = $('#lkl'), svg = $('#lks');
+  layer.innerHTML = lk.items.map(function (it, k) { return '<div class="lchip" data-k="' + k + '">' + esc(it.text || '(링크)') + ' →</div>'; }).join('');
+  var chips = $$('.lchip', layer), ph = $('.phone', src), targets = {}, nb = src.nextElementSibling;
+  lk.order.forEach(function (t) {
+    var c = cardEl(t); if (!c) return;
+    var p = $('.phone', c); targets[t] = {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight};
   });
-  cols.forEach(function (c, i) {
-    defs += '<marker class="lkm" id="hd-lk-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/></marker>';
+  lk.geom = {src: {x: src.offsetLeft, y: src.offsetTop, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w, limit: nb ? nb.offsetLeft : null},
+             targets: targets, chips: chips.map(function (n) { return {w: n.offsetWidth, h: n.offsetHeight}; })};
+  var v = curView = deriveView(lk, ui), defs = '', paths = '', cols = [];
+  v.pairs.forEach(function (p) {
+    var n = chips[p.k];
+    n.style.left = p.chip.x + 'px'; n.style.top = p.chip.y + 'px'; n.style.color = p.color;
+    n.setAttribute('data-to', p.to); n.title = '→ ' + (TITLES[p.to] || p.to);
+    n.classList.add('on');
+    if (!p.path) return;
+    var ci = cols.indexOf(p.color); if (ci < 0) { ci = cols.length; cols.push(p.color); }
+    paths += '<path class="lk" data-k="' + p.k + '" data-from="' + esc(p.from) + '" data-to="' + esc(p.to) + '" stroke="' + p.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + p.path + '"><title>' +
+      esc(p.text) + ' → ' + esc(TITLES[p.to] || p.to) + '</title></path>';
+  });
+  cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색(색마다 marker 하나)
+    defs += '<marker class="lkm" id="hd-lk-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/></marker>';
   });
   $('defs', svg).insertAdjacentHTML('beforeend', defs);
   svg.insertAdjacentHTML('beforeend', paths);
-  lk.order.forEach(function (t) {
-    var g = lk.targets[t], c = cardEl(t); if (!g.n || !c) return;
+  Object.keys(v.rings).forEach(function (t) {
+    var g = v.rings[t], c = cardEl(t); if (!g.n || !c) return;
     var b = document.createElement('span'); b.className = 'lnum'; b.textContent = circled(g.n); $('.phone', c).appendChild(b);
   });
-  markHover();
+  applyFocus(); renderLegend(v); markHover();
+  postTo(lk.from, {type: 'hd-links-paint', items: v.pairs.map(function (p) { return {path: lk.items[p.k].path, color: p.color, n: p.n || undefined}; })});
 }
-function markHover() {
-  var h = lkHover;
-  $$('path.lk, circle.lkd', $('#ar')).forEach(function (n) {
-    var t = n.getAttribute('data-to');
-    n.classList.toggle('em', !!h && t === h); n.classList.toggle('dim', !!h && t !== h);
+function markHover() {                              // 마우스: 그 한 쌍만 진하게, 나머지 쌍·대상 테두리는 흐리게
+  if (!lk) return;
+  var v = deriveView({from: lk.from, order: lk.order, items: lk.items, titles: lk.titles}, ui), by = {};
+  v.pairs.forEach(function (p) { by[p.k] = p; });
+  $$('#lks path.lk, #lkl .lchip').forEach(function (n) {
+    var p = by[n.getAttribute('data-k')];
+    n.classList.toggle('em', !!p && p.emph); n.classList.toggle('dim', !!p && p.dim);
   });
+  $$('#lgRows .lgrow').forEach(function (n) { n.classList.toggle('em', ui.hover === +n.dataset.k); });
   $$('.card.lt', rowsEl).forEach(function (c) {
-    c.classList.toggle('em', !!h && c.dataset.id === h); c.classList.toggle('dim', !!h && c.dataset.id !== h);
+    var g = v.rings[c.dataset.id];
+    c.classList.toggle('em', !!g && g.emph); c.classList.toggle('dim', !!g && g.dim);
   });
 }
-function setFocus(id) {
+// 펼치기(겹쳐서): 화면 전체 높이까지(카드 2.5배 한도), 다른 카드 자리는 그대로
+function expand(id, h, done) {
+  var c = cardEl(id); if (!c) return;
+  var ph = $('.phone', c), fr = $('iframe', ph);
+  xpId = id;
+  c.style.height = c.offsetHeight + 'px'; c.classList.add('xp');
+  fr.style.height = h + 'px';
+  void ph.offsetHeight;
+  ph.style.height = h + 'px';
+  var fin = false, end = function () { if (fin) return; fin = true; done(); };
+  ph.addEventListener('transitionend', end, {once: true});
+  setTimeout(end, 300);
+}
+function collapse(id) {
+  var c = cardEl(id); if (xpId === id) xpId = null;
+  if (!c) return;
+  var ph = $('.phone', c), fr = $('iframe', ph);
+  ph.style.height = '';
+  setTimeout(function () { if (xpId === id) return; fr.style.height = ''; c.style.height = ''; c.classList.remove('xp'); }, 230);
+}
+function setFocus(id) {                             // 의도 focus(id) / exitFocus() = setFocus(null)
   var prev = focusId; focusId = id || null;
   if (prev && prev !== focusId) { postTo(prev, {type: 'hd-links', on: false}); postTo(prev, {type: 'hd-links-paint', items: []}); }
-  lk = null; lkHover = null; clearLinkLayer();
-  $$('.card.em, .card.dim', rowsEl).forEach(function (c) { c.classList.remove('em', 'dim'); });
-  applyFocus();
-  if (focusId) requestLinks(focusId);
+  if (xpId && xpId !== focusId) collapse(xpId);
+  lk = null; curView = null; ui.stage = 1; ui.on = null; ui.hover = null;
+  clearTimeout(lkWaitT);
+  rowsEl.classList.toggle('lkwait', !!focusId);
+  if (focusId) { lkWaitT = setTimeout(function () { rowsEl.classList.remove('lkwait'); }, 1500); requestLinks(focusId); }
+  renderLinks();
+}
+function cycle() {                                  // 같은 카드 Shift+클릭: 다음 색 → … → 전체 → 색1
+  if (!lk) return;
+  var n = lk.order.length, s = curView ? curView.stage : ui.stage;
+  ui.stage = cycleNext(s, n); ui.on = null; ui.hover = null;
+  renderLinks();
+}
+function toggleColor(k) {                           // 범례 체크: 다음 Shift+클릭 전까지 그대로
+  var vis = curView ? curView.visible : [];
+  if (!ui.on) { ui.on = {}; vis.forEach(function (x, i) { ui.on[i] = x; }); }
+  ui.on[k] = !ui.on[k]; ui.hover = null;
+  renderLinks();
+}
+function hover(k) { if (k !== ui.hover) { ui.hover = k; markHover(); } }
+function setSat(v) {
+  ui.sat = Math.max(0.2, Math.min(1.2, +v || 0.7));
+  try { localStorage.setItem('hd-link-sat', String(ui.sat)); } catch (e) {}
+  cancelAnimationFrame(satRaf); satRaf = requestAnimationFrame(renderLinks);
 }
 addEventListener('message', function (e) {
   var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-links' || !focusId || !Array.isArray(d.links)) return;
   var f = frameOf(focusId); if (!f || e.source !== f.contentWindow || performance.now() > lkDeadline) return;
-  setLinks(d); applyFocus(); drawLinks();
-});
-pane.addEventListener('mousemove', function (e) {          // 링크 요소(카드 안 그 자리)·화살표·대상 화면에 올리면 그 짝만 강조
-  if (!lk || (drag && drag.moved)) return;
-  var el = e.target, t = null;
-  if (el && el.classList && (el.classList.contains('lk') || el.classList.contains('lkd'))) t = el.getAttribute('data-to');
-  else {
-    var c = el && el.closest && el.closest('.card');
-    if (c && c.dataset.id === lk.from) {
-      var r = $('.phone', c).getBoundingClientRect(), k = r.width / CARD.w, x = (e.clientX - r.left) / k, y = (e.clientY - r.top) / k;
-      lk.items.forEach(function (it) { var q = it.rect; if (x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) t = it.to; });
-    } else if (c && lk.targets[c.dataset.id]) t = c.dataset.id;
+  var id = focusId, m = buildModel(d), want = Math.min(Math.round(+d.docHeight || 0), Math.round(CARD.h * 2.5));
+  if (m && xpId !== id && want > CARD.h + 4) {      // 긴 화면: 먼저 펼치고, 다 펼친 뒤 자리를 다시 받아 그린다
+    expand(id, want, function () { if (focusId === id) requestLinks(id); });
+    return;
   }
-  if (t !== lkHover) { lkHover = t; markHover(); }
+  clearTimeout(lkWaitT); rowsEl.classList.remove('lkwait');
+  lk = m; renderLinks();
 });
+pane.addEventListener('mousemove', function (e) {
+  if (!lk || !curView || (drag && drag.moved)) return;
+  var el = e.target, k = null, vis = curView.visible, cl = function (s) { return el && el.closest ? el.closest(s) : null; };
+  var row = cl('.lgrow'), chip = cl('.lchip');
+  if (row) k = +row.dataset.k;
+  else if (chip) k = +chip.dataset.k;
+  else if (el && el.classList && el.classList.contains('lk')) k = +el.getAttribute('data-k');
+  else if (!cl('#legend')) {
+    var c = cl('.card');
+    if (c && c.dataset.id === lk.from) {
+      var r = $('.phone', c).getBoundingClientRect(), s = r.width / CARD.w, x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
+      lk.items.forEach(function (it, i) { var q = it.rect; if (vis[i] && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) k = i; });
+    } else if (c && curView.rings[c.dataset.id]) {
+      lk.items.forEach(function (it, i) { if (k == null && vis[i] && it.to === c.dataset.id) k = i; });
+    }
+  }
+  if (k != null && !vis[k]) k = null;
+  hover(k);
+});
+(function () {
+  var lg = $('#legend');
+  ['pointerdown', 'wheel', 'dblclick'].forEach(function (ev) { lg.addEventListener(ev, function (e) { e.stopPropagation(); }); });
+  $('#lgRows').addEventListener('change', function (e) { var r = e.target.closest('.lgrow'); if (r) toggleColor(+r.dataset.k); });
+  $('#lgSat').addEventListener('input', function (e) { setSat(e.target.value); });
+})();
+window.HDCanvas = {assignColors: assignColors, cycleNext: cycleNext, routeCurve: routeCurve, deriveView: deriveView, satHex: satHex, LINK_COLORS: LINK_COLORS};
 $('#arrows').addEventListener('click', function () { setArrows(!arrowsOn); });
 setArrows(arrowsOn);
 
@@ -885,6 +1098,13 @@ loadVisible();
 var hashTab = (location.hash || '').slice(1);
 if (hashTab === 'foundation' || hashTab === 'components') showTab(hashTab);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { drawArrows(); });
+if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 와서 줄 높이가 바뀌면 화살표를 다시
+  var roRaf = 0, roH = 0;
+  new ResizeObserver(function () {
+    if (rowsEl.offsetHeight === roH) return; roH = rowsEl.offsetHeight;
+    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
+  }).observe(rowsEl);
+}
 window.__hdReady = performance.now();
 })();
 </script>

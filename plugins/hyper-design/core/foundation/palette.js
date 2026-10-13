@@ -3,8 +3,9 @@
    요소 고르기(캔버스 크게 보기): {type:'hd-pick', on} 을 받으면 마우스 올린 요소에 테두리를 그리고
    {type:'hd-hover', rect} / 클릭 시 {type:'hd-picked', screen, path, text, rect, add} 를 부모에게 보낸다(add = Shift 로 여러 개 고르기).
    연결 보기: {type:'hd-links', on:true} 를 받으면 다른 화면으로 가는 링크 목록을
-   {type:'hd-links', screen, accent, links:[{to, path, text, rect}]} 로 답하고,
-   {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움). */
+   {type:'hd-links', screen, accent, docHeight, links:[{to, path, text, rect}]} 로 답하고(docHeight = 화면 전체 높이),
+   {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움).
+   한 요소에 쌍이 여럿이면 테두리를 3px 간격 동심으로 겹친다. */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -109,16 +110,23 @@
     });
     return res;
   }
+  function docHeight() {
+    var de = document.documentElement, b = document.body;
+    return Math.max(de.scrollHeight, de.offsetHeight, b ? b.scrollHeight : 0, b ? b.offsetHeight : 0);
+  }
   var paints = [];
   function paint(items) {
     paints.forEach(function (n) { n.remove(); }); paints = [];
+    var seen = {};
     (items || []).forEach(function (it) {
       var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
       if (!el) return;
+      var o = 3 + 6 * (seen[it.path] || 0);            // 같은 요소의 두 번째 쌍부터 바깥으로(3px 틈)
+      seen[it.path] = (seen[it.path] || 0) + 1;
       var r = el.getBoundingClientRect(), d = document.createElement('div');
       d.setAttribute('data-hd-links', '');
       d.style.cssText = 'position:absolute;z-index:2147483646;pointer-events:none;border-radius:6px;box-sizing:border-box;' +
-        'left:' + (r.left + scrollX - 3) + 'px;top:' + (r.top + scrollY - 3) + 'px;width:' + (r.width + 6) + 'px;height:' + (r.height + 6) + 'px;' +
+        'left:' + (r.left + scrollX - o) + 'px;top:' + (r.top + scrollY - o) + 'px;width:' + (r.width + 2 * o) + 'px;height:' + (r.height + 2 * o) + 'px;' +
         'border:3px solid ' + it.color + ';box-shadow:0 0 0 2px rgba(255,255,255,.85)';
       if (it.n) {
         var b = document.createElement('span');
@@ -134,7 +142,7 @@
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);
-    else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), links: links()}); else paint([]); }
+    else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
