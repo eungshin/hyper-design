@@ -29,7 +29,7 @@ button{font:inherit;color:inherit}
 .vbtn{min-height:44px;min-width:44px;padding:0 14px;border:1px solid #dcdcd7;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
 .vbtn:hover{background:#F5F5F2}
 .zoom{min-width:64px;font-variant-numeric:tabular-nums;color:#555}
-body:not([data-tab="screens"]) .view{visibility:hidden}
+body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 @media (max-width:760px){
   .hd{padding:6px 10px;gap:4px 8px}
   .hd h1{flex:1 1 0;font-size:16px;order:1;max-width:none}
@@ -464,10 +464,10 @@ function sizeModal() {
 function openModal(file, title) {
   sizeModal(); $('#mtitle').textContent = title || '';
   mscreen = idOf(file);
-  mframe.src = file; modal.hidden = false; $('#mclose').focus();
+  mframe.src = file; modal.hidden = false; document.body.classList.add('modal-open'); $('#mclose').focus();
   drawPins();
 }
-function closeModal() { setPick(false); hidePop(); modal.hidden = true; mframe.removeAttribute('src'); mscreen = null; drawPins(); }
+function closeModal() { setPick(false); hidePop(); modal.hidden = true; document.body.classList.remove('modal-open'); mframe.removeAttribute('src'); mscreen = null; drawPins(); }
 mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); });
 $('#mclose').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal || e.target.id === 'mtitle') closeModal(); });
