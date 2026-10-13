@@ -22,7 +22,7 @@ def wjson(p, obj):
 
 # 1. expand_states 기본값
 def test_expand_states_fills_defaults_idempotent(tmp_path):
-    screens = [{"id": f"s{i}", "title": f"화면 {i}", "group": "g", "purpose": "p", "kind": "list", "policies": ["x"]}
+    screens = [{"id": f"s{i}", "title": f"화면 {i}", "group": "g", "purpose": "p", "kind": "detail", "policies": ["x"]}
                for i in range(3)]
     screens[1]["traits"] = {"shares": True}
     screens[2]["role"] = "editor"
@@ -93,3 +93,20 @@ def test_skill_md_wiring():
     assert "imgsearch.py" not in go
     mx = (PLUGIN / "skills" / "max" / "SKILL.md").read_text(encoding="utf-8")
     assert "hyper-design:state-writer" in mx
+
+
+# 1b. 목록 화면은 large_list를 채우지 않는다 — selfcheck가 미선언을 잡는다
+def test_list_screen_large_list_stays_undeclared(tmp_path):
+    wjson(tmp_path / "screens.json", {"groups": ["g"], "screens": [
+        {"id": "lst", "title": "목록", "group": "g", "purpose": "p", "kind": "list", "policies": ["x"]},
+        {"id": "lst2", "title": "목록2", "group": "g", "purpose": "p", "kind": "list", "policies": ["x"],
+         "traits": {"large_list": True}}]})
+    r = run("expand_states.py", tmp_path, "--stage", "go")
+    assert r.returncode == 0, r.stdout + r.stderr
+    by = {s["id"]: s for s in json.loads((tmp_path / "screens.json").read_text(encoding="utf-8"))["screens"]}
+    assert "large_list" not in by["lst"]["traits"]
+    assert set(by["lst"]["traits"]) == {"list_first_use", "form", "shares", "long_task"}
+    assert by["lst2"]["traits"]["large_list"] is True
+    txt = run("selfcheck.py", tmp_path).stdout
+    assert "lst: traits.large_list(30개 넘게 쌓이는 목록인가) 미선언" in txt
+    assert "lst2: traits.large_list" not in txt
