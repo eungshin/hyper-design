@@ -8,6 +8,7 @@ python3 build_canvas.py <out_dir>
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 390×844 크게 보기.
 - out/foundation.html : tokens.css 의 색 역할(쉬운 이름)·글자 단계·여백·모서리·그림자 견본. palette.js 로 즉시 전환.
+- out/palette.js      : foundation/palette.js 를 복사(팔레트 교체 + 요소 고르기 hd-pick/hd-picked).
 - out/components.html : foundation/specimens.html 중 화면들이 실제로 쓴 클래스의 섹션만. 배지는 screens.json badges 로.
 
 판 규칙(그대로 유지)
@@ -21,10 +22,11 @@ screens.json:
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}])
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 """
-import sys, os, json, re, html, pathlib
+import sys, os, json, re, html, pathlib, shutil
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
+PALETTE_JS = HERE.parent / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parent / "foundation" / "specimens.html")
 SCALE, CARD, MODAL = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}
 
@@ -305,6 +307,8 @@ def main():
         sys.exit("usage: python3 build_canvas.py <out_dir>")
     out = pathlib.Path(sys.argv[1])
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
+    if PALETTE_JS.exists():                             # 화면 쪽 고르기(요소 고르기) 스크립트를 최신으로
+        shutil.copyfile(PALETTE_JS, out / "palette.js")
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
     nk = build_components(out, m)
