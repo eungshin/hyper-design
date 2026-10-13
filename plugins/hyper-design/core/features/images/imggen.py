@@ -2,8 +2,8 @@
 
   python3 imggen.py <out> [--placeholders-only] [--cmd "<generator command>"] [--timeout 480]
 
-순서: ① 자리표시 즉시 생성 ② 비율별 시트 프롬프트 ③ 생성기를 시트마다 순서대로 호출 ④ 흰 간격 감지로 자르기
-⑤ credits.json 병합 ⑥ .images/status.json 기록. 처리된 경우는 모두 종료 코드 0.
+순서: ① 자리표시 즉시 생성 ② 시트 계획(최소 시트, 칸마다 슬롯 비율로 자르기)·프롬프트 ③ 생성기를 시트마다 순서대로 호출 ④ 흰 간격 감지로 자르기
+⑤ 빈칸은 같은 시트 사진의 다른 구도(.images/alt/) ⑥ credits.json 병합 ⑦ .images/status.json 기록. 처리된 경우는 모두 종료 코드 0.
 """
 import argparse
 import json
@@ -108,23 +108,84 @@ def first_en(s):
     return str(s.get("what", s.get("slot", "object")))
 
 
+def orient(s):
+    """'S' 정사각 · 'L' 가로 · 'P' 세로."""
+    w, h = parse_ratio(s.get("ratio", "3:4"))
+    return "S" if w == h else "L" if w > h else "P"
+
+
+def _cell_ratio(chunk):
+    """2×2 시트 칸 비율: 가로 ≥ 세로면 4:3, 아니면 3:4. 정사각만 있으면 1:1."""
+    o = [orient(s) for s in chunk]
+    nl, np_ = o.count("L"), o.count("P")
+    if nl == 0 and np_ == 0:
+        return "1:1"
+    return "4:3" if nl >= np_ else "3:4"
+
+
 def plan_sheets(photos):
-    """[(ratio_str, cols, rows, [slots])] — 1:1은 최대 16칸(4×4/3×3/2×2), 나머지는 최대 4칸 2×2."""
-    groups = {}
+    """[(cell_ratio, cols, rows, [slots])] — 시트를 최소로 만들고 칸마다 슬롯 비율로 가운데 자른다.
+
+    규칙(같은 입력이면 같은 결과):
+    1. 사진 ≤ 4장 → 2×2 시트 하나에 모두.
+    2. 그 밖: 정사각은 최대 16칸(≤4 → 2×2, ≤9 → 3×3, 그 밖 4×4). 가로·세로는 방향별로 모아 최대 4칸 2×2.
+    3. 1–2장만 남은 묶음(가로·세로·정사각의 마지막 묶음)은 빈칸이 충분한 다른 2×2 방향 시트에 합친다 —
+       반대 방향 시트 우선, 다음 같은 방향, 동률이면 앞 시트. 작은 묶음부터, 같으면 L → P → S 순서.
+    4. 2×2 방향 시트의 칸 비율은 가로 ≥ 세로면 4:3, 아니면 3:4 (정사각만이면 1:1).
+    """
+    if not photos:
+        return []
+    if len(photos) <= 4:
+        return [(_cell_ratio(photos), 2, 2, list(photos))]
+    pools = {"L": [], "P": [], "S": []}
     for s in photos:
-        groups.setdefault(s.get("ratio", "3:4"), []).append(s)
+        pools[orient(s)].append(s)
+    groups = []  # [kind, items]
+    for k in ("L", "P"):
+        items = pools[k]
+        for i in range(0, len(items), 4):
+            groups.append([k, items[i:i + 4]])
+    sq = pools["S"]
+    for i in range(0, len(sq), 16):
+        groups.append(["S", sq[i:i + 16]])
+
+    order = {"L": 0, "P": 1, "S": 2}
+    opposite = {"L": "P", "P": "L", "S": None}
+    while True:
+        small = [g for g in groups if 1 <= len(g[1]) <= 2]
+        small.sort(key=lambda g: (len(g[1]), order[g[0]], groups.index(g)))
+        merged = False
+        for g in small:
+            need = len(g[1])
+            targets = [t for t in groups if t is not g and t[0] in ("L", "P") and 4 - len(t[1]) >= need]
+            if not targets:
+                continue
+            targets.sort(key=lambda t: (0 if t[0] == opposite[g[0]] else 1, groups.index(t)))
+            t = targets[0]
+            t[1] = t[1] + g[1]
+            groups.remove(g)
+            merged = True
+            break
+        if not merged:
+            break
+
     sheets = []
-    for r, items in groups.items():
-        square = parse_ratio(r)[0] == parse_ratio(r)[1]
-        cap = 16 if square else 4
-        for i in range(0, len(items), cap):
-            chunk = items[i:i + cap]
-            if square:
-                g = 2 if len(chunk) <= 4 else 3 if len(chunk) <= 9 else 4
-            else:
-                g = 2
-            sheets.append((r, g, g, chunk))
+    for k, chunk in groups:
+        if k == "S":
+            gsz = 2 if len(chunk) <= 4 else 3 if len(chunk) <= 9 else 4
+            sheets.append(("1:1", gsz, gsz, chunk))
+        else:
+            sheets.append((_cell_ratio(chunk), 2, 2, chunk))
     return sheets
+
+
+def same_ratio(a, b):
+    (aw, ah), (bw, bh) = parse_ratio(a), parse_ratio(b)
+    return aw * bh == ah * bw
+
+
+def sheet_plan(sheets):
+    return [{"cells": f"{c}x{r}", "cell_ratio": cr, "slots": [s["slot"] for s in chunk]} for cr, c, r, chunk in sheets]
 
 
 def build_prompt(ratio_str, cols, rows, chunk):
@@ -132,14 +193,22 @@ def build_prompt(ratio_str, cols, rows, chunk):
     parts = [
         f"A single image laid out as an exact grid of {cols} columns x {rows} rows ({n} equal cells), "
         f"each cell with a {ratio_str} aspect ratio. Uniform pure white gutters of about 3% between cells "
-        "and a pure white outer margin around the grid. Every cell has the same plain light warm-grey seamless "
-        "background, soft even daylight, photorealistic e-commerce product photography style, consistent colour "
-        "grading across all cells. No text, no labels, no numbers, no logos, no brand marks. "
+        "and a pure white outer margin around the grid. Photorealistic, consistent colour grading across all cells. "
+        "A single object is shown on a plain light warm-grey seamless background with soft daylight, product photography; "
+        "a scene, interior or portrait is shown in its natural setting exactly as described, with natural light. "
+        "No text, no labels, no numbers, no logos, no brand marks. "
         "Do not depict the face of any real, identifiable person."
     ]
-    cells = [f"{i + 1} {first_en(s)}" for i, s in enumerate(chunk)]
+    cells = []
+    for i, s in enumerate(chunk):
+        r = s.get("ratio", "3:4")
+        line = f"{i + 1} {first_en(s)}"
+        if not same_ratio(r, ratio_str):
+            line += f" (keep the subject centred, it will be cropped to {r})"
+        cells.append(line)
     for j in range(len(chunk), n):
-        cells.append(f"{j + 1} a neutral spare object (plain ceramic cup)")
+        s = chunk[(j - len(chunk)) % len(chunk)]
+        cells.append(f"{j + 1} alternate angle of: {first_en(s)}")
     parts.append("Cells in reading order: " + "; ".join(cells) + ".")
     return " ".join(parts)
 
@@ -225,10 +294,12 @@ def main(argv=None):
 
     sheets = plan_sheets(photos)
     notes, generated = [], set()
+    alternates = [0]
 
     def status(state, **kw):
         d = {"state": state, "sheets": len(sheets), "generated": len(generated),
-             "placeholders": len(photos) - len(generated), "elapsed_s": round(time.time() - t0, 1), "notes": notes}
+             "placeholders": len(photos) - len(generated), "alternates": alternates[0],
+             "elapsed_s": round(time.time() - t0, 1), "notes": notes, "sheet_plan": sheet_plan(sheets)}
         d.update(kw)
         write_json(status_p, d)
         return d
@@ -273,15 +344,26 @@ def main(argv=None):
             notes.append(f"sheet-{n}: no output file")
             continue
         try:
-            cells, ok = crop_sheet(sheet, cols, rows, parse_ratio(r))
+            cells, ok = crop_sheet(sheet, cols, rows)
         except Exception as e:
             notes.append(f"sheet-{n}: crop failed ({e})")
             continue
         if not ok:
-            notes.append(f"sheet-{n}: equal-split")
+            notes.append(f"sheet {n}: equal split fallback")
         for s, cell in zip(chunk, cells):
-            cell.resize(size_for(parse_ratio(r)), Image.LANCZOS).save(photos_dir / f"{s['slot']}.jpg", quality=88)
+            sr = parse_ratio(s.get("ratio", "3:4"))
+            center_crop(cell, sr).resize(size_for(sr), Image.LANCZOS).save(photos_dir / f"{s['slot']}.jpg", quality=88)
             generated.add(s["slot"])
+        alt_dir = out / ".images/alt"
+        seen = {}
+        for j, cell in enumerate(cells[len(chunk):]):
+            s = chunk[j % len(chunk)]
+            seen[s["slot"]] = seen.get(s["slot"], 0) + 1
+            sr = parse_ratio(s.get("ratio", "3:4"))
+            alt_dir.mkdir(parents=True, exist_ok=True)
+            center_crop(cell, sr).resize(size_for(sr), Image.LANCZOS).save(
+                alt_dir / f"{s['slot']}-alt{seen[s['slot']]}.jpg", quality=85)
+            alternates[0] += 1
         status("running")
 
     return finish("done" if len(generated) == len(photos) else "fallback")
