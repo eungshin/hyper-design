@@ -523,12 +523,12 @@ def parse_path(d):
     return cmds
 
 
-def check_route(d):
-    """둥근 직각 연결선: M/L/Q 만, L 은 가로·세로만, 꺾임(Q) ≤ 3, 자기 교차 없음."""
+def check_route(d, max_q=3):
+    """둥근 직각 연결선: M/L/Q 만, L 은 가로·세로만, 꺾임(Q) ≤ max_q, 자기 교차 없음."""
     cmds = parse_path(d)
     assert {c for c, _ in cmds} <= {"M", "L", "Q"}, d
     assert cmds[0][0] == "M"
-    assert sum(1 for c, _ in cmds if c == "Q") <= 3, d
+    assert sum(1 for c, _ in cmds if c == "Q") <= max_q, d
     pts, cur = [], tuple(cmds[0][1])
     pts.append(cur)
     for c, n in cmds[1:]:
@@ -565,6 +565,8 @@ def test_v2_route_shapes(gpage):
     }""")
     for d in cases:
         check_route(d)
+    lane = gpage.evaluate("window.HDCanvas.routeCurve({x: 900, y: 300, dir: 'up'}, {x: 400, y: 1300}, {lift: 16, apex: 10, laneX: 220})")
+    check_route(lane, 4)                                  # 다른 줄 갈래: 왼쪽 통로(꺾임 4)
     a, b, c = (parse_path(d) for d in cases[:3])          # (a) 오른쪽 (b) 왼쪽 (c) 아래 왼쪽
     assert a[-1][1] == [1100, 100] and b[-1][1] == [-300, 100] and c[-1][1] == [-200, 1500]
     # 화면 위 모든 선도 같은 규칙, 화살촉 색 = 선 색
@@ -576,7 +578,7 @@ def test_v2_route_shapes(gpage):
         check_route(d)
         assert stroke.lower() == fill.lower(), (stroke, fill)
     for d in gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => p.getAttribute('d'))"):
-        check_route(d)
+        check_route(d, 4)
 
 
 def test_v2_exit_focus(gpage):
@@ -645,3 +647,62 @@ def test_v2_base_curves_shot(gpage):
     gpage.mouse.wheel(-420, -160)                          # 줄 위 통로와 왼쪽 카드가 보이게
     gpage.wait_for_timeout(400)
     gpage.screenshot(path=str(FSHOTS / "f-base-curves.png"))
+
+
+CARD_BOXES_JS = """() => [...document.querySelectorAll('#rows .card')].map(c => {
+    const ph = c.querySelector('.phone');
+    return [c.dataset.id, c.offsetLeft, c.offsetTop, c.offsetLeft + c.offsetWidth, c.offsetTop + Math.max(c.offsetHeight, ph.offsetHeight)]; })"""
+
+
+def vertical_points(d, step=4, skip=12):
+    """세로 L 구간 위 점들(경로 처음·끝 12px 제외)."""
+    cmds = parse_path(d)
+    cur, out, segs = tuple(cmds[0][1]), [], []
+    for c, n in cmds[1:]:
+        nxt = (n[-2], n[-1])
+        if c == "L" and abs(nxt[0] - cur[0]) < 0.25 and abs(nxt[1] - cur[1]) > 0:
+            segs.append((cur, nxt))
+        cur = nxt
+    start, end = tuple(cmds[0][1]), cur
+    for a, b in segs:
+        n = max(1, int(abs(b[1] - a[1]) // step))
+        for i in range(n + 1):
+            p = (a[0], a[1] + (b[1] - a[1]) * i / n)
+            if min(((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2) ** 0.5 for q in (start, end)) > skip:
+                out.append(p)
+    return out
+
+
+def assert_no_vertical_in_cards(pg, sel):
+    boxes = pg.evaluate(CARD_BOXES_JS)
+    paths = pg.evaluate(f"[...document.querySelectorAll('{sel}')].map(p => [p.dataset.from, p.dataset.to, p.getAttribute('d')])")
+    for fr, to, d in paths:
+        for x, y in vertical_points(d):
+            for cid, l, t, r, b in boxes:
+                assert not (l < x < r and t < y < b), (f"{fr}→{to} 세로선이 카드 {cid} 안을 지남", (x, y), d)
+    return len(paths)
+
+
+def test_v2_no_vertical_through_cards(gpage, gym_out):
+    gpage.keyboard.press("Escape")
+    assert assert_no_vertical_in_cards(gpage, "#rows path.ln") > 0
+    for sid in ("pass", "renew", "pt-detail", "home"):
+        if not link_targets(gym_out, sid):
+            continue
+        zoom_to(gpage, sid, 300)
+        shift_click(gpage, sid)
+        gpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
+        for _ in range(12):
+            if "전체" in lk_state(gpage)["title"]:
+                break
+            shift_click(gpage, sid)
+        gpage.wait_for_timeout(350)
+        assert assert_no_vertical_in_cards(gpage, "#lks path.lk") > 0, sid
+        # 칩은 출발 카드 오른쪽 테두리에 걸친다
+        edge = gpage.evaluate(f"""(() => {{ const c = document.querySelector('.card[data-id="{sid}"]');
+            return [c.offsetLeft + c.querySelector('.phone').offsetWidth,
+                    [...document.querySelectorAll('#lkl .lchip.on')].map(n => [n.offsetLeft, n.offsetLeft + n.offsetWidth])]; }})()""")
+        for l, r in edge[1]:
+            assert l < edge[0] < r, (sid, edge)
+        gpage.keyboard.press("Escape")
+        gpage.wait_for_timeout(400)
