@@ -2,7 +2,7 @@
 
 python3 expand_states.py out [--stage go|max]
 - go(1차): 결과 화면(done)만 펼치고, max가 더할 상태 수를 pending_states로 남긴다 · max(2차): 전부
-먼저 기본 화면의 기본값을 채운다: file=screens/<id>.html · role=everyone · traits 5개(없으면 false)
+먼저 기본 화면의 기본값을 채운다: file=screens/<id>.html · role=everyone · traits 5개(없으면 false — kind list의 large_list는 비워 둔다)
 입력: out/screens.json(기본 화면) + out/spec_inventory.json(있으면, kind=rule 의 target·state)
 파생: list_first_use→empty · form→error · shares→done · long_task→progress · rule(state=error|confirm|done)
 - 같은 화면·같은 상태의 규칙 여럿은 상태 화면 하나로 묶고, 규칙 이름은 그 화면 policies에 한 줄씩
@@ -20,7 +20,8 @@ for s in M.get("screens", []):
     if "--" in s["id"]: continue          # 상태 항목은 아래에서 기본 화면을 따라 채운다
     if not s.get("file"): s["file"] = f"screens/{s['id']}.html"
     if not s.get("role"): s["role"] = "everyone"
-    s["traits"] = {**{k: False for k in TRAIT_KEYS}, **(s.get("traits") or {})}
+    keys = [k for k in TRAIT_KEYS if not (k == "large_list" and s.get("kind") == "list")]   # 목록은 large_list를 직접 선언한다(selfcheck)
+    s["traits"] = {**{k: False for k in keys}, **(s.get("traits") or {})}
 inv = {}
 if (out / "spec_inventory.json").exists():
     inv = json.loads((out / "spec_inventory.json").read_text(encoding="utf-8"))
