@@ -409,34 +409,28 @@ function roundPath(pts, r) {
   var z = p[p.length - 1];
   return d + ' L' + f(z[0]) + ',' + f(z[1]);
 }
-/* 둥근 직각 연결선(가로·세로만, 꺾임 ≤ 3, 되돌아가는 고리 없음). 끝은 늘 아래로 대상 카드 위 가운데에 들어간다.
-   src.dir 'up'   : 카드 위에서 위로 → 줄 위 통로(lift+apex) → 가로 → 아래로
-   src.dir 'right': 칩 오른쪽에서 가로로 → 위로 통로 → 가로 → 아래로(대상이 한참 아래면 가로 → 아래) */
+/* 둥근 직각 연결선(가로·세로만, 되돌아가는 고리 없음). 끝은 늘 아래로 대상 카드 위 가운데에 들어간다.
+   세로선은 카드 사이 틈(gutter)·줄 위 통로·왼쪽 통로에서만 — 카드 상자 안을 세로로 지나지 않는다.
+   src.dir 'up'            : 카드 위에서 위로 → 줄 위 통로(lift+apex) → 가로 → 아래로 (꺾임 2)
+   src.dir 'up' + o.laneX  : 다른 줄 — 위로 → 왼쪽 통로로 가로 → 통로 따라 세로 → 대상 줄 위에서 가로 → 아래로 (꺾임 4)
+   src.dir 'right'         : 출발 카드 오른쪽 가장자리에서 가로로 틈(o.gx)까지 → 틈 따라 세로 → 대상 줄 위 통로 → 가로 → 아래로 (꺾임 3) */
 function routeCurve(src, dst, o) {
   o = o || {};
   var r = o.r || RADIUS, lift = o.lift == null ? 44 : o.lift, apex = o.apex || 0, k = o.k || 0;
   var sx = src.x, sy = src.y, tx = dst.x, ty = dst.y, pts;
-  if (src.dir === 'up') {
+  if (src.dir === 'up' && o.laneX != null) {
+    var sg = sy - lift - apex, tg = ty - lift - apex;
+    pts = [[sx, sy], [sx, sg], [o.laneX, sg], [o.laneX, tg], [tx, tg], [tx, ty]];
+  } else if (src.dir === 'up') {
     var top = Math.min(sy, ty) - lift - apex;
     pts = [[sx, sy], [sx, top], [tx, top], [tx, ty]];
   } else {
-    var g = 18 + 14 * k, vx;                       // 칩에서 오른쪽으로 나가는 거리(쌍마다 엇갈리게)
-    if (ty > sy + 4 * r) {                         // 대상이 아래 줄
-      if (tx >= sx + g + r) pts = [[sx, sy], [tx, sy], [tx, ty]];
-      else {
-        vx = Math.max(sx + g, tx + 2 * r + 4);
-        var my = Math.max(sy + 2 * r, ty - lift - apex);
-        pts = [[sx, sy], [vx, sy], [vx, my], [tx, my], [tx, ty]];
-      }
-    } else {                                       // 같은 줄·위 줄: 줄 위 통로로 넘어간다
-      var lane = Math.min(sy, ty) - lift - apex;
-      vx = tx >= sx + g + 2 * r ? sx + g : Math.max(sx + g, tx + 2 * r + 4);
-      pts = [[sx, sy], [vx, sy], [vx, lane], [tx, lane], [tx, ty]];
-    }
+    var gx = o.gx == null ? sx + 18 + 14 * k : o.gx, lane = ty - lift - apex;
+    pts = [[sx, sy], [gx, sy], [gx, lane], [tx, lane], [tx, ty]];
   }
   return roundPath(pts, r);
 }
-// 갈래(branches) 화살표: 같은 둥근 직각 규칙. 이름표는 출발 카드 오른쪽(평소 숨김).
+// 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
 function drawArrows() {
   var svg = $('#ar'), box = {};
   $$('.card', rowsEl).forEach(function (c) {
@@ -444,15 +438,21 @@ function drawArrows() {
   });
   $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
   $$('path.ln', svg).forEach(function (n) { n.remove(); });
-  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {};
+  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {}, minX = LEFT;
   (D.arrows || []).forEach(function (a) { per[a.from] = (per[a.from] || 0) + 1; });
   (D.arrows || []).forEach(function (a) {
     var s = box[a.from], t = box[a.to]; if (!s || !t) return;
     var j = seen[a.from] || 0, n = per[a.from]; seen[a.from] = j + 1;
     var sx = s.x + CARD.w / 2 + (j - (n - 1) / 2) * 28, tx = t.x + CARD.w / 2;
     if (Math.abs(sx - tx) < 3 * RADIUS) sx = tx + (tx > s.x + CARD.w / 2 - 1 ? -1 : 1) * (CARD.w / 2 - 40);   // 같은 칸(위아래 줄): 세로선이 겹치지 않게
-    var same = s.row === t.row;
-    var d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 10}, {lift: same ? 36 : 72, apex: same ? 14 * j : 14 * (cross++ % 4)});
+    var same = s.row === t.row, d;
+    if (same) d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 10}, {lift: 54, apex: 14 * j});
+    else {                                          // 다른 줄: 왼쪽 통로(LEFT − 56 − 22·k)로 우회
+      var ck = cross++, lane = LEFT - 56 - 22 * (ck % 4);
+      sx = s.x + 60 + 24 * (ck % 3); tx = t.x + 60 + 24 * (ck % 3);
+      d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 8}, {lift: 16, apex: 10 * (ck % 4), laneX: lane});
+      minX = Math.min(minX, lane);
+    }
     var ft = ' data-from="' + esc(a.from) + '" data-to="' + esc(a.to) + '"';
     paths += '<path class="ln"' + ft + ' d="' + d + '"/>';
     if (a.label) {
@@ -462,7 +462,7 @@ function drawArrows() {
   });
   svg.insertAdjacentHTML('beforeend', paths);
   rowsEl.insertAdjacentHTML('beforeend', labels);
-  contentLeft = Math.max(0, LEFT - 24);
+  contentLeft = Math.max(0, minX - 24);
   renderLinks();
 }
 
@@ -679,9 +679,7 @@ function deriveView(m, ui) {
       var ex = S.x + r.x * sc, ey = S.y + r.y * sc, eh = r.h * sc, bot = S.y + S.h;
       var cy = Math.max(S.y + 4 + sz.h / 2, Math.min(bot - 4 - sz.h / 2, ey + eh / 2));
       var lim = S.limit == null ? Infinity : S.limit;
-      var c = S.x + S.w + 8 + sz.w <= lim - 4
-        ? {x: S.x + S.w + 8, y: cy - sz.h / 2, w: sz.w, h: sz.h, side: 'out'}          // 카드 오른쪽 바깥, 요소 높이
-        : {x: Math.max(S.x + 6, Math.min(S.x + S.w - sz.w - 6, ex)), y: Math.max(S.y + 4, Math.min(bot - sz.h - 4, ey - 4 - sz.h)), w: sz.w, h: sz.h, side: 'in'};   // 옆 카드를 덮으면 요소 바로 위(카드 안)
+      var c = {x: S.x + S.w - sz.w / 2, y: cy - sz.h / 2, w: sz.w, h: sz.h};   // 카드 오른쪽 테두리에 걸쳐(반은 밖, 반은 안) 요소 높이에
       for (var guard = 0; guard < 60; guard++) {   // 칩끼리 안 겹치게 4px 띄워 쌓는다
         var hit = placed.filter(function (q) { return c.x < q.x + q.w && q.x < c.x + c.w && c.y < q.y + q.h + 4 && q.y < c.y + c.h + 4; })[0];
         if (!hit) break;
@@ -689,7 +687,8 @@ function deriveView(m, ui) {
       }
       placed.push(c); p.chip = c;
       var T = g.targets && g.targets[it.to];
-      if (T) p.path = routeCurve({x: c.x + c.w, y: c.y + c.h / 2, dir: 'right'}, {x: T.x + T.w / 2, y: T.y - 10}, {apex: idx * 16, k: idx});
+      var gx = Math.min(S.x + S.w + 14 + 12 * idx, lim - 10);   // 세로선은 오른쪽 틈에서만(쌍마다 12px 엇갈림)
+      if (T) p.path = routeCurve({x: S.x + S.w, y: c.y + c.h / 2, dir: 'right'}, {x: T.x + T.w / 2, y: T.y - 10}, {apex: idx * 16, k: idx, gx: gx});
       idx++;
     }
     out.pairs.push(p);
