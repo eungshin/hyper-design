@@ -162,3 +162,72 @@ def test_placeholders_only(tmp_path):
 def test_real_sheet_crop():
     cells, _ = imggen.crop_sheet(REAL_SHEET, 4, 4, (1, 1))
     assert len(cells) == 16
+
+
+GYM_V2 = [
+    {"slot": "trainer-park", "kind": "photo", "what": "트레이너", "ratio": "1:1",
+     "en": "portrait of a friendly korean male personal trainer in his early 30s"},
+    {"slot": "gym-gangnam", "kind": "photo", "what": "헬스장 내부", "ratio": "16:9",
+     "en": "interior of a bright neighborhood fitness gym in seoul"},
+    {"slot": "signup-hero", "kind": "photo", "what": "출입 단말기", "ratio": "4:3",
+     "en": "close-up of a hand holding a smartphone up to a gym entrance gate scanner"},
+    {"slot": "ic-key", "kind": "icon", "what": "열쇠", "en": ["key"]},
+]
+
+
+def plan_view(sheets):
+    return [(r, c, w, [s["slot"] for s in chunk]) for r, c, w, chunk in sheets]
+
+
+def test_gym_v2_single_sheet(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "image_slots.json").write_text(json.dumps(GYM_V2, ensure_ascii=False), encoding="utf-8")
+    gen = tmp_path / "fake_gen.py"
+    gen.write_text(FAKE_GEN, encoding="utf-8")
+    r = run(out, "--cmd", f'"{sys.executable}" "{gen}"', home=tmp_path)
+    assert r.returncode == 0, r.stderr
+    st = status(out)
+    assert st["state"] == "done" and st["sheets"] == 1 and st["generated"] == 3
+    assert st["sheet_plan"] == [{"cells": "2x2", "cell_ratio": "4:3",
+                                 "slots": ["trainer-park", "gym-gangnam", "signup-hero"]}]
+    assert st["alternates"] == 1
+    assert (out / ".images/alt/trainer-park-alt1.jpg").exists()
+    assert Image.open(out / "assets/photos/trainer-park.jpg").size == (1200, 1200)
+    assert Image.open(out / "assets/photos/gym-gangnam.jpg").size == (1200, 675)
+    assert Image.open(out / "assets/photos/signup-hero.jpg").size == (1200, 900)
+    assert not any("alt" in c["file"] for c in json.loads((out / "credits.json").read_text(encoding="utf-8")))
+
+
+def test_mixed_plan():
+    """6 가로 + 1 세로 + 5 정사각 (12장, > 4라 방향별로 묶는다).
+
+    가로 → [l0..l3] [l4 l5], 세로 → [p0], 정사각 5장 → 3×3 하나.
+    1–2장 남은 묶음은 작은 것부터 반대 방향 시트의 빈칸에 합친다: [p0] → [l4 l5 p0] (가로 2 ≥ 세로 1 → 4:3).
+    결과 3장 (옛 비율별 묶음은 16:9·4:3·3:4·1:1 로 4장).
+    """
+    ph = [{"slot": f"l{i}", "ratio": "16:9" if i % 2 == 0 else "4:3", "en": f"wide scene {i}"} for i in range(6)]
+    ph.append({"slot": "p0", "ratio": "3:4", "en": "tall portrait"})
+    ph += [{"slot": f"s{i}", "ratio": "1:1", "en": f"object {i}"} for i in range(5)]
+    assert plan_view(imggen.plan_sheets(ph)) == [
+        ("4:3", 2, 2, ["l0", "l1", "l2", "l3"]),
+        ("4:3", 2, 2, ["l4", "l5", "p0"]),
+        ("1:1", 3, 3, ["s0", "s1", "s2", "s3", "s4"]),
+    ]
+
+
+def test_prompt_neutral_and_crop_note():
+    photos = [s for s in GYM_V2 if s["kind"] == "photo"]
+    (r, c, w, chunk), = imggen.plan_sheets(photos)
+    p = imggen.build_prompt(r, c, w, chunk)
+    assert "ceramic cup" not in p
+    assert "e-commerce" not in p
+    assert "cropped to 16:9" in p
+    assert "cropped to 4:3" not in p
+    assert "alternate angle of: portrait of a friendly" in p
+
+
+def test_plan_deterministic():
+    ph = [{"slot": f"x{i}", "ratio": ["16:9", "3:4", "1:1", "4:3", "2:3"][i % 5], "en": f"t{i}"} for i in range(13)]
+    assert plan_view(imggen.plan_sheets(ph)) == plan_view(imggen.plan_sheets(list(ph)))
+    assert sum(len(x[3]) for x in imggen.plan_sheets(ph)) == 13
