@@ -8,12 +8,12 @@ python3 build_canvas.py <out_dir>
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 390×844 크게 보기.
 - out/foundation.html : tokens.css 의 색 역할(쉬운 이름)·글자 단계·여백·모서리·그림자 견본. palette.js 로 즉시 전환.
-- out/palette.js      : foundation/palette.js 를 복사(팔레트 교체 + 요소 고르기 hd-pick/hd-picked).
+- out/palette.js      : foundation/palette.js 를 복사(팔레트 교체 + 주석 달기 hd-pick/hd-picked + 연결 보기 hd-links).
 - out/components.html : foundation/specimens.html 중 화면들이 실제로 쓴 클래스의 섹션만. 배지는 screens.json badges 로.
 
 판 규칙(그대로 유지)
 - 한 줄 = 한 흐름(group). 상태 변형(id에 --)은 원래 화면 바로 뒤에, 같은 줄에.
-- 화살표는 분기(branches)에만. 줄을 넘으면 왼쪽 통로로 우회.
+- 화살표는 분기(branches)에만. 줄을 넘으면 왼쪽 통로로 우회. Shift+클릭한 화면은 화면 안 링크(palette.js 가 알려 줌)를 색별 화살표로.
 - 화면 아래: 목적 1줄 + 정책(policies) 최대 3줄, 넘치면 접기. 첫 배율 0.72.
 
 screens.json:
@@ -307,7 +307,7 @@ def main():
         sys.exit("usage: python3 build_canvas.py <out_dir>")
     out = pathlib.Path(sys.argv[1])
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
-    if PALETTE_JS.exists():                             # 화면 쪽 고르기(요소 고르기) 스크립트를 최신으로
+    if PALETTE_JS.exists():                             # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로
         shutil.copyfile(PALETTE_JS, out / "palette.js")
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)

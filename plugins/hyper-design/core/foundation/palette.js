@@ -1,7 +1,10 @@
 /* 원클릭 팔레트 교체 — 화면은 <link id="tokens" href="tokens.css"> 하나만 바꾼다.
    캔버스가 postMessage({type:'hd-palette', slug})를 보내거나, 마지막 선택(localStorage)·?p= 를 따른다.
    요소 고르기(캔버스 크게 보기): {type:'hd-pick', on} 을 받으면 마우스 올린 요소에 테두리를 그리고
-   {type:'hd-hover', rect} / 클릭 시 {type:'hd-picked', screen, path, text, rect} 를 부모에게 보낸다. */
+   {type:'hd-hover', rect} / 클릭 시 {type:'hd-picked', screen, path, text, rect, add} 를 부모에게 보낸다(add = Shift 로 여러 개 고르기).
+   연결 보기: {type:'hd-links', on:true} 를 받으면 다른 화면으로 가는 링크 목록을
+   {type:'hd-links', screen, accent, links:[{to, path, text, rect}]} 로 답하고,
+   {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움). */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -72,12 +75,67 @@
     if (!picking) return;
     block(e);
     var t = target(e); if (!t) return;
-    send({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t)});
+    send({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), add: !!e.shiftKey});
   }, true);
+
+  /* ---------- 연결 보기: 다른 화면으로 가는 링크 ---------- */
+  function hex(v) {
+    v = String(v || '').trim(); if (!v) return '';
+    var t = document.createElement('i'); t.style.color = v; document.documentElement.appendChild(t);
+    var c = getComputedStyle(t).color; t.remove();
+    var m = c.match(/\d+(\.\d+)?/g); if (!m || m.length < 3) return '';
+    return '#' + m.slice(0, 3).map(function (x) { return ('0' + Math.round(+x).toString(16)).slice(-2); }).join('');
+  }
+  function accent() {
+    var cs = getComputedStyle(document.documentElement);
+    var names = ['--c-brand', '--c-accent', '--c-primary', '--primary', '--accent'];
+    for (var i = 0; i < names.length; i++) { var v = hex(cs.getPropertyValue(names[i])); if (v) return v; }
+    return '';
+  }
+  function hrefOf(el) {
+    var h = el.getAttribute('href') || el.getAttribute('data-href');
+    if (!h) { var m = (el.getAttribute('onclick') || '').match(/['"]([^'"]+\.html?)(?:[?#][^'"]*)?['"]/i); h = m && m[1]; }
+    return h;
+  }
+  function links() {
+    var here = location.href.split(/[?#]/)[0], dir = here.replace(/[^\/]*$/, ''), me = screenId(), res = [];
+    document.querySelectorAll('a[href], [data-href], [onclick]').forEach(function (el) {
+      var h = hrefOf(el); if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return;
+      var u; try { u = new URL(h, here).href.split(/[?#]/)[0]; } catch (e) { return; }
+      if (u.indexOf(dir) !== 0 || !/\.html?$/i.test(u)) return;
+      var rest = decodeURIComponent(u.slice(dir.length)); if (rest.indexOf('/') >= 0) return;   // 같은 폴더의 화면만
+      var to = rest.replace(/\.html?$/i, ''); if (!to || to === me) return;
+      res.push({to: to, path: pathOf(el), text: textOf(el).slice(0, 40), rect: rectOf(el)});
+    });
+    return res;
+  }
+  var paints = [];
+  function paint(items) {
+    paints.forEach(function (n) { n.remove(); }); paints = [];
+    (items || []).forEach(function (it) {
+      var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
+      if (!el) return;
+      var r = el.getBoundingClientRect(), d = document.createElement('div');
+      d.setAttribute('data-hd-links', '');
+      d.style.cssText = 'position:absolute;z-index:2147483646;pointer-events:none;border-radius:6px;box-sizing:border-box;' +
+        'left:' + (r.left + scrollX - 3) + 'px;top:' + (r.top + scrollY - 3) + 'px;width:' + (r.width + 6) + 'px;height:' + (r.height + 6) + 'px;' +
+        'border:3px solid ' + it.color + ';box-shadow:0 0 0 2px rgba(255,255,255,.85)';
+      if (it.n) {
+        var b = document.createElement('span');
+        b.textContent = it.n <= 20 ? String.fromCharCode(0x245F + it.n) : '(' + it.n + ')';
+        b.style.cssText = 'position:absolute;right:-10px;top:-12px;min-width:22px;height:22px;padding:0 3px;border-radius:999px;background:' + it.color +
+          ';color:#fff;font:700 14px/22px sans-serif;text-align:center';
+        d.appendChild(b);
+      }
+      document.documentElement.appendChild(d); paints.push(d);
+    });
+  }
 
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);
+    else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), links: links()}); else paint([]); }
+    else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
       if (!picking && box) box.style.display = 'none';
