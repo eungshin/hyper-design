@@ -85,10 +85,17 @@ def run(out: Path, shot=None):
             page.wait_for_timeout(200)
 
             # (3) 카드 클릭 → 모달, Esc → 닫힘
-            box = page.evaluate("""() => { const pr = document.getElementById('screens').getBoundingClientRect();
+            find_card = """() => { const pr = document.getElementById('screens').getBoundingClientRect();
                 for (const c of document.querySelectorAll('.cover')) { const r = c.getBoundingClientRect();
                   if (r.top > pr.top && r.top + 40 < pr.bottom && r.left > pr.left && r.right < pr.right) return {x: r.left + r.width / 2, y: r.top + Math.min(r.height / 2, (pr.bottom - r.top) / 2)}; }
-                return null; }""")
+                return null; }"""
+            box = page.evaluate(find_card)
+            # 판 위 글(이야기·사람·결정)이 길면 첫 배율에서 카드가 화면 아래에 있다 → 휠로 내려서 카드를 화면에 들인다
+            for _ in range(12):
+                if box:
+                    break
+                page.mouse.move(700, 500); page.mouse.wheel(0, 300); page.wait_for_timeout(150)
+                box = page.evaluate(find_card)
             if box:
                 page.mouse.click(box["x"], box["y"])
                 page.wait_for_timeout(250)
