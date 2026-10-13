@@ -17,16 +17,16 @@ description: hyper-design의 끝까지 버전 — 1차(모든 흐름의 처음�
 - 새로 생긴 상태 화면 목록(`state_of`·`state`·`rules`)을 흐름(group)별로 묶는다.
 
 ## 2. 병렬 빌드 (5분)
-- 빌드 서브에이전트 **ceil(상태 화면 수 / 5)개(최대 8)를 한 메시지에**. 같은 흐름끼리 묶는다.
-- 각 에이전트에게: `$SK/references/principles.md` 전문, `$SK/foundation/COMPONENTS.md` 전문, `out/journey.md`의 사람 카드·사실 표, 맡은 상태 항목(규칙 원문 인용 포함), 그리고 아래 규칙:
-  - **기본 화면 파일을 복사해 바뀐 부분만 고친다.** 구조(제목 위치·블록 묶음·사진)는 그대로.
+- `python3 $SK/features/pack/pack.py out --mode state --screens <새 상태 화면 id,…> --max-agents 5` → `out/packs/plan.json`의 항목마다 서브에이전트 `hyper-design:state-writer`를 프롬프트 `PACK=<pack 경로>`로 — **한 메시지에 전부, `model` 인자는 넣지 않는다**. 쓸 수 없으면 일반 서브에이전트(`model: "haiku"`) 프롬프트 맨 위에 `$SK/features/pack/writer.md` 전문을 붙인다.
+- 원칙·COMPONENTS 전문, 사람 카드·사실 표, 맡은 상태 항목(규칙 원문 인용 포함), "기본 화면 파일을 복사해 바뀐 부분만 고친다"는 **pack에 들어 있다**. 메인은 다음 내용 규칙이 지켜졌는지만 3단계에서 본다:
   - **상태가 바뀌면 그 상태와 모순되는 정보는 지운다**(예: 이미 시작돼 취소할 수 없는데 "취소하면 7회→6회" 안내가 남아 있으면 안 된다).
   - **오류 이유는 첫 화면(스크롤 없이)에 보인다** — 문제 칸 바로 아래 또는 맨 위. 해결 행동이 주 버튼, 같은 목적 버튼을 하나 더 붙이지 않는다.
   - `error`: 같은 요소에서 문제 칸만 바뀐다(경고 아이콘 + 문구). `confirm`: 바텀시트 대화상자 — 되돌릴 수 없는 행동·중복 경고에만, 위험한 확인은 오류 색 글자. `empty`: 첫 사용 — 다음 행동 하나. `progress`: 진행률·남은 개수·취소/백그라운드 안내.
+  - 문구는 1차에서 고른 **보이스톤 프리셋**(`out/decisions.json`의 `voice` — haeyo/hamnida, 없으면 haeyo)을 따른다 — 프리셋 전문은 pack에 들어 있다. 오류·사과 문구는 프리셋의 `exceptions`대로.
   - 1차 화면은 고치지 않는다(사용자가 이미 봤다). 상태 화면으로 가는 링크가 필요하면 그 한 줄만 추가한다.
 
 ## 3. 검증·수정 (3분)
-한 메시지에서 동시에(포그라운드): `build_canvas.py out` · `selfcheck.py out` · `audit.py out --shots out/.shots` + 사실 대조 서브에이전트 1개. 비평 체크리스트는 `$SK/references/checklist.md`. 수정은 1회, 상태 화면 위주로 흐름별 병렬.
+한 메시지에서 동시에(포그라운드): `build_canvas.py out` · `selfcheck.py out` · `audit.py out --shots out/.shots` + 사실 대조 서브에이전트 1개(`hyper-design:fact-checker`, `model` 인자 없이). 그 전에 `out/.images/status.json`이 `running`이면 끝날 때까지 기다린다(go 3단계와 같다). 비평 체크리스트는 `$SK/references/checklist.md`. 수정은 1회, 상태 화면 위주로 흐름별 병렬.
 
 ## 끝 — 마지막 메시지
 - 무엇을 더했는지 2줄(상태 화면 수, 대표적인 예외 순간 2~3개)
