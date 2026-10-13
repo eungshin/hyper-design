@@ -65,8 +65,8 @@
 세그먼트: `<div class="seg" role="radiogroup"><button class="seg-item is-selected" role="radio" aria-checked="true">…</button>…</div>` · 칩: `<div class="chips"><button class="chip is-selected">…</button></div>`
 
 ## 기타
-- 부가 정보 한 줄: `<p class="info"><img src="../assets/fluent/weather.svg" alt=""><span>…</span></p>`
-- 아바타: 인물 일러스트는 mother·father·jieun·minsu·hayun만, 나이·관계가 맞을 때. 그 밖의 사람은 글자 아바타 `<span class="avatar is-text">수</span>`. 사물 일러스트를 사람 자리에 쓰지 않는다.
+- 부가 정보 한 줄: `<p class="info"><img src="../assets/fluent/pin.svg" alt=""><span>…</span></p>`
+- 아바타: 인물 일러스트는 `out/icons.json`의 kind person만, 나이·관계가 맞을 때. 그 밖의 사람은 글자 아바타 `<span class="avatar is-text">수</span>`. 사물 일러스트를 사람 자리에 쓰지 않는다.
 - 아바타 여럿: `<span class="avatars"><span class="avatar"><img src="../assets/fluent/mother.svg" alt=""></span>…</span>`
 - 탭바(목적지 3곳 이상일 때만): `<nav class="tabbar"><a class="tab" aria-current="page">(선 아이콘)라벨</a>…</nav>` + body `has-tab`
 - 바텀시트: `<div class="dim"></div><div class="sheet">…</div>`, 빈 상태: `<div class="empty">…</div>`
@@ -74,7 +74,7 @@
 - 목록에 추가할 수 있으면 끝에 `row is-add`(**반드시 다른 화면·시트로 가는 `<a href>`** — 자기 화면으로 가면 누른 뒤 모습이 없는 것), 순서를 바꿀 수 있으면 행 오른쪽에 끌기 손잡이(선 아이콘 ≡), 지울 수 있으면 편집 화면에 "지우기"(btn secondary)
 
 ## 일러스트 (assets/fluent/, Fluent Emoji Color · MIT)
-beach · calendar · car · clipboard · coffee · eyes · father · hayun · hotel · idcard · invite · jieun · luggage · meal · minsu · mother · phone · pill · pin · plane · shoe · ticket · umbrella · walk · weather
+`out/icons.json`에 있는 이름만 쓴다(기본 세트 + 이 앱에 필요한 것). 사람 = kind person.
 
 용도: 사물·주제 = 컬러 일러스트 / 누르는 것(+·뒤로·›·체크·스위치) = 선 아이콘(stroke 1.75, 24px, currentColor) / 사람 = 아바타. 유니코드 이모지 금지.
 
