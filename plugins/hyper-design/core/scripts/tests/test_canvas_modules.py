@@ -62,7 +62,7 @@ for (const n of [1, 3, 5]) {
   const links = [0, 1, 2].map(i => ({to: 't' + i, path: 'p' + i, text: 'x' + i, rect: {x: 0, y: i, w: 1, h: 1}}));
   const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src';
   let s = F.reduce(F.reduce(F.initial(0.5), {type: 'focus', id: 'src'}), {type: 'links', links: m});
-  s = F.reduce(s, {type: 'cycle'});                       // 단계 2
+  s = F.reduce(s, {type: 'cycle'});                       // 전체 → 그룹 1
   const t = F.reduce(s, {type: 'toggle', k: 0});
   out.toggle = {on: t.on, visible: F.deriveView(m, t).visible, before: F.deriveView(m, s).visible, hover: t.hover};
   const t2 = F.reduce(t, {type: 'cycle'});
@@ -73,6 +73,46 @@ for (const n of [1, 3, 5]) {
   out.exit = {focusId: x.focusId, links: x.links, stage: x.stage, on: x.on, hover: x.hover, sat: x.sat};
   const i0 = F.initial(); out.cycleNoLinksSame = F.reduce(i0, {type: 'cycle'}) === i0;
   out.sat = [F.reduce(i0, {type: 'setSat', v: '5'}).sat, F.reduce(i0, {type: 'setSat', v: '0'}).sat, F.reduce(i0, {type: 'setSat', v: '0.5'}).sat];
+}
+
+// 3b. 순환(전체 먼저) · 모두 표시 · 범례 제목 · 같은 대상 합치기
+{
+  const links = [{to: 'a', path: 'p0', text: '뒤로', rect: {x: 8, y: 10, w: 40, h: 40}},
+                 {to: 'b', path: 'p1', text: '일시정지 신청', rect: {x: 20, y: 300, w: 335, h: 48}},
+                 {to: 'c', path: 'p2', text: '연장하기', rect: {x: 20, y: 500, w: 335, h: 48}},
+                 {to: 'b', path: 'p3', text: '정지 문의', rect: {x: 20, y: 700, w: 335, h: 48}}];
+  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src'; m.titles = {src: '회원권'};
+  let s = F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m});
+  const seq = [];
+  const snap = st => { const v = F.deriveView(m, st); return {stage: v.stage, vis: v.visible, title: v.legend.title, all: v.legend.all, rows: v.legend.rows.length}; };
+  seq.push(snap(s));
+  for (let i = 0; i < 5; i++) { s = F.reduce(s, {type: 'cycle'}); seq.push(snap(s)); }
+  out.cycle3 = seq;
+  out.groups4 = F.groupsOf(m).map(g => [g.to, g.items, g.text, g.tag]);
+  let t = F.reduce(s, {type: 'toggle', k: 2});          // s = 단계 1(그룹 a 만) → c 도 켬
+  out.manual = snap(t);
+  out.allOff = snap(F.reduce(t, {type: 'all', on: false}));
+  out.allOn = snap(F.reduce(t, {type: 'all', on: true}));
+  out.manualThenCycle = snap(F.reduce(t, {type: 'cycle'}));
+}
+// 3c. 옆면 규칙 · 경로 계획 · 태그 자리
+out.side = [0.25, 0.5, 0.8].map(f => [HD.route.sideOf(f * 375, 375, 'R'), HD.route.sideOf(f * 375, 375, 'L')]);
+{
+  const S = {x: 1000, y: 1000, w: 375, h: 812}, cap = {top: 855, bottom: 896};
+  const T = (x, row, rowTop) => ({x, y: rowTop, w: 375, h: 812, rowTop, cap: {top: rowTop - 145, bottom: rowTop - 104}, row});
+  const groups = [
+    {k: 0, to: 'back', target: T(541, 1, 1000), sameRow: true, members: [{x: 1008, y: 1010, w: 40, h: 40}]},
+    {k: 1, to: 'far', target: T(1918, 1, 1000), sameRow: true, members: [{x: 1020, y: 1300, w: 335, h: 48}, {x: 1020, y: 1700, w: 335, h: 48}]},
+    {k: 2, to: 'near', target: T(1459, 1, 1000), sameRow: true, members: [{x: 1020, y: 1500, w: 335, h: 48}]},
+    {k: 3, to: 'bell', target: T(82, 1, 1000), sameRow: true, members: [{x: 1330, y: 1010, w: 40, h: 40}]},
+    {k: 4, to: 'up', target: T(1459, 0, 0), sameRow: false, members: [{x: 1030, y: 1100, w: 300, h: 40}]}];
+  const pl = HD.route.plan({src: S, rowTop: 1000, cap, left: 300, groups});
+  out.plan = pl.map(p => ({k: p.k, side: p.side, rev: p.rev, gx: p.gx, lane: p.lane, ly: p.ly, pts: p.pts, d: p.d, segs: p.laneSegs, laneX: p.laneX}));
+  const verts = [];
+  pl.forEach(p => p.verticals.forEach(v => verts.push({k: p.k, x: v.x, y0: v.y0, y1: v.y1})));
+  out.verts = verts;
+  out.tags = HD.labels.placeTags(pl.map(p => ({k: p.k, segs: p.laneSegs, w: 90, h: 27})), verts);
+  out.tagFallback = HD.labels.placeTags([{k: 0, segs: [{a: 0, b: 40, y: 0}], w: 90, h: 27}], []);
 }
 
 // 4. prefs
@@ -148,13 +188,13 @@ def test_add_links_replaces_and_groups(res):
 def test_focus_reducer(res):
     for n in ("1", "3", "5"):
         assert res["cycle"][n]["got"] == res["cycle"][n]["want"], n
-    assert res["cycle"]["3"]["got"][:6] == [1, 2, 3, 0, 1, 2]
+    assert res["cycle"]["3"]["got"][:6] == [0, 1, 2, 3, 0, 1]          # v3: Shift+클릭 = 전체 먼저, 다시 누르면 하나씩 → 전체
     assert res["cycle"]["1"]["got"] == [0] * len(res["cycle"]["1"]["got"])
     t = res["toggle"]
-    assert t["before"] == [False, True, False]
-    assert t["on"] == {"0": True, "1": True, "2": False} and t["visible"] == [True, True, False] and t["hover"] is None
+    assert t["before"] == [True, False, False]
+    assert t["on"] == {"0": False, "1": False, "2": False} and t["visible"] == [False, False, False] and t["hover"] is None
     assert res["cycleClearsManual"] and res["hoverSame"] and res["cycleNoLinksSame"]
-    assert res["exit"] == {"focusId": None, "links": None, "stage": 1, "on": None, "hover": None, "sat": 0.5}
+    assert res["exit"] == {"focusId": None, "links": None, "stage": 0, "on": None, "hover": None, "sat": 0.5}
     assert res["sat"] == [1.2, 0.7, 0.5]
 
 
@@ -188,3 +228,89 @@ def test_single_file_output(res):
     order = [html.index(f'data-hd-module="{n}"') for n in ["graph", "route", "labels", "focus", "prefs", "view-links"]]
     assert order == sorted(order) and order[-1] < html.index("// ── Canvas shell")
     assert not re.search(r"<script[^>]+\bsrc=", html), "외부 스크립트 참조 없음"
+
+
+def test_cycle_all_first_and_legend(res):
+    """S1: 첫 Shift+클릭 = 전체(그룹 n개), 다시 = 1 … n → 전체. 제목 · 모두 표시 체크 상태."""
+    seq = res["cycle3"]
+    assert [x["stage"] for x in seq] == [0, 1, 2, 3, 0, 1]
+    assert seq[0]["title"] == "회원권 · 전체 3개" and seq[0]["all"] == "on" and seq[0]["vis"] == [True, True, True]
+    assert seq[1]["title"] == "회원권 · 1/3 뒤로" and seq[1]["vis"] == [True, False, False] and seq[1]["all"] == "mixed"
+    assert seq[2]["title"] == "회원권 · 2/3 일시정지 신청 · 정지 문의"
+    assert seq[3]["title"] == "회원권 · 3/3 연장하기"
+    assert all(x["rows"] == 3 for x in seq)                          # 범례 줄 = 대상 그룹 하나에 한 줄
+    assert res["manual"]["title"] == "회원권 · 직접 선택 2/3" and res["manual"]["vis"] == [True, False, True] and res["manual"]["all"] == "mixed"
+    assert res["allOff"]["vis"] == [False] * 3 and res["allOff"]["all"] == "off" and res["allOff"]["title"] == "회원권 · 직접 선택 0/3"
+    assert res["allOn"]["vis"] == [True] * 3 and res["allOn"]["all"] == "on"
+    assert res["manualThenCycle"]["title"] == "회원권 · 2/3 일시정지 신청 · 정지 문의"   # 수동 선택은 다음 Shift+클릭까지만
+
+
+def test_same_target_merge(res):
+    g = res["groups4"]
+    assert [x[0] for x in g] == ["a", "b", "c"] and g[1][1] == [1, 3]
+    assert g[1][2] == "일시정지 신청 · 정지 문의 (2)" and g[1][3] == "일시정지 신청 · 정지 문의 (2)"
+    assert g[0][2] == "뒤로"
+
+
+def test_side_rule(res):
+    assert res["side"] == [["L", "L"], ["R", "L"], ["R", "R"]]       # 25% → 왼쪽 · 50% → 대상 쪽 · 80% → 오른쪽
+
+
+def segs_of(pts):
+    return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+
+
+def collinear_overlap(s1, s2):
+    (a, b), (c, d) = s1, s2
+    if a[1] == b[1] == c[1] == d[1]:
+        lo, hi = max(min(a[0], b[0]), min(c[0], d[0])), min(max(a[0], b[0]), max(c[0], d[0]))
+        return max(0, hi - lo)
+    if a[0] == b[0] == c[0] == d[0]:
+        lo, hi = max(min(a[1], b[1]), min(c[1], d[1])), min(max(a[1], b[1]), max(c[1], d[1]))
+        return max(0, hi - lo)
+    return 0
+
+
+def test_plan_routes(res):
+    P = {p["k"]: p for p in res["plan"]}
+    back, far, near, bell, up = P[0], P[1], P[2], P[3], P[4]
+    assert back["side"] == "L" and back["pts"][0][0][0] == 1008 and back["pts"][0][1][0] < 1000   # 왼쪽 위 뒤로: 왼쪽 옆면으로 나감
+    assert near["side"] == far["side"] == "R" and not near["rev"]
+    assert near["gx"] == 1375 + 38 and far["gx"] == 1375 + 26                      # 가까운 대상 = 바깥 통로
+    assert bell["side"] == "R" and bell["rev"] and bell["gx"] == 1375 + 14          # 반대 방향 = 가장 안쪽
+    assert near["lane"] == 0 and far["lane"] == 1
+    assert bell["lane"] > max(P[k]["lane"] for k in (0, 1, 2))                      # 반대 방향 = 겹치는 것들 위
+    assert up["laneX"] < min(p["gx"] for p in res["plan"]) and len(up["segs"]) == 2
+    for p in res["plan"]:
+        for pts in p["pts"]:
+            for (a, b) in segs_of(pts):
+                assert a[0] == b[0] or a[1] == b[1], ("가로·세로만", p["k"], pts)
+            corners = len(pts) - 2
+            assert corners <= (5 if p["k"] == 4 else 3), (p["k"], pts)
+        for d in p["d"]:
+            assert set(re.findall(r"[A-Z]", d)) <= {"M", "L", "Q"}
+    for p in res["plan"]:                                                          # 서로 다른 그룹은 20px 넘게 겹치지 않는다
+        for q in res["plan"]:
+            if p["k"] >= q["k"]:
+                continue
+            for s1 in (s for pts in p["pts"] for s in segs_of(pts)):
+                for s2 in (s for pts in q["pts"] for s in segs_of(pts)):
+                    assert collinear_overlap(s1, s2) <= 20, (p["k"], q["k"], s1, s2)
+
+
+def test_place_tags(res):
+    tags, P = res["tags"], {p["k"]: p for p in res["plan"]}
+    W, H = 90 + 8, 27 + 8
+    for t in tags:
+        assert not t["fallback"], t
+        seg = [s for s in P[t["k"]]["segs"] if abs(s["y"] - t["y"]) < 0.01][0]
+        assert seg["a"] + 10 + 45 <= t["x"] + 1e-6 and t["x"] + 45 <= seg["b"] - 10 + 1e-6, (t, seg)
+        for v in res["verts"]:
+            if v["k"] == t["k"]:
+                continue
+            assert not (v["x"] - 3 < t["x"] + W / 2 and t["x"] - W / 2 < v["x"] + 3 and min(v["y0"], v["y1"]) < t["y"] + H / 2 and t["y"] - H / 2 < max(v["y0"], v["y1"])), (t, v)
+    for i, a in enumerate(tags):
+        for b in tags[i + 1:]:
+            assert not (abs(a["x"] - b["x"]) < W and abs(a["y"] - b["y"]) < H), (a, b)
+    fb = res["tagFallback"][0]
+    assert fb["fallback"] and fb["x"] == 20                                         # 자리가 없으면 50%

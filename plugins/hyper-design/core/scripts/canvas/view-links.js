@@ -1,7 +1,8 @@
-/* View — 연결 보기의 DOM/SVG: 색 링크 선·칩·테두리 고리·범례·펼치기/접기·마우스 강조.
+/* View — 연결 보기의 DOM/SVG: 색 링크 선·선 위 태그·테두리 고리·범례·펼치기/접기·마우스 강조.
+   경로·태그 자리는 HD.route.plan / HD.labels.placeTags(focus.deriveView 안)가 정한다. 여기서는 DOM 을 재고 그리기만.
    상태는 HD.focus 리듀서 하나. 이벤트는 의도를 만들어 dispatch(intent) 만 부른다 → reduce → 그리기.
    HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state}
-   ctx = {graph, rowsEl, pane, CARD, $, $$, esc, circled, isDragging(), prefs, savePrefs()} */
+   ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs()} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -69,37 +70,47 @@ function mount(ctx) {
     var lg = $('#legend');
     if (!v || !v.legend || !state.focusId) { lg.hidden = true; return; }
     $('#lgTitle').textContent = v.legend.title;
-    $('#lgRows').innerHTML = v.legend.rows.map(function (r) {
-      return '<label class="lgrow" data-k="' + r.k + '"><span class="lgdot" style="background:' + r.color + '"></span><span class="lgtx">' + esc(r.from) +
-        ' › <b>[' + esc(r.text) + ']</b><br><i>→ ' + esc(r.to) + '</i></span><input type="checkbox"' + (r.checked ? ' checked' : '') + '></label>';
-    }).join('');
+    $('#lgRows').innerHTML = '<label class="lgrow lgall"><span class="lgtx">모두 표시</span><input type="checkbox" id="lgAll"></label>' +
+      v.legend.rows.map(function (r) {
+        return '<label class="lgrow" data-k="' + r.k + '"><span class="lgdot" style="background:' + r.color + '"></span><span class="lgtx">' + esc(r.from) +
+          ' › <b>[' + esc(r.text) + ']</b><br><i>→ ' + esc(r.to) + '</i></span><input type="checkbox"' + (r.checked ? ' checked' : '') + '></label>';
+      }).join('');
+    var all = $('#lgAll');
+    all.checked = v.legend.all === 'on'; all.indeterminate = v.legend.all === 'mixed';
     $('#lgSat').value = String(state.sat);
     lg.hidden = false;
+  }
+  function geomOf(card) {                             // 카드 · 그 줄의 위쪽(카드 윗변) · 줄 제목 상자(판 좌표)
+    var fl = card.closest('.flow'), cap = fl ? $('.glabel', fl) : null;
+    return {x: card.offsetLeft, y: card.offsetTop, rowTop: card.offsetTop, row: fl ? $$('.flow', rowsEl).indexOf(fl) : -1,
+            cap: cap ? {top: cap.offsetTop, bottom: cap.offsetTop + cap.offsetHeight} : null};
   }
   function renderLinks() {
     clearLinkLayer();
     var lk = state.links;
     var src = lk && lk.from === state.focusId ? cardEl(lk.from) : null;
     if (!src) { curView = null; applyFocus(); renderLegend(null); return; }
-    var layer = $('#lkl'), svg = $('#lks');
-    layer.innerHTML = lk.items.map(function (it, k) { return '<div class="lchip" data-k="' + k + '">' + esc(it.text || '(링크)') + ' →</div>'; }).join('');
-    var chips = $$('.lchip', layer), ph = $('.phone', src), targets = {}, nb = src.nextElementSibling;
+    var layer = $('#lkl'), svg = $('#lks'), gs = F.groupsOf(lk);
+    layer.innerHTML = gs.map(function (g) { return '<div class="ltag" data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(g.tag) + '</div>'; }).join('');
+    var tagEls = $$('.ltag', layer), ph = $('.phone', src), sg = geomOf(src), targets = {}, sizes = {};
     lk.order.forEach(function (t) {
       var c = cardEl(t); if (!c) return;
-      var p = $('.phone', c); targets[t] = {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight};
+      var p = $('.phone', c), tg = geomOf(c);
+      targets[t] = {x: tg.x, y: tg.y, w: p.offsetWidth, h: p.offsetHeight, rowTop: tg.rowTop, cap: tg.cap, row: tg.row};
     });
-    lk.geom = {src: {x: src.offsetLeft, y: src.offsetTop, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w, limit: nb ? nb.offsetLeft : null},
-               targets: targets, chips: chips.map(function (n) { return {w: n.offsetWidth, h: n.offsetHeight}; })};
+    tagEls.forEach(function (n) { sizes[n.dataset.k] = {w: n.offsetWidth, h: n.offsetHeight}; });
+    lk.geom = {src: {x: sg.x, y: sg.y, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w},
+               rowTop: sg.rowTop, cap: sg.cap, srcRow: sg.row, left: ctx.LEFT || 0, targets: targets, tags: sizes};
     var v = curView = F.deriveView(lk, state), defs = '', paths = '', cols = [];
-    v.pairs.forEach(function (p) {
-      var n = chips[p.k];
-      n.style.left = p.chip.x + 'px'; n.style.top = p.chip.y + 'px'; n.style.color = p.color;
-      n.setAttribute('data-to', p.to); n.title = '→ ' + (TITLES[p.to] || p.to);
-      n.classList.add('on');
-      if (!p.path) return;
-      var ci = cols.indexOf(p.color); if (ci < 0) { ci = cols.length; cols.push(p.color); }
-      paths += '<path class="lk" data-k="' + p.k + '" data-from="' + esc(p.from) + '" data-to="' + esc(p.to) + '" stroke="' + p.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + p.path + '"><title>' +
-        esc(p.text) + ' → ' + esc(TITLES[p.to] || p.to) + '</title></path>';
+    v.groups.forEach(function (g) {
+      var n = tagEls[g.k];
+      n.style.color = g.color; n.title = g.text + ' → ' + (TITLES[g.to] || g.to);
+      if (g.tag) { n.style.left = g.tag.x + 'px'; n.style.top = g.tag.y + 'px'; n.classList.add('on'); }
+      var ci = cols.indexOf(g.color); if (ci < 0) { ci = cols.length; cols.push(g.color); }
+      g.paths.forEach(function (d, i) {
+        paths += '<path class="lk" data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
+          '" stroke="' + g.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + d + '"><title>' + esc(g.text) + ' → ' + esc(TITLES[g.to] || g.to) + '</title></path>';
+      });
     });
     cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색(색마다 marker 하나)
       defs += '<marker class="lkm" id="hd-lk-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/></marker>';
@@ -111,18 +122,23 @@ function mount(ctx) {
       var b = document.createElement('span'); b.className = 'lnum'; b.textContent = circled(g.n); $('.phone', c).appendChild(b);
     });
     applyFocus(); renderLegend(v); markHover();
-    postTo(lk.from, {type: 'hd-links-paint', items: v.pairs.map(function (p) { return {path: lk.items[p.k].path, color: p.color, n: p.n || undefined}; })});
+    var paint = [];
+    v.groups.forEach(function (g) { g.items.forEach(function (i) { paint.push({path: lk.items[i].path, color: g.color, n: g.n || undefined}); }); });
+    postTo(lk.from, {type: 'hd-links-paint', items: paint});
   }
-  function markHover() {                              // 마우스: 그 한 쌍만 진하게, 나머지 쌍·대상 테두리는 흐리게
+  function markHover() {                              // 마우스: 그 그룹만 진하게, 나머지 그룹(선·태그·범례 줄)·대상 테두리는 흐리게
     var lk = state.links;
     if (!lk) return;
-    var v = F.deriveView({from: lk.from, order: lk.order, items: lk.items, titles: lk.titles}, state), by = {};
-    v.pairs.forEach(function (p) { by[p.k] = p; });
-    $$('#lks path.lk, #lkl .lchip').forEach(function (n) {
-      var p = by[n.getAttribute('data-k')];
-      n.classList.toggle('em', !!p && p.emph); n.classList.toggle('dim', !!p && p.dim);
+    var v = F.deriveView({from: lk.from, order: lk.order, targets: lk.targets, items: lk.items, titles: lk.titles}, state), by = {};
+    v.groups.forEach(function (g) { by[g.k] = g; });
+    $$('#lks path.lk, #lkl .ltag').forEach(function (n) {
+      var g = by[n.getAttribute('data-k')];
+      n.classList.toggle('em', !!g && g.emph); n.classList.toggle('dim', !!g && g.dim);
     });
-    $$('#lgRows .lgrow').forEach(function (n) { n.classList.toggle('em', state.hover === +n.dataset.k); });
+    $$('#lgRows .lgrow[data-k]').forEach(function (n) {
+      var r = v.legend.rows[+n.dataset.k];
+      n.classList.toggle('em', !!r && r.emph); n.classList.toggle('dim', !!r && r.dim);
+    });
     $$('.card.lt', rowsEl).forEach(function (c) {
       var g = v.rings[c.dataset.id];
       c.classList.toggle('em', !!g && g.emph); c.classList.toggle('dim', !!g && g.dim);
@@ -192,17 +208,17 @@ function mount(ctx) {
     var lk = state.links;
     if (!lk || !curView || ctx.isDragging()) return;
     var el = e.target, k = null, vis = curView.visible, cl = function (s) { return el && el.closest ? el.closest(s) : null; };
-    var row = cl('.lgrow'), chip = cl('.lchip');
-    if (row) k = +row.dataset.k;
-    else if (chip) k = +chip.dataset.k;
+    var row = cl('.lgrow'), tag = cl('.ltag');
+    if (row) k = row.dataset.k == null ? null : +row.dataset.k;
+    else if (tag) k = +tag.dataset.k;
     else if (el && el.classList && el.classList.contains('lk')) k = +el.getAttribute('data-k');
     else if (!cl('#legend')) {
       var c = cl('.card');
       if (c && c.dataset.id === lk.from) {
         var r = $('.phone', c).getBoundingClientRect(), s = r.width / CARD.w, x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
-        lk.items.forEach(function (it, i) { var q = it.rect; if (vis[i] && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) k = i; });
+        lk.items.forEach(function (it, i) { var q = it.rect; if (vis[it.ci] && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) k = it.ci; });
       } else if (c && curView.rings[c.dataset.id]) {
-        lk.items.forEach(function (it, i) { if (k == null && vis[i] && it.to === c.dataset.id) k = i; });
+        k = lk.order.indexOf(c.dataset.id);
       }
     }
     if (k != null && !vis[k]) k = null;
@@ -210,7 +226,10 @@ function mount(ctx) {
   });
   var lg = $('#legend');
   ['pointerdown', 'wheel', 'dblclick'].forEach(function (ev) { lg.addEventListener(ev, function (e) { e.stopPropagation(); }); });
-  $('#lgRows').addEventListener('change', function (e) { var r = e.target.closest('.lgrow'); if (r) dispatch({type: 'toggle', k: +r.dataset.k}); });
+  $('#lgRows').addEventListener('change', function (e) {
+    if (e.target.id === 'lgAll') { dispatch({type: 'all', on: e.target.checked}); return; }
+    var r = e.target.closest('.lgrow[data-k]'); if (r) dispatch({type: 'toggle', k: +r.dataset.k});
+  });
   $('#lgSat').addEventListener('input', function (e) { dispatch({type: 'setSat', v: e.target.value}); });
 
   return {dispatch: dispatch, render: renderLinks, focusId: function () { return state.focusId; }, state: function () { return state; }};

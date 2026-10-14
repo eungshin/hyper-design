@@ -297,7 +297,7 @@ def test_gym_link_colors(gpage, gym_out):
         .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, shiftKey: true}))""", sid)
     gpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
     assert gpage.evaluate("document.getElementById('modal').hidden")
-    # v2: 첫 Shift+클릭은 색 1만 → 같은 카드를 계속 Shift+클릭해 '전체' 단계로
+    # v3: 첫 Shift+클릭이 '전체' (v2 에서는 색 1 부터였다)
     for _ in range(len(want) + 1):
         if "전체" in gpage.text_content("#lgTitle"):
             break
@@ -325,7 +325,7 @@ def test_gym_link_colors(gpage, gym_out):
     gpage.screenshot(path=str(GSHOTS / "a-focus-links.png"))
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(300)
-    assert gpage.evaluate("document.querySelectorAll('#lks path.lk, .card.lt, .lnum, #lkl .lchip').length") == 0
+    assert gpage.evaluate("document.querySelectorAll('#lks path.lk, .card.lt, .lnum, #lkl .ltag').length") == 0
     assert gpage.evaluate("!document.getElementById('rows').classList.contains('focusing')")
     assert outl.count() == 0
 
@@ -389,7 +389,7 @@ def test_gym_annotate_button(gpage):
 def test_gym_shortcut_hint(gpage):
     hint = gpage.locator("#khint")
     assert hint.is_visible()
-    assert hint.text_content().strip() == "Shift+클릭 연결 보기 · A 화살표 · 0 전체 보기 · 클릭 크게 보기"
+    assert hint.text_content().strip() == "Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 클릭 크게 보기"   # v3: 화살표 → 주요 흐름
     hb, pr = hint.bounding_box(), gpage.locator("#screens").bounding_box()
     assert hb["x"] < pr["x"] + 40 and hb["y"] + hb["height"] > pr["y"] + pr["height"] - 40
     gpage.evaluate("document.querySelector('#rows .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))")
@@ -402,6 +402,7 @@ def test_gym_shortcut_hint(gpage):
 
 # ---------------------------------------------------------------- canvas-focus-v2
 FSHOTS = REPO / "tasks" / "2-canvas-focus-v2" / "shots"
+V3SHOTS = REPO / "tasks" / "3-canvas-v3" / "shots"
 
 LABEL_GEOM_JS = """() => [...document.querySelectorAll('#rows .alabel')].map(n => {
     const p = [...document.querySelectorAll('#rows path.ln')].find(q => q.dataset.from === n.dataset.from && q.dataset.to === n.dataset.to);
@@ -446,7 +447,11 @@ EMPTY_JS = r"""() => {
 }"""
 
 
+ALL_JS = "(() => { const a = document.getElementById('lgAll'); return a ? [a.checked, a.indeterminate] : null; })()"
+
+
 def test_v2_focus_cycle(gpage, gym_out):
+    """v3(S1): Shift+클릭 = 전체 → 다시 = 그룹 1 … n → 전체. 범례 '모두 표시' 체크 · 직접 선택."""
     want = link_targets(gym_out, "pass")
     n = len(want)
     assert n >= 2
@@ -454,35 +459,48 @@ def test_v2_focus_cycle(gpage, gym_out):
     zoom_to(gpage, "pass", 380)
     shift_click(gpage, "pass")
     gpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
+    gpage.wait_for_timeout(300)
     st = lk_state(gpage)
-    assert st["legend"] and f"1/{n}" in st["title"], st
-    total = st["rows"]
+    assert st["legend"] and st["title"].endswith(f"전체 {n}개"), st
+    assert {t for t, _ in st["paths"]} == set(want) and len({c for _, c in st["paths"]}) == n, st
+    assert gpage.evaluate("document.querySelectorAll('#lgRows .lgrow[data-k]').length") == n
+    assert gpage.evaluate(ALL_JS) == [True, False]
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.wait_for_timeout(600)
+    gpage.screenshot(path=str(V3SHOTS / "p1-a-all.png"))
+    gpage.screenshot(path=str(FSHOTS / "a-focus-all.png"))
     seen = []
     for k in range(1, n + 1):
-        if k > 1:
-            shift_click(gpage, "pass")
-            st = lk_state(gpage)
-            assert f"{k}/{n}" in st["title"], st
+        shift_click(gpage, "pass")
+        st = lk_state(gpage)
+        assert f"{k}/{n}" in st["title"], st
         cols = {c for _, c in st["paths"]}
         assert len(cols) == 1 and st["paths"][0][0] == want[k - 1], (k, st)
         assert cols.isdisjoint(seen), (k, st)
         seen += list(cols)
+        assert gpage.evaluate(ALL_JS) == [False, True], k                      # 일부만 켜짐 = indeterminate
         if k == 1:
-            FSHOTS.mkdir(parents=True, exist_ok=True)
-            gpage.wait_for_timeout(250)
+            gpage.wait_for_timeout(400)
+            gpage.screenshot(path=str(V3SHOTS / "p1-b-one.png"))
             gpage.screenshot(path=str(FSHOTS / "b-focus-stage1.png"))
     shift_click(gpage, "pass")
     st = lk_state(gpage)
-    assert "전체" in st["title"] and len(st["paths"]) == total and len({c for _, c in st["paths"]}) == n, st
-    gpage.wait_for_timeout(250)
-    gpage.screenshot(path=str(FSHOTS / "a-focus-all.png"))
+    assert st["title"].endswith(f"전체 {n}개") and len({c for _, c in st["paths"]}) == n, st
     shift_click(gpage, "pass")
     st = lk_state(gpage)
     assert f"1/{n}" in st["title"] and {c for _, c in st["paths"]} == {seen[0]}, st
-    # 범례 체크를 끄면 다음 Shift+클릭 전까지 그대로
-    gpage.locator("#lgRows .lgrow input").first.uncheck()
-    assert len(lk_state(gpage)["paths"]) == 0
+    # 범례 체크를 끄면 다음 Shift+클릭 전까지 그대로 · 제목 = 직접 선택
+    gpage.locator("#lgRows .lgrow[data-k] input").first.uncheck()
+    st = lk_state(gpage)
+    assert len(st["paths"]) == 0 and st["title"].endswith(f"직접 선택 0/{n}"), st
+    assert gpage.evaluate(ALL_JS) == [False, False]
     assert gpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "범례 조작은 연결 보기를 끄지 않는다"
+    gpage.locator("#lgAll").check()
+    st = lk_state(gpage)
+    assert st["title"].endswith(f"직접 선택 {n}/{n}") and len({c for _, c in st["paths"]}) == n, st
+    assert gpage.evaluate(ALL_JS) == [True, False]
+    gpage.locator("#lgAll").uncheck()
+    assert len(lk_state(gpage)["paths"]) == 0 and gpage.evaluate(ALL_JS) == [False, False]
     shift_click(gpage, "pass")
     assert f"2/{n}" in lk_state(gpage)["title"]
 
@@ -492,22 +510,30 @@ def test_v2_hover_emphasis(gpage):
         if "전체" in lk_state(gpage)["title"]:
             break
         shift_click(gpage, "pass")
-    row = gpage.locator("#lgRows .lgrow").first
+    row = gpage.locator("#lgRows .lgrow[data-k]").first
     row.hover()
     gpage.wait_for_timeout(350)
     res = gpage.evaluate("""() => {
-        const k = document.querySelector('#lgRows .lgrow').dataset.k;
+        const k = document.querySelector('#lgRows .lgrow[data-k]').dataset.k;
         const ps = [...document.querySelectorAll('#lks path.lk')];
         const me = ps.find(p => p.dataset.k === k), to = me.dataset.to;
+        const tags = [...document.querySelectorAll('#lkl .ltag.on')];
         return {me: +getComputedStyle(me).opacity,
                 others: ps.filter(p => p.dataset.to !== to).map(p => +getComputedStyle(p).opacity),
+                mytag: +getComputedStyle(tags.find(t => t.dataset.k === k)).opacity,
+                tags: tags.filter(t => t.dataset.k !== k).map(t => +getComputedStyle(t).opacity),
+                lrows: [...document.querySelectorAll('#lgRows .lgrow[data-k]')].filter(r => r.dataset.k !== k).map(r => +getComputedStyle(r).opacity),
                 rings: [...document.querySelectorAll('#rows .card.lt')].filter(c => c.dataset.id !== to).map(c => +getComputedStyle(c).opacity),
                 myring: +getComputedStyle(document.querySelector('.card[data-id="' + to + '"]')).opacity};
     }""")
     assert res["me"] == 1 and res["myring"] == 1, res
     assert res["others"] and all(o < 0.5 for o in res["others"]), res
     assert res["rings"] and all(o < 0.5 for o in res["rings"]), res
+    assert res["mytag"] == 1 and res["tags"] and all(o < 0.5 for o in res["tags"]), res           # v3: 태그·범례 줄도 흐리게
+    assert res["lrows"] and all(o < 0.6 for o in res["lrows"]), res
     gpage.screenshot(path=str(FSHOTS / "c-hover-emphasis.png"))
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.screenshot(path=str(V3SHOTS / "p1-c-hover.png"))
     gpage.mouse.move(5, 300)
 
 
@@ -575,7 +601,7 @@ def test_v2_route_shapes(gpage):
         return [p.getAttribute('d'), p.getAttribute('stroke'), document.querySelector('#' + id + ' path').getAttribute('fill')]; })""")
     assert on
     for d, stroke, fill in on:
-        check_route(d)
+        check_route(d, 5)                                  # v3: 다른 줄 대상은 왼쪽 통로로(꺾임 ≤ 5)
         assert stroke.lower() == fill.lower(), (stroke, fill)
     for d in gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => p.getAttribute('d'))"):
         check_route(d, 4)
@@ -626,10 +652,7 @@ def test_v2_expand_tall_screen(gpage, gym_out):
             break
         shift_click(gpage, sid)
     gpage.wait_for_timeout(250)
-    chips = gpage.evaluate("[...document.querySelectorAll('#lkl .lchip.on')].map(n => { const r = n.getBoundingClientRect(); return [r.top, r.bottom]; })")
-    assert chips
-    for t, b in chips:
-        assert t >= ph["y"] - 0.5 and b <= ph["y"] + ph["height"] + 0.5, (t, b, ph)
+    assert check_tags(gpage) > 0                          # v3: 칩(카드 테두리) 대신 선 위 태그 — 자기 차선 위
     FSHOTS.mkdir(parents=True, exist_ok=True)
     gpage.screenshot(path=str(FSHOTS / "d-expanded-tall.png"))
     gpage.keyboard.press("Escape")
@@ -698,11 +721,156 @@ def test_v2_no_vertical_through_cards(gpage, gym_out):
             shift_click(gpage, sid)
         gpage.wait_for_timeout(350)
         assert assert_no_vertical_in_cards(gpage, "#lks path.lk") > 0, sid
-        # 칩은 출발 카드 오른쪽 테두리에 걸친다
-        edge = gpage.evaluate(f"""(() => {{ const c = document.querySelector('.card[data-id="{sid}"]');
-            return [c.offsetLeft + c.querySelector('.phone').offsetWidth,
-                    [...document.querySelectorAll('#lkl .lchip.on')].map(n => [n.offsetLeft, n.offsetLeft + n.offsetWidth])]; }})()""")
-        for l, r in edge[1]:
-            assert l < edge[0] < r, (sid, edge)
+        assert check_tags(gpage) > 0, sid                 # v3: 칩 대신 선 위 태그(자기 차선 위, 안 겹침)
         gpage.keyboard.press("Escape")
         gpage.wait_for_timeout(400)
+
+
+# ---------------------------------------------------------------- canvas-v3 (phase 1): 옆면 출발 · 선 위 태그 · 주요 흐름 점선
+LINK_GEOM_JS = """() => ({
+    paths: [...document.querySelectorAll('#lks path.lk')].map(p => ({k: +p.dataset.k, to: p.dataset.to, pts: JSON.parse(p.dataset.pts)})),
+    tags: [...document.querySelectorAll('#lkl .ltag.on')].map(n => ({k: +n.dataset.k, text: n.textContent, x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight}))})"""
+
+
+def _segs(pts):
+    return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1) if pts[i] != pts[i + 1]]
+
+
+def _overlap(s1, s2):
+    (a, b), (c, d) = s1, s2
+    if abs(a[1] - b[1]) < 0.01 and abs(c[1] - d[1]) < 0.01 and abs(a[1] - c[1]) < 0.01:
+        return max(0, min(max(a[0], b[0]), max(c[0], d[0])) - max(min(a[0], b[0]), min(c[0], d[0])))
+    if abs(a[0] - b[0]) < 0.01 and abs(c[0] - d[0]) < 0.01 and abs(a[0] - c[0]) < 0.01:
+        return max(0, min(max(a[1], b[1]), max(c[1], d[1])) - max(min(a[1], b[1]), min(c[1], d[1])))
+    return 0
+
+
+def check_tags(pg):
+    """보이는 태그: 가운데가 자기 그룹의 가로(차선) 구간 위(±2px) · 태그끼리 안 겹침 · 다른 그룹 세로선과 안 겹침.
+    서로 다른 그룹의 선은 20px 넘게 같은 줄을 나눠 쓰지 않는다(경로 계획 꺾은선으로 확인)."""
+    g = pg.evaluate(LINK_GEOM_JS)
+    by = {}
+    for p in g["paths"]:
+        by.setdefault(p["k"], []).extend(_segs(p["pts"]))
+    for t in g["tags"]:
+        hs = [s for s in by[t["k"]] if abs(s[0][1] - s[1][1]) < 0.01]
+        assert any(abs(t["y"] - a[1]) <= 2 and min(a[0], b[0]) - 2 <= t["x"] <= max(a[0], b[0]) + 2 for a, b in hs), ("태그가 자기 차선 위가 아님", t, hs)
+        box = (t["x"] - t["w"] / 2, t["y"] - t["h"] / 2, t["x"] + t["w"] / 2, t["y"] + t["h"] / 2)
+        for k, segs in by.items():
+            if k == t["k"]:
+                continue
+            for a, b in segs:
+                if abs(a[0] - b[0]) < 0.01:
+                    y0, y1 = min(a[1], b[1]), max(a[1], b[1])
+                    assert not (box[0] < a[0] < box[2] and y0 < box[3] and box[1] < y1), ("태그가 다른 그룹 세로선 위", t, (a, b))
+    for i, a in enumerate(g["tags"]):
+        for b in g["tags"][i + 1:]:
+            assert abs(a["x"] - b["x"]) >= (a["w"] + b["w"]) / 2 or abs(a["y"] - b["y"]) >= (a["h"] + b["h"]) / 2, ("태그 겹침", a, b)
+    ks = sorted(by)
+    for i, k1 in enumerate(ks):
+        for k2 in ks[i + 1:]:
+            for s1 in by[k1]:
+                for s2 in by[k2]:
+                    assert _overlap(s1, s2) <= 20, ("다른 그룹 선이 겹침", k1, k2, s1, s2)
+    return len(g["tags"])
+
+
+def focus_all(pg, sid, n_max=12):
+    pg.keyboard.press("Escape")
+    pg.wait_for_timeout(200)
+    zoom_to(pg, sid, 300)
+    shift_click(pg, sid)
+    pg.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
+    pg.wait_for_timeout(900)                               # 긴 화면은 펼친 뒤 다시 그린다
+    assert "전체" in lk_state(pg)["title"]
+
+
+def test_v3_back_exits_left(gpage, gym_out):
+    """S2: 왼쪽 위 '뒤로' → 선은 그 요소의 왼쪽 가장자리에서 출발해 왼쪽으로 나간다(카드 왼쪽 바깥 통로)."""
+    for sid in ("trainer-change", "pass"):
+        to = link_targets(gym_out, sid)[0]
+        focus_all(gpage, sid)
+        fr = gpage.frame_locator(f'.card[data-id="{sid}"] .phone iframe')
+        el = fr.locator('a[aria-label="뒤로"]').first.evaluate("e => { const r = e.getBoundingClientRect(); return [r.left, r.width]; }")
+        left = gpage.evaluate(f"""document.querySelector('.card[data-id="{sid}"]').offsetLeft""")
+        assert el[0] + el[1] / 2 < 375 * 0.3, el
+        pts = gpage.evaluate(f"""JSON.parse(document.querySelector('#lks path.lk[data-to="{to}"]').dataset.pts)""")
+        x0, x1 = pts[0][0], pts[1][0]
+        assert abs(x0 - (left + el[0])) <= 2, (sid, pts[0], left, el)     # 요소 왼쪽 가장자리에서 출발
+        assert x1 < x0 and x1 < left and abs(pts[1][1] - pts[0][1]) < 0.01, (sid, pts)   # 첫 구간은 왼쪽으로, 카드 밖까지
+        if sid == "trainer-change":
+            gpage.wait_for_timeout(300)
+            V3SHOTS.mkdir(parents=True, exist_ok=True)
+            gpage.screenshot(path=str(V3SHOTS / "p1-d-back.png"))
+
+
+def test_v3_tags_on_lanes(gpage, gym_out):
+    """S2: 태그는 선 위(자기 차선) · 태그끼리 · 다른 세로선과 안 겹침 · 서로 다른 그룹 선은 같은 줄을 나눠 쓰지 않음."""
+    for sid in ("pass", "trainer-change", "renew", "pt-detail", "home", "log-today"):
+        if not link_targets(gym_out, sid):
+            continue
+        focus_all(gpage, sid)
+        assert check_tags(gpage) > 0, sid
+        assert assert_no_vertical_in_cards(gpage, "#lks path.lk") > 0, sid
+
+
+def test_v3_same_target_merge(gpage, gym_out):
+    """S2: 같은 대상으로 가는 요소 여럿 = 줄기 하나 · 태그 하나('A · B (2)') · 범례 한 줄."""
+    focus_all(gpage, "home")
+    n = len(link_targets(gym_out, "home"))
+    g = gpage.evaluate(LINK_GEOM_JS)
+    assert len(g["tags"]) == n and gpage.evaluate("document.querySelectorAll('#lgRows .lgrow[data-k]').length") == n
+    merged = [t for t in g["tags"] if t["text"].endswith(" (2)")]
+    assert merged, g["tags"]
+    for t in merged:
+        assert " · " in t["text"], t
+        assert sum(1 for p in g["paths"] if p["k"] == t["k"]) == 2                     # 요소마다 출발, 같은 줄기
+        rows = gpage.evaluate(f"""[...document.querySelectorAll('#lgRows .lgrow[data-k="{t["k"]}"]')].map(r => r.textContent)""")
+        assert len(rows) == 1 and "(2)" in rows[0], rows
+        a, b = [p["pts"] for p in g["paths"] if p["k"] == t["k"]]
+        assert a[2:] == b[2:], (a, b)                                                  # 바깥 통로 · 차선 · 내려가는 선 공유
+
+
+def test_v3_main_flow_dashed(gpage):
+    """S3: 회색 갈래 화살표 = '주요 흐름' 회색 점선. 버튼 · A · 범례 체크로 켜고 끄기, 새로고침 뒤에도. 설명 문단 없음."""
+    gpage.keyboard.press("Escape")
+    gpage.wait_for_timeout(200)
+    vis = lambda: gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].filter(p => getComputedStyle(p).display !== 'none').length")
+    total = gpage.locator("#rows path.ln").count()
+    assert total > 0 and vis() == total
+    dash = gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => getComputedStyle(p).strokeDasharray)")
+    assert all(d and d != "none" for d in dash), dash
+    assert gpage.text_content("#arrows").strip() == "주요 흐름"
+    assert "설계 단계" not in gpage.evaluate("document.body.innerText")
+    assert gpage.evaluate("[...document.querySelectorAll('#rows .alabel')].every(n => getComputedStyle(n).display === 'none')")
+    zoom_to(gpage, "pt-detail", 300)
+    gpage.mouse.wheel(-420, -160)
+    gpage.wait_for_timeout(500)
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.screenshot(path=str(V3SHOTS / "p1-e-base.png"))
+    gpage.click("#arrows")
+    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
+    gpage.reload()
+    gpage.wait_for_function("window.__hdReady !== undefined")
+    gpage.wait_for_timeout(300)
+    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
+    gpage.keyboard.press("a")
+    assert vis() == total
+    # 범례 맨 아래 체크(연결 보기 중)
+    zoom_to(gpage, "pass", 300)
+    shift_click(gpage, "pass")
+    gpage.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
+    assert gpage.evaluate("document.getElementById('lgFlow').checked")
+    assert gpage.text_content("#legend .lgflow").strip() == "주요 흐름 (회색 점선)"
+    gpage.locator("#lgFlow").uncheck()
+    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
+    assert gpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
+    # 연결 보기 중 주요 흐름은 흐리게(.18), 태그를 덮지 않는다(태그 층이 위)
+    gpage.locator("#lgFlow").check()
+    assert vis() == total - gpage.locator("#rows path.ln.rep").count()   # 색 링크가 대신 그리는 갈래(.rep)는 연결 보기 중 숨김
+    ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on)')].map(p => +getComputedStyle(p).opacity)")
+    assert ops and all(abs(o - 0.18) < 0.01 for o in ops), ops
+    gpage.reload()
+    gpage.wait_for_function("window.__hdReady !== undefined")
+    gpage.wait_for_timeout(300)
+    assert vis() == total
