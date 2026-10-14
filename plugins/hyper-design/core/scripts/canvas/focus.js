@@ -1,12 +1,14 @@
 /* ViewModel — 연결 보기 상태 하나 + 순수 리듀서, 그리고 상태 → 보일 것(deriveView). DOM 없음.
    상태 {focusId, links, stage, on, hover, sat}
      focusId : Shift+클릭한 화면 id(없으면 null)   links : 그 화면의 색 링크 모델(assignColors 결과 + from/titles…)
-     stage   : 색 단계(1..n, 0 = 전체)            on    : 범례 체크(수동, 다음 Shift+클릭 전까지)
-     hover   : 마우스가 올라간 쌍 k               sat   : 채도 배율
-   의도 {type:'focus', id} · {type:'exitFocus'} · {type:'cycle'} · {type:'toggle', k} · {type:'hover', k} · {type:'setSat', v} · {type:'links', links} */
+     stage   : 0 = 전체, 1..n = 대상 그룹 하나       on    : 범례 체크(그룹 k → bool, 수동, 다음 Shift+클릭 전까지)
+     hover   : 마우스가 올라간 그룹 k             sat   : 채도 배율
+   그룹 = 같은 대상 화면으로 가는 링크 묶음(k = 색 = 처음 나온 순서).
+   의도 {type:'focus', id} · {type:'exitFocus'} · {type:'cycle'} · {type:'toggle', k} · {type:'all', on} · {type:'hover', k} · {type:'setSat', v} · {type:'links', links} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
+var TAG_MAX = 14;                                  // 선 위 태그·범례 제목에서 버튼 글 하나의 최대 글자 수(넘으면 …)
 var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(색상각이 서로 다름)
 
 function hueOf(hx) {
@@ -43,67 +45,89 @@ function assignColors(links, accentHex, palette) {
     return {to: l.to, path: l.path, text: l.text, rect: l.rect, color: g.color, n: g.n, ci: g.ci};
   })};
 }
-// 같은 카드를 Shift+클릭할 때마다: 색1 → 색2 → … → 전체(0) → 색1. 색이 하나뿐이면 늘 전체.
+// 같은 대상끼리 한 그룹(그룹 k = 색 k = 처음 나온 순서). items 의 번호 목록 · 버튼 글 · 태그 글(A · B (2))
+function groupsOf(m) {
+  if (!m || !m.items) return [];
+  return m.order.map(function (to, k) {
+    var idx = [], texts = [];
+    m.items.forEach(function (it, i) { if (it.ci === k) { idx.push(i); texts.push(it.text || '(링크)'); } });
+    var cnt = idx.length > 1 ? ' (' + idx.length + ')' : '', sh = texts.map(short);
+    return {k: k, to: to, items: idx, texts: texts, text: texts.join(' · ') + cnt, tag: sh.join(' · ') + cnt, short: sh.join(' · ')};
+  });
+}
+function short(t) { t = String(t).replace(/\s+/g, ' ').trim(); return t.length > TAG_MAX ? t.slice(0, TAG_MAX - 1).trim() + '…' : t; }
+// 같은 카드를 Shift+클릭할 때마다: 전체(0) → 그룹1 → 그룹2 → … → 그룹n → 전체. 그룹이 하나뿐이면 늘 전체.
 function cycleNext(stage, n) {
   if (!(n > 1)) return 0;
   if (stage == null || stage === 0) return 1;
   return stage >= n ? 0 : stage + 1;
 }
-// 실제로 보이는 단계 · 쌍마다 보임(deriveView 와 같은 규칙)
+// 실제로 보이는 단계 · 그룹마다 보임(deriveView 와 같은 규칙). 처음(Shift+클릭으로 들어옴)은 전체.
 function stageOf(m, ui) {
   if (!m || !m.items || !m.items.length) return 0;
   var n = m.order.length;
-  return n <= 1 ? 0 : ui.stage == null ? 1 : ui.stage > n ? 0 : ui.stage;
+  return n <= 1 || ui.stage == null || ui.stage > n ? 0 : ui.stage;
 }
 function visibleOf(m, ui) {
   if (!m || !m.items || !m.items.length) return [];
   var stage = stageOf(m, ui);
-  return m.items.map(function (it, k) { return ui.on ? !!ui.on[k] : stage === 0 || it.ci === stage - 1; });
+  return m.order.map(function (t, k) { return ui.on ? !!ui.on[k] : stage === 0 || k === stage - 1; });
 }
 
-// Model + UI 상태(단계·체크·마우스·채도) → 보일 것. DOM 없음.
+/* Model + UI 상태(단계·체크·마우스·채도) → 보일 것. DOM 없음.
+   m.geom(있으면) = {src:{x,y,w,h,sc}, rowTop, cap, left, srcRow, targets:{id:{x,y,w,h,rowTop,cap,row}}, tags:{k:{w,h}}}
+   → {groups:[{k,to,color,n,text,paths,pts,tag,lane,emph,dim}], legend:{title, all:'on'|'off'|'mixed', rows}, rings, dimCards, stage, nGroups, visible, groupOf} */
 function deriveView(m, ui) {
   ui = ui || {};
-  var out = {pairs: [], legend: null, rings: {}, dimCards: [], stage: 0, nColors: 0, visible: []};
+  var out = {groups: [], legend: null, rings: {}, dimCards: [], stage: 0, nGroups: 0, visible: [], groupOf: []};
   if (!m || !m.items || !m.items.length) return out;
-  var n = m.order.length, stage = stageOf(m, ui);
+  var gs = groupsOf(m), n = gs.length, stage = stageOf(m, ui);
   var sat = ui.sat == null ? 0.7 : ui.sat, hv = ui.hover == null ? null : ui.hover;
   var title = function (id) { return (m.titles && m.titles[id]) || id; };
-  var col = m.items.map(function (it) { return satHex(it.color, sat); });
-  var vis = visibleOf(m, ui);
+  var col = gs.map(function (g) { return satHex(m.targets[g.to].color, sat); });
+  var vis = visibleOf(m, ui), nOn = vis.filter(Boolean).length;
   if (hv != null && !vis[hv]) hv = null;
-  out.stage = stage; out.nColors = n; out.visible = vis;
-  out.legend = {title: title(m.from) + ' · ' + (stage === 0 ? '전체 ' + m.items.length + '개' : stage + '/' + n + ' ' + title(m.order[stage - 1])),
-    rows: m.items.map(function (it, k) { return {k: k, color: col[k], from: title(m.from), text: it.text || '(링크)', to: title(it.to), checked: vis[k], emph: hv === k}; })};
-  var hvTo = hv == null ? null : m.items[hv].to;
-  m.items.forEach(function (it, k) {
-    if (vis[k] && !out.rings[it.to]) out.rings[it.to] = {color: col[k], n: it.n, emph: hvTo === it.to, dim: hvTo != null && hvTo !== it.to};
+  out.stage = stage; out.nGroups = n; out.visible = vis;
+  out.groupOf = m.items.map(function (it) { return it.ci; });
+  var head = title(m.from) + ' · ';
+  out.legend = {
+    title: head + (ui.on ? '직접 선택 ' + nOn + '/' + n : stage === 0 ? '전체 ' + n + '개' : stage + '/' + n + ' ' + gs[stage - 1].short),
+    all: nOn === n ? 'on' : nOn === 0 ? 'off' : 'mixed',
+    rows: gs.map(function (g, k) { return {k: k, color: col[k], from: title(m.from), text: g.text, to: title(g.to), checked: vis[k], emph: hv === k, dim: hv != null && hv !== k}; })};
+  var hvTo = hv == null ? null : gs[hv].to;
+  gs.forEach(function (g, k) {
+    if (vis[k]) out.rings[g.to] = {color: col[k], n: m.targets[g.to].n, emph: hvTo === g.to, dim: hvTo != null && hvTo !== g.to};
   });
   m.order.forEach(function (t) { if (!out.rings[t]) out.dimCards.push(t); });
-  var g = m.geom, placed = [], idx = 0;
-  var list = m.items.map(function (it, k) { return k; }).filter(function (k) { return vis[k]; });
-  if (g) list.sort(function (a, b) { return (m.items[a].rect.y - m.items[b].rect.y) || a - b; });
-  list.forEach(function (k) {
-    var it = m.items[k];
-    var p = {k: k, from: m.from, to: it.to, color: col[k], n: it.n, text: it.text, chip: null, path: null, emph: hv === k, dim: hv != null && hv !== k};
-    if (g) {
-      var S = g.src, sz = (g.chips && g.chips[k]) || {w: 120, h: 30};
-      var lim = S.limit == null ? Infinity : S.limit;
-      var c = HD.labels.placeChip(S, it.rect, sz, placed);
-      placed.push(c); p.chip = c;
-      var T = g.targets && g.targets[it.to];
-      var gx = Math.min(S.x + S.w + 14 + 12 * idx, lim - 10);   // 세로선은 오른쪽 틈에서만(쌍마다 12px 엇갈림)
-      if (T) p.path = HD.route.routeCurve({x: S.x + S.w, y: c.y + c.h / 2, dir: 'right'}, {x: T.x + T.w / 2, y: T.y - 10}, {apex: idx * 16, k: idx, gx: gx});
-      idx++;
-    }
-    out.pairs.push(p);
+  var geo = m.geom, shown = gs.filter(function (g, k) { return vis[k]; }), planned = {}, tags = {};
+  if (geo) {
+    var S = geo.src, sc = S.sc || 1;
+    var pl = HD.route.plan({src: S, rowTop: geo.rowTop, cap: geo.cap, left: geo.left,
+      groups: shown.filter(function (g) { return geo.targets && geo.targets[g.to]; }).map(function (g) {
+        var T = geo.targets[g.to];
+        return {k: g.k, to: g.to, target: T, sameRow: T.row === geo.srcRow, members: g.items.map(function (i) {
+          var r = m.items[i].rect; return {x: S.x + r.x * sc, y: S.y + r.y * sc, w: r.w * sc, h: r.h * sc}; })};
+      })});
+    pl.forEach(function (p) { planned[p.k] = p; });
+    var verts = [];
+    pl.forEach(function (p) { p.verticals.forEach(function (v) { verts.push({k: p.k, x: v.x, y0: v.y0, y1: v.y1}); }); });
+    HD.labels.placeTags(pl.map(function (p) {
+      var sz = (geo.tags && geo.tags[p.k]) || {w: 120, h: 28};
+      return {k: p.k, segs: p.laneSegs, w: sz.w, h: sz.h};
+    }), verts).forEach(function (t) { tags[t.k] = t; });
+  }
+  shown.forEach(function (g) {
+    var p = planned[g.k] || null;
+    out.groups.push({k: g.k, from: m.from, to: g.to, color: col[g.k], n: m.targets[g.to].n, text: g.text, tagText: g.tag, count: g.items.length,
+      items: g.items, paths: p ? p.d : [], pts: p ? p.pts : [], lane: p ? p.laneSeg : null, side: p ? p.side : null,
+      tag: tags[g.k] || null, emph: hv === g.k, dim: hv != null && hv !== g.k});
   });
   return out;
 }
 
 // ---------- 상태 하나 + 리듀서(새 상태를 돌려준다. 바뀐 게 없으면 같은 객체)
 function initial(sat) {
-  return {focusId: null, links: null, stage: 1, on: null, hover: null, sat: sat == null ? 0.7 : sat};
+  return {focusId: null, links: null, stage: 0, on: null, hover: null, sat: sat == null ? 0.7 : sat};
 }
 function assign(s, patch) {
   var o = {}, k;
@@ -114,18 +138,19 @@ function assign(s, patch) {
 function reduce(s, it) {
   s = s || initial();
   var t = it && it.type;
-  if (t === 'focus' || t === 'exitFocus') {          // focus(id): 그 화면으로, 색 1 부터 · exitFocus: 연결 보기 끝
-    return assign(s, {focusId: t === 'focus' ? (it.id || null) : null, links: null, stage: 1, on: null, hover: null});
+  if (t === 'focus' || t === 'exitFocus') {          // focus(id): 그 화면으로, 전체부터 · exitFocus: 연결 보기 끝
+    return assign(s, {focusId: t === 'focus' ? (it.id || null) : null, links: null, stage: 0, on: null, hover: null});
   }
   if (t === 'links') return assign(s, {links: it.links || null});   // 그 화면의 hd-links 답(모델) 도착
-  if (t === 'cycle') {                               // 같은 카드 Shift+클릭: 다음 색 → … → 전체 → 색1
+  if (t === 'cycle') {                               // 같은 카드 Shift+클릭: 전체 → 그룹1 → … → 그룹n → 전체
     if (!s.links) return s;
     return assign(s, {stage: cycleNext(stageOf(s.links, s), s.links.order.length), on: null, hover: null});
   }
-  if (t === 'toggle') {                              // 범례 체크(수동): 다음 Shift+클릭 전까지 그대로
-    var on = {}, i;
+  if (t === 'toggle' || t === 'all') {               // 범례 체크(그룹 k 하나 · 모두 표시, 수동): 다음 Shift+클릭 전까지 그대로
+    if (!s.links) return s;
+    var on = {}, i, n = s.links.order.length;
     if (s.on) { for (i in s.on) on[i] = s.on[i]; } else visibleOf(s.links, s).forEach(function (x, j) { on[j] = x; });
-    on[it.k] = !on[it.k];
+    if (t === 'all') { for (i = 0; i < n; i++) on[i] = !!it.on; } else on[it.k] = !on[it.k];
     return assign(s, {on: on, hover: null});
   }
   if (t === 'hover') return it.k === s.hover ? s : assign(s, {hover: it.k});
@@ -133,6 +158,6 @@ function reduce(s, it) {
   return s;
 }
 
-HD.focus = {LINK_COLORS: LINK_COLORS, hueOf: hueOf, satHex: satHex, assignColors: assignColors, cycleNext: cycleNext,
+HD.focus = {LINK_COLORS: LINK_COLORS, hueOf: hueOf, satHex: satHex, assignColors: assignColors, groupsOf: groupsOf, cycleNext: cycleNext,
             stageOf: stageOf, visibleOf: visibleOf, deriveView: deriveView, initial: initial, reduce: reduce};
 })();
