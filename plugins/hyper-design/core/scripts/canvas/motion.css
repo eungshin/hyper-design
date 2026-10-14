@@ -61,7 +61,10 @@
 }
 
 /* 1. 포커스 진입 / 해제 — 다른 카드 흐리게(불투명도), 색 선은 그려지듯(pathLength=1) */
+/* 흐려지는 쪽(진입)은 바로: 전체 보기에서 Shift+클릭하면 카드 iframe 이 한꺼번에 로드되며 한동안 프레임이 안 그려져
+   전환이 멈춘 채 남는다(흐려지지 않은 카드). 해제(다시 밝아짐)만 전환. 진입의 움직임은 선이 그려지는 것으로. */
 #rows .card { transition: opacity var(--focus-dur) var(--focus-ease); }
+#rows.focusing .card { transition: none; }
 svg.lks path.lk { stroke-dasharray: 1; animation: hd-draw var(--focus-draw-dur) var(--focus-ease) backwards; }
 svg.lks path.lk { transition: opacity var(--duration-quick) var(--focus-ease); }
 @keyframes hd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }

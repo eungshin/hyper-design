@@ -59,11 +59,15 @@ var XLANE0 = 56, XLANE_STEP = 22;                 // 왼쪽 통로: left − 56 
 function sideOf(cx, w, facing) { return cx < 0.3 * w ? 'L' : cx > 0.7 * w ? 'R' : facing; }
 
 // 줄 위 차선 i 의 y: 카드 위 46 + 30·i. 줄 제목(cap)에 닿으면 그 차선부터는 줄 제목 위로.
+// 줄 제목과 카드 사이 자리를 먼저 다 쓴다: 30px 간격 자리 → 그 사이 15px 자리(세로선이 줄 제목 글자를 지나지 않게). 그래도 모자라면 줄 제목 위로.
 function laneY(rowTop, cap, i) {
   var y = rowTop - LANE_LIFT - LANE_STEP * i;
-  if (!cap || y >= cap.bottom + CAP_GAP) return y;
-  var fit = Math.max(0, Math.floor((rowTop - LANE_LIFT - cap.bottom - CAP_GAP) / LANE_STEP) + 1);
-  return cap.top - CAP_LIFT - LANE_STEP * (i - fit);
+  if (!cap) return y;
+  var top = rowTop - LANE_LIFT, lim = cap.bottom + CAP_GAP, slots = [], k;
+  for (k = 0; top - LANE_STEP * k >= lim; k++) slots.push(top - LANE_STEP * k);
+  for (k = 0; top - LANE_STEP * k - LANE_STEP / 2 >= lim; k++) slots.push(top - LANE_STEP * k - LANE_STEP / 2);
+  if (i < slots.length) return slots[i];
+  return cap.top - CAP_LIFT - LANE_STEP * (i - slots.length);
 }
 
 // 출발 가로선(요소 → 바깥 통로)이 다른 그룹의 출발 가로선과 같은 높이로 겹치면(탭 막대처럼 나란한 요소) 요소 높이 안에서 8px씩 비켜 선다
