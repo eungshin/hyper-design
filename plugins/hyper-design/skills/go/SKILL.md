@@ -105,7 +105,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 **먼저 사진 생성을 기다린다**: `out/.images/status.json`의 `state`가 `running`이 아닐 때까지 15초마다 확인(최대 10분). 시간이 넘으면 자리표시 그대로 진행하고 마지막 메시지에 적는다.
 
 한 메시지에서 동시에(**포그라운드로 실행해 같은 턴에서 결과를 받는다 — 백그라운드로 돌려 놓고 "끝나면 알려드릴게요"로 턴을 끝내지 않는다. 턴이 끝나면 다시 이어지지 않는다**):
-- `python3 $SK/scripts/build_canvas.py out` — 캔버스 `out/index.html`(Screens·Foundation·Components 탭, 드래그 이동, 색 점 3개, 갈래 화살표, 정책 3줄 — 스크립트가 만들고 AI는 손대지 않는다)
+- `python3 $SK/features/canvas/build_canvas.py out` — 캔버스 `out/index.html`(Screens·Foundation·Components 탭, 드래그 이동, 색 점 3개, 갈래 화살표, 정책 3줄 — 스크립트가 만들고 AI는 손대지 않는다)
 - `python3 $SK/scripts/selfcheck.py out` — 매니페스트·파일·상태·금지 문구
 - `python3 $SK/scripts/audit.py out --shots out/.shots` — 렌더링 측정(대비·토큰 밖 색·의미 배지·CTA·터치·캔버스) + 화면 캡처
 - **사실 대조 서브에이전트 1개** `hyper-design:fact-checker`(같은 메시지에서, `model` 인자 없이, 프롬프트 `OUT=<out 경로>` + 화면 파일 목록): `journey.md` 사실 표와 모든 `screens/*.html`의 글자를 대조해 어긋남(날짜·시간·인원·겹침·상태 이름)과 "누른 뒤 갈 곳이 없는 조작"만 목록으로 돌려준다. 고치지는 않는다.

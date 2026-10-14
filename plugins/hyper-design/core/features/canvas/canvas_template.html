@@ -304,7 +304,7 @@ body.modal-open #khint{display:none}
 <script>
 (function () {
 'use strict';
-// ── Canvas shell: data, board content, zoom/pan, modal, tabs, palette, notes (legacy, untouched). 연결 보기는 canvas/*.js(HD.*)
+// ── Canvas shell: data, board content, zoom/pan, modal, tabs, palette, notes (legacy, untouched). 연결 보기는 modules/*.js(HD.*)
 var D = JSON.parse(document.getElementById('hd-data').textContent || '{}');
 var Z0 = D.scale || 0.72, ZMIN = 0.02, ZMAX = 1.5;
 var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.modal || {}).h || 844;
@@ -378,7 +378,7 @@ $('#foot').innerHTML = foot;
 $('#foot').style.marginLeft = LEFT + 'px';
 
 /* ======================================================================
-   연결 보기 — Model(canvas/graph.js · route.js · labels.js) / ViewModel(canvas/focus.js · prefs.js) / View(canvas/view-links.js).
+   연결 보기 — Model(modules/graph.js · route.js · labels.js) / ViewModel(modules/focus.js · prefs.js) / View(modules/view-links.js).
    build_canvas.py 가 hd-modules 표시 자리(이 스크립트 앞)에 그 모듈들을 끼워 넣는다(globalThis.HD).
    ====================================================================== */
 // ── 회색 갈래 화살표(그래프의 kind:'flow' 간선) — 그리기는 이 셸에서
@@ -623,7 +623,7 @@ if (P && P.options && P.options.length) {
   setPalette(start);
 }
 
-// ── 연결 보기 View 붙이기(canvas/view-links.js) · 설정(canvas/prefs.js) · 주요 흐름(회색 점선) 켜고 끄기 — 도구 막대 · A · 범례 맨 아래 체크
+// ── 연결 보기 View 붙이기(modules/view-links.js) · 설정(modules/prefs.js) · 주요 흐름(회색 점선) 켜고 끄기 — 도구 막대 · A · 범례 맨 아래 체크
 function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
 var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
 function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
@@ -637,7 +637,7 @@ function setArrows(on) {
 }
 var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled,
                              isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
-// 움직임 View(canvas/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
+// 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
                               getView: function () { return {z: z, tx: tx, ty: ty}; },
                               setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); },

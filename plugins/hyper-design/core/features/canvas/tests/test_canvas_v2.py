@@ -9,7 +9,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent
-REPO = SCRIPTS.parents[3]
+REPO = SCRIPTS.parents[4]
 FIXTURE = REPO / "runs" / "laundry-v1" / "out"
 SHOTS = REPO / "tasks" / "0-harness-v2" / "phase3-shots"
 

@@ -1,4 +1,4 @@
-"""캔버스 모듈(canvas/*.js) — Model·ViewModel 순수 함수 단위 테스트(node). 브라우저 없음.
+"""캔버스 모듈(modules/*.js) — Model·ViewModel 순수 함수 단위 테스트(node). 브라우저 없음.
 
 graph.js · route.js · labels.js · style.js · camera.js · focus.js · prefs.js 를 순서대로 node 에서 읽어 확인한다.
 D 는 runs/gym-v2/out 임시 복사본을 build_canvas.py 로 만든 index.html 의 hd-data 에서 꺼낸다.
@@ -10,8 +10,8 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent
-MOD = SCRIPTS / "canvas"
-REPO = SCRIPTS.parents[3]
+MOD = SCRIPTS / "modules"
+REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "labels", "style", "camera", "focus", "prefs"]
 ALL_MODULES = ["graph", "route", "labels", "style", "camera", "focus", "prefs", "view-links", "view-motion"]
@@ -183,7 +183,7 @@ def gym_data():
 @pytest.fixture(scope="module")
 def res():
     if not NODE:
-        pytest.skip("node 가 PATH 에 없음 — canvas/*.js 단위 테스트는 node 로 돌린다")
+        pytest.skip("node 가 PATH 에 없음 — modules/*.js 단위 테스트는 node 로 돌린다")
     if not GYM.exists():
         pytest.skip(f"fixture 없음: {GYM}")
     D, screens, html = gym_data()
