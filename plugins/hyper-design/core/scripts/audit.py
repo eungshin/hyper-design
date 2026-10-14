@@ -537,8 +537,8 @@ def main():
         # 상호작용 테스트(Playwright): 드래그 이동·카드 모달·확대·Foundation/Components 탭·팔레트 전환·콘솔 에러·로드 시간
         import subprocess
         here = Path(__file__).resolve().parent
-        ct = next((c for c in (here / "canvas_test.py",
-                               here.parent / "plugins/hyper-design/core/scripts/canvas_test.py") if c.exists()), None)
+        ct = next((c for c in (here.parent / "features/canvas/canvas_test.py",
+                               here.parent / "plugins/hyper-design/core/features/canvas/canvas_test.py") if c.exists()), None)
         if ct:
             try:
                 r = subprocess.run([sys.executable, str(ct), str(OUT)], capture_output=True, text=True, timeout=180)

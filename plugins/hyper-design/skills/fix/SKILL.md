@@ -47,7 +47,7 @@ PACK=<pack 절대경로>
 - `hyper-design:screen-reviser`를 서브에이전트 종류로 쓸 수 없으면 일반 서브에이전트를 `model: "haiku"`로 띄우고, 프롬프트 맨 위에 `$SK/../agents/screen-reviser.md`의 본문(입력·순서·규칙·보고)을 그대로 붙인다.
 
 ### 4. 확인
-- 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/scripts/build_canvas.py <out>`.
+- 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/features/canvas/build_canvas.py <out>`.
 - selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다.
 
 ### 5. 마지막 메시지
@@ -56,4 +56,4 @@ PACK=<pack 절대경로>
 - 마지막 줄: `[[DONE <out>/index.html]]` — 이 줄 없이 턴을 끝내면 미완성으로 처리된다.
 
 ## 참고
-- 요청문 형식 원본: `$SK/scripts/canvas_template.html`의 `requestText` · 수정 에이전트: `plugins/hyper-design/agents/screen-reviser.md` · 설계: `docs/eungshin/tdr-v2.md` 14-3·14-4
+- 요청문 형식 원본: `$SK/features/canvas/canvas_template.html`의 `requestText` · 수정 에이전트: `plugins/hyper-design/agents/screen-reviser.md` · 설계: `docs/eungshin/tdr-v2.md` 14-3·14-4

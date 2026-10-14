@@ -3,7 +3,7 @@
 python3 build_canvas.py <out_dir>
 
 출력
-- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 canvas/*.js 모듈(<!-- hd-modules -->)·canvas/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
+- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 modules/*.js 모듈(<!-- hd-modules -->)·modules/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
                         헤더 = 제목 · 탭[Screens|Foundation|Components] · 팔레트 점 · [전체 보기][배율%]
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 390×844 크게 보기.
@@ -27,13 +27,13 @@ import sys, os, json, re, html, pathlib, shutil
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
-MODULES_DIR = HERE / "canvas"
+MODULES_DIR = HERE / "modules"
 MODULES = ["graph", "route", "labels", "style", "camera", "focus", "prefs", "view-links", "view-motion"]   # 순서 고정: Model → ViewModel → View
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
-PALETTE_JS = HERE.parent / "foundation" / "palette.js"
-SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parent / "foundation" / "specimens.html")
+PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
+SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
 SCALE, CARD, MODAL = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}
 
 esc = lambda x: html.escape(str(x if x is not None else ""))
@@ -49,7 +49,7 @@ def load(p, default=None):
 
 # ---------------------------------------------------------------- index.html
 def inline_modules(tpl):
-    """canvas/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
+    """modules/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
     assert MODULES_MARKER in tpl, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
     parts = []
     for name in MODULES:
@@ -58,7 +58,7 @@ def inline_modules(tpl):
         js = f.read_text(encoding="utf-8").replace("</", "<\\/").replace("<!--", "<\\!--")
         parts.append(f'<script data-hd-module="{name}">\n{js}</script>')
     tpl = tpl.replace(MODULES_MARKER, "\n".join(parts), 1)
-    # 움직임 토큰·전환(canvas/motion.css)을 <style> 안 표시 자리에
+    # 움직임 토큰·전환(modules/motion.css)을 <style> 안 표시 자리에
     assert MOTION_MARKER in tpl, f"canvas_template.html 에 {MOTION_MARKER} 자리가 없다"
     css = MOTION_CSS.read_text(encoding="utf-8").replace("</", "<\\/")
     return tpl.replace(MOTION_MARKER, css, 1)

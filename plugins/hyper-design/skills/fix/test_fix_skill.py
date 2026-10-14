@@ -4,7 +4,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE / "SKILL.md"
-TEMPLATE = HERE.parents[1] / "core" / "scripts" / "canvas_template.html"
+TEMPLATE = HERE.parents[1] / "core" / "features" / "canvas" / "canvas_template.html"
 
 HEADER_RE = re.compile(r"^\[hyper-design 수정 요청\] out=.+ · \d+건$")
 ITEM_RE = re.compile(r"^(\d+)\. screen=[^\s·]+ · path=.+$")

@@ -37,5 +37,6 @@ PRD만 붙여넣고 "화면 만들어줘"라고 해도 `go`가 실행된다. PRD
 plugins/hyper-design/
   skills/go/SKILL.md     # 1차
   skills/max/SKILL.md    # 2차
-  core/                  # 공용 — foundation(토큰·부품·팔레트·시드), scripts(검사·캔버스·이미지 검색), references(원칙·체크리스트·명세·이미지)
+  core/                  # 공용 — foundation(토큰·부품·팔레트·시드), scripts(검사·준비·이미지 검색), references(원칙·체크리스트·명세·이미지)
+  core/features/<기능>/   # 기능 단위 폴더 — 계약(contract.md)·코드·tests: canvas(캔버스·연결 보기) · pack(빌드 묶음) · icons · images
 ```
