@@ -1,15 +1,16 @@
 /* ViewModel — 연결 보기 상태 하나 + 순수 리듀서, 그리고 상태 → 보일 것(deriveView). DOM 없음.
-   상태 {focusId, links, stage, on, hover, sat}
+   상태 {focusId, links, stage, on, hover, colors, pair}
      focusId : Shift+클릭한 화면 id(없으면 null)   links : 그 화면의 색 링크 모델(assignColors 결과 + from/titles…)
      stage   : 0 = 전체, 1..n = 대상 그룹 하나       on    : 범례 체크(그룹 k → bool, 수동, 다음 Shift+클릭 전까지)
-     hover   : 마우스가 올라간 그룹 k             sat   : 채도 배율
+     hover   : 마우스가 올라간 그룹 k             colors: 선 색 설정 {preset, rand, custom}(HD.lineStyle.colourOf)
+     pair    : Ctrl+클릭으로 들어온 쌍의 대상 id(링크 답이 오면 그 그룹만 켬)
    그룹 = 같은 대상 화면으로 가는 링크 묶음(k = 색 = 처음 나온 순서).
-   의도 {type:'focus', id} · {type:'exitFocus'} · {type:'cycle'} · {type:'toggle', k} · {type:'all', on} · {type:'hover', k} · {type:'setSat', v} · {type:'links', links} */
+   의도 {type:'focus', id} · {type:'exitFocus'} · {type:'cycle'} · {type:'toggle', k} · {type:'all', on} · {type:'hover', k} · {type:'style', colors} · {type:'pair', id, to} · {type:'links', links} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var TAG_MAX = 14;                                  // 선 위 태그·범례 제목에서 버튼 글 하나의 최대 글자 수(넘으면 …)
-var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(색상각이 서로 다름)
+var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(= HD.lineStyle.PRESETS.calm)
 
 function hueOf(hx) {
   var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m) return null;
@@ -20,16 +21,6 @@ function hueOf(hx) {
   return (h * 60 + 360) % 360;
 }
 function hueGap(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
-function satHex(hx, s) {                           // 채도만 s 배(HSL)
-  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m || s == null) return hx;
-  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
-  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, sa = 0;
-  if (d) { sa = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
-  sa = Math.max(0, Math.min(1, sa * s));
-  var c = (1 - Math.abs(2 * l - 1)) * sa, x = c * (1 - Math.abs((h / 60) % 2 - 1)), o = l - c / 2;
-  var q = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-  return '#' + q.map(function (t) { return ('0' + Math.max(0, Math.min(255, Math.round((t + o) * 255))).toString(16)).slice(-2); }).join('');
-}
 // 링크마다 색: 같은 대상 = 같은 색, 문서에 처음 나온 순서, 앱 강조색 ±30° 는 건너뜀, 모자라면 번호
 function assignColors(links, accentHex, palette) {
   palette = palette || LINK_COLORS;
@@ -74,7 +65,7 @@ function visibleOf(m, ui) {
   return m.order.map(function (t, k) { return ui.on ? !!ui.on[k] : stage === 0 || k === stage - 1; });
 }
 
-/* Model + UI 상태(단계·체크·마우스·채도) → 보일 것. DOM 없음.
+/* Model + UI 상태(단계·체크·마우스·선 색) → 보일 것. DOM 없음.
    m.geom(있으면) = {src:{x,y,w,h,sc}, rowTop, cap, left, srcRow, targets:{id:{x,y,w,h,rowTop,cap,row}}, tags:{k:{w,h}}}
    → {groups:[{k,to,color,n,text,paths,pts,tag,lane,emph,dim}], legend:{title, all:'on'|'off'|'mixed', rows}, rings, dimCards, stage, nGroups, visible, groupOf} */
 function deriveView(m, ui) {
@@ -82,9 +73,10 @@ function deriveView(m, ui) {
   var out = {groups: [], legend: null, rings: {}, dimCards: [], stage: 0, nGroups: 0, visible: [], groupOf: []};
   if (!m || !m.items || !m.items.length) return out;
   var gs = groupsOf(m), n = gs.length, stage = stageOf(m, ui);
-  var sat = ui.sat == null ? 0.7 : ui.sat, hv = ui.hover == null ? null : ui.hover;
+  var hv = ui.hover == null ? null : ui.hover;
   var title = function (id) { return (m.titles && m.titles[id]) || id; };
-  var col = gs.map(function (g) { return satHex(m.targets[g.to].color, sat); });
+  var col = gs.map(function (g) {                  // 쌍마다 고른 색 > 프리셋(강조색 건너뜀) · 같은 대상 = 같은 색
+    return ui.colors && HD.lineStyle ? HD.lineStyle.colourOf(ui.colors, m.from, {to: g.to, k: g.k}, m.accent) : m.targets[g.to].color; });
   var vis = visibleOf(m, ui), nOn = vis.filter(Boolean).length;
   if (hv != null && !vis[hv]) hv = null;
   out.stage = stage; out.nGroups = n; out.visible = vis;
@@ -126,8 +118,8 @@ function deriveView(m, ui) {
 }
 
 // ---------- 상태 하나 + 리듀서(새 상태를 돌려준다. 바뀐 게 없으면 같은 객체)
-function initial(sat) {
-  return {focusId: null, links: null, stage: 0, on: null, hover: null, sat: sat == null ? 0.7 : sat};
+function initial(style) {
+  return {focusId: null, links: null, stage: 0, on: null, hover: null, colors: style || null, pair: null};
 }
 function assign(s, patch) {
   var o = {}, k;
@@ -139,9 +131,18 @@ function reduce(s, it) {
   s = s || initial();
   var t = it && it.type;
   if (t === 'focus' || t === 'exitFocus') {          // focus(id): 그 화면으로, 전체부터 · exitFocus: 연결 보기 끝
-    return assign(s, {focusId: t === 'focus' ? (it.id || null) : null, links: null, stage: 0, on: null, hover: null});
+    return assign(s, {focusId: t === 'focus' ? (it.id || null) : null, links: null, stage: 0, on: null, hover: null, pair: null});
   }
-  if (t === 'links') return assign(s, {links: it.links || null});   // 그 화면의 hd-links 답(모델) 도착
+  if (t === 'pair') {                                // Ctrl+클릭(연결 보기 밖): 그 화면으로 들어가되 그 쌍 하나만
+    return assign(s, {focusId: it.id || null, links: null, stage: 0, on: null, hover: null, pair: it.to || null});
+  }
+  if (t === 'links') {                               // 그 화면의 hd-links 답(모델) 도착
+    var lk = it.links || null, k0 = lk && s.pair ? lk.order.indexOf(s.pair) : -1;
+    if (k0 < 0) return assign(s, {links: lk});
+    var only = {};
+    lk.order.forEach(function (x, j) { only[j] = j === k0; });
+    return assign(s, {links: lk, on: only});
+  }
   if (t === 'cycle') {                               // 같은 카드 Shift+클릭: 전체 → 그룹1 → … → 그룹n → 전체
     if (!s.links) return s;
     return assign(s, {stage: cycleNext(stageOf(s.links, s), s.links.order.length), on: null, hover: null});
@@ -154,10 +155,10 @@ function reduce(s, it) {
     return assign(s, {on: on, hover: null});
   }
   if (t === 'hover') return it.k === s.hover ? s : assign(s, {hover: it.k});
-  if (t === 'setSat') return assign(s, {sat: Math.max(0.2, Math.min(1.2, +it.v || 0.7))});
+  if (t === 'style') return assign(s, {colors: it.colors || null});
   return s;
 }
 
-HD.focus = {LINK_COLORS: LINK_COLORS, hueOf: hueOf, satHex: satHex, assignColors: assignColors, groupsOf: groupsOf, cycleNext: cycleNext,
+HD.focus = {LINK_COLORS: LINK_COLORS, hueOf: hueOf, assignColors: assignColors, groupsOf: groupsOf, cycleNext: cycleNext,
             stageOf: stageOf, visibleOf: visibleOf, deriveView: deriveView, initial: initial, reduce: reduce};
 })();

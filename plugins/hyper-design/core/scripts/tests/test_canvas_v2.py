@@ -874,3 +874,196 @@ def test_v3_main_flow_dashed(gpage):
     gpage.wait_for_function("window.__hdReady !== undefined")
     gpage.wait_for_timeout(300)
     assert vis() == total
+
+
+# ---------------------------------------------------------------- canvas-v3 (phase 2): Ctrl+클릭 카메라 · 전환 메뉴 · 선 색/굵기
+CAM_DONE = "window.__hdCam && !window.__hdCam.running"
+OFFSET_JS = """(id) => { const r = document.querySelector('.card[data-id="' + id + '"] .phone').getBoundingClientRect(),
+    p = document.getElementById('screens').getBoundingClientRect();
+    return [r.left + r.width / 2 - (p.left + p.width / 2), r.top + r.height / 2 - (p.top + p.height / 2)]; }"""
+
+
+def ctrl_click_link(pg, sid, text):
+    """카드 안 링크 요소 자리를 Ctrl+클릭(카드 위 덮개가 받는다)."""
+    b = pg.frame_locator(f'.card[data-id="{sid}"] .phone iframe').locator("a", has_text=text).first.bounding_box()
+    pg.keyboard.down("Control")
+    pg.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+    pg.keyboard.up("Control")
+
+
+def centred(pg, sid, tol=8):
+    dx, dy = pg.evaluate(OFFSET_JS, sid)
+    return abs(dx) <= tol and abs(dy) <= tol
+
+
+def test_v3_ctrl_click_camera(gpage, gym_out):
+    """S4: 카드 안 링크 Ctrl+클릭 → 화면은 이동하지 않고, 카메라가 대상 카드 가운데로(8px) · 그 쌍만 강조. 범례 줄 Ctrl+클릭도. Esc 는 바로 멈춤."""
+    want = link_targets(gym_out, "pass")
+    gpage.keyboard.press("Escape")
+    zoom_to(gpage, "pass", 380)
+    frame_url = lambda: gpage.frame_locator('.card[data-id="pass"] .phone iframe').locator("body").evaluate("() => location.href")
+    url0 = frame_url()
+    ctrl_click_link(gpage, "pass", "일시정지 신청")
+    gpage.wait_for_function("window.__hdCam && window.__hdCam.running", timeout=3000)
+    gpage.wait_for_timeout(420)
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.screenshot(path=str(V3SHOTS / "p2-b-mid.png"))
+    gpage.wait_for_function(CAM_DONE, timeout=4000)
+    assert gpage.evaluate("window.__hdCam.to") == "pause"
+    gpage.wait_for_timeout(120)
+    gpage.screenshot(path=str(V3SHOTS / "p2-c-end.png"))
+    assert centred(gpage, "pause"), gpage.evaluate(OFFSET_JS, "pause")
+    assert frame_url() == url0, "Ctrl+클릭은 화면을 이동시키지 않는다"
+    assert gpage.evaluate("document.querySelector('.card[data-id=\"pause\"]').classList.contains('pulse')")
+    gpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)   # 연결 보기 밖 → 그 쌍 하나만
+    assert set(gpage.evaluate("[...document.querySelectorAll('#lks path.lk')].map(p => p.dataset.to)")) == {"pause"}
+    # 범례 줄 Ctrl+클릭: 그 대상으로, 체크는 그대로
+    k = want.index("renew")
+    row = gpage.locator(f'#lgRows .lgrow[data-k="{k}"]')
+    before = row.locator("input").is_checked()
+    row.locator(".lgtx").click(modifiers=["Control"])
+    gpage.wait_for_function(CAM_DONE + " && window.__hdCam.to === 'renew'", timeout=4000)
+    assert centred(gpage, "renew") and row.locator("input").is_checked() == before
+    # Esc 중간에 → 그 자리에서 멈춤
+    gpage.locator('#lgRows .lgrow[data-k="0"] .lgtx').click(modifiers=["Control"])
+    gpage.wait_for_timeout(200)
+    gpage.keyboard.press("Escape")
+    v0 = gpage.evaluate("HDCanvas.view()")
+    gpage.wait_for_timeout(300)
+    assert gpage.evaluate("window.__hdCam.running") is False and gpage.evaluate("HDCanvas.view()") == v0
+    assert not centred(gpage, want[0])
+
+
+def test_v3_reduced_motion_jumps(gpage):
+    """S4: prefers-reduced-motion: reduce → 카메라는 끝 상태로 바로."""
+    gpage.emulate_media(reduced_motion="reduce")
+    try:
+        gpage.keyboard.press("Escape")
+        zoom_to(gpage, "pass", 380)
+        ctrl_click_link(gpage, "pass", "연장하기")
+        gpage.wait_for_function("window.__hdCam && window.__hdCam.to === 'renew'", timeout=3000)
+        assert gpage.evaluate("window.__hdCam.keys.length") == 1 and gpage.evaluate("window.__hdCam.running") is False
+        assert centred(gpage, "renew")
+    finally:
+        gpage.emulate_media(reduced_motion="no-preference")
+        gpage.keyboard.press("Escape")
+
+
+def test_v3_transition_menu(gpage):
+    """S6: T → 전환 메뉴(표의 전환마다 한 줄, 토큰 값) · ▶ 마다 페이지 오류 없음 · '애니메이션 끄기'는 새로고침 뒤에도, 카메라는 바로."""
+    errs = []
+    gpage.on("pageerror", lambda e: errs.append(str(e)))
+    gpage.keyboard.press("Escape")
+    gpage.mouse.click(5, 300)
+    gpage.keyboard.press("t")
+    gpage.wait_for_selector("#tmenu:not([hidden])")
+    names = gpage.evaluate("[...document.querySelectorAll('#tmenu .trow .tn')].map(n => n.textContent)")
+    assert names == ["포커스 진입 / 해제", "카드 펼치기 / 접기", "카메라 이동", "크게 보기 모달 열기/닫기", "범례 패널 표시", "드롭다운 / 팝오버", "태그·툴팁 등장"]
+    vals = gpage.evaluate("[...document.querySelectorAll('#tmenu .trow .tv')].map(n => n.textContent)")
+    assert all(re.match(r"^\d+ms · \S", v) for v in vals), vals
+    gpage.wait_for_timeout(300)
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.screenshot(path=str(V3SHOTS / "p2-a-menu.png"))
+    for t in ["focus", "expand", "camera", "modal", "legend", "dropdown", "tooltip"]:
+        gpage.click(f'#tmenu button[data-play="{t}"]')
+        gpage.wait_for_timeout(1300)
+        assert not errs, (t, errs)
+    gpage.keyboard.press("Escape")
+    gpage.wait_for_timeout(300)
+    if gpage.is_hidden("#tmenu"):
+        gpage.keyboard.press("t")
+    gpage.check("#tmOff")
+    assert gpage.evaluate("document.body.classList.contains('nomotion')")
+    reload(gpage)
+    assert gpage.evaluate("document.body.classList.contains('nomotion') && JSON.parse(localStorage.getItem('hd-canvas-prefs')).motion === false")
+    zoom_to(gpage, "pass", 380)
+    ctrl_click_link(gpage, "pass", "연장하기")
+    gpage.wait_for_function("window.__hdCam && window.__hdCam.to === 'renew'", timeout=3000)
+    assert gpage.evaluate("window.__hdCam.keys.length") == 1 and centred(gpage, "renew")
+    gpage.keyboard.press("Escape")
+    gpage.keyboard.press("t")
+    gpage.wait_for_selector("#tmenu:not([hidden])")
+    assert gpage.is_checked("#tmOff")
+    gpage.uncheck("#tmOff")
+    gpage.keyboard.press("Escape")
+    assert not gpage.evaluate("document.body.classList.contains('nomotion')")
+    assert not errs, errs
+
+
+# ---------------------------------------------------------------- canvas-v3 (phase 3): 색 드롭다운 · 쌍 색 · 굵기
+STROKES_JS = """() => [...document.querySelectorAll('#lks path.lk')].map(p => {
+    const id = (p.getAttribute('marker-end') || '').match(/#([^)]+)/)[1];
+    return [+p.dataset.k, p.getAttribute('stroke').toLowerCase(), document.querySelector('#' + id + ' path').getAttribute('fill').toLowerCase(), getComputedStyle(p).strokeWidth]; })"""
+
+
+def set_width(pg, w):
+    pg.evaluate("(w) => { const i = document.getElementById('lgW'); i.value = String(w); i.dispatchEvent(new Event('input', {bubbles: true})); }", w)
+
+
+def test_v3_line_style(gpage):
+    """S5: 색 드롭다운(진하게) · 랜덤(누를 때마다 다름, 메뉴 그대로) · 밖 클릭 닫기 · ● 쌍 색(그 쌍만) · 초기화 · 굵기 5(강조 7) · 새로고침 유지 · 설명 글 없음."""
+    focus_all(gpage, "pass")
+    deep = [c.lower() for c in gpage.evaluate("HDCanvas.style.PRESETS.deep.c")]
+    gpage.click("#lgDdb")
+    gpage.wait_for_selector("#lgDd:not([hidden])")
+    gpage.wait_for_timeout(300)
+    V3SHOTS.mkdir(parents=True, exist_ok=True)
+    gpage.screenshot(path=str(V3SHOTS / "p3-a-dropdown.png"))
+    dd, bt = gpage.locator("#lgDd").bounding_box(), gpage.locator("#lgDdb").bounding_box()
+    assert dd["y"] + dd["height"] <= bt["y"], "위로 열림"
+    gpage.click('#lgDd button[data-preset="deep"]')
+    gpage.wait_for_timeout(250)
+    assert gpage.is_hidden("#lgDd")
+    st = gpage.evaluate(STROKES_JS)
+    assert st and all(s in deep and f == s for _, s, f, _ in st), st
+    set_width(gpage, 5)
+    st = gpage.evaluate(STROKES_JS)
+    assert {w for *_, w in st} == {"5px"}, st
+    gpage.locator('#lgRows .lgrow[data-k="0"]').hover()
+    gpage.wait_for_timeout(200)
+    assert gpage.evaluate("getComputedStyle(document.querySelector('#lks path.lk.em')).strokeWidth") == "7px"
+    gpage.mouse.move(5, 300)
+    gpage.wait_for_timeout(200)
+    gpage.screenshot(path=str(V3SHOTS / "p3-b-deep-width5.png"))
+    # ● → 색판 → 그 쌍만
+    before = {k: s for k, s, _, _ in gpage.evaluate(STROKES_JS)}
+    chk = gpage.locator('#lgRows .lgrow[data-k="1"] input').is_checked()
+    gpage.click('#lgRows .lgrow[data-k="1"] .lgdot')
+    gpage.wait_for_selector("#lgSw:not([hidden])")
+    assert gpage.locator('#lgRows .lgrow[data-k="1"] input').is_checked() == chk
+    gpage.click('#lgSwG button[data-c="#F97316"]')
+    gpage.wait_for_timeout(250)
+    after = {k: s for k, s, _, _ in gpage.evaluate(STROKES_JS)}
+    assert after[1] == "#f97316" and all(after[k] == before[k] for k in before if k != 1), (before, after)
+    gpage.screenshot(path=str(V3SHOTS / "p3-c-custom-pair.png"))
+    reload(gpage)
+    focus_all(gpage, "pass")
+    st = gpage.evaluate(STROKES_JS)
+    assert {k: s for k, s, _, _ in st} == after and {w for *_, w in st} == {"5px"}, st
+    # 초기화 → 프리셋 색으로
+    gpage.click("#lgDdb")
+    gpage.click('#lgDd button[data-act="reset"]')
+    gpage.wait_for_timeout(250)
+    assert {k: s for k, s, _, _ in gpage.evaluate(STROKES_JS)} == before
+    # 밖 클릭 → 닫힘
+    gpage.click("#lgDdb")
+    gpage.wait_for_selector("#lgDd:not([hidden])")
+    gpage.click("#lgTitle")
+    gpage.wait_for_timeout(250)
+    assert gpage.is_hidden("#lgDd")
+    # 랜덤 두 번 → 색이 다름, 메뉴는 열린 채
+    gpage.click("#lgDdb")
+    gpage.click('#lgDd button[data-preset="random"]')
+    gpage.wait_for_timeout(150)
+    r1 = [s for _, s, _, _ in gpage.evaluate(STROKES_JS)]
+    assert gpage.is_visible("#lgDd")
+    gpage.click('#lgDd button[data-preset="random"]')
+    gpage.wait_for_timeout(150)
+    r2 = [s for _, s, _, _ in gpage.evaluate(STROKES_JS)]
+    assert r1 != r2 and gpage.is_visible("#lgDd")
+    # 스타일 줄엔 설명 문장이 없다(요소마다 자기 글 40자 이하)
+    long = gpage.evaluate("""() => [...document.querySelectorAll('#lgStyle, #lgStyle *, #legend .lgflow, #legend .lgflow *, #lgDd *, #lgSw, #lgSw *')]
+        .map(e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(' ')).filter(t => t.length > 40)""")
+    assert not long, long
+    gpage.evaluate("localStorage.removeItem('hd-canvas-prefs')")
+    gpage.keyboard.press("Escape")

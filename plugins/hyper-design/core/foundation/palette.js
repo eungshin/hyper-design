@@ -5,7 +5,9 @@
    연결 보기: {type:'hd-links', on:true} 를 받으면 다른 화면으로 가는 링크 목록을
    {type:'hd-links', screen, accent, docHeight, links:[{to, path, text, rect}]} 로 답하고(docHeight = 화면 전체 높이),
    {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움).
-   한 요소에 쌍이 여럿이면 테두리를 3px 간격 동심으로 겹친다. */
+   한 요소에 쌍이 여럿이면 테두리를 3px 간격 동심으로 겹친다.
+   어디로 가나(Ctrl/Cmd+클릭): 링크 요소를 Ctrl/Cmd+클릭하면 이동하지 않고 {type:'hd-link-go', screen, to, path, rect} 를 보낸다.
+   캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로. */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -98,18 +100,36 @@
     if (!h) { var m = (el.getAttribute('onclick') || '').match(/['"]([^'"]+\.html?)(?:[?#][^'"]*)?['"]/i); h = m && m[1]; }
     return h;
   }
+  var LINK_SEL = 'a[href], [data-href], [onclick]';
+  function toOf(el) {                                 // 같은 폴더의 다른 화면으로 가는 링크면 그 화면 id
+    var h = hrefOf(el); if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return null;
+    var here = location.href.split(/[?#]/)[0], dir = here.replace(/[^\/]*$/, ''), u;
+    try { u = new URL(h, here).href.split(/[?#]/)[0]; } catch (e) { return null; }
+    if (u.indexOf(dir) !== 0 || !/\.html?$/i.test(u)) return null;
+    var rest = decodeURIComponent(u.slice(dir.length)); if (rest.indexOf('/') >= 0) return null;   // 같은 폴더의 화면만
+    var to = rest.replace(/\.html?$/i, ''); return !to || to === screenId() ? null : to;
+  }
   function links() {
-    var here = location.href.split(/[?#]/)[0], dir = here.replace(/[^\/]*$/, ''), me = screenId(), res = [];
-    document.querySelectorAll('a[href], [data-href], [onclick]').forEach(function (el) {
-      var h = hrefOf(el); if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return;
-      var u; try { u = new URL(h, here).href.split(/[?#]/)[0]; } catch (e) { return; }
-      if (u.indexOf(dir) !== 0 || !/\.html?$/i.test(u)) return;
-      var rest = decodeURIComponent(u.slice(dir.length)); if (rest.indexOf('/') >= 0) return;   // 같은 폴더의 화면만
-      var to = rest.replace(/\.html?$/i, ''); if (!to || to === me) return;
+    var res = [];
+    document.querySelectorAll(LINK_SEL).forEach(function (el) {
+      var to = toOf(el); if (!to) return;
       res.push({to: to, path: pathOf(el), text: textOf(el).slice(0, 40), rect: rectOf(el)});
     });
     return res;
   }
+  function linkAt(el) {                               // el 또는 그 조상 중 화면 링크
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.matches && n.matches(LINK_SEL) && toOf(n)) return n; }
+    return null;
+  }
+  function sendGo(el) {
+    send(el ? {type: 'hd-link-go', screen: screenId(), to: toOf(el), path: pathOf(el), rect: rectOf(el)} : {type: 'hd-link-go', screen: screenId(), to: null});
+  }
+  document.addEventListener('click', function (e) {    // Ctrl/Cmd+클릭: 이동 대신 '어디로 가나'
+    if (picking || !(e.ctrlKey || e.metaKey) || !window.parent || window.parent === window) return;
+    var el = linkAt(e.target); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    sendGo(el);
+  }, true);
   function docHeight() {
     var de = document.documentElement, b = document.body;
     return Math.max(de.scrollHeight, de.offsetHeight, b ? b.scrollHeight : 0, b ? b.offsetHeight : 0);
@@ -144,6 +164,7 @@
     if (d.type === 'hd-palette') apply(d.slug);
     else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
+    else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
       if (!picking && box) box.style.display = 'none';
