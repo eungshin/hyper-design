@@ -42,10 +42,12 @@ function groupsOf(m) {
   return m.order.map(function (to, k) {
     var idx = [], texts = [];
     m.items.forEach(function (it, i) { if (it.ci === k) { idx.push(i); texts.push(it.text || '(링크)'); } });
-    var cnt = idx.length > 1 ? ' (' + idx.length + ')' : '', sh = texts.map(short);
-    return {k: k, to: to, items: idx, texts: texts, text: texts.join(' · ') + cnt, tag: sh.join(' · ') + cnt, short: sh.join(' · ')};
+    // 같은 글의 버튼이 여럿이면 글은 한 번만, 개수는 (n)으로: "수리 신청 (3)"
+    var cnt = idx.length > 1 ? ' (' + idx.length + ')' : '', u = uniq(texts), sh = uniq(u.map(short));
+    return {k: k, to: to, items: idx, texts: texts, text: u.join(' · ') + cnt, tag: sh.join(' · ') + cnt, short: sh.join(' · ')};
   });
 }
+function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
 function short(t) { t = String(t).replace(/\s+/g, ' ').trim(); return t.length > TAG_MAX ? t.slice(0, TAG_MAX - 1).trim() + '…' : t; }
 // 같은 카드를 Shift+클릭할 때마다: 전체(0) → 그룹1 → 그룹2 → … → 그룹n → 전체. 그룹이 하나뿐이면 늘 전체.
 function cycleNext(stage, n) {
