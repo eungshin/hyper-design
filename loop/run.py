@@ -1,11 +1,13 @@
 """하네스 1회 구동: 격리 폴더에서 claude -p 헤드리스 실행, 질문은 가상 사용자가 답한다.
-python3 loop/run.py <prd.md> <run_dir> [--max]
+python3 loop/run.py <prd.md> <run_dir> [--max] [--harness 이름] [--no-trace]
 플러그인(plugins/hyper-design)을 --plugin-dir로 불러 /hyper-design:go 로 구동. --max면 go가 끝난 뒤 같은 세션에서 /hyper-design:max(1차 결과는 out-go/로 보존)
 산출: run_dir/out(결과), prompt-log.md, elapsed.txt, transcript.jsonl
+끝나면 기본으로 perf/trace.py를 불러 perf/perf.db에 적재한다(run_id = run_dir 이름). --no-trace로 끈다.
 """
 import sys, json, re, shutil, subprocess, time, pathlib, datetime
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 prd = pathlib.Path(sys.argv[1]).resolve(); run = pathlib.Path(sys.argv[2]).resolve(); DO_MAX = "--max" in sys.argv
+HARNESS = sys.argv[sys.argv.index("--harness") + 1] if "--harness" in sys.argv else "eungshin"
 PLUGIN = ROOT / "plugins/hyper-design"
 MODEL = "claude-opus-5-5"; MAX_TURNS = 4
 if run.exists(): shutil.rmtree(run)
@@ -69,3 +71,7 @@ if (work / "out").exists(): shutil.copytree(work / "out", run / "out")
 (run / "prompt-log.md").write_text("".join(log) + f"\n\n총 개입 횟수: {turns} / 5 · 종료 상태: {status}\n", encoding="utf-8")
 (run / "elapsed.txt").write_text(f"시작: {start:%Y-%m-%d %H:%M}\n종료: {end:%Y-%m-%d %H:%M}\n하네스 실행 시간(가상 사용자 응답 제외): {harness_sec/60:.1f}분\n" + (f"1차(go) {go_sec/60:.1f}분 · 2차(max) {max_sec/60:.1f}분\n" if DO_MAX else ""), encoding="utf-8")
 print(json.dumps({"status": status, "turns": turns, "harness_min": round(harness_sec / 60, 1), "go_min": round(go_sec / 60, 1), "max_min": round(max_sec / 60, 1)}))
+if "--no-trace" not in sys.argv:
+    subprocess.run([sys.executable, str(ROOT / "perf/trace.py"), "--latest", str(work), "--run", run.name, "--harness", HARNESS,
+                    "--prd", str(prd.relative_to(ROOT)) if prd.is_relative_to(ROOT) else str(prd), "--out", str(run / "out"),
+                    "--note", f"loop/run.py headless · {status} · 개입 {turns}회"])
