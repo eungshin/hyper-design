@@ -93,6 +93,8 @@ for (const n of [1, 3, 5]) {
   for (let i = 0; i < 5; i++) { s = F.reduce(s, {type: 'cycle'}); seq.push(snap(s)); }
   out.cycle3 = seq;
   out.groups4 = F.groupsOf(m).map(g => [g.to, g.items, g.text, g.tag]);
+  const dup = F.assignColors(['반품 신청', '수리 신청', '수리 신청'].map((x, i) => ({to: 'r', path: 'q' + i, text: x, rect: {x: 0, y: i * 60, w: 300, h: 48}})), '', F.LINK_COLORS);
+  out.dupTag = F.groupsOf(dup)[0].tag;
   let t = F.reduce(s, {type: 'toggle', k: 2});          // s = 단계 1(그룹 a 만) → c 도 켬
   out.manual = snap(t);
   out.allOff = snap(F.reduce(t, {type: 'all', on: false}));
@@ -326,6 +328,7 @@ def test_same_target_merge(res):
     assert [x[0] for x in g] == ["a", "b", "c"] and g[1][1] == [1, 3]
     assert g[1][2] == "일시정지 신청 · 정지 문의 (2)" and g[1][3] == "일시정지 신청 · 정지 문의 (2)"
     assert g[0][2] == "뒤로"
+    assert res["dupTag"] == "반품 신청 · 수리 신청 (3)"   # 같은 글 버튼 여럿 → 글은 한 번, 개수는 (n)
 
 
 def test_side_rule(res):
