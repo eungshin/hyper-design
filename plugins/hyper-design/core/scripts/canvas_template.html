@@ -90,10 +90,10 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 
 .rows{position:relative;padding-bottom:40px}
 .flow{padding-top:90px}
-.glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap}
+.glabel{font-size:31px;font-weight:700;margin:0 0 164px;white-space:nowrap}   /* 줄 위 차선 4개(46+30·3)가 줄 제목과 카드 사이에 들어가게 */
 .cards{display:flex;gap:84px;align-items:flex-start}
 .card{flex:none;width:375px;position:relative}
-.phone{position:relative;width:375px;height:812px;border-radius:28px;overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10);transition:height .2s ease}
+.phone{position:relative;width:375px;height:812px;border-radius:28px;overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
 .card.xp{z-index:6}
 .card.xp>:not(.phone):not(.anno){visibility:hidden}
 .phone iframe{display:block;width:375px;height:812px;border:0;pointer-events:none;background:#fff}
@@ -143,17 +143,18 @@ svg.ar marker path,svg.ar marker circle{fill:#9AA09A}
 #rows.focusing .card.lt.dim{opacity:.3}
 /* 색 링크 층: 카드(펼친 카드 포함) 위에 선·선 위 태그 */
 svg.lks{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
-svg.lks path.lk{fill:none;stroke-width:calc(var(--lw,2) * 1.25);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:default;transition:opacity .15s}
-svg.lks path.lk.em{stroke-width:calc(var(--lw,2) * 2)}
+svg.lks path.lk{fill:none;stroke-width:var(--lkw,2.5px);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:default}
+svg.lks path.lk.em{stroke-width:calc(var(--lkw,2.5px) + 2px)}
 svg.lks path.lk.dim{opacity:.15}
 #lkl{position:absolute;left:0;top:0;width:0;height:0;z-index:8}
-.ltag{position:absolute;left:0;top:0;visibility:hidden;transform:translate(-50%,-50%);background:#fff;border:2px solid currentColor;border-radius:999px;padding:2px 12px;font-size:16px;line-height:1.35;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:default;transition:opacity .15s}
+.ltag{position:absolute;left:0;top:0;visibility:hidden;transform:translate(-50%,-50%) scale(var(--ts,1));background:#fff;border:2px solid currentColor;border-radius:999px;padding:2px 12px;font-size:16px;line-height:1.35;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:default}
+/* --ts: 작게 볼 때(배율 < 1) 태그를 화면에서 글자 12px · 테두리 1.5px 이상으로(가운데 고정) */
 .ltag.on{visibility:visible}
 .ltag.em{box-shadow:0 0 0 3px currentColor}
 .ltag.dim{opacity:.15}
 .lnum{position:absolute;left:10px;top:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ring);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
 .nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:#e5484d;color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
-/* 범례(연결 보기 중에만): 쌍마다 켜고 끄기 · 채도 */
+/* 범례(연결 보기 중에만): 쌍마다 켜고 끄기 · 색 · 굵기 */
 #legend{position:absolute;right:12px;bottom:10px;z-index:4;width:360px;max-height:calc(100% - 20px);overflow:auto;background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.14);padding:12px 14px;font-size:13px;cursor:default;touch-action:auto;-webkit-user-select:none;user-select:none}
 #legend[hidden],body.modal-open #legend{display:none}
 #legend .lgt{margin:0 0 8px;font-size:13px;font-weight:700;color:#1c1c1c}
@@ -161,12 +162,38 @@ svg.lks path.lk.dim{opacity:.15}
 #legend .lgrow:hover,#legend .lgrow.em{background:#F4F5F3}
 #legend .lgrow.dim{opacity:.45}
 #legend .lgall{font-weight:600}
-#legend .lgdot{width:12px;height:12px;border-radius:50%;flex:none}
+#legend .lgdot{width:16px;height:16px;border-radius:50%;flex:none;border:2px solid #fff;box-shadow:0 0 0 1px #ccc;cursor:pointer;padding:0}
 #legend .lgtx{flex:1;line-height:1.35;color:#333}
 #legend .lgtx i{font-style:normal;color:#777}
 #legend input[type=checkbox]{accent-color:#444;width:16px;height:16px}
-#legend .lgsat{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#777}
-#legend .lgsat input{flex:1}
+#legend .lgstyle{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#777}
+#legend .lgddw{display:flex;align-items:center;gap:6px}
+#legend .lgddb{display:flex;align-items:center;gap:6px;border:1.5px solid #e2e2de;border-radius:8px;background:#fff;padding:4px 8px;cursor:pointer;font-size:12px;color:#1c1c1c;white-space:nowrap}
+.sw{display:inline-flex;gap:2px}.sw i{width:9px;height:9px;border-radius:50%}
+#legend .lgw{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+#legend .lgw input{flex:1;min-width:0}
+#legend .lgw b{font-size:12px;color:#444;min-width:40px;font-variant-numeric:tabular-nums}
+.lgdd{position:fixed;z-index:30;background:#fff;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:5px;width:214px;font-size:12px}
+.lgdd[hidden],.lgsw[hidden]{display:none}
+.lgdd button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;background:#fff;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;text-align:left}
+.lgdd button:hover{background:#F4F5F3}.lgdd button.on{background:#EEF0EE}
+.lgdd hr{border:0;border-top:1px solid #eee;margin:4px 2px}.lgdd .mut{color:#777;font-weight:500}
+.lgsw{position:fixed;z-index:31;background:#fff;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px;width:190px}
+.lgsw .g{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.lgsw .g button{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:pointer;padding:0}
+.lgsw .x{display:flex;align-items:center;justify-content:space-between;margin-top:7px;font-size:11px;color:#777}
+.lgsw input[type=color]{width:34px;height:22px;border:0;padding:0;background:none}
+/* 전환 메뉴(T): 캔버스 전환마다 이름 · 쓰는 곳 · 시간/곡선 토큰 · ▶ 보기 · 애니메이션 끄기 */
+#tmenu{position:fixed;z-index:26;right:12px;top:64px;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 80px);overflow:auto;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.22);padding:10px 12px;font-size:13px}
+#tmenu[hidden]{display:none}
+#tmenu h2{font-size:14px;margin:2px 4px 6px}
+#tmenu .trow{display:grid;grid-template-columns:1fr auto;gap:1px 12px;align-items:center;padding:7px 4px;border-top:1px solid #f0f0ec}
+#tmenu .tn{font-weight:700}
+#tmenu .tw{color:#777;font-size:12px}
+#tmenu .tv{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#555}
+#tmenu .tplay{grid-column:2;grid-row:1 / span 3;min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:13px;font-weight:600;cursor:pointer}
+#tmenu .tplay:hover{background:#F5F5F2}
+#tmenu .toff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;padding:9px 4px 2px;cursor:pointer}
 #legend .lgflow{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#555;cursor:pointer}
 
 /* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
@@ -209,6 +236,7 @@ body.modal-open #khint{display:none}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee}
 #notes .nmsg{flex-basis:100%;color:#166534;font-size:13px}
 #modal .mtitle{position:absolute;top:max(10px,env(safe-area-inset-top));left:16px;right:96px;color:#fff;font-size:15px;font-weight:600;min-height:44px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* hd-motion */
 </style>
 </head>
 <body data-tab="screens">
@@ -222,6 +250,7 @@ body.modal-open #khint{display:none}
   <div class="pal" data-group="palette" aria-label="색 바꾸기"></div>
   <div class="view" data-group="view">
     <button class="vbtn" id="arrows" aria-pressed="true" title="주요 흐름(회색 점선) 켜고 끄기 (A) · Shift+화면 클릭으로 연결만 보기">주요 흐름</button>
+    <button class="vbtn" id="tbtn" aria-expanded="false" aria-controls="tmenu" title="캔버스 전환 보기 (T)">전환</button>
     <button class="vbtn" id="fit" title="모든 화면이 한 번에 들어오게 (0)">전체<span class="fit-long"> 보기</span></button>
     <button class="vbtn zoom" id="zoom" title="처음 배율로">72%</button>
   </div>
@@ -235,8 +264,10 @@ body.modal-open #khint{display:none}
     </div>
     <div id="khint">Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 클릭 크게 보기</div>
     <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div>
-      <label class="lgsat">채도 <input id="lgSat" type="range" min="0.2" max="1.2" step="0.05" value="0.7"></label>
-      <label class="lgflow"><input type="checkbox" id="lgFlow" checked> 주요 흐름 (회색 점선)</label></div>
+      <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw">색 <button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="bottom-left" hidden></span></span>
+        <label class="lgw">굵기 <input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5"><b id="lgWv">2.5px</b></label></div>
+      <label class="lgflow"><input type="checkbox" id="lgFlow" checked> 주요 흐름 (회색 점선)</label>
+      <div class="lgsw t-dropdown" id="lgSw" hidden><div class="g" id="lgSwG"></div><label class="x">직접 고르기 <input type="color" id="lgSwC"></label></div></div>
   </section>
   <section class="pane" id="foundation" hidden><iframe class="doc" title="Foundation — 색·글자·여백" data-src="foundation.html"></iframe></section>
   <section class="pane" id="components" hidden><iframe class="doc" title="Components — 이 앱이 쓴 부품" data-src="components.html"></iframe></section>
@@ -247,6 +278,7 @@ body.modal-open #khint{display:none}
   <button class="mpick" id="mpick" aria-pressed="false" title="화면 안 요소를 눌러 주석 남기기 (P) · Shift+클릭으로 여러 개">주석 달기</button>
   <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
 </div>
+<div id="tmenu" class="t-dropdown" data-origin="top-right" hidden role="dialog" aria-label="전환"></div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
   <div class="ptitle" id="ptitle"></div>
   <div class="ppath" id="ppath"></div>
@@ -386,7 +418,7 @@ function drawArrows() {
   svg.insertAdjacentHTML('beforeend', paths);
   rowsEl.insertAdjacentHTML('beforeend', labels);
   contentLeft = Math.max(0, minX - 24);
-  VL.render();
+  VL.render(true);
 }
 
 /* ---------- 이동·확대 ---------- */
@@ -396,8 +428,13 @@ function apply() {
   stage.dataset.zoom = z.toFixed(4);
   $('#zoom').textContent = Math.round(z * 100) + '%';
   rowsEl.style.setProperty('--lw', Math.max(2, 1.2 / z).toFixed(2));   // 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
+  var ts = tagScale();                             // 선 위 태그: 작게 볼 때 화면에서 읽히는 크기로(겹침 상자도 다시 잰다)
+  rowsEl.style.setProperty('--ts', ts.toFixed(3));
+  if (Math.abs(ts - lastTs) > 0.02) { lastTs = ts; clearTimeout(tsT); tsT = setTimeout(function () { if (VL && VL.focusId()) VL.render(true); }, 120); }
   scheduleVisible();
 }
+var lastTs = 1, tsT = 0;
+function tagScale() { return Math.max(1, 0.75 / z); }   // 글자 16·0.75 = 12px, 테두리 2·0.75 = 1.5px(화면)
 var fitMin = ZMIN;                                // 전체 보기가 ZMIN 보다 작아야 하면 그만큼은 허용
 function clampZ(v) { return Math.min(ZMAX, Math.max(fitMin, v)); }
 function zoomAt(px, py, nz) {
@@ -425,6 +462,7 @@ $('#zoom').addEventListener('click', home);
 
 pane.addEventListener('wheel', function (e) {
   e.preventDefault();
+  if (VM) VM.stop();                               // 카메라 이동 중이면 바로 멈춤
   var r = pane.getBoundingClientRect(), k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? pane.clientHeight : 1;
   var dx = e.deltaX * k, dy = e.deltaY * k;
   if (e.ctrlKey || e.metaKey) { zoomAt(e.clientX - r.left, e.clientY - r.top, z * Math.exp(-dy * 0.0022)); return; }
@@ -437,6 +475,7 @@ function mid() { var a = Array.from(ptrs.values()); return {x: (a[0].x + a[1].x)
 function startDrag(id, p, type) { drag = {id: id, x: p.x, y: p.y, tx: tx, ty: ty, moved: false, thr: type === 'touch' ? 8 : 4}; }
 pane.addEventListener('pointerdown', function (e) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (VM) VM.stop();
   justDragged = false;
   ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (ptrs.size === 1) startDrag(e.pointerId, {x: e.clientX, y: e.clientY}, e.pointerType);
@@ -479,6 +518,7 @@ pane.addEventListener('pointercancel', endPtr);
 pane.addEventListener('click', function (e) {
   if (justDragged) { justDragged = false; e.preventDefault(); e.stopPropagation(); return; }
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
+  if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#legend')) return;                       // 범례 안 조작은 연결 보기를 끄지 않는다
   var an = cl('.anno');
   var focusId = VL.focusId();
@@ -516,16 +556,26 @@ function sizeModal() {
 function openModal(file, title, pick) {
   sizeModal(); $('#mtitle').textContent = title || '';
   mscreen = idOf(file);
+  clearTimeout(mcloseT); modal.classList.remove('is-closing');
   mframe.src = file; modal.hidden = false; document.body.classList.add('modal-open'); $('#mclose').focus();
   setPick(!!pick);
   drawPins();
 }
-function closeModal() { setPick(false); hidePop(); modal.hidden = true; document.body.classList.remove('modal-open'); mframe.removeAttribute('src'); mscreen = null; drawPins(); }
+var mcloseT = 0;
+function closeModal() {                            // hidden 은 바로(상태), 닫히는 모습은 .is-closing 동안(motion.css · 06-modal)
+  if (modal.hidden) return;
+  setPick(false); hidePop(); modal.hidden = true; document.body.classList.remove('modal-open'); mscreen = null; drawPins();
+  modal.classList.add('is-closing');
+  clearTimeout(mcloseT);
+  mcloseT = setTimeout(function () { modal.classList.remove('is-closing'); if (modal.hidden) mframe.removeAttribute('src'); },
+                       HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
+}
 mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); });
 $('#mclose').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal || e.target.id === 'mtitle') closeModal(); });
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
+  if (VM) VM.stop();
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
   if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
@@ -586,9 +636,16 @@ function setArrows(on) {
   prefs.arrows = arrowsOn; savePrefs();
 }
 var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled,
-                             isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs});
+                             isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
+// 움직임 View(canvas/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
+var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
+                              getView: function () { return {z: z, tx: tx, ty: ty}; },
+                              setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); },
+                              openModal: function (file, title) { openModal(file, title); }, closeModal: function () { closeModal(); },
+                              modalOpen: function () { return !modal.hidden; }, mframe: mframe});
 window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycleNext, routeCurve: HD.route.routeCurve, plan: HD.route.plan,
-                   deriveView: HD.focus.deriveView, satHex: HD.focus.satHex, LINK_COLORS: HD.focus.LINK_COLORS};
+                   deriveView: HD.focus.deriveView, LINK_COLORS: HD.focus.LINK_COLORS, camera: HD.camera, style: HD.lineStyle,
+                   view: function () { return {z: z, tx: tx, ty: ty}; }};
 $('#arrows').addEventListener('click', function () { setArrows(!arrowsOn); });
 $('#lgFlow').addEventListener('change', function (e) { setArrows(e.target.checked); });
 setArrows(arrowsOn);
