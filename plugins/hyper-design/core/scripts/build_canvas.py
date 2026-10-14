@@ -3,7 +3,7 @@
 python3 build_canvas.py <out_dir>
 
 출력
-- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)만 끼워 넣은 것.
+- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 canvas/*.js 모듈(<!-- hd-modules -->)을 끼워 넣은 한 파일.
                         헤더 = 제목 · 탭[Screens|Foundation|Components] · 팔레트 점 · [전체 보기][배율%]
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 390×844 크게 보기.
@@ -27,6 +27,9 @@ import sys, os, json, re, html, pathlib, shutil
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
+MODULES_DIR = HERE / "canvas"
+MODULES = ["graph", "route", "labels", "focus", "prefs", "view-links"]   # 순서 고정: Model → ViewModel → View
+MODULES_MARKER = "<!-- hd-modules -->"
 PALETTE_JS = HERE.parent / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parent / "foundation" / "specimens.html")
 SCALE, CARD, MODAL = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}
@@ -43,6 +46,18 @@ def load(p, default=None):
 
 
 # ---------------------------------------------------------------- index.html
+def inline_modules(tpl):
+    """canvas/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
+    assert MODULES_MARKER in tpl, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
+    parts = []
+    for name in MODULES:
+        f = MODULES_DIR / f"{name}.js"
+        assert f.exists(), f"캔버스 모듈이 없다: {f}"
+        js = f.read_text(encoding="utf-8").replace("</", "<\\/").replace("<!--", "<\\!--")
+        parts.append(f'<script data-hd-module="{name}">\n{js}</script>')
+    return tpl.replace(MODULES_MARKER, "\n".join(parts), 1)
+
+
 def build_index(out, m):
     screens = m["screens"]
     groups = list(m.get("groups") or [])
@@ -105,6 +120,7 @@ def build_index(out, m):
     links = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
     nos = f'<noscript id="hd-links"><ul>{links}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
+    tpl = inline_modules(tpl)
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
     return len(screens), len(arrows), len(data_rows)
 

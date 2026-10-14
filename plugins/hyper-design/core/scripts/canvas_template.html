@@ -263,9 +263,11 @@ body.modal-open #khint{display:none}
 </aside>
 <noscript id="hd-links"></noscript>
 <script id="hd-data" type="application/json">{}</script>
+<!-- hd-modules -->
 <script>
 (function () {
 'use strict';
+// ── Canvas shell: data, board content, zoom/pan, modal, tabs, palette, notes (legacy, untouched). 연결 보기는 canvas/*.js(HD.*)
 var D = JSON.parse(document.getElementById('hd-data').textContent || '{}');
 var Z0 = D.scale || 0.72, ZMIN = 0.02, ZMAX = 1.5;
 var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.modal || {}).h || 844;
@@ -339,97 +341,13 @@ $('#foot').innerHTML = foot;
 $('#foot').style.marginLeft = LEFT + 'px';
 
 /* ======================================================================
-   연결 보기(갈래 화살표 · Shift+클릭 색 링크) — Model / ViewModel / View 로 나눈다.
+   연결 보기 — Model(canvas/graph.js · route.js · labels.js) / ViewModel(canvas/focus.js · prefs.js) / View(canvas/view-links.js).
+   build_canvas.py 가 hd-modules 표시 자리(이 스크립트 앞)에 그 모듈들을 끼워 넣는다(globalThis.HD).
    ====================================================================== */
-// ── Model: 순수 데이터 + 순수 함수(DOM 없음)
-var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(색상각이 서로 다름)
-var RADIUS = 18;                                   // 꺾이는 곳 둥근 반지름(짧은 쪽 선의 절반까지 줄어듦)
+// ── 회색 갈래 화살표(그래프의 kind:'flow' 간선) — 그리기는 이 셸에서
+var G = HD.graph.fromData(D);
+var RADIUS = HD.route.RADIUS, routeCurve = HD.route.routeCurve;
 var contentLeft = LEFT;
-function hueOf(hx) {
-  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m) return null;
-  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
-  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  if (d < 0.08) return null;                       // 회색 계열은 색상각이 없다
-  var h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return (h * 60 + 360) % 360;
-}
-function hueGap(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
-function satHex(hx, s) {                           // 채도만 s 배(HSL)
-  var m = /^#?([0-9a-f]{6})$/i.exec(String(hx || '').trim()); if (!m || s == null) return hx;
-  var v = parseInt(m[1], 16), r = (v >> 16 & 255) / 255, g = (v >> 8 & 255) / 255, b = (v & 255) / 255;
-  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn, h = 0, sa = 0;
-  if (d) { sa = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
-  sa = Math.max(0, Math.min(1, sa * s));
-  var c = (1 - Math.abs(2 * l - 1)) * sa, x = c * (1 - Math.abs((h / 60) % 2 - 1)), o = l - c / 2;
-  var q = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-  return '#' + q.map(function (t) { return ('0' + Math.max(0, Math.min(255, Math.round((t + o) * 255))).toString(16)).slice(-2); }).join('');
-}
-// 링크마다 색: 같은 대상 = 같은 색, 문서에 처음 나온 순서, 앱 강조색 ±30° 는 건너뜀, 모자라면 번호
-function assignColors(links, accentHex, palette) {
-  palette = palette || LINK_COLORS;
-  var ah = hueOf(accentHex);
-  var pal = palette.filter(function (c) { var h = hueOf(c); return ah == null || h == null || hueGap(h, ah) >= 30; });
-  if (!pal.length) pal = palette.slice();
-  var order = [];
-  (links || []).forEach(function (l) { if (order.indexOf(l.to) < 0) order.push(l.to); });
-  var numbered = order.length > pal.length, targets = {};
-  order.forEach(function (t, i) { targets[t] = {color: pal[i % pal.length], n: numbered ? i + 1 : 0, ci: i}; });
-  return {order: order, targets: targets, items: (links || []).map(function (l) {
-    var g = targets[l.to];
-    return {to: l.to, path: l.path, text: l.text, rect: l.rect, color: g.color, n: g.n, ci: g.ci};
-  })};
-}
-// 같은 카드를 Shift+클릭할 때마다: 색1 → 색2 → … → 전체(0) → 색1. 색이 하나뿐이면 늘 전체.
-function cycleNext(stage, n) {
-  if (!(n > 1)) return 0;
-  if (stage == null || stage === 0) return 1;
-  return stage >= n ? 0 : stage + 1;
-}
-// 꺾은선 → 꺾는 곳마다 원호(Q) 하나. 반지름은 짧은 쪽 선의 절반까지.
-function roundPath(pts, r) {
-  var p = [];
-  pts.forEach(function (q) {
-    var a = [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10], l = p[p.length - 1];
-    if (l && l[0] === a[0] && l[1] === a[1]) return;
-    var l2 = p[p.length - 2];
-    if (l2 && ((l2[0] === l[0] && l[0] === a[0]) || (l2[1] === l[1] && l[1] === a[1]))) p.pop();   // 한 줄 위의 가운데 점은 뺀다
-    p.push(a);
-  });
-  var f = function (v) { return String(Math.round(v * 10) / 10); };
-  var d = 'M' + f(p[0][0]) + ',' + f(p[0][1]);
-  for (var i = 1; i < p.length - 1; i++) {
-    var a = p[i - 1], c = p[i], n = p[i + 1];
-    var l1 = Math.hypot(c[0] - a[0], c[1] - a[1]), l2 = Math.hypot(n[0] - c[0], n[1] - c[1]);
-    var rr = Math.min(r, l1 / 2, l2 / 2);
-    if (rr < 0.5) { d += ' L' + f(c[0]) + ',' + f(c[1]); continue; }
-    var s = [c[0] - (c[0] - a[0]) / l1 * rr, c[1] - (c[1] - a[1]) / l1 * rr];
-    var e = [c[0] + (n[0] - c[0]) / l2 * rr, c[1] + (n[1] - c[1]) / l2 * rr];
-    d += ' L' + f(s[0]) + ',' + f(s[1]) + ' Q' + f(c[0]) + ',' + f(c[1]) + ' ' + f(e[0]) + ',' + f(e[1]);
-  }
-  var z = p[p.length - 1];
-  return d + ' L' + f(z[0]) + ',' + f(z[1]);
-}
-/* 둥근 직각 연결선(가로·세로만, 되돌아가는 고리 없음). 끝은 늘 아래로 대상 카드 위 가운데에 들어간다.
-   세로선은 카드 사이 틈(gutter)·줄 위 통로·왼쪽 통로에서만 — 카드 상자 안을 세로로 지나지 않는다.
-   src.dir 'up'            : 카드 위에서 위로 → 줄 위 통로(lift+apex) → 가로 → 아래로 (꺾임 2)
-   src.dir 'up' + o.laneX  : 다른 줄 — 위로 → 왼쪽 통로로 가로 → 통로 따라 세로 → 대상 줄 위에서 가로 → 아래로 (꺾임 4)
-   src.dir 'right'         : 출발 카드 오른쪽 가장자리에서 가로로 틈(o.gx)까지 → 틈 따라 세로 → 대상 줄 위 통로 → 가로 → 아래로 (꺾임 3) */
-function routeCurve(src, dst, o) {
-  o = o || {};
-  var r = o.r || RADIUS, lift = o.lift == null ? 44 : o.lift, apex = o.apex || 0, k = o.k || 0;
-  var sx = src.x, sy = src.y, tx = dst.x, ty = dst.y, pts;
-  if (src.dir === 'up' && o.laneX != null) {
-    var sg = sy - lift - apex, tg = ty - lift - apex;
-    pts = [[sx, sy], [sx, sg], [o.laneX, sg], [o.laneX, tg], [tx, tg], [tx, ty]];
-  } else if (src.dir === 'up') {
-    var top = Math.min(sy, ty) - lift - apex;
-    pts = [[sx, sy], [sx, top], [tx, top], [tx, ty]];
-  } else {
-    var gx = o.gx == null ? sx + 18 + 14 * k : o.gx, lane = ty - lift - apex;
-    pts = [[sx, sy], [gx, sy], [gx, lane], [tx, lane], [tx, ty]];
-  }
-  return roundPath(pts, r);
-}
 // 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
 function drawArrows() {
   var svg = $('#ar'), box = {};
@@ -438,9 +356,9 @@ function drawArrows() {
   });
   $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
   $$('path.ln', svg).forEach(function (n) { n.remove(); });
-  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {}, minX = LEFT;
-  (D.arrows || []).forEach(function (a) { per[a.from] = (per[a.from] || 0) + 1; });
-  (D.arrows || []).forEach(function (a) {
+  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {}, minX = LEFT, flow = HD.graph.edgesFrom(G, null, 'flow');
+  flow.forEach(function (a) { per[a.from] = (per[a.from] || 0) + 1; });
+  flow.forEach(function (a) {
     var s = box[a.from], t = box[a.to]; if (!s || !t) return;
     var j = seen[a.from] || 0, n = per[a.from]; seen[a.from] = j + 1;
     var sx = s.x + CARD.w / 2 + (j - (n - 1) / 2) * 28, tx = t.x + CARD.w / 2;
@@ -463,7 +381,7 @@ function drawArrows() {
   svg.insertAdjacentHTML('beforeend', paths);
   rowsEl.insertAdjacentHTML('beforeend', labels);
   contentLeft = Math.max(0, minX - 24);
-  renderLinks();
+  VL.render();
 }
 
 /* ---------- 이동·확대 ---------- */
@@ -558,11 +476,12 @@ pane.addEventListener('click', function (e) {
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
   if (cl('#legend')) return;                       // 범례 안 조작은 연결 보기를 끄지 않는다
   var an = cl('.anno');
-  if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) setFocus(null); openModal(an.dataset.file, an.dataset.title, true); return; }
+  var focusId = VL.focusId();
+  if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title, true); return; }
   var c = cl('.cover');
-  if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; if (focusId === id) cycle(); else setFocus(id); return; }
-  if (c) { if (focusId) setFocus(null); openModal(c.dataset.file, c.dataset.title); return; }
-  if (focusId && !e.shiftKey && !cl('.card, .lchip, path.lk')) setFocus(null);   // 빈 판을 그냥 누르면 연결 보기 끝
+  if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; VL.dispatch(focusId === id ? {type: 'cycle'} : {type: 'focus', id: id}); return; }
+  if (c) { if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(c.dataset.file, c.dataset.title); return; }
+  if (focusId && !e.shiftKey && !cl('.card, .lchip, path.lk')) VL.dispatch({type: 'exitFocus'});   // 빈 판을 그냥 누르면 연결 보기 끝
 }, true);
 
 /* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) ---------- */
@@ -604,7 +523,7 @@ addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
-  if (focusId) setFocus(null);
+  if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
 });
 addEventListener('resize', function () { if (!modal.hidden) { sizeModal(); drawPins(); } });
 
@@ -649,263 +568,21 @@ if (P && P.options && P.options.length) {
   setPalette(start);
 }
 
-// ── ViewModel: Model + UI 상태(단계·체크·마우스·채도) → 보일 것. DOM 없음.
-function deriveView(m, ui) {
-  ui = ui || {};
-  var out = {pairs: [], legend: null, rings: {}, dimCards: [], stage: 0, nColors: 0, visible: []};
-  if (!m || !m.items || !m.items.length) return out;
-  var n = m.order.length, stage = n <= 1 ? 0 : ui.stage == null ? 1 : ui.stage > n ? 0 : ui.stage;
-  var sat = ui.sat == null ? 0.7 : ui.sat, hv = ui.hover == null ? null : ui.hover;
-  var title = function (id) { return (m.titles && m.titles[id]) || id; };
-  var col = m.items.map(function (it) { return satHex(it.color, sat); });
-  var vis = m.items.map(function (it, k) { return ui.on ? !!ui.on[k] : stage === 0 || it.ci === stage - 1; });
-  if (hv != null && !vis[hv]) hv = null;
-  out.stage = stage; out.nColors = n; out.visible = vis;
-  out.legend = {title: title(m.from) + ' · ' + (stage === 0 ? '전체 ' + m.items.length + '개' : stage + '/' + n + ' ' + title(m.order[stage - 1])),
-    rows: m.items.map(function (it, k) { return {k: k, color: col[k], from: title(m.from), text: it.text || '(링크)', to: title(it.to), checked: vis[k], emph: hv === k}; })};
-  var hvTo = hv == null ? null : m.items[hv].to;
-  m.items.forEach(function (it, k) {
-    if (vis[k] && !out.rings[it.to]) out.rings[it.to] = {color: col[k], n: it.n, emph: hvTo === it.to, dim: hvTo != null && hvTo !== it.to};
-  });
-  m.order.forEach(function (t) { if (!out.rings[t]) out.dimCards.push(t); });
-  var g = m.geom, placed = [], idx = 0;
-  var list = m.items.map(function (it, k) { return k; }).filter(function (k) { return vis[k]; });
-  if (g) list.sort(function (a, b) { return (m.items[a].rect.y - m.items[b].rect.y) || a - b; });
-  list.forEach(function (k) {
-    var it = m.items[k];
-    var p = {k: k, from: m.from, to: it.to, color: col[k], n: it.n, text: it.text, chip: null, path: null, emph: hv === k, dim: hv != null && hv !== k};
-    if (g) {
-      var S = g.src, sc = S.sc || 1, r = it.rect, sz = (g.chips && g.chips[k]) || {w: 120, h: 30};
-      var ex = S.x + r.x * sc, ey = S.y + r.y * sc, eh = r.h * sc, bot = S.y + S.h;
-      var cy = Math.max(S.y + 4 + sz.h / 2, Math.min(bot - 4 - sz.h / 2, ey + eh / 2));
-      var lim = S.limit == null ? Infinity : S.limit;
-      var c = {x: S.x + S.w - sz.w / 2, y: cy - sz.h / 2, w: sz.w, h: sz.h};   // 카드 오른쪽 테두리에 걸쳐(반은 밖, 반은 안) 요소 높이에
-      for (var guard = 0; guard < 60; guard++) {   // 칩끼리 안 겹치게 4px 띄워 쌓는다
-        var hit = placed.filter(function (q) { return c.x < q.x + q.w && q.x < c.x + c.w && c.y < q.y + q.h + 4 && q.y < c.y + c.h + 4; })[0];
-        if (!hit) break;
-        c.y = hit.y + hit.h + 4;
-      }
-      placed.push(c); p.chip = c;
-      var T = g.targets && g.targets[it.to];
-      var gx = Math.min(S.x + S.w + 14 + 12 * idx, lim - 10);   // 세로선은 오른쪽 틈에서만(쌍마다 12px 엇갈림)
-      if (T) p.path = routeCurve({x: S.x + S.w, y: c.y + c.h / 2, dir: 'right'}, {x: T.x + T.w / 2, y: T.y - 10}, {apex: idx * 16, k: idx, gx: gx});
-      idx++;
-    }
-    out.pairs.push(p);
-  });
-  return out;
-}
-
-// ── View: DOM/SVG 는 여기서만. 이벤트 → 의도(focus · cycle · exitFocus · toggleColor · hover · setSat)
-var focusId = null, arrowsOn = true;
-try { arrowsOn = localStorage.getItem('hd-arrows') !== '0'; } catch (e) {}
+// ── 연결 보기 View 붙이기(canvas/view-links.js) · 설정(canvas/prefs.js) · 화살표 켜고 끄기
 function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
+var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
+function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
+var arrowsOn = prefs.arrows;
 function setArrows(on) {
   arrowsOn = !!on;
   rowsEl.classList.toggle('noarrows', !arrowsOn);
   $('#arrows').setAttribute('aria-pressed', String(arrowsOn));
-  try { localStorage.setItem('hd-arrows', arrowsOn ? '1' : '0'); } catch (e) {}
+  prefs.arrows = arrowsOn; savePrefs();
 }
-var lk = null, lkDeadline = 0, lkWaitT = 0, curView = null, xpId = null, satRaf = 0;
-var ui = {stage: 1, on: null, hover: null, sat: 0.7};
-try { var sv0 = parseFloat(localStorage.getItem('hd-link-sat')); if (sv0 >= 0.2 && sv0 <= 1.2) ui.sat = sv0; } catch (e) {}
-var TITLES = {};
-(D.rows || []).forEach(function (row) { row.screens.forEach(function (s) { TITLES[s.id] = s.title; }); });
-function cardEl(id) { return $$('.card', rowsEl).filter(function (c) { return c.dataset.id === id; })[0] || null; }
-function frameOf(id) { var c = cardEl(id); return c ? $('.phone iframe', c) : null; }
-function postTo(id, msg) { var f = frameOf(id); try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); } catch (e) {} }
-function requestLinks(id) {
-  var f = frameOf(id); if (!f) return;
-  lkDeadline = performance.now() + 1500;            // 1.5초 안에 답이 없으면(palette.js 없음 등) 갈래 이름표로
-  if (f.hasAttribute('data-src')) { f.src = f.getAttribute('data-src'); f.removeAttribute('data-src'); }
-  var ask = function () { if (focusId === id) postTo(id, {type: 'hd-links', on: true}); };
-  f.addEventListener('load', ask, {once: true});
-  ask();
-}
-function buildModel(d) {
-  var ids = {};
-  $$('.card', rowsEl).forEach(function (c) { ids[c.dataset.id] = 1; });
-  var items = (d.links || []).filter(function (l) { return l && ids[l.to] && l.to !== focusId && l.rect; });
-  if (!items.length) return null;
-  var m = assignColors(items.map(function (l) { return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect}; }), d.accent, LINK_COLORS);
-  m.from = focusId; m.accent = d.accent || ''; m.titles = TITLES; m.docHeight = +d.docHeight || 0;
-  return m;
-}
-function applyFocus() {
-  var v = curView;
-  rowsEl.classList.toggle('focusing', !!focusId);
-  rowsEl.classList.toggle('haslk', !!(focusId && lk));
-  var linked = {};
-  if (focusId) linked[focusId] = 1;
-  $$('path.ln, .alabel', rowsEl).forEach(function (n) {
-    var on = !!focusId && (n.getAttribute('data-from') === focusId || n.getAttribute('data-to') === focusId);
-    n.classList.toggle('on', on);
-    var rp = on && !!lk && n.getAttribute('data-from') === focusId && !!lk.targets[n.getAttribute('data-to')];   // 색 링크가 대신 그린다
-    n.classList.toggle('rep', rp);
-    if (rp) n.classList.remove('on');
-    if (on) { linked[n.getAttribute('data-from')] = 1; linked[n.getAttribute('data-to')] = 1; }
-  });
-  var rings = v ? v.rings : {};
-  $$('.card', rowsEl).forEach(function (c) {
-    var t = rings[c.dataset.id];
-    c.classList.toggle('hl', !!focusId && (!!linked[c.dataset.id] || !!t));
-    c.classList.toggle('focus', c.dataset.id === focusId);
-    c.classList.toggle('lt', !!t);
-    if (t) c.style.setProperty('--ring', t.color); else { c.style.removeProperty('--ring'); c.classList.remove('em', 'dim'); }
-  });
-}
-function clearLinkLayer() {
-  var svg = $('#lks');
-  $$('path.lk, marker.lkm', svg).forEach(function (n) { n.remove(); });
-  $('#lkl').innerHTML = '';
-  $$('.lnum', rowsEl).forEach(function (n) { n.remove(); });
-}
-function renderLegend(v) {
-  var lg = $('#legend');
-  if (!v || !v.legend || !focusId) { lg.hidden = true; return; }
-  $('#lgTitle').textContent = v.legend.title;
-  $('#lgRows').innerHTML = v.legend.rows.map(function (r) {
-    return '<label class="lgrow" data-k="' + r.k + '"><span class="lgdot" style="background:' + r.color + '"></span><span class="lgtx">' + esc(r.from) +
-      ' › <b>[' + esc(r.text) + ']</b><br><i>→ ' + esc(r.to) + '</i></span><input type="checkbox"' + (r.checked ? ' checked' : '') + '></label>';
-  }).join('');
-  $('#lgSat').value = String(ui.sat);
-  lg.hidden = false;
-}
-function renderLinks() {
-  clearLinkLayer();
-  var src = lk && lk.from === focusId ? cardEl(lk.from) : null;
-  if (!src) { curView = null; applyFocus(); renderLegend(null); return; }
-  var layer = $('#lkl'), svg = $('#lks');
-  layer.innerHTML = lk.items.map(function (it, k) { return '<div class="lchip" data-k="' + k + '">' + esc(it.text || '(링크)') + ' →</div>'; }).join('');
-  var chips = $$('.lchip', layer), ph = $('.phone', src), targets = {}, nb = src.nextElementSibling;
-  lk.order.forEach(function (t) {
-    var c = cardEl(t); if (!c) return;
-    var p = $('.phone', c); targets[t] = {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight};
-  });
-  lk.geom = {src: {x: src.offsetLeft, y: src.offsetTop, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w, limit: nb ? nb.offsetLeft : null},
-             targets: targets, chips: chips.map(function (n) { return {w: n.offsetWidth, h: n.offsetHeight}; })};
-  var v = curView = deriveView(lk, ui), defs = '', paths = '', cols = [];
-  v.pairs.forEach(function (p) {
-    var n = chips[p.k];
-    n.style.left = p.chip.x + 'px'; n.style.top = p.chip.y + 'px'; n.style.color = p.color;
-    n.setAttribute('data-to', p.to); n.title = '→ ' + (TITLES[p.to] || p.to);
-    n.classList.add('on');
-    if (!p.path) return;
-    var ci = cols.indexOf(p.color); if (ci < 0) { ci = cols.length; cols.push(p.color); }
-    paths += '<path class="lk" data-k="' + p.k + '" data-from="' + esc(p.from) + '" data-to="' + esc(p.to) + '" stroke="' + p.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + p.path + '"><title>' +
-      esc(p.text) + ' → ' + esc(TITLES[p.to] || p.to) + '</title></path>';
-  });
-  cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색(색마다 marker 하나)
-    defs += '<marker class="lkm" id="hd-lk-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/></marker>';
-  });
-  $('defs', svg).insertAdjacentHTML('beforeend', defs);
-  svg.insertAdjacentHTML('beforeend', paths);
-  Object.keys(v.rings).forEach(function (t) {
-    var g = v.rings[t], c = cardEl(t); if (!g.n || !c) return;
-    var b = document.createElement('span'); b.className = 'lnum'; b.textContent = circled(g.n); $('.phone', c).appendChild(b);
-  });
-  applyFocus(); renderLegend(v); markHover();
-  postTo(lk.from, {type: 'hd-links-paint', items: v.pairs.map(function (p) { return {path: lk.items[p.k].path, color: p.color, n: p.n || undefined}; })});
-}
-function markHover() {                              // 마우스: 그 한 쌍만 진하게, 나머지 쌍·대상 테두리는 흐리게
-  if (!lk) return;
-  var v = deriveView({from: lk.from, order: lk.order, items: lk.items, titles: lk.titles}, ui), by = {};
-  v.pairs.forEach(function (p) { by[p.k] = p; });
-  $$('#lks path.lk, #lkl .lchip').forEach(function (n) {
-    var p = by[n.getAttribute('data-k')];
-    n.classList.toggle('em', !!p && p.emph); n.classList.toggle('dim', !!p && p.dim);
-  });
-  $$('#lgRows .lgrow').forEach(function (n) { n.classList.toggle('em', ui.hover === +n.dataset.k); });
-  $$('.card.lt', rowsEl).forEach(function (c) {
-    var g = v.rings[c.dataset.id];
-    c.classList.toggle('em', !!g && g.emph); c.classList.toggle('dim', !!g && g.dim);
-  });
-}
-// 펼치기(겹쳐서): 화면 전체 높이까지(카드 2.5배 한도), 다른 카드 자리는 그대로
-function expand(id, h, done) {
-  var c = cardEl(id); if (!c) return;
-  var ph = $('.phone', c), fr = $('iframe', ph);
-  xpId = id;
-  c.style.height = c.offsetHeight + 'px'; c.classList.add('xp');
-  fr.style.height = h + 'px';
-  void ph.offsetHeight;
-  ph.style.height = h + 'px';
-  var fin = false, end = function () { if (fin) return; fin = true; done(); };
-  ph.addEventListener('transitionend', end, {once: true});
-  setTimeout(end, 300);
-}
-function collapse(id) {
-  var c = cardEl(id); if (xpId === id) xpId = null;
-  if (!c) return;
-  var ph = $('.phone', c), fr = $('iframe', ph);
-  ph.style.height = '';
-  setTimeout(function () { if (xpId === id) return; fr.style.height = ''; c.style.height = ''; c.classList.remove('xp'); }, 230);
-}
-function setFocus(id) {                             // 의도 focus(id) / exitFocus() = setFocus(null)
-  var prev = focusId; focusId = id || null;
-  if (prev && prev !== focusId) { postTo(prev, {type: 'hd-links', on: false}); postTo(prev, {type: 'hd-links-paint', items: []}); }
-  if (xpId && xpId !== focusId) collapse(xpId);
-  lk = null; curView = null; ui.stage = 1; ui.on = null; ui.hover = null;
-  clearTimeout(lkWaitT);
-  rowsEl.classList.toggle('lkwait', !!focusId);
-  if (focusId) { lkWaitT = setTimeout(function () { rowsEl.classList.remove('lkwait'); }, 1500); requestLinks(focusId); }
-  renderLinks();
-}
-function cycle() {                                  // 같은 카드 Shift+클릭: 다음 색 → … → 전체 → 색1
-  if (!lk) return;
-  var n = lk.order.length, s = curView ? curView.stage : ui.stage;
-  ui.stage = cycleNext(s, n); ui.on = null; ui.hover = null;
-  renderLinks();
-}
-function toggleColor(k) {                           // 범례 체크: 다음 Shift+클릭 전까지 그대로
-  var vis = curView ? curView.visible : [];
-  if (!ui.on) { ui.on = {}; vis.forEach(function (x, i) { ui.on[i] = x; }); }
-  ui.on[k] = !ui.on[k]; ui.hover = null;
-  renderLinks();
-}
-function hover(k) { if (k !== ui.hover) { ui.hover = k; markHover(); } }
-function setSat(v) {
-  ui.sat = Math.max(0.2, Math.min(1.2, +v || 0.7));
-  try { localStorage.setItem('hd-link-sat', String(ui.sat)); } catch (e) {}
-  cancelAnimationFrame(satRaf); satRaf = requestAnimationFrame(renderLinks);
-}
-addEventListener('message', function (e) {
-  var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-links' || !focusId || !Array.isArray(d.links)) return;
-  var f = frameOf(focusId); if (!f || e.source !== f.contentWindow || performance.now() > lkDeadline) return;
-  var id = focusId, m = buildModel(d), want = Math.min(Math.round(+d.docHeight || 0), Math.round(CARD.h * 2.5));
-  if (m && xpId !== id && want > CARD.h + 4) {      // 긴 화면: 먼저 펼치고, 다 펼친 뒤 자리를 다시 받아 그린다
-    expand(id, want, function () { if (focusId === id) requestLinks(id); });
-    return;
-  }
-  clearTimeout(lkWaitT); rowsEl.classList.remove('lkwait');
-  lk = m; renderLinks();
-});
-pane.addEventListener('mousemove', function (e) {
-  if (!lk || !curView || (drag && drag.moved)) return;
-  var el = e.target, k = null, vis = curView.visible, cl = function (s) { return el && el.closest ? el.closest(s) : null; };
-  var row = cl('.lgrow'), chip = cl('.lchip');
-  if (row) k = +row.dataset.k;
-  else if (chip) k = +chip.dataset.k;
-  else if (el && el.classList && el.classList.contains('lk')) k = +el.getAttribute('data-k');
-  else if (!cl('#legend')) {
-    var c = cl('.card');
-    if (c && c.dataset.id === lk.from) {
-      var r = $('.phone', c).getBoundingClientRect(), s = r.width / CARD.w, x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
-      lk.items.forEach(function (it, i) { var q = it.rect; if (vis[i] && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) k = i; });
-    } else if (c && curView.rings[c.dataset.id]) {
-      lk.items.forEach(function (it, i) { if (k == null && vis[i] && it.to === c.dataset.id) k = i; });
-    }
-  }
-  if (k != null && !vis[k]) k = null;
-  hover(k);
-});
-(function () {
-  var lg = $('#legend');
-  ['pointerdown', 'wheel', 'dblclick'].forEach(function (ev) { lg.addEventListener(ev, function (e) { e.stopPropagation(); }); });
-  $('#lgRows').addEventListener('change', function (e) { var r = e.target.closest('.lgrow'); if (r) toggleColor(+r.dataset.k); });
-  $('#lgSat').addEventListener('input', function (e) { setSat(e.target.value); });
-})();
-window.HDCanvas = {assignColors: assignColors, cycleNext: cycleNext, routeCurve: routeCurve, deriveView: deriveView, satHex: satHex, LINK_COLORS: LINK_COLORS};
+var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, $: $, $$: $$, esc: esc, circled: circled,
+                             isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs});
+window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycleNext, routeCurve: HD.route.routeCurve,
+                   deriveView: HD.focus.deriveView, satHex: HD.focus.satHex, LINK_COLORS: HD.focus.LINK_COLORS};
 $('#arrows').addEventListener('click', function () { setArrows(!arrowsOn); });
 setArrows(arrowsOn);
 
