@@ -101,7 +101,8 @@ def run(out: Path, shot=None):
                 page.wait_for_timeout(250)
                 opened = page.evaluate("!document.getElementById('modal').hidden && !!document.getElementById('mframe').getAttribute('src')")
                 size = page.evaluate("(() => { const f = document.getElementById('mframe'); return [f.offsetWidth, f.offsetHeight] })()")
-                add("card_click_opens_modal", opened and size == [390, 844], f"open={opened} iframe={size}")
+                want = (lambda m: [m.get("w", 390), m.get("h", 844)])(((json.loads((out / "surface.json").read_text(encoding="utf-8")) if (out / "surface.json").exists() else {}).get("frame") or {}).get("modal") or {})   # 표면 프로필 모달 크기, 없으면 폰
+                add("card_click_opens_modal", opened and size == want, f"open={opened} iframe={size} want={want}")
                 page.keyboard.press("Escape"); page.wait_for_timeout(150)
                 closed = page.evaluate("document.getElementById('modal').hidden")
                 add("esc_closes_modal", closed, closed)
