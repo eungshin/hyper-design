@@ -9,7 +9,28 @@ from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 ALLOWED_STATES = {"empty", "error", "disabled", "done", "confirm", "progress"}   # v13: confirm ← 명세 규칙(되돌릴 수 없음·중복), progress ← long_task   # done ← shares(링크·공유·초대의 결과 표시)
-VIEWPORT = {"width": 375, "height": 812}
+VIEWPORT = {"width": 375, "height": 812}   # 표면 프로필(out/surface.json) viewport가 없을 때(폰)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "surfaces")); import surface
+
+# 키보드 초점이 보이는가(표면 프로필 audit.focus_visible) — Tab 한 번으로 키보드 모드를 켠 뒤 요소마다 focus() 전후 모습을 비교
+FOCUS_JS = r"""
+() => {
+  const res = {total: 0, ok: 0, fails: []};
+  const sig = el => { const c = getComputedStyle(el); return [c.outlineStyle, c.outlineWidth, c.outlineColor, c.boxShadow, c.borderColor, c.backgroundColor].join('|'); };
+  const els = [...document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,[tabindex]:not([tabindex="-1"])')]
+    .filter(el => { const r = el.getBoundingClientRect(), c = getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== 'hidden' && !el.disabled; });
+  for (const el of els) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const before = sig(el); el.focus({preventScroll: true});
+    if (document.activeElement !== el) continue;
+    res.total++;
+    if (sig(el) !== before) res.ok++;
+    else res.fails.push(`${el.tagName.toLowerCase()} "${(el.innerText || el.value || el.getAttribute('aria-label') || '').trim().slice(0, 15)}"`);
+  }
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  return res;
+}
+"""
 
 MEASURE_JS = r"""
 () => {
@@ -245,6 +266,11 @@ def main():
     ap.add_argument("--json")
     args = ap.parse_args()
     OUT = Path(args.out).resolve()
+    SURF = surface.load(OUT)                # 표면 프로필 — 뷰포트·터치/초점 검사·상태 표
+    VP = SURF.get("viewport") or VIEWPORT
+    AU = SURF.get("audit") or {"touch": True, "focus_visible": False}
+    ST = SURF["states"]
+    allowed = ALLOWED_STATES | set(ST["traits"].values())
     checks = []
 
     def add(group, cid, value, threshold, ok, detail=""):
@@ -320,32 +346,29 @@ def main():
         for f in base_files:
             s = mscreens.get(f.stem, {})
             tr = s.get("traits") or {}
-            exp = set()
-            if tr.get("list_first_use"): exp.add("empty")
-            if tr.get("form") or tr.get("sends"): exp.add("error")
-            if tr.get("shares"): exp.add("done")
+            exp = {st for k, st in ST["traits"].items() if tr.get(k)}
+            if tr.get("sends"): exp.add("error")
             if tr.get("readonly_role"): exp.add("disabled")
-            if tr.get("long_task"): exp.add("progress")
             exp |= rule_st.get(f.stem, set())
-            if (manifest or {}).get("stage") == "go": exp &= {"done"}   # 1차(go)는 결과 화면만
+            if (manifest or {}).get("stage") == "go": exp &= set(ST["go"])   # 1차(go)는 결과 화면만
             have = variants.get(f.stem, set())
             declared = set(s.get("states") or [])
             for st in exp - have:
                 missing.append(f"{f.stem}--{st}")
             for st in (have | declared) - exp:
                 excess.append(f"{f.stem}--{st}")
-            if 1 + len(have | declared) > 3:
+            if len(have | declared) > ST["cap"]:
                 over.append(f.stem)
         for b, sts in variants.items():
             for st in sts:
-                if st not in ALLOWED_STATES:
+                if st not in allowed:
                     excess.append(f"{b}--{st}(금지)")
                 if b not in {f.stem for f in base_files}:
                     excess.append(f"{b}--{st}(기본화면 없음)")
         excess = sorted(set(excess))
         add("상태", "state_missing", len(missing), "0", not missing, ", ".join(missing))
         add("상태", "state_excess", len(excess), "0", not excess, ", ".join(excess))
-        add("상태", "state_cap", len(over), "0 (화면당 ≤3)", not over, ", ".join(over))
+        add("상태", "state_cap", len(over), f"0 (화면당 ≤{ST['cap'] + 1})", not over, ", ".join(over))
     else:
         for cid in ("state_missing", "state_excess", "state_cap"):
             add("상태", cid, "n/a", "0", False, mf_err)
@@ -358,7 +381,7 @@ def main():
             browser = p.chromium.launch(channel="chrome")
         except Exception:
             browser = p.chromium.launch()
-        ctx = browser.new_context(viewport=VIEWPORT, device_scale_factor=1)
+        ctx = browser.new_context(viewport=VP, device_scale_factor=1)
         shots = Path(args.shots) if args.shots else None
         if shots:
             shots.mkdir(parents=True, exist_ok=True)
@@ -371,11 +394,14 @@ def main():
                 page.goto(f.resolve().as_uri(), wait_until="load", timeout=15000)
                 page.wait_for_timeout(150)
                 r = page.evaluate(MEASURE_JS)
+                if AU.get("focus_visible"):
+                    page.keyboard.press("Tab")
+                    r["focus"] = page.evaluate(FOCUS_JS)
                 if shots:
                     # 폰처럼 찍는다: 첫 화면 + 스크롤 끝. full_page 한 장은 고정 버튼·탭바를 본문 중간(812px)에 찍어
                     # "버튼이 내용을 가린다"는 착시를 만든다(v8·v9 평가에서 반복된 오탐).
                     page.screenshot(path=str(shots / f"{f.stem}.png"))
-                    if page.evaluate("document.documentElement.scrollHeight") > 812 + 8:
+                    if page.evaluate("document.documentElement.scrollHeight") > VP["height"] + 8:
                         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)"); page.wait_for_timeout(150)
                         page.screenshot(path=str(shots / f"{f.stem}-end.png"))
             except Exception as e:
@@ -472,8 +498,14 @@ def main():
     tt = sum(r.get("touch", {}).get("total", 0) for r in per.values())
     tok = sum(r.get("touch", {}).get("ok", 0) for r in per.values())
     tf = [f"{sid}: {x}" for sid, r in per.items() for x in r.get("touch", {}).get("fails", [])]
-    add("가독성", "touch_target", f"{(tok/tt*100 if tt else 100):.1f}%", "100%", tok == tt, "; ".join(tf[:6]))
-    ov = [f"{sid}({r.get('scrollWidth')})" for sid, r in per.items() if (r.get("scrollWidth") or 0) > 375]
+    if AU.get("touch", True):
+        add("가독성", "touch_target", f"{(tok/tt*100 if tt else 100):.1f}%", "100%", tok == tt, "; ".join(tf[:6]))
+    if AU.get("focus_visible"):
+        ft = sum(r.get("focus", {}).get("total", 0) for r in per.values())
+        fo = sum(r.get("focus", {}).get("ok", 0) for r in per.values())
+        ff = [f"{sid}: {x}" for sid, r in per.items() for x in r.get("focus", {}).get("fails", [])]
+        add("가독성", "focus_visible", f"{(fo/ft*100 if ft else 100):.1f}%", "100%", fo == ft, "; ".join(ff[:6]) + (" — 키보드 초점이 보이지 않음" if ff else ""))
+    ov = [f"{sid}({r.get('scrollWidth')})" for sid, r in per.items() if (r.get("scrollWidth") or 0) > VP["width"]]
     add("가독성", "h_overflow", len(ov), "0", not ov, ", ".join(ov))
     sq = [f"{sid}({r.get('rowSqueeze')})" for sid, r in per.items() if r.get("rowSqueeze")]
     add("가독성", "row_squeeze", len(sq), "0", not sq, ", ".join(sq) + (" — 행 오른쪽 버튼 때문에 제목이 3줄 이상" if sq else ""))

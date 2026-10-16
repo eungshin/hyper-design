@@ -1,11 +1,11 @@
 ---
 name: go
-description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 만든다 — 모든 흐름을 처음부터 끝까지(시작·결과 화면 포함), 실제 사진, 색 팔레트 원클릭 전환, 한눈에 보는 캔버스. 사용자가 PRD·기획서·요구사항을 붙여넣거나 "화면 만들어줘/디자인해줘/HTML로" 할 때 트리거. 오류·확인·빈 화면 같은 상태까지 원하면 max.
+description: PRD(기획 문서) 한 장으로 모바일 앱(또는 데스크톱 단계 마법사) HTML 디자인을 만든다 — 모든 흐름을 처음부터 끝까지(시작·결과 화면 포함), 실제 사진, 색 팔레트 원클릭 전환, 한눈에 보는 캔버스. 사용자가 PRD·기획서·요구사항을 붙여넣거나 "화면 만들어줘/디자인해줘/HTML로" 할 때 트리거. 오류·확인·빈 화면 같은 상태까지 원하면 max.
 ---
 
 # hyper-design:go — 1차: 모든 흐름을 처음부터 끝까지
 
-**PRD 한 장 → (PRD 요구사항을 뺄 때만) 확인 한 번 → 15분 안에 완성된 디자인.** 이 결과물은 그 자체로 완성품이다: 사용자가 만들거나 신청하는 모든 대상의 **시작 → 보기 → 고치기 → 끝(결과)** 화면, 실제 사진, 캔버스. 오류·확인·빈·진행 상태 화면은 `/hyper-design:max`가 더한다(사용자가 원할 때).
+**PRD 한 장 → 표면 질문 한 번 → (PRD 요구사항을 뺄 때만) 확인 한 번 → 15분 안에 완성된 디자인.** 이 결과물은 그 자체로 완성품이다: 사용자가 만들거나 신청하는 모든 대상의 **시작 → 보기 → 고치기 → 끝(결과)** 화면, 실제 사진, 캔버스. 오류·확인·빈·진행 상태 화면은 `/hyper-design:max`가 더한다(사용자가 원할 때).
 
 사용자는 디자인을 모른다고 가정하고, 디자인·제품 결정은 하네스가 내리고 이유를 남긴다. 단, **PRD에 적힌 것을 빼거나 가볍게 바꾸는 결정만은 만들기 전에 사용자에게 확인**한다.
 
@@ -15,17 +15,31 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 
 `$SK/references/principles.md`를 먼저 읽는다 — 화면 작성 에이전트는 그 전문을 pack(`features/pack/pack.py`)으로 받는다. 그 밖의 서브에이전트 프롬프트에는 전문을 그대로 붙인다.
 
-## 진행 — 보통 한 턴, PRD 요구사항을 뺄 때만 두 턴
+## 진행 — 보통 두 턴(표면 질문 → 만들기), PRD 요구사항을 뺄 때만 세 턴
 
-첫 줄에 한 문장으로 알린다: "바로 만들게요. 15분쯤 걸려요."
+### 0단계 — 표면 묻기 (첫 턴, 30초)
+
+- **맨 먼저(1초)**: `python3 $SK/scripts/save_prd.py out` — 붙여넣은 PRD 원문을 `out/prd.md`로 저장(파일로 받았으면 `--from <파일>`). 실패하면 그때만 직접 쓴다.
+- **언제나 한 번 묻는다** — 폰 화면인가, 데스크톱·웹인가. 데스크톱·웹 안에서는 하네스가 PRD를 보고 화면 모양 하나를 **추천**한다: 순서대로 한 가지씩 끝내는 첫 실행·설정·가입 → 단계 마법사(2b) · 읽고 훑는 소개·문서·랜딩 → 스크롤 페이지(2a) · 숫자·목록을 계속 지켜보는 업무 도구 → 대시보드(2c). PRD에 `## 표면` 절이 있으면 그 줄을 그대로 인용한다(헤드리스 가상 사용자는 그 인용과 PRD로 답한다). 형식:
+
+```
+어떤 화면으로 만들까요? 번호만 알려 주세요.
+1. 모바일 앱(폰 화면)
+2. 데스크톱·웹 — 2a 스크롤 페이지 · 2b 단계 마법사 · 2c 대시보드 (추천: 2b — 이유 한 줄)
+PRD '표면': "(그 절의 첫 줄 인용, 없으면 이 줄을 뺀다)"
+[[ASK]]
+```
+- 답 → 표면 프로필(`$SK/surfaces/README.md`): `1` → `mobile` · `2b` → `desktop-wizard` · `2a` → `desktop-scroll` · `2c` → `desktop-dashboard`(전용 프로필이 없으면 데스크톱 기본으로 짓는다 — 마법사 창 크기, 그 가정은 decisions.json에). `2`만 오면 추천한 것. 고른 표면·화면 모양·이유는 decisions.json의 `surface`에 한 줄.
+- **이후 모든 단계의 표면 차이는 `out/surface.json`에서 읽는다**(setup_out.py가 쓴다) — 화면 크기 `frame`, 시장 재료 `market`, 흐름 고리 `flow`, 화면 종류 `kinds`, 상태 `states`, 이미지 `images`. 이 문서의 예시는 mobile 값이다.
+
+답을 받으면 첫 줄에 한 문장으로 알린다: "바로 만들게요. 15분쯤 걸려요."
 
 ### 1단계 — 동시에 시작 (목표 3분)
 
-- **맨 먼저(1초)**: `python3 $SK/scripts/save_prd.py out` — 붙여넣은 PRD 원문을 `out/prd.md`로 저장(파일로 받았으면 `--from <파일>`). 실패하면 그때만 직접 쓴다.
-- **이어서 바로(3초)**: PRD의 핵심 기능·갈등에서 키워드 3~4개를 뽑아 `python3 $SK/scripts/market.py out "<키워드>" …` — 같은 문제를 푸는 잘 되는 앱(평점 수 상위 5)의 스토어 화면·설명·리뷰를 `out/market/`에 모은다(`$SK/references/market.md` 1절). 도메인 이름이 아니라 이 PRD의 말로.
+- **이어서 바로(3초)** — 시장 재료는 `out/surface.json`의 `market.source`대로: `app_store`면 PRD의 핵심 기능·갈등에서 키워드 3~4개를 뽑아 `python3 $SK/scripts/market.py out "<키워드>" …` — 같은 문제를 푸는 잘 되는 앱(평점 수 상위 5)의 스토어 화면·설명·리뷰를 `out/market/`에 모은다(`$SK/references/market.md` 1절). 도메인 이름이 아니라 이 PRD의 말로. `prd_refs`면 market.py를 **실행하지 않는다** — PRD의 참고 제품 절이 재료다(`market.md` 4절, 절이 없으면 건너뛰고 decisions.json에).
 - **먼저 30초**: PRD에서 도메인(예: 여행·생활·커머스·교육·결혼)과 제품 성격 키워드 3개를 정한다 — 키워드는 라이브러리 어휘에서 고른다: 따뜻함·감성·친근·활기·선명·강렬·밝음·산뜻·신뢰·차분·고급·모노·에디토리얼·생활·여행·자연·건강·기록·커뮤니티. 도메인은 구체적으로(예: "뷰티,헤어", "운동,예약") — 라이브러리에 맞는 도메인이 없으면 승인된 브랜드 시드에서 색을 만든다(자동). 그리고 **감정 온도**: 축하·결혼·선물·돌잔치처럼 **설렘 자체가 제품의 핵심**이면 `warm`, 금융·업무·의료처럼 믿음이 핵심이면 `cool`, 여행·생활·가족 일상처럼 둘 다 아니면 비운다(대부분 비운다).
-- **백그라운드로 즉시**: `python3 $SK/scripts/setup_out.py out --domain "<도메인>" --tags "<키워드,…>" [--temp warm|cool]` — 공통 파일 복사(Tier 0 아이콘 `out/assets/fluent/` 포함) + 팔레트 라이브러리(`$SK/foundation/palettes/`)에서 **기본 1 + 대안 2 자동 결정**. 사용자에게 색을 묻지 않는다.
-- **같은 메시지에서 서브에이전트 1개 — 시장 관례**: `$SK/references/market.md` 2절 프롬프트로 `out/market/`에서 `out/conventions.json`을 뽑는다(2개 이상 앱에서 본 것만 관례).
+- **백그라운드로 즉시**: `python3 $SK/scripts/setup_out.py out --domain "<도메인>" --tags "<키워드,…>" --surface <0단계 표면> [--temp warm|cool] [--theme <slug>.json]` — 표면 프로필(`out/surface.json`) + 공통 파일 복사(Tier 0 아이콘 `out/assets/fluent/` 포함) + 팔레트 라이브러리(`$SK/foundation/palettes/`)에서 **기본 1 + 대안 2 자동 결정**. 사용자에게 색을 묻지 않는다. **PRD가 레퍼런스 테마 파일(`$SK/foundation/themes/<slug>.json`)을 지정하면 `--theme`으로 넘긴다** — 그 테마가 기본값이 되고(점수 무시), 대안 2개만 라이브러리에서 온다(`$SK/surfaces/README.md` 테마 절). 팔레트 선택 이유는 "사용자 지정 레퍼런스".
+- **같은 메시지에서 서브에이전트 1개 — 시장 관례**: `$SK/references/market.md` 2절 프롬프트로 `out/market/`에서 `out/conventions.json`을 뽑는다(2개 이상 앱에서 본 것만 관례). `market.source: prd_refs`면 4절대로 PRD의 참고 제품 절에서(`market.min_seen`개 이상 제품에서 본 것만).
 - **같은 메시지에서 서브에이전트 1개 — 명세 목록**: `$SK/references/spec-mode.md`의 프롬프트로 `out/prd.md`에서 `out/spec_inventory.json`을 뽑는다(화면·단계·부딪히는 규칙 최대 20개, 항목마다 원문 인용).
 - **메인은 그동안** `out/journey.md`를 쓴다:
   - **사람 카드(맨 먼저 — 이 앱이 누구를 위한 것인가)**: PRD에 사용자 구분(유형·단계·페르소나)이 있으면 **그 구분과 이름을 그대로** 가져온다. 없으면 여정에서 서로 가장 다른 사람 2~3명. 사람마다 {누구(상황 한 줄 — 나이·국적·성별처럼 사진에 영향을 주는 특성 포함), **처음 오는 이유**, 그때 마음(불안·막막함·호기심·자부심…), **알고 싶은 것 3~5개**(그 사람이 앱을 열 때 머릿속에 있는 질문 — 기능 이름이 아니라 질문, 그리고 그 답이 보일 화면 id), **이 앱에서 성공한 순간**, 주로 쓰는 화면 id}. 같은 앱이라도 목적이 다르면 알고 싶은 것이 다르다 — 예: 기록하러 온 사람은 "내 기록이 어떻게 쌓였나, 내가 어떻게 변했나", 남이 궁금해서 온 사람은 "나와 비슷한 사람은 누구고 어떻게 됐나, 나와 같은 시기를 지난 사람은 어땠나, 그 사람들은 무엇을 쓰나". 이 카드를 `screens.json`의 `people`에도 옮긴다. **핵심 사람**(이 앱이 가장 먼저 붙잡아야 하는 사람) 하나를 정하고 이유를 가정 로그에.
@@ -33,9 +47,9 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
   - **범위**: 커버한다 / 커버하지 않는다(이유) / 경계(추천 결정). 사람 나누는 방식(권한).
   - **시나리오 데이터 표 + 사실 표**: 등장인물·주요 항목 3~5개, 그리고 화면에 나올 **모든 사실**(날짜·시간·인원 수·누가 어디에 속하는지·무엇이 무엇과 겹치는지·각 대상의 상태 이름)을 한 표에. 모든 화면이 이 표만 인용한다(원칙 19). 숫자를 쓰는 제목("23명")은 표에서 센 값.
   - **가정 로그**: 하네스가 대신 정한 것과 이유(팔레트 선택 이유 포함 — `out/palettes.json`의 why).
-- 명세 목록이 오면 **병합**: 같은 화면의 탭·섹션으로 쪼개진 screen은 feature로 합친다. screen+step ≥ 15면 `mode: "spec"` — screen·step은 **전부 화면**이 된다(빼려면 1.5단계 결정 + 확인). 아니면 `brief` — 지금처럼 여정에서 화면을 끌어낸다. **흐름 고리(`objects`)를 먼저 채운다** — 대상마다 create(처음 만드는 시작점)·view·edit(고치기·지우기·취소)·after(끝: **그 행동의 결과 화면** — 완료 확인·바뀐 결과가 보이는 화면. 목록·상세로 대신하지 않는다)에 화면 id. after에는 결과 화면(`kind: "result"` 또는 `<id>--done`)이 하나 이상 있어야 한다(selfcheck). 빈 칸이 있으면 그 화면을 화면 목록에 추가한다(시작과 끝이 빠지는 것은 치명적이다). n/a는 edit에만, 이유와 함께. 이어서 각 항목의 `covered_by`(화면 id) 또는 `decision`을 채운다(요소 단위는 목록에 없다 — 빌드 에이전트가 PRD의 그 화면 절을 읽는다). rule은 `target`(화면 id)·`state`(error|confirm|done) 또는 `policy`(정책 문구로만 반영할 화면 id).
+- 명세 목록이 오면 **병합**: 같은 화면의 탭·섹션으로 쪼개진 screen은 feature로 합친다. screen+step ≥ 15면 `mode: "spec"` — screen·step은 **전부 화면**이 된다(빼려면 1.5단계 결정 + 확인). 아니면 `brief` — 지금처럼 여정에서 화면을 끌어낸다. **흐름 고리를 먼저 채운다** — 모양은 `out/surface.json`의 `flow`. `flow.field: steps`(단계 마법사)면 spec_inventory.json `steps`에 순서대로 단계마다 `{name, screen, pass}`(`pass` = 무엇을 하면 다음이 열리는가 한 줄), 마지막 단계의 화면은 `kind: "result"`(selfcheck). `flow.field: objects`면 `objects`에 대상마다 create(처음 만드는 시작점)·view·edit(고치기·지우기·취소)·after(끝: **그 행동의 결과 화면** — 완료 확인·바뀐 결과가 보이는 화면. 목록·상세로 대신하지 않는다)에 화면 id. after에는 결과 화면(`kind: "result"` 또는 `<id>--done`)이 하나 이상 있어야 한다(selfcheck). 빈 칸이 있으면 그 화면을 화면 목록에 추가한다(시작과 끝이 빠지는 것은 치명적이다). n/a는 edit에만, 이유와 함께. 이어서 각 항목의 `covered_by`(화면 id) 또는 `decision`을 채운다(요소 단위는 목록에 없다 — 빌드 에이전트가 PRD의 그 화면 절을 읽는다). rule은 `target`(화면 id)·`state`(error|confirm|done) 또는 `policy`(정책 문구로만 반영할 화면 id).
 - **시장 관례 합치기**(conventions.json이 오면, screens.json 전에): 탭 구성·온보딩 순서·홈 첫 블록·결제 흐름은 `follow`가 기본값 — 벗어나려면 이 앱의 core 때문이어야 하고 이유는 decisions.json에. `consider`(후킹 장치)는 1.5단계 후보로, `avoid`(리뷰 불만)는 해당 화면 정책으로. 리서치가 3분 안에 안 오면 기다리지 않는다(`market.md` 3절).
-- 이어서 `out/screens.json`. **`screens.json`은 한 번만 쓴다**(파일 하나에 쓰고 끝 — 도우미 스크립트를 따로 만들거나 같은 내용을 두 번 쓰지 않는다). 부분 수정은 Edit 도구로 — 인라인 python 치환 금지(`journey.md`·`decisions.json`도 같다). 화면 항목의 `file`·`role`·`traits` 기본값(false)과 `states`는 생략해도 된다 — `expand_states.py`가 채운다(`traits`는 true인 것만 적으면 된다):
+- 이어서 `out/screens.json`. **`screens.json`은 한 번만 쓴다**(파일 하나에 쓰고 끝 — 도우미 스크립트를 따로 만들거나 같은 내용을 두 번 쓰지 않는다). 부분 수정은 Edit 도구로 — 인라인 python 치환 금지(`journey.md`·`decisions.json`도 같다). 화면 항목의 `file`·`role`·`traits` 기본값(false)과 `states`는 생략해도 된다 — `expand_states.py`가 채운다(`traits`는 true인 것만 적으면 된다). `kind`는 `out/surface.json` `kinds`의 키에서, `traits` 키는 `states.traits`·`states.extra_traits`에서 고른다(아래 예시는 mobile):
 
 ```json
 {"groups": ["처음 들어올 때", "홈 — 시기마다 맨 위가 바뀐다", "…"],
@@ -58,7 +72,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
   - 화면은 **여정의 궁금해지는 순간**에서 끌어낸다. 같은 화면이 시기에 따라 달라지면 별도 화면 id로(예: `home`, `home-d7`, `home-trip`).
   - `kind: "list"` 화면은 `large_list`(30개 넘게 쌓일 수 있나)를 반드시 적는다 — true면 검색 칸 필수(selfcheck).
   - **1차는 기본 화면 + 결과 화면만.** 행동의 끝(예약 완료·출석 완료·취소 완료·신청 뒤)은 별도 화면(`kind: "result"`)이나 `traits.shares`(→ `--done`)로 그린다.
-  - **상태 화면 항목·`states`는 손으로 쓰지 않는다** — `expand_states.py`가 traits와 명세 규칙에서 펼친다: 목록 + 첫 사용 → `empty`, 폼 → `error`, 밖으로 내보내는 행동·한 번 누르는 요청 → `done`, 사용자가 지켜봐야 하는 긴 작업(사진 여러 장 업로드 등, `long_task`) → `progress`, 명세 규칙 → 그 규칙의 `error`(같은 요소 오류) 또는 `confirm`(되돌릴 수 없음·중복 경고 대화상자). `loading`·`success`는 상태가 아니다. 화면당 상태 2개 이하(기본 포함 3) — 넘으면 규칙을 정책 문구로 내린다.
+  - **상태 화면 항목·`states`는 손으로 쓰지 않는다** — `expand_states.py`가 traits와 명세 규칙에서 펼친다(특성→상태 표와 화면당 상한은 `out/surface.json` `states` — 단계 마법사는 단계마다 `can_error`→오류 · `wrong_action`→잘못 누름(`fail`) · `may_timeout`→시간 초과(`timeout`) · `waits`→기다림(`progress`)). mobile: 목록 + 첫 사용 → `empty`, 폼 → `error`, 밖으로 내보내는 행동·한 번 누르는 요청 → `done`, 사용자가 지켜봐야 하는 긴 작업(사진 여러 장 업로드 등, `long_task`) → `progress`, 명세 규칙 → 그 규칙의 `error`(같은 요소 오류) 또는 `confirm`(되돌릴 수 없음·중복 경고 대화상자). `loading`·`success`는 상태가 아니다. 화면당 상태 2개 이하(기본 포함 3) — 넘으면 규칙을 정책 문구로 내린다.
   - 탭·세그먼트로 내용이 바뀌는 화면은 `"tabs": [{"label": "지난 수업", "screen": "my-bookings-past"}]` — 칸마다 그 내용을 보여 주는 화면(현재 칸은 자기 id).
   - `accent`(선택, 기본은 빼둔다): 강조색(`.accent-text`·`.accent-dot`)이 맡을 **뜻 하나**(할인·마감 임박·새 소식·내 손이 필요한 것 중 이 앱에서 첫눈에 걸려야 하는 것). 선언하지 않으면 강조 부품을 쓸 수 없다. 팔레트가 강조색을 가졌으면 `out/palettes.json`의 `accent_seen`이 그 서비스의 쓰임새다. CTA·선택 상태를 강조색으로 칠하지 않는다 — 버튼은 계속 브랜드 색.
   - `photo_centric`: 사진·이미지가 사용자가 만들거나 보는 **핵심 콘텐츠**면 true.
@@ -67,7 +81,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 
 ### 1.5단계 — 제품 판단: 가장 중요한 것만 남긴다 (목표 2분)
 
-**같은 메시지에서 함께**: `python3 $SK/scripts/expand_states.py out --stage go`(1차 상태 펼치기 — 결과 화면(`done`)만. 오류·확인·빈·진행은 max가 펼친다). 메인은 판단하는 동안 **이미지 자리 목록** `out/image_slots.json`을 쓴다(`$SK/references/images.md` 1절) — 항목마다 `kind`: `photo`(실사) · `icon`(아이콘성 사물 — 바구니·트럭·영수증처럼 물건 하나) · `drawing`(도식·지도·QR만). photo·icon은 `en` 필수: photo는 영어 묘사 한 문장, icon은 영어 사물 이름 **선호 순서 목록**(대안 포함, 예: `["washing machine", "bubbles"]`). 쓰자마자 **같은 메시지에서** `python3 $SK/features/images/imggen.py out`을 **백그라운드로**(Bash `run_in_background` — 자리표시를 먼저 쓰고 사진을 생성해 덮어쓴다, 빌드는 그 경로를 쓴다) + `python3 $SK/features/icons/resolve.py out`(포그라운드, 몇 초 — `out/icons.json`).
+**같은 메시지에서 함께**: `python3 $SK/scripts/expand_states.py out --stage go`(1차 상태 펼치기 — 결과 화면(`done`)만. 오류·확인·빈·진행은 max가 펼친다). 메인은 판단하는 동안 **이미지 자리 목록** `out/image_slots.json`을 쓴다(`$SK/references/images.md` 1절) — `kind`는 `out/surface.json` `images.kinds` 안에서만, `images.note`를 따른다(selfcheck). 항목마다 `kind`: `photo`(실사) · `icon`(아이콘성 사물 — 바구니·트럭·영수증처럼 물건 하나) · `drawing`(도식·지도·QR만). photo·icon은 `en` 필수: photo는 영어 묘사 한 문장, icon은 영어 사물 이름 **선호 순서 목록**(대안 포함, 예: `["washing machine", "bubbles"]`). 쓰자마자 **같은 메시지에서** `python3 $SK/features/images/imggen.py out`을 **백그라운드로**(Bash `run_in_background` — 자리표시를 먼저 쓰고 사진을 생성해 덮어쓴다, 빌드는 그 경로를 쓴다) + `python3 $SK/features/icons/resolve.py out`(포그라운드, 몇 초 — `out/icons.json`).
 
 `out/decisions.json`:
 ```json
@@ -95,7 +109,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 ### 2단계 — 병렬 빌드 (목표 4분)
 
 - `python3 $SK/features/pack/pack.py out --max-agents 5` → `out/packs/plan.json`의 항목마다 서브에이전트 `hyper-design:screen-writer`를 프롬프트 `PACK=<pack 경로>`로 띄운다 — **한 메시지에 전부(최대 5), `model` 인자는 넣지 않는다**(정의 파일이 정한다). 각자 자기 파일만 쓴다. `hyper-design:screen-writer`를 서브에이전트 종류로 쓸 수 없으면 일반 서브에이전트를 `model: "sonnet"`으로 띄우고 프롬프트 맨 위에 `$SK/features/pack/writer.md` 전문을 붙인다.
-- 작성에 필요한 것은 **pack에 들어 있다**: 원칙·COMPONENTS 전문, 시나리오 데이터 표·사실 표("표에 없는 날짜·숫자·상태를 지어내지 말 것"), 맡은 화면 항목·명세 항목(PRD 원문 인용), 사람 카드, 시장 관례("구조만 참고, 문구·그림·색은 베끼지 말 것"), 사진 경로·아이콘 이름, 구조 예시, 셀프체크 규칙 요약. 메인이 따로 붙이지 않는다.
+- 작성에 필요한 것은 **pack에 들어 있다**: 표면(mobile이 아니면 1절에 창 크기와 "화면은 데스크톱 창이다" 같은 한 줄, 그 표면의 구조 예시), 원칙·COMPONENTS 전문, 시나리오 데이터 표·사실 표("표에 없는 날짜·숫자·상태를 지어내지 말 것"), 맡은 화면 항목·명세 항목(PRD 원문 인용), 사람 카드, 시장 관례("구조만 참고, 문구·그림·색은 베끼지 말 것"), 사진 경로·아이콘 이름, 구조 예시, 셀프체크 규칙 요약. 메인이 따로 붙이지 않는다.
 - pack에 든 내용 규칙: **상태 화면은 기본 화면 파일을 복사해 바뀐 부분만 고친다**(구조가 달라지면 안 된다, 같은 목적의 버튼을 하나 더 붙이지 않는다). 사람 카드는 첫 화면에서 그 질문의 답을 가장 크게 — 질문마다 블록을 만들어 질답지로 만들지 않는다.
 - **보이스톤 프리셋**은 pack에 전문이 들어간다 — 메인은 고르기만 한다: `haeyo`(기본), 금융·공공·보험·의료·계약·무거운 결제·높은 연령이 핵심인 앱이면 `hamnida`. 고른 프리셋과 이유는 decisions.json의 `voice`에 한 줄. 화면의 모든 문구는 그 프리셋의 규칙(문체·예외·경어·능동·긍정)을 따른다 — 사람 카드는 무엇을 먼저 말할지를, 프리셋은 어떻게 말할지를 정한다.
 - 파일: `out/screens/<id>.html` — COMPONENTS.md의 뼈대 그대로(`../tokens.css`·`../components.css`·`../palette.js`, 일러스트 `../assets/fluent/<이름>.svg`). 갈래·이동은 실제 `<a href>`로 잇는다.
@@ -107,7 +121,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 한 메시지에서 동시에(**포그라운드로 실행해 같은 턴에서 결과를 받는다 — 백그라운드로 돌려 놓고 "끝나면 알려드릴게요"로 턴을 끝내지 않는다. 턴이 끝나면 다시 이어지지 않는다**):
 - `python3 $SK/features/canvas/build_canvas.py out` — 캔버스 `out/index.html`(Screens·Foundation·Components 탭, 드래그 이동, 색 점 3개, 갈래 화살표, 정책 3줄 — 스크립트가 만들고 AI는 손대지 않는다)
 - `python3 $SK/scripts/selfcheck.py out` — 매니페스트·파일·상태·금지 문구
-- `python3 $SK/scripts/audit.py out --shots out/.shots` — 렌더링 측정(대비·토큰 밖 색·의미 배지·CTA·터치·캔버스) + 화면 캡처
+- `python3 $SK/scripts/audit.py out --shots out/.shots` — 렌더링 측정(대비·토큰 밖 색·의미 배지·CTA·터치 또는 키보드 초점(`surface.json` `audit`)·캔버스) + 표면 뷰포트로 화면 캡처
 - **사실 대조 서브에이전트 1개** `hyper-design:fact-checker`(같은 메시지에서, `model` 인자 없이, 프롬프트 `OUT=<out 경로>` + 화면 파일 목록): `journey.md` 사실 표와 모든 `screens/*.html`의 글자를 대조해 어긋남(날짜·시간·인원·겹침·상태 이름)과 "누른 뒤 갈 곳이 없는 조작"만 목록으로 돌려준다. 고치지는 않는다.
 
 ❌ 항목과 캡처를 보고 고친다. 여러 화면에 걸친 문제는 공통 원인부터. 고칠 화면이 많으면 흐름별로 서브에이전트에 나눠 **병렬로** 고친다. 수정은 **1회**, 흐름 고리(시작·끝)와 P0 항목 우선. 수정 후 selfcheck만 한 번 더. 그래도 남는 항목은 마지막 메시지에 적는다. 1차의 시간 상한은 15분 — 넘을 것 같으면 P1 이하 수정은 미루고 마지막 메시지에 적는다.

@@ -1,0 +1,16 @@
+{
+ "name": "mobile",
+ "label": "모바일 앱",
+ "frame": {"device": "폰 화면", "card": {"w": 375, "h": 812}, "modal": {"w": 390, "h": 844}, "radius": 28, "scale": 0.72},
+ "viewport": {"width": 375, "height": 812},
+ "market": {"source": "app_store", "min_seen": 2},
+ "flow": {"field": "objects", "loop": ["create", "view", "edit", "after"]},
+ "kinds": {"home": "home.html", "list": "checklist.html", "detail": "day.html", "form": "item-edit.html", "result": "join.html"},
+ "states": {"traits": {"list_first_use": "empty", "form": "error", "shares": "done", "long_task": "progress"},
+            "extra_traits": ["large_list"], "go": ["done"], "cap": 2},
+ "audit": {"touch": true, "focus_visible": false},
+ "images": {"kinds": ["photo", "icon", "drawing"], "note": ""},
+ "principles": {},
+ "type": {},
+ "writer": "화면은 폰 화면(375×812)이다. COMPONENTS 뼈대(viewport width=375)를 그대로 쓴다."
+}

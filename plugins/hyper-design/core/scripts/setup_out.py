@@ -1,12 +1,15 @@
 """구동 첫 단계 — 공통 파일을 한 번에 준비한다(메인이 여정표를 쓰는 동안 백그라운드로).
 
-python3 setup_out.py out --domain 여행 --tags "따뜻함,편안함,신뢰"
-→ out/components.css · out/palette.js · out/assets/fluent/(Tier 0 아이콘, features/icons/core) · out/tokens.css + tokens-<slug>.css ×3 · out/palettes.json
+python3 setup_out.py out --domain 여행 --tags "따뜻함,편안함,신뢰" [--surface mobile|desktop-wizard] [--theme <themes/*.json>]
+→ out/surface.json(표면 프로필, core/surfaces/README.md) · out/components.css · out/palette.js · out/assets/fluent/(Tier 0 아이콘, features/icons/core) · out/tokens.css + tokens-<slug>.css ×3 · out/palettes.json
 """
-import argparse, pathlib, shutil, subprocess, sys
+import argparse, json, pathlib, shutil, subprocess, sys
 F = pathlib.Path(__file__).resolve().parent.parent / "foundation"
 ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--domain", default=""); ap.add_argument("--tags", default=""); ap.add_argument("--temp", default="")
+ap.add_argument("--surface", default="mobile"); ap.add_argument("--theme", default="")   # 사용자 지정 레퍼런스 테마(TDR surface D7)
 a = ap.parse_args(); out = pathlib.Path(a.out); (out / "screens").mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(F.parent / "surfaces")); import surface
+(out / "surface.json").write_text(json.dumps(surface.resolve(a.surface), ensure_ascii=False, indent=1), encoding="utf-8")
 shutil.copy(F / "components.css", out / "components.css"); shutil.copy(F / "palette.js", out / "palette.js")
 ICONS = F.parent / "features" / "icons" / "core"   # Tier 0 아이콘(svg + LICENSE.md)
 for d in (F / "assets").iterdir() if (F / "assets").exists() else []:
@@ -15,6 +18,6 @@ for d in (F / "assets").iterdir() if (F / "assets").exists() else []:
 (out / "assets" / "fluent").mkdir(parents=True, exist_ok=True)
 for f in ICONS.iterdir():
     if f.suffix == ".svg" or f.name == "LICENSE.md": shutil.copy(f, out / "assets" / "fluent" / f.name)
-r = subprocess.run([sys.executable, str(F.parent / "scripts" / "palette_pick.py"), str(out), "--domain", a.domain, "--tags", a.tags] + (["--temp", a.temp] if a.temp else []), capture_output=True, text=True, encoding="utf-8", errors="replace")
+r = subprocess.run([sys.executable, str(F.parent / "scripts" / "palette_pick.py"), str(out), "--domain", a.domain, "--tags", a.tags] + (["--temp", a.temp] if a.temp else []) + (["--theme", a.theme] if a.theme else []), capture_output=True, text=True, encoding="utf-8", errors="replace")
 print(r.stdout.strip() or r.stderr.strip())
 print("setup ok:", ", ".join(sorted(p.name for p in out.iterdir())))

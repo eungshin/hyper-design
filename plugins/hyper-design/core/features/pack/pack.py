@@ -19,6 +19,8 @@ PRINCIPLES = SK / "references" / "principles.md"
 COMPONENTS = SK / "foundation" / "COMPONENTS.md"
 VOICES = SK / "foundation" / "voices"
 EXAMPLES = SK / "foundation" / "examples"
+sys.path.insert(0, str(SK / "surfaces"))
+import surface  # noqa: E402  표면 프로필(out/surface.json, 없으면 mobile)
 
 # kind → 예시 화면 id. examples/screens.json 항목에 "kind"가 있으면 그것이 우선한다.
 # (현재 examples/screens.json에는 kind가 없어 아래 표가 쓰인다 — id는 그 파일에 있는지 확인한다)
@@ -53,6 +55,38 @@ SELFCHECK_RULES = """\
 """
 
 TASK_RULES = "이 파일 하나만 읽는다 · 화면마다 Write 한 번 · 다시 열지 않는다 · 화면당 3분 상한"
+
+STEPS_RULE = "- 단계 흐름의 단계마다 통과 조건이 화면에서 보인다(무엇을 하면 다음이 열리는가), 마지막 단계는 결과 화면(`kind: result`)."
+
+
+def selfcheck_rules(surf):
+    if (surf.get("flow") or {}).get("field") == "steps":
+        lines = SELFCHECK_RULES.rstrip().splitlines()
+        return "\n".join(lines[:-1] + [STEPS_RULE]) + "\n"
+    return SELFCHECK_RULES
+
+
+def surface_principles(surf):
+    """표면 프로필의 principles(원칙 덮어쓰기) + type(글자 크기) — 원칙 전문 바로 뒤에 붙는다. mobile은 빈 문자열."""
+    pr, ty = surf.get("principles") or {}, surf.get("type") or {}
+    if not pr and not ty:
+        return ""
+    H = [f"### 이 표면({surf.get('label', '')})에서 바뀌는 원칙 — 위 원칙과 부딪히면 이것이 이긴다", ""]
+    if pr.get("replaces"):
+        H.append("대신하는 원칙: " + ", ".join(str(x) for x in pr["replaces"]))
+    H += [f"- {line}" for line in pr.get("rules", [])]
+    if ty:
+        H += ["", "글자 크기(px, 크기/줄높이·굵기): " + " · ".join(f"{k} {v}" for k, v in ty.items())]
+    return "\n".join(H) + "\n"
+
+
+def surface_text(surf):
+    """1절 '할 일' 아래 표면 한 단락 — 작성자가 무엇(폰/데스크톱 창)을 그리는지. mobile은 오늘 그대로(빈 줄 없음)."""
+    if surf.get("name") == "mobile":
+        return ""
+    f = surf.get("frame") or {}
+    card = f.get("card") or {}
+    return f"표면: **{surf.get('label', '')}** — {f.get('device', '')} {card.get('w')}×{card.get('h')}. {surf.get('writer', '')}".rstrip()
 
 
 # ---------- 읽기 ----------
@@ -188,8 +222,24 @@ def section(md, heading_prefix):
     return "\n".join(out).rstrip()
 
 
-def components_text(out):
-    text = read_text(COMPONENTS)
+SURFACE_ONLY = re.compile(r"^## .*\(표면 `([\w-]+)`일 때만")
+
+
+def surface_sections(text, name):
+    """'## …(표면 `X`일 때만 …' 절은 표면 이름이 X일 때만 남긴다 — mobile PACK은 오늘 그대로."""
+    res, keep = [], True
+    for ln in text.splitlines(keepends=True):
+        if ln.startswith("## "):
+            m = SURFACE_ONLY.match(ln)
+            keep = not m or m.group(1) == name
+        if keep:
+            res.append(ln)
+    out = "".join(res)
+    return out.rstrip("\n") + "\n" if text.endswith("\n") else out.rstrip("\n")
+
+
+def components_text(out, surf_name="mobile"):
+    text = surface_sections(read_text(COMPONENTS), surf_name)
     icons = load_json(out / "icons.json")
     if not isinstance(icons, list) or not icons:
         return text
@@ -237,7 +287,10 @@ def voice_text(out):
     return slug, read_text(p).rstrip()
 
 
-def example_map():
+def example_map(surf=None):
+    """kind → 예시 파일. 표면 프로필이 mobile이 아니면 그 프로필의 kinds 표를 쓴다."""
+    if surf and surf.get("name") != "mobile" and surf.get("kinds"):
+        return {k: f for k, f in surf["kinds"].items() if (EXAMPLES / f).exists()}
     ex = load_json(EXAMPLES / "screens.json", {}) or {}
     entries = ex.get("screens", []) if isinstance(ex, dict) else []
     ids = {e.get("id"): e for e in entries}
@@ -379,6 +432,9 @@ def build_pack(n, sids, smap, ctx, mode):
     H.append("")
     H.append(TASK_RULES)
     H.append("")
+    if ctx["surface"]:
+        H.append(ctx["surface"])
+        H.append("")
     if mode == "revise":
         H.append("## 2. 부품 (COMPONENTS.md 전문)")
         H.append("")
@@ -400,6 +456,9 @@ def build_pack(n, sids, smap, ctx, mode):
     H.append("")
     H.append(ctx["principles"].rstrip())
     H.append("")
+    if ctx.get("surface_principles"):
+        H.append(ctx["surface_principles"].rstrip())
+        H.append("")
     # 3. 부품
     H.append("## 3. 부품 (COMPONENTS.md 전문)")
     H.append("")
@@ -468,7 +527,7 @@ def build_pack(n, sids, smap, ctx, mode):
     # 8. 셀프체크
     H.append("## 8. 셀프체크 규칙 요약")
     H.append("")
-    H.append(SELFCHECK_RULES.rstrip())
+    H.append(ctx["selfcheck"].rstrip())
     return "\n".join(H).rstrip() + "\n"
 
 
@@ -514,10 +573,14 @@ def main(argv=None):
         if isinstance(ic, dict) and ic.get("slot") and ic.get("name"):
             icon_by_slot.setdefault(ic["slot"], ic["name"])
     voice_slug, voice = voice_text(out)
+    surf = surface.load(out)
     ctx = {
+        "surface": surface_text(surf),
+        "selfcheck": selfcheck_rules(surf),
         "out": out,
         "principles": read_text(PRINCIPLES),
-        "components": components_text(out),
+        "surface_principles": surface_principles(surf),
+        "components": components_text(out, surf.get("name", "mobile")),
         "voice_slug": voice_slug,
         "voice": voice,
         "scenario": section(journey, "시나리오 데이터 표"),
@@ -527,7 +590,7 @@ def main(argv=None):
         "slots": [s for s in (slots or []) if isinstance(s, dict) and s.get("slot")],
         "icon_by_slot": icon_by_slot,
         "market": market_text(out),
-        "examples": example_map(),
+        "examples": example_map(surf),
     }
 
     pdir = out / "packs"

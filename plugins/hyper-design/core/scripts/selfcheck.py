@@ -3,8 +3,11 @@
 python3 selfcheck.py out
 """
 import sys, json, re, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "surfaces")); import surface
 
 out = pathlib.Path(sys.argv[1]); errs = []
+SURF = surface.load(out)   # 표면 프로필(out/surface.json, 없으면 mobile) — core/surfaces/README.md
+ST = SURF["states"]
 try:
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
 except Exception as e:
@@ -54,18 +57,14 @@ for s in S:
         if b.get("to") not in ids: errs.append(f'{s["id"]}: 갈래가 없는 화면으로 {b.get("to")}')
     # 상태: traits 에서만 파생
     t = s.get("traits", {}) or {}
-    exp = set()
-    if t.get("list_first_use"): exp.add("empty")
-    if t.get("form"): exp.add("error")
-    if t.get("shares"): exp.add("done")
-    if t.get("long_task"): exp.add("progress")
+    exp = {st for k, st in ST["traits"].items() if t.get(k)}
     exp |= RULE_ST.get(s["id"], set())
-    if m.get("stage") == "go": exp &= {"done"}          # 1차는 결과 화면만 — 나머지는 /hyper-design:max
+    if m.get("stage") == "go": exp &= set(ST["go"])     # 1차는 결과 화면만 — 나머지는 /hyper-design:max
     if "large_list" not in t and s.get("kind") == "list" and "--" not in s["id"]: errs.append(f'{s["id"]}: traits.large_list(30개 넘게 쌓이는 목록인가) 미선언')
     if "--" not in s["id"]:
         decl = set(s.get("states", []) or [])
         if decl != exp: errs.append(f'{s["id"]}: states {sorted(decl)} ≠ 파생 {sorted(exp)} — expand_states.py를 다시 돌린다')
-        if len(exp) > 2: errs.append(f'{s["id"]}: 상태 {len(exp)}개 > 2(기본 포함 3)')
+        if len(exp) > ST["cap"]: errs.append(f'{s["id"]}: 상태 {len(exp)}개 > {ST["cap"]}(기본 포함 {ST["cap"] + 1})')
         for st in exp:
             if f'{s["id"]}--{st}' not in ids: errs.append(f'{s["id"]}: 상태 화면 {s["id"]}--{st} 없음')
     f = out / s["file"]
@@ -97,11 +96,25 @@ for s in S:
         if img not in PERSON: errs.append(f"{f.name}: 사람 자리(avatar)에 사물 일러스트 {img} — 글자 아바타(avatar is-text)로")
     for href in re.findall(r'(?:href|src)="([^"#:]+\.(?:html|svg|css|js))"', h):
         if not (f.parent / href).exists(): errs.append(f"{f.name}: 깨진 참조 {href}")
-# 흐름 고리(v14): 사용자가 만들거나 신청하는 대상마다 시작·끝이 있어야 한다
-OBJ = INV.get("objects")
+# 흐름 고리(v14): 사용자가 만들거나 신청하는 대상마다 시작·끝이 있어야 한다 — 모양은 표면 프로필 flow
+FLOW = SURF["flow"]
+OBJ = INV.get("objects") if FLOW["field"] == "objects" else []
 if OBJ is None: errs.append("spec_inventory.json: objects(흐름 고리) 없음 — 사용자가 만들·신청하는 대상마다 create/view/edit/after")
+if FLOW["field"] == "steps":                   # 단계 마법사: 순서대로 단계마다 화면·통과 조건, 마지막은 결과 화면
+    STEPS = INV.get("steps")
+    byid = {x["id"]: x for x in S}
+    if not STEPS: errs.append("spec_inventory.json: steps(단계 흐름) 없음 — 순서대로 [{name, screen, pass}], 마지막은 결과 화면")
+    for i, st in enumerate(STEPS or [], 1):
+        nm = st.get("name") or f"{i}단계"
+        for k in FLOW.get("step") or []:
+            if not str(st.get(k) or "").strip(): errs.append(f"단계 '{nm}': {k} 없음" + (" — 무엇을 하면 다음이 열리는가(통과 조건)" if k == "pass" else ""))
+        if st.get("screen") and st["screen"] not in ids: errs.append(f"단계 '{nm}': 없는 화면 {st['screen']}")
+    if STEPS:
+        last = STEPS[-1].get("screen")
+        if last in byid and not (last.endswith("--done") or byid[last].get("kind") == FLOW.get("last_kind", "result")):
+            errs.append(f"단계 흐름: 마지막 단계 화면 {last}가 결과 화면이 아님(kind: {FLOW.get('last_kind', 'result')})")
 for o in OBJ or []:
-    for step in ("create", "view", "edit", "after"):
+    for step in FLOW.get("loop") or ("create", "view", "edit", "after"):
         v = o.get(step)
         if not v: errs.append(f"흐름 고리 '{o.get('name')}': {step} 비어 있음"); continue
         if isinstance(v, str) and v.startswith("n/a"):
@@ -141,7 +154,12 @@ for s in S:                                   # 질문은 위계에만 — 한 �
 for s in S:
     for t in s.get("tabs") or []:
         if t.get("screen") not in ids: errs.append(f"{s['id']}: 탭 '{t.get('label')}'의 화면 {t.get('screen')} 없음")
-# 이미지: 스톡 사진은 출처 기록 필수, 라이선스 제한
+# 이미지: 표면 프로필이 허락한 kind만 · 스톡 사진은 출처 기록 필수, 라이선스 제한
+try: _SL = json.loads((out / "image_slots.json").read_text(encoding="utf-8"))
+except Exception: _SL = []
+for sl in (_SL.get("slots") if isinstance(_SL, dict) else _SL) or []:
+    if isinstance(sl, dict) and (sl.get("kind") or "photo") not in SURF["images"]["kinds"]:
+        errs.append(f"image_slots {sl.get('slot')}: kind {sl.get('kind') or 'photo'}는 이 표면({SURF['name']})에서 쓰지 않는다 — {'·'.join(SURF['images']['kinds'])}")
 photos = sorted((out / "assets/photos").glob("*.jpg")) if (out / "assets/photos").exists() else []
 try: CR = {c.get("file"): c for c in json.loads((out / "credits.json").read_text(encoding="utf-8"))}
 except Exception: CR = {}
@@ -172,14 +190,15 @@ if CONV.exists():
         except Exception: DI = {}
         for kind in ("follow", "consider"):
             for c in C.get(kind) or []:
-                if len(set(c.get("seen_in") or [])) < 2: errs.append(f"conventions {c.get('id')}: {kind}인데 본 앱 {len(set(c.get('seen_in') or []))}개 — 2개 이상 앱에서 본 것만(아니면 cases)")
+                MS = SURF["market"].get("min_seen", 2)
+                if len(set(c.get("seen_in") or [])) < MS: errs.append(f"conventions {c.get('id')}: {kind}인데 본 앱 {len(set(c.get('seen_in') or []))}개 — {MS}개 이상 앱에서 본 것만(아니면 cases)")
                 d = DI.get(c.get("id"))
                 if not d: errs.append(f"decisions.json: 시장 관례 {c.get('id')} '{(c.get('what') or '')[:30]}' 판정 없음 — 따랐는지/벗어났는지(source: 시장)")
                 elif d.get("source") != "시장": errs.append(f"decisions.json: {c.get('id')}의 source가 '시장'이 아님")
     except Exception as e:
         errs.append(f"conventions.json 깨짐: {e}")
 elif not (out / "market/SKIPPED").exists():
-    errs.append("시장 관례 없음 — market.py + 해석 에이전트로 conventions.json(못 하면 out/market/SKIPPED에 이유)")
+    errs.append("시장 관례 없음 — " + ("market.py + 해석 에이전트로" if SURF["market"]["source"] == "app_store" else f"PRD '{SURF['market'].get('prd_section', '')}' 절에서") + " conventions.json(못 하면 out/market/SKIPPED에 이유)")
 # 배지 뜻→색 표: 선언한 표만 쓰고, 한 색에 뜻 하나
 BADGES = m.get("badges") or {}
 if not BADGES: errs.append("badges(뜻→색 표) 없음")

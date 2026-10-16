@@ -4,18 +4,22 @@ python3 expand_states.py out [--stage go|max]
 - go(1차): 결과 화면(done)만 펼치고, max가 더할 상태 수를 pending_states로 남긴다 · max(2차): 전부
 먼저 기본 화면의 기본값을 채운다: file=screens/<id>.html · role=everyone · traits 5개(없으면 false — kind list의 large_list는 비워 둔다)
 입력: out/screens.json(기본 화면) + out/spec_inventory.json(있으면, kind=rule 의 target·state)
-파생: list_first_use→empty · form→error · shares→done · long_task→progress · rule(state=error|confirm|done)
+파생: 표면 프로필(out/surface.json, 없으면 mobile)의 states.traits — mobile: list_first_use→empty · form→error · shares→done · long_task→progress,
+      desktop-wizard: can_error→error · wrong_action→fail · may_timeout→timeout · waits→progress — 그리고 rule(state=error|confirm|done)
 - 같은 화면·같은 상태의 규칙 여럿은 상태 화면 하나로 묶고, 규칙 이름은 그 화면 policies에 한 줄씩
 - 기본 화면의 states를 채우고 <id>--<state> 항목을 추가(이미 있으면 필요한 필드만 보충), 파생되지 않는 상태 항목은 지운다
-- 화면당 상태 > 2(기본 포함 3)면 종료코드 1(규칙 일부를 정책 문구로 내린다)
+- 화면당 상태 > 프로필 states.cap(mobile 2 — 기본 포함 3)이면 종료코드 1(규칙 일부를 정책 문구로 내린다)
 """
 import sys, json, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "surfaces")); import surface
 out = pathlib.Path(sys.argv[1])
 STAGE = sys.argv[sys.argv.index("--stage") + 1] if "--stage" in sys.argv else "max"
-GO_ONLY = {"done"}
+PS = surface.load(out)["states"]
+GO_ONLY = set(PS["go"]); CAP = PS["cap"]
 M = json.loads((out / "screens.json").read_text(encoding="utf-8"))
 # 기본값 채우기 — 메인은 핵심 칸만 쓴다(file·role·traits는 생략 가능)
-TRAIT_KEYS = ("list_first_use", "form", "shares", "large_list", "long_task")
+TRAIT = PS["traits"]
+TRAIT_KEYS = tuple(TRAIT) + tuple(PS.get("extra_traits") or [])
 for s in M.get("screens", []):
     if "--" in s["id"]: continue          # 상태 항목은 아래에서 기본 화면을 따라 채운다
     if not s.get("file"): s["file"] = f"screens/{s['id']}.html"
@@ -25,8 +29,7 @@ for s in M.get("screens", []):
 inv = {}
 if (out / "spec_inventory.json").exists():
     inv = json.loads((out / "spec_inventory.json").read_text(encoding="utf-8"))
-KO = {"empty": "처음(비어 있음)", "error": "오류", "done": "보낸 뒤", "confirm": "확인", "progress": "진행 중"}
-TRAIT = {"list_first_use": "empty", "form": "error", "shares": "done", "long_task": "progress"}
+KO = {"empty": "처음(비어 있음)", "error": "오류", "done": "보낸 뒤", "confirm": "확인", "progress": "진행 중", "fail": "잘못 누름", "timeout": "시간 초과"}
 base = [s for s in M["screens"] if "--" not in s["id"]]
 old = {s["id"]: s for s in M["screens"] if "--" in s["id"]}
 ids = {s["id"] for s in base}
@@ -47,7 +50,7 @@ for s in base:
     full = list(states)
     if STAGE == "go": states = [x for x in states if x in GO_ONLY]
     pending += len(full) - len(states)
-    if len(full) > 2: errs.append(f"{s["id"]}: 상태 {len(full)}개 > 2(기본 포함 3) — 규칙 일부를 정책 문구로 내릴 것")
+    if len(full) > CAP: errs.append(f"{s["id"]}: 상태 {len(full)}개 > {CAP}(기본 포함 {CAP + 1}) — 규칙 일부를 정책 문구로 내릴 것")
     s["states"] = states
     new.append(s)
     for st in states:
@@ -55,8 +58,8 @@ for s in base:
         r = rules.get((s["id"], st), [])
         e = old.get(sid, {})
         e.update({"id": sid, "file": e.get("file") or f"screens/{sid}.html", "group": s.get("group"),
-                  "title": e.get("title") or f"{s.get('title', s['id'])} · {KO[st]}",
-                  "purpose": e.get("purpose") or (" · ".join(x["name"] for x in r) if r else f"{KO[st]} 모습"),
+                  "title": e.get("title") or f"{s.get('title', s['id'])} · {KO.get(st, st)}",
+                  "purpose": e.get("purpose") or (" · ".join(x["name"] for x in r) if r else f"{KO.get(st, st)} 모습"),
                   "role": s.get("role"), "kind": s.get("kind"), "state_of": s["id"], "state": st})
         if r:
             e["rules"] = [x.get("id") for x in r]

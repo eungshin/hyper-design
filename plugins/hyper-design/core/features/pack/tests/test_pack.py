@@ -52,7 +52,7 @@ def base(sid):
 
 def components_core_lines():
     """COMPONENTS.md에서 일러스트 이름 목록(바뀌는 문단)을 뺀 모든 줄."""
-    lines = pack.COMPONENTS.read_text(encoding="utf-8").splitlines()
+    lines = pack.surface_sections(pack.COMPONENTS.read_text(encoding="utf-8"), "mobile").splitlines()   # mobile PACK엔 표면 전용 절이 없다
     keep, i = [], 0
     while i < len(lines):
         ln = lines[i]
@@ -121,7 +121,7 @@ def test_full_principles_components_facts(built):
 def test_components_list_kept_without_icons(tmp_path):
     out = make_out(tmp_path, icons=False)
     _, texts = run(out)
-    full = pack.COMPONENTS.read_text(encoding="utf-8").rstrip()
+    full = pack.surface_sections(pack.COMPONENTS.read_text(encoding="utf-8"), "mobile").rstrip()
     for t in texts.values():
         assert full in t
 
@@ -198,3 +198,23 @@ def test_missing_optional_inputs(tmp_path):
         (out / f).unlink()
     plan, _ = run(out)
     assert sum(len(a["screens"]) for a in plan["agents"]) == len(screens(out))
+
+
+def test_desktop_wizard_pack_gets_surface_section_and_principles(tmp_path):
+    """표면 desktop-wizard: COMPONENTS의 마법사 절 + 원칙 덮어쓰기·글자 크기가 원칙 전문 뒤에 붙는다."""
+    import json, sys as _s
+    out = make_out(tmp_path, icons=False)
+    _s.path.insert(0, str(pack.SK / "surfaces")); import surface
+    (out / "surface.json").write_text(json.dumps(surface.resolve("desktop-wizard"), ensure_ascii=False), encoding="utf-8")
+    _, texts = run(out)
+    for t in texts.values():
+        assert "## 데스크톱 단계 마법사" in t
+        assert "바뀌는 원칙" in t and "좌우 분할 55:45" in t
+        assert "title 32/40·650" in t
+
+
+def test_mobile_pack_has_no_surface_principles(tmp_path):
+    out = make_out(tmp_path, icons=False)
+    _, texts = run(out)
+    for t in texts.values():
+        assert "바뀌는 원칙" not in t and "## 데스크톱 단계 마법사" not in t
