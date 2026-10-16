@@ -6,7 +6,7 @@ python3 build_canvas.py <out_dir>
 - out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 modules/*.js 모듈(<!-- hd-modules -->)·modules/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
                         헤더 = 제목 · 탭[Screens|Foundation|Components] · 팔레트 점 · [전체 보기][배율%]
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
-                        Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 390×844 크게 보기.
+                        Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 크게 보기(크기는 표면 프로필 frame.modal, 기본 390×844).
 - out/foundation.html : tokens.css 의 색 역할(쉬운 이름)·글자 단계·여백·모서리·그림자 견본. palette.js 로 즉시 전환.
 - out/palette.js      : foundation/palette.js 를 복사(팔레트 교체 + 주석 달기 hd-pick/hd-picked + 연결 보기 hd-links).
 - out/components.html : foundation/specimens.html 중 화면들이 실제로 쓴 클래스의 섹션만. 배지는 screens.json badges 로.
@@ -20,7 +20,7 @@ python3 build_canvas.py <out_dir>
 screens.json:
 {"groups": [...], "story": {...}, "badges": {"뜻": "is-brand", ...},
  "screens": [{"id", "file", "title", "group", "purpose", "policies": [], "branches": [{"to", "label"}]}]}
-선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}])
+선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 """
 import sys, os, json, re, html, pathlib, shutil
@@ -34,7 +34,15 @@ MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
 PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
-SCALE, CARD, MODAL = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}
+SCALE, CARD, MODAL, RADIUS = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28   # surface.json이 없을 때(폰)
+
+
+def frame(out):
+    """out/surface.json의 frame → (scale, card, modal, radius). 없거나 빠진 칸은 폰 값."""
+    f = (load(out / "surface.json", {}) or {}).get("frame") or {}
+    size = lambda v, d: {"w": int(v["w"]), "h": int(v["h"])} if isinstance(v, dict) and v.get("w") and v.get("h") else d
+    return (f.get("scale") or SCALE, size(f.get("card"), CARD), size(f.get("modal"), MODAL),
+            RADIUS if f.get("radius") is None else f["radius"])
 
 esc = lambda x: html.escape(str(x if x is not None else ""))
 
@@ -114,7 +122,8 @@ def build_index(out, m):
         pal = None
     credits = load(out / "credits.json", []) or []
 
-    data = {"title": m.get("title") or "전체 화면 한눈에 보기", "scale": SCALE, "card": CARD, "modal": MODAL,
+    scale, card_sz, modal_sz, radius = frame(out)
+    data = {"title": m.get("title") or "전체 화면 한눈에 보기", "scale": scale, "card": card_sz, "modal": modal_sz, "radius": radius,
             "story": m.get("story") or None, "people": [{"name": p.get("name", ""), "why": p.get("why", ""), "win": p.get("win", ""), "core": bool(p.get("core")),
                                                      "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows,
             "palettes": pal, "credits": credits if isinstance(credits, list) else []}
@@ -335,7 +344,7 @@ def main():
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
     nk = build_components(out, m)
-    print(f"canvas v3: {n} screens, {na} branch arrows, {ng} groups, scale {SCALE} · foundation {nc} colors · components {nk} sections")
+    print(f"canvas v3: {n} screens, {na} branch arrows, {ng} groups, scale {frame(out)[0]} · foundation {nc} colors · components {nk} sections")
 
 
 if __name__ == "__main__":

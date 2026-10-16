@@ -92,12 +92,12 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 .flow{padding-top:90px}
 .glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap}
 .cards{display:flex;gap:84px;align-items:flex-start}
-.card{flex:none;width:375px;position:relative}
-.phone{position:relative;width:375px;height:812px;border-radius:28px;overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
+.card{flex:none;width:var(--card-w,375px);position:relative}
+.phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:var(--card-r,28px);overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
 .card.xp{z-index:6}
 .card.xp>:not(.phone):not(.anno){visibility:hidden}
-.phone iframe{display:block;width:375px;height:812px;border:0;pointer-events:none;background:#fff}
-.cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:28px;cursor:pointer}
+.phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
+.cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:var(--card-r,28px);cursor:pointer}
 .cover:hover,.cover:focus-visible{outline:4px solid #2563eb;outline-offset:0}
 .ftitle{font-size:22px;font-weight:700;margin-top:16px;line-height:1.35}
 .state{display:inline-block;font-size:15px;font-weight:700;color:#8a5a00;background:#fff3cf;border-radius:8px;padding:2px 8px;margin-right:8px;vertical-align:2px}
@@ -120,8 +120,8 @@ svg.ar marker path,svg.ar marker circle{fill:#9AA09A}
 /* ---------- 크게 보기 ---------- */
 #modal{position:fixed;inset:0;z-index:20;background:rgba(20,20,20,.62);display:flex;flex-direction:column;align-items:center;justify-content:center}
 #modal[hidden]{display:none}
-#modal .box{position:relative;border-radius:30px;overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
-#modal iframe{display:block;width:390px;height:844px;border:0;transform-origin:0 0;background:#fff}
+#modal .box{position:relative;border-radius:var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+#modal iframe{display:block;width:var(--modal-w,390px);height:var(--modal-h,844px);border:0;transform-origin:0 0;background:#fff}
 #modal .close{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;min-width:44px;min-height:44px;padding:0 16px;border:0;border-radius:12px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;z-index:2}
 #modal .mpick{flex:none;margin:48px 0 12px;min-width:44px;min-height:44px;padding:0 26px;border:2px solid #fff;border-radius:999px;background:var(--c-brand,#2563eb);color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 #modal .mpick:hover{filter:brightness(1.08)}
@@ -308,6 +308,10 @@ body.modal-open #khint{display:none}
 var D = JSON.parse(document.getElementById('hd-data').textContent || '{}');
 var Z0 = D.scale || 0.72, ZMIN = 0.02, ZMAX = 1.5;
 var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.modal || {}).h || 844;
+(function (r, cr) {                              // 카드·모달 크기는 표면 프로필(out/surface.json → D.card·D.modal·D.radius)
+  r.setProperty('--card-w', CARD.w + 'px'); r.setProperty('--card-h', CARD.h + 'px'); r.setProperty('--card-r', cr + 'px');
+  r.setProperty('--modal-w', MW + 'px'); r.setProperty('--modal-h', MH + 'px'); r.setProperty('--modal-r', (cr + 2) + 'px');
+})(document.documentElement.style, D.radius == null ? 28 : D.radius);
 var LEFT = 300;                                  // 카드 왼쪽 통로(줄을 넘는 화살표가 지나는 곳)
 var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
