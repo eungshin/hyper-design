@@ -253,3 +253,64 @@ body:not(.plain) .page > div:not([class]) > .hero, body:not(.plain) .page > sect
 .plain .page > .hero { margin-left: 0; margin-right: 0; }
 /* 이미 한 행동의 결과 표시(리뷰 완료·출석 완료) — 누를 수 없지만 읽혀야 한다: 비활성 바탕 + 보조 글자색 */
 .btn.is-done { background: var(--c-disabled-bg); color: var(--c-text-2); pointer-events: none; }
+
+/* ── 데스크톱 단계 마법사(표면 desktop-wizard, 창 1080×680 한 장, 스크롤 없음) ─────────────
+   승인 샘플: runs/dayfine-onboarding-sample/index.html (TDR surface 4절)
+   위: 가운데 단계 머리 + 진행 막대 + 오른쪽 닫기 · 가운데: 왼쪽 읽기 면(흰, 할 일) 55 : 오른쪽 창 바탕(--c-shell) 위 카드 45
+   글자는 표면 프로필 type 칸(제목 32/40·650, 질문 18/24·650, 보조 16/24, 단계 머리 15, 힌트 13) */
+body.window { height: 100vh; overflow: hidden; background: var(--c-shell, var(--c-bg)); }
+.wizard { height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.wizard-chrome { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 44px; padding: 0 12px 0 16px; }
+.wizard-steps { grid-column: 2; display: flex; align-items: center; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 15px; line-height: 20px; color: var(--c-text-3); }
+.wizard-steps li { display: inline-flex; align-items: center; gap: 10px; }
+.wizard-steps li + li::before { content: "›"; opacity: .6; }
+.wizard-steps li[aria-current="step"] { color: var(--c-text-1); font-weight: 600; }
+.wizard-close { grid-column: 3; justify-self: end; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-s); color: var(--c-text-2); }
+.wizard-close:hover { background: var(--c-bg); }
+.wizard-close svg { width: 18px; height: 18px; }
+.wizard-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--c-line); }
+.wizard-progress::before { content: ""; display: block; height: 100%; width: var(--p, 0%); background: var(--c-text-1); border-radius: 0 3px 3px 0; }
+.wizard-body { display: grid; grid-template-columns: 55fr 45fr; min-height: 0; }
+.wizard-body.is-single { grid-template-columns: 1fr; }
+.wizard-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; padding: 24px 40px 28px; background: var(--c-surface); border-top: 1px solid var(--c-line); border-right: 1px solid var(--c-line); }
+.wizard-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: var(--c-text-2); }
+.wizard-back svg { width: 16px; height: 16px; }
+.wizard-content { align-self: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.wizard-content .eyebrow { margin: 0 0 8px; font-size: 13px; line-height: 18px; color: var(--c-text-3); }
+.wizard-content .title { margin: 0 0 12px; font-size: 32px; line-height: 40px; font-weight: 650; letter-spacing: -0.02em; }
+.wizard-content .lead { margin: 0 0 24px; font-size: 16px; line-height: 24px; color: var(--c-text-2); }
+.wizard-ask { margin: 24px 0 0; font-size: 18px; line-height: 24px; font-weight: 650; }
+.wizard-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wizard-foot .btns { display: flex; gap: 8px; margin-left: auto; }
+.wizard-foot .btn { height: 40px; padding: 0 20px; font-size: 15px; white-space: nowrap; }
+.wizard-hint { font-size: 13px; line-height: 18px; color: var(--c-text-3); }
+.wizard-hint .kbd { min-width: 0; height: auto; padding: 1px 6px; font-size: 12px; font-weight: 500; box-shadow: none; border: 1px solid var(--c-line); background: var(--c-bg); color: var(--c-text-2); }
+.wizard-art { display: grid; place-items: center; min-height: 0; padding: 32px; border-top: 1px solid var(--c-line); }
+.art-card { max-width: 100%; padding: 28px; border-radius: 16px; background: color-mix(in srgb, var(--c-surface) 88%, transparent); border: 1px solid var(--c-line); box-shadow: 0 10px 30px rgba(15, 60, 90, .10); }
+.art-card.pick { width: 300px; text-align: center; }
+.art-card.pick img { display: block; width: 112px; height: 112px; margin: 0 auto 16px; }
+.art-card.pick strong { display: block; margin-bottom: 6px; font-size: 20px; line-height: 28px; font-weight: 650; }
+.art-card p { margin: 0; font-size: 15px; line-height: 22px; color: var(--c-text-2); }
+.btn.outline { background: var(--c-surface); color: var(--c-text-1); box-shadow: inset 0 0 0 1px var(--c-line); }
+.btn.pill { border-radius: var(--r-pill); }
+/* 고르기 타일(설정 화면) — 아이콘 28 + 이름 + 숫자키. 선택은 먹색 테두리 2px + 옅은 바탕(평평한 선택) */
+.tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile-grid.is-2 { grid-template-columns: repeat(2, 1fr); }
+.tile-grid.is-4 { grid-template-columns: repeat(4, 1fr); }
+.tile { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--c-line); background: var(--c-surface); color: var(--c-text-1); font-size: 15px; line-height: 20px; text-align: left; }
+.tile:hover { background: var(--c-bg); }
+.tile img { flex: none; width: 28px; height: 28px; }
+.tile .n { margin-left: auto; font-size: 12px; color: var(--c-text-3); }
+.tile[aria-checked="true"] { outline: 2px solid var(--c-text-1); outline-offset: -1px; background: color-mix(in srgb, var(--c-text-1) 7%, transparent); }
+.tile.is-input { color: var(--c-text-3); }
+/* 키(체험 화면) */
+.kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; margin: 0 2px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--c-text-1); background: var(--c-surface); box-shadow: 0 2px 0 var(--c-text-1); font-size: 15px; line-height: 22px; font-weight: 650; color: var(--c-text-1); }
+.keys { display: inline-flex; align-items: center; gap: 4px; }
+.bigkeys { display: flex; justify-content: center; gap: 14px; }
+.bigkey { display: grid; place-items: center; min-width: 96px; height: 88px; padding: 0 20px; border-radius: 14px; border: 1.5px solid var(--c-text-1); background: var(--c-surface); box-shadow: 0 4px 0 var(--c-text-1); font-size: 30px; font-weight: 600; }
+.bigkey.is-on { transform: translateY(3px); box-shadow: 0 1px 0 var(--c-text-1); border-color: var(--c-accent); color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface)); }
+.bigkeys + p { margin-top: 18px; text-align: center; }
+/* 예문(체험 화면) — 고를 단어는 <mark> */
+.sample { margin: 0; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--c-line); background: var(--c-bg); font-size: 20px; line-height: 1.7; }
+.sample mark { padding: 0 2px; border-radius: 2px; background: var(--c-highlight, color-mix(in srgb, var(--c-accent) 20%, transparent)); color: inherit; }
+.wizard :is(a, button, input, [tabindex]):focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }

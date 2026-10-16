@@ -1,0 +1,26 @@
+{
+ "name": "Dayfine 새벽",
+ "slug": "dayfine-dawn",
+ "domain": "생산성·학습",
+ "tags": ["차분", "신뢰", "산뜻"],
+ "source": "사용자 지정 레퍼런스 — Dayfine ui_host/popup/src/styles palette.css·theme.css의 .theme-dawn (2026-10-17 옮김)",
+ "synthesized": false,
+ "ink": "#1b1b1b",
+ "white": "#ffffff",
+ "scales": {
+  "gray": {"50": "#fafafa", "100": "#ededed", "200": "#dedede", "500": "#737373", "600": "#5d5d5d", "700": "#404040", "900": "#1b1b1b"},
+  "blue": {"300": "#72c1ea", "600": "#0f7ec2", "700": "#095f94"},
+  "red": {"600": "#d9534f", "700": "#c9302c"}
+ },
+ "brand": "gray",
+ "brand_step": "900",
+ "mono": true,
+ "gray": "gray",
+ "danger": "red",
+ "accent": {"scale": "blue", "step": "600", "seen": "누르는 순간의 키, 지금 하는 일의 강조(Dayfine popup-accent)"},
+ "bg_step": "50",
+ "line_step": "200",
+ "brand_confirmed": true,
+ "shell": "linear-gradient(120deg, #fafafa 15%, color-mix(in srgb, #72c1ea 24%, #ffffff) 55%, color-mix(in srgb, #fbbf24 19%, #ffffff) 100%)",
+ "highlight": "color-mix(in srgb, #f5c518 55%, transparent)"
+}

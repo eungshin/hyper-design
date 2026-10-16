@@ -91,3 +91,28 @@
 - 썸네일(목록 행 왼쪽의 작은 사진): `<span class="thumb"><img src="…" alt=""></span>` · 크게 `thumb is-l`(72px).
 - 사진 모음(후기 사진·갤러리 3열): `<div class="photo-grid"><img src="…" alt="">…</div>`
 - **사진 자리(`.photo`·`.thumb`·`.photo-grid`·`.compare`)에는 반드시 `<img>`를 넣는다.** 회색 칸에 "사진 1"·"이미지" 같은 글자만 넣지 않는다. `alt`는 무엇의 사진인지 적는다(꾸밈용이면 `alt=""`).
+
+## 데스크톱 단계 마법사 (표면 `desktop-wizard`일 때만 — 창 1080×680 한 장, 스크롤 없음)
+모범 답안: `foundation/examples/wizard-setup.html`(설정·고르기) · `wizard-trial.html`(체험·키). viewport는 `width=device-width`, body는 `class="window"`. 탭바·하단 고정 CTA(`.cta`)·바텀시트는 쓰지 않는다.
+```html
+<div class="wizard">
+  <header class="wizard-chrome">
+    <ol class="wizard-steps" aria-label="단계"><li>로그인</li><li aria-current="step">설정</li><li>체험</li><li>시작</li></ol>
+    <a class="wizard-close" href="…" aria-label="닫기. 다음 로그인 때 이어서 할 수 있어요">(✕ 선 아이콘)</a>
+    <div class="wizard-progress" style="--p:30%"></div>
+  </header>
+  <main class="wizard-body">                         <!-- 오른쪽 그림이 없으면 wizard-body is-single -->
+    <section class="wizard-main">                    <!-- 왼쪽 55: 흰 읽기 면 -->
+      <a class="wizard-back" href="…">(← 선 아이콘) 이전</a>
+      <div class="wizard-content"><p class="eyebrow">설정 1 / 3</p><h1 class="title">할 일 한 줄</h1><p class="lead">보조 줄</p>(하는 곳)<p class="wizard-ask">확인 질문</p></div>
+      <footer class="wizard-foot"><span class="wizard-hint">(키 힌트)</span><div class="btns"><a class="btn outline pill">…</a><a class="btn primary pill">…</a></div></footer>
+    </section>
+    <aside class="wizard-art" aria-label="…"><div class="art-card">…</div></aside>   <!-- 오른쪽 45: 창 바탕(--c-shell) 위 카드 -->
+  </main>
+</div>
+```
+- 진행 막대의 `style="--p:N%"`는 CSS 변수 지정이라 인라인 style 예외에 든다(`.range`와 같다).
+- 고르기: `<div class="tile-grid" role="radiogroup">` + `<button class="tile" role="radio" aria-checked="true|false"><img src="../assets/fluent/…svg" alt="">이름<span class="n">1</span></button>`. 여러 개 고르기는 `role="group"` + `role="checkbox"`. 열 수 `is-2`·`is-4`(기본 3). 직접 입력 칸은 `tile is-input`.
+- 오른쪽 카드: 설정 화면 `art-card pick`(큰 아이콘 `img` + `strong` 이름 + `p` 한 줄), 체험 화면 `art-card` 안 `bigkeys` > `bigkey`(누르는 키 `is-on`) + `p` 한 줄.
+- 키: 글 안의 키는 `<span class="kbd">Ctrl</span>`. 예문은 `<p class="sample">… <mark>고를 단어</mark> …</p>`(강조색은 `--c-highlight`).
+- 주 버튼은 화면당 하나 `btn primary pill`. 통과 조건을 못 채웠으면 `aria-disabled="true"`. 보조는 `btn outline pill`.

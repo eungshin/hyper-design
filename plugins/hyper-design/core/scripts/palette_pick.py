@@ -1,10 +1,12 @@
 """팔레트 라이브러리에서 기본값 1 + 대안 2를 고르고 토큰 파일을 만든다 — 사용자에게 묻지 않는다.
 
-python3 palette_pick.py <out_dir> --domain 여행 --tags "따뜻함,편안함,신뢰" --temp warm
+python3 palette_pick.py <out_dir> --domain 여행 --tags "따뜻함,편안함,신뢰" --temp warm [--theme foundation/themes/<slug>.json]
 → out_dir/tokens.css(기본값) + tokens-<slug>.css ×3 + palettes.json(선택 이유)
 
 점수: 도메인 일치 3 · 성격 태그 겹침 1씩 · 감정 온도(--temp warm|cool) 일치 +1.5 / 반대 -1.5 · 흰 글자 버튼이 성립(대비 3 이상)하지 않으면 -2 · 합성 팔레트 -0.5 · 브랜드가 오류 빨강과 겹치면 -1.5(확정과 주의가 같은 붉은색이 된다)
 대안: 기본값과 브랜드 색상각이 40° 이상 다른 것(모노 1개까지) — 원클릭 교체 때 확실히 달라 보이게
+--theme: 사용자가 지정한 레퍼런스 테마(팔레트와 같은 형식 + 선택 칸 shell·highlight)가 점수와 무관하게 기본값이 된다. 대안 2개는 라이브러리에서 그대로.
+         shell → --c-shell(창 바탕, 그라데이션 가능) · highlight → --c-highlight(예문 강조)
 """
 import argparse, json, pathlib, subprocess, sys, colorsys
 HERE = pathlib.Path(__file__).resolve().parent.parent / "foundation"
@@ -15,7 +17,9 @@ def hue(c): return colorsys.rgb_to_hls(*c)[0] * 360
 def gap(a, b): d = abs(hue(a) - hue(b)) % 360; return min(d, 360 - d)
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8")   # Windows cp949 콘솔에서 출처 글자(—)로 죽지 않게
     ap = argparse.ArgumentParser(); ap.add_argument("out"); ap.add_argument("--domain", default=""); ap.add_argument("--tags", default=""); ap.add_argument("--temp", default="", choices=["", "warm", "cool"])
+    ap.add_argument("--theme", default="", help="사용자 지정 레퍼런스 테마 JSON — 기본값으로 쓴다")
     a = ap.parse_args(); out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     tags = {t.strip() for t in a.tags.split(",") if t.strip()}
     pals = {f.stem: json.loads(f.read_text(encoding="utf-8")) for f in sorted((HERE / "palettes").glob("*.json"))}
@@ -73,9 +77,21 @@ def main():
             if len(picks) < 3:
                 picks += [x for _, x, _ in scored if x not in picks and not x.startswith("seed-")][: 3 - len(picks)]
             default = slug
+    src = {}
+    if a.theme:                                      # 사용자 지정 레퍼런스가 이긴다(TDR surface D7)
+        tf = pathlib.Path(a.theme)
+        tf = tf if tf.is_absolute() or tf.exists() else HERE / "themes" / tf.name
+        T = json.loads(tf.read_text(encoding="utf-8")); slug = T["slug"]
+        pals[slug] = T; src[slug] = tf
+        scored.insert(0, (99, slug, ["사용자 지정 레퍼런스 테마"]))
+        picks = [slug] + [p for p in picks if p != slug][:2]; default = slug
     for slug in picks:
         if slug.startswith("seed-"): continue
-        subprocess.run([sys.executable, str(HERE / "derive.py"), "--palette", str(HERE / "palettes" / f"{slug}.json"), "-o", str(out / f"tokens-{slug}.css")], check=True, capture_output=True)
+        subprocess.run([sys.executable, str(HERE / "derive.py"), "--palette", str(src.get(slug, HERE / "palettes" / f"{slug}.json")), "-o", str(out / f"tokens-{slug}.css")], check=True, capture_output=True)
+        extra = {k: pals[slug][k] for k in ("shell", "highlight") if pals[slug].get(k)}
+        if extra:
+            with open(out / f"tokens-{slug}.css", "a", encoding="utf-8") as fh:
+                fh.write("\n/* 레퍼런스 테마 칸 */\n:root {\n" + "".join(f"  --c-{k}: {v};\n" for k, v in extra.items()) + "}\n")
     (out / "tokens.css").write_text((out / f"tokens-{default}.css").read_text(encoding="utf-8"), encoding="utf-8")
     info = {"default": default, "options": [{"slug": s, "name": pals[s]["name"], "brand": pals[s]["scales"][pals[s]["brand"]][pals[s]["brand_step"]],
             "source": pals[s]["source"], "why": next(w for _, x, w in scored if x == s),

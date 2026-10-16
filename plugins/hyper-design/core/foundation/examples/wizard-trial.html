@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>체험 · 복사로 찾기</title>
+<link id="tokens" rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="../components.css"><script src="../palette.js"></script>
+</head>
+<body class="window">
+<div class="wizard">
+  <header class="wizard-chrome">
+    <ol class="wizard-steps" aria-label="단계"><li>로그인</li><li>설정</li><li aria-current="step">체험</li><li>시작</li></ol>
+    <a class="wizard-close" href="wizard-trial.html" aria-label="닫기. 다음 로그인 때 이어서 할 수 있어요"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    <div class="wizard-progress" style="--p:62%"></div>
+  </header>
+  <main class="wizard-body">
+    <section class="wizard-main">
+      <a class="wizard-back" href="wizard-setup.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 이전</a>
+      <div class="wizard-content">
+        <p class="eyebrow">체험 1 / 3</p>
+        <h1 class="title">단어를 고르고 복사를 두 번 눌러 보세요</h1>
+        <p class="lead"><span class="kbd">Ctrl</span>을 누른 채 <span class="kbd">C</span>를 두 번 누르면 돼요. 어느 프로그램에서든 같아요.</p>
+        <p class="sample">The committee reached a <mark>tentative</mark> agreement after a long meeting.</p>
+        <p class="wizard-ask">작은 창에 뜻이 떴나요?</p>
+      </div>
+      <footer class="wizard-foot">
+        <span class="wizard-hint"><span class="kbd">Esc</span> 이전</span>
+        <div class="btns"><a class="btn outline pill" href="wizard-trial.html">아니요, 키 바꾸기</a><a class="btn primary pill" href="wizard-setup.html">네, 계속</a></div>
+      </footer>
+    </section>
+    <aside class="wizard-art" aria-label="키 그림">
+      <div class="art-card"><div class="bigkeys"><span class="bigkey is-on">Ctrl</span><span class="bigkey">C</span><span class="bigkey">C</span></div><p>Ctrl을 누른 채 <strong>C를 빠르게 두 번</strong></p></div>
+    </aside>
+  </main>
+</div>
+</body></html>
