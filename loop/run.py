@@ -31,6 +31,8 @@ def shoot(html, png):
         pg.screenshot(path=str(png), full_page=True); b.close()
 
 SIM = (ROOT / "loop/sim_user.md").read_text(encoding="utf-8")
+_sm = re.search(r"^## 표면[^\n]*\n(.*?)(?=^## |\Z)", prd.read_text(encoding="utf-8"), re.S | re.M)
+SURFACE = _sm.group(1).strip() if _sm else "(표면 절 없음)"   # 표면 질문(go 0단계)에 가상 사용자가 PRD대로 답한다
 log = [f"# prompt-log\n\n- 하네스: solo/greatSumini `.claude/skills/oss-design-harness`\n- 모델: Claude Code headless / {MODEL}\n- 답변자: 가상 사용자 에이전트(비개발자 페르소나, loop/sim_user.md)\n"]
 trans = open(run / "transcript.jsonl", "w")
 harness_sec, sid, msg = 0.0, None, "/hyper-design:go\n\n" + prd.read_text(encoding="utf-8")
@@ -53,7 +55,7 @@ while turns < MAX_TURNS:
     else:                                            # 글로만 묻는 확인(제품 판단) — 마커 앞 본문이 질문
         q = text[:m.start()].strip()[-1200:]
         png = "(없음)"
-    ans = claude(SIM.replace("{{QUESTION}}", q).replace("{{IMAGE}}", str(png)).replace("{{ASSISTANT}}", text[-1500:]),
+    ans = claude(SIM.replace("{{SURFACE}}", SURFACE).replace("{{QUESTION}}", q).replace("{{IMAGE}}", str(png)).replace("{{ASSISTANT}}", text[-1500:]),
                  run, model="claude-sonnet-5-5").get("result", "").strip().splitlines()[-1].strip()
     log[-1] += ""
     log.append("> (AI 질문) " + q.replace("\n", "\n> ") + "\n")
