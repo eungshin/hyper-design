@@ -11,7 +11,8 @@
    편집(트리거·도착 바꾸기): {type:'hd-hit-at', x, y} 를 받으면 그 자리의 요소(링크 → 누를 수 있는 요소 → 그 요소 순)로
    {type:'hd-hit', screen, path, text, full, rect, to} 를 보낸다(to = 지금 가는 화면 id 또는 null, full = 고칠 글 전체, 요소가 없으면 path:null).
    leaf:true 면 그 자리 요소 그대로(글자 고치기).
-   반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다). */
+   반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다).
+   불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다. */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -189,6 +190,7 @@
     });
   }
 
+  send({type: 'hd-here', screen: screenId()});
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);

@@ -792,6 +792,11 @@ function closeModal() {                            // hidden 은 바로(상태),
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
 mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) sendPending(mframe, mscreen); });
+addEventListener('message', function (e) {         // 크게 보기 안에서 다른 화면으로 넘어감(palette.js hd-here) → 그 화면의 제목·번호·미리보기만
+  var d = e.data; if (!d || d.type !== 'hd-here' || modal.hidden || e.source !== mframe.contentWindow || !d.screen || d.screen === mscreen) return;
+  mscreen = String(d.screen); $('#mtitle').textContent = titleOf(mscreen);
+  hidePop(); drawPins(); sendPending(mframe, mscreen);
+});
 $('#mclose').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal || e.target.id === 'mtitle') closeModal(); });
 addEventListener('keydown', function (e) {

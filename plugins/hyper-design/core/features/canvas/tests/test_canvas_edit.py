@@ -912,3 +912,27 @@ def test_memo_tool_opens_card_memo(dpage):
         localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
     dpage.keyboard.press("h")
     reload(dpage)
+
+
+# ---------------------------------------------------------------- 재작업 S0~S7 (docs/eungshin/canvas-edit-rework-2026-10-20.md)
+def test_modal_pins_follow_navigated_screen(dpage):
+    """S0 버그: 크게 보기 안에서 다른 화면으로 넘어가면 그 화면의 번호만 보인다."""
+    from test_canvas_v2 import open_screen
+    n0 = len(notes_of(dpage))
+    dpage.evaluate("""() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')) ||
+        'hd-notes:' + (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(location.pathname);
+        const a = JSON.parse(localStorage.getItem(k) || '[]');
+        a.push({id: 'pin1', screen: 'job', targets: [{path: 'h1.title:nth-of-type(1)', text: 't', rect: {x: 20, y: 20, w: 100, h: 30}}],
+                path: 'h1.title:nth-of-type(1)', text: 't', rect: {x: 20, y: 20, w: 100, h: 30}, note: '핀', intent: 'question', sent: false});
+        localStorage.setItem(k, JSON.stringify(a)); }""")
+    reload(dpage)
+    fr = open_screen(dpage, "job")
+    assert dpage.locator("#mpins .pin").count() == 1
+    fr.locator('a[href="language.html"]').first.click()
+    dpage.wait_for_function("document.getElementById('mtitle').textContent.indexOf('언어') >= 0", timeout=5000)
+    assert dpage.locator("#mpins .pin").count() == 0, "넘어간 화면에는 앞 화면 번호가 없다"
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_timeout(200)
+    dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
+        localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
+    reload(dpage)
