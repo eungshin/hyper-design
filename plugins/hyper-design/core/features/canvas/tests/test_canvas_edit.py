@@ -780,3 +780,45 @@ def test_element_menu_edit_text(dpage):
     dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
     dpage.keyboard.press("Escape")
     assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc 는 고치기를 취소"
+
+
+# ---------------------------------------------------------------- 재작업 A: 연결 편집은 캔버스에 바로 보인다(원 세션 검증 10-20)
+def lk_to(pg, to):
+    return pg.evaluate("(to) => [...document.querySelectorAll('#lks path.lk')].filter(p => p.dataset.to === to).map(p => p.getAttribute('class'))", to)
+
+
+def test_cut_hides_line_at_once_with_live_mark_and_toast_undo(dpage):
+    focus_dayfine(dpage, "job")
+    lk = paths(dpage)[0]
+    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
+    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
+        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
+    dpage.mouse.move(sx - 14, sy - 14)
+    dpage.mouse.down(button="right")
+    dpage.mouse.move(sx + 14, sy + 14, steps=6)
+    assert any("cutting" in c for c in lk_to(dpage, lk["to"])), "끄는 동안 가로지른 선은 바로 빨갛게"
+    dpage.mouse.up(button="right")
+    dpage.wait_for_timeout(250)
+    assert lk_to(dpage, lk["to"]) == [], "놓으면 그 선은 바로 사라진다"
+    assert "끊었어요" in dpage.text_content("#toast")
+    dpage.click("#toast button")
+    dpage.wait_for_timeout(250)
+    assert lk_to(dpage, lk["to"]), "토스트의 되돌리기 = 선이 돌아온다"
+    dpage.keyboard.press("Escape")
+
+
+def test_socket_drag_draws_pending_line_at_once(dpage):
+    focus_dayfine(dpage, "job")
+    dpage.keyboard.press("l")
+    s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none');
+        const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2, to: s.dataset.to}; })()""")
+    q = visible_cover(dpage, skip=["job", s["to"]])
+    drag(dpage, s, q["x"] - s["x"], q["y"] - s["y"])
+    dpage.wait_for_timeout(250)
+    cls = lk_to(dpage, q["id"])
+    assert cls and all("pd" in c for c in cls), ("새 도착으로 가는 선이 바로 반영 대기 모양(점선)으로", cls)
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(250)
+    assert lk_to(dpage, q["id"]) == [], "되돌리면 사라진다"
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")

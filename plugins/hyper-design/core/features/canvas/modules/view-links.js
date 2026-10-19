@@ -4,7 +4,9 @@
    HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown, renameTag(k), group(k), item(i)}
    소켓(.sock): 연결 출발 요소마다 출발 카드 위 점 — 보이기는 CSS(트리거 도구 · 그 연결 강조 .lit), 끌기는 캔버스가 받는다
    ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale(), names:{get(from,to), set(from,to,text)},
-          record?({label, undo(), redo()}) — 선 색·굵기 바꿈을 되돌리기에, isHidden?(id) — 숨긴 화면은 연결 대상·장애물에서 뺀다}
+          record?({label, undo(), redo()}) — 선 색·굵기 바꿈을 되돌리기에, isHidden?(id) — 숨긴 화면은 연결 대상·장애물에서 뺀다,
+          pending?(from) → {byPath:{path:{op:'link'|'cut', to}}, adds:[{to,path,text,rect}], cutIn:{id:1}} — 아직 파일에 안 들어간 연결 편집을 바로 겹쳐 그린다}
+   refresh() — 편집이 바뀌면 마지막 hd-links 답에 편집을 다시 겹쳐 그린다(새 선·바뀐 도착 = 점선 .pd, 끊은 선 = 안 그림)
    names: 태그 이름(이 이동이 무슨 맥락인지) — 버튼 글과 따로. 없으면 태그는 버튼 글. */
 (function () {
 'use strict';
@@ -16,7 +18,7 @@ function mount(ctx) {
   var S = HD.lineStyle, prefs = ctx.prefs || HD.prefs.defaults();
   var styleOf = function () { return {preset: prefs.preset, rand: prefs.rand, custom: prefs.custom}; };
   var graph = ctx.graph, state = F.initial(styleOf());
-  var lkDeadline = 0, lkWaitT = 0, curView = null, xpId = null, styleRaf = 0;
+  var lkDeadline = 0, lkWaitT = 0, curView = null, xpId = null, styleRaf = 0, lastD = null;
   var TITLES = {};
   (graph.screens || []).forEach(function (s) { TITLES[s.id] = s.title; });
 
@@ -35,14 +37,29 @@ function mount(ctx) {
   }
   // hd-links 답 → 그래프의 link 간선 → 색 모델
   function buildModel(d) {
-    var focusId = state.focusId, ids = {};
+    var focusId = state.focusId, ids = {}, pd = ctx.pending ? ctx.pending(focusId) : null, seen = {}, pend = {};
+    lastD = d;
     $$('.card', rowsEl).filter(shown).forEach(function (c) { ids[c.dataset.id] = 1; });
-    var items = (d.links || []).filter(function (l) { return l && ids[l.to] && l.to !== focusId && l.rect; });
+    var raw = (d.links || []).filter(function (l) { return l && l.rect; }).map(function (l) {
+      return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect};
+    });
+    if (pd) {                                         // 아직 파일에 안 들어간 편집: 끊은 것은 빼고, 도착 바꾼 것·새로 이은 것은 점선으로
+      raw = raw.filter(function (l) {
+        var o = pd.byPath[l.path]; seen[l.path] = 1;
+        if ((o && o.op === 'cut') || pd.cutIn[l.to]) return false;
+        if (o && o.op === 'link') { l.to = String(o.to); pend[l.path + '>' + l.to] = 1; }
+        return true;
+      });
+      pd.adds.forEach(function (a) { if (!seen[a.path] && a.rect) { raw.push({to: String(a.to), path: String(a.path), text: String(a.text || ''), rect: a.rect}); pend[a.path + '>' + a.to] = 1; } });
+    }
+    var items = raw.filter(function (l) { return ids[l.to] && l.to !== focusId; });
     if (!items.length) return null;
-    graph = G.addLinks(graph, focusId, items.map(function (l) { return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect}; }));
+    graph = G.addLinks(graph, focusId, items);
     var m = F.assignColors(G.edgesFrom(graph, focusId, 'link').map(function (e) { return {to: e.to, path: e.via.path, text: e.via.text, rect: e.via.rect}; }), d.accent, F.LINK_COLORS);
     m.from = focusId; m.accent = d.accent || ''; m.titles = TITLES; m.docHeight = +d.docHeight || 0;
     m.seq = (graph.screens || []).map(function (s) { return s.id; });   // 흐름 순서 — 앞 화면으로 가는 연결은 가늘고 흐리게
+    m.pend = {};
+    m.items.forEach(function (it) { if (pend[it.path + '>' + it.to]) m.pend[it.ci] = 1; });
     return m;
   }
   function applyFocus() {
@@ -102,7 +119,7 @@ function mount(ctx) {
     var layer = $('#lkl'), svg = $('#lks'), gs = F.groupsOf(lk);
     layer.innerHTML = gs.map(function (g) {
       var nm = ctx.names ? ctx.names.get(lk.from, g.to) : '';
-      return '<div class="ltag' + (nm ? ' named' : '') + '"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(nm || g.tag) + '</div>'; }).join('');
+      return '<div class="ltag' + (nm ? ' named' : '') + (lk.pend && lk.pend[g.k] ? ' pd' : '') + '"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(nm || g.tag) + '</div>'; }).join('');
     var tagEls = $$('.ltag', layer), ph = $('.phone', src), sg = geomOf(src), targets = {}, sizes = {};
     lk.order.forEach(function (t) {
       var c = cardEl(t); if (!c) return;
@@ -124,7 +141,7 @@ function mount(ctx) {
       }
       var ci = cols.indexOf(g.color); if (ci < 0) { ci = cols.length; cols.push(g.color); }
       g.paths.forEach(function (d, i) {
-        paths += '<path class="lk' + (g.back ? ' bk' : '') + '" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
+        paths += '<path class="lk' + (g.back ? ' bk' : '') + (lk.pend && lk.pend[g.k] ? ' pd' : '') + '" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
           '" stroke="' + g.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + d + '"><title>' + esc(g.text) + ' → ' + esc(TITLES[g.to] || g.to) + '</title></path>';
       });
     });
@@ -373,6 +390,12 @@ function mount(ctx) {
     expand(id, Math.round(CARD.h * 1.4), function () { setTimeout(function () { if (xpId === id && state.focusId !== id) collapse(id); }, 500); });
   }
 
+  function refresh() {                               // 편집이 바뀜 → 마지막 답에 다시 겹쳐 그린다(움직임 없이)
+    if (!state.focusId || !lastD || lastD.screen !== state.focusId) return;
+    var m = buildModel(lastD);
+    state = F.reduce(state, {type: 'links', links: m});
+    renderLinks(true);
+  }
   // 편집(트리거·자르기)이 읽는 연결: 그룹 k = 한 도착 · 항목 i = 출발 요소 하나
   function item(i) { var lk = state.links, it = lk && lk.items[i]; return it ? {from: lk.from, to: it.to, path: it.path, text: it.text, rect: it.rect} : null; }
   function group(k) {
@@ -382,7 +405,7 @@ function mount(ctx) {
   }
 
   return {dispatch: dispatch, render: renderLinks, focusId: function () { return state.focusId; }, state: function () { return state; },
-          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown, renameTag: renameTag, group: group, item: item};
+          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown, renameTag: renameTag, group: group, item: item, refresh: refresh};
 }
 
 HD.viewLinks = {mount: mount};
