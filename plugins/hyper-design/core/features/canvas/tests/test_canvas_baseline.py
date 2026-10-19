@@ -150,3 +150,30 @@ def test_typing_guard_blocks_shortcuts(bpage):
     assert not modal_open(bpage)
     assert bpage.evaluate("document.querySelector('#tmenu:not([hidden])') === null")
     bpage.evaluate("document.getElementById('hd-test-input').remove()")
+
+
+def test_notes_roundtrip_same_key(bpage):
+    """메모는 hd-notes:<hash(pathname)> 한 키에 저장되고, 새로고침 뒤 같은 키·같은 내용으로 다시 그려진다."""
+    import re
+    from test_canvas_v2 import open_screen
+    sid = bpage.evaluate("document.querySelector('#rows .card').dataset.id")
+    fr = open_screen(bpage, sid)
+    bpage.click("#mpick")
+    bpage.wait_for_timeout(150)
+    fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first.click()
+    bpage.wait_for_selector("#pop:not([hidden])")
+    bpage.fill("#pnote", "기준선 메모")
+    bpage.click("#padd")
+    bpage.keyboard.press("Escape")
+    bpage.keyboard.press("Escape")
+    keys = bpage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes'))")
+    assert len(keys) == 1 and re.match(r"^hd-notes:\S+$", keys[0]), keys
+    before = bpage.evaluate("(k) => localStorage.getItem(k)", keys[0])
+    assert "기준선 메모" in before
+    reload(bpage)
+    assert bpage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes'))") == keys
+    assert bpage.evaluate("(k) => localStorage.getItem(k)", keys[0]) == before
+    assert "기준선 메모" in bpage.text_content("#nlist")
+    assert bpage.locator(f'.card[data-id="{sid}"] .nbadge').text_content() == "1"
+    bpage.evaluate("(k) => localStorage.removeItem(k)", keys[0])
+    reload(bpage)
