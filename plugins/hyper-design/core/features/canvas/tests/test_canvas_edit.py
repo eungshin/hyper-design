@@ -304,7 +304,7 @@ def test_straight_neighbour_back_faint_and_under_cards(dpage):
     nxt = ps["language"]
     lang_x = dpage.evaluate("""document.querySelector('.card[data-id="language"]').offsetLeft""")
     pts = nxt["pts"]
-    assert len(pts) == 2 and abs(pts[0][1] - pts[1][1]) < 0.01 and abs(pts[1][0] - lang_x) < 1, ("바로 옆 화면은 꺾임 없이 옆면으로", pts)
+    assert len(pts) == 2 and abs(pts[0][1] - pts[1][1]) < 0.01 and abs(pts[1][0] - (lang_x - 10)) < 1, ("바로 옆 화면은 꺾임 없이 옆면 10px 앞까지", pts)
     back = [p for p in ps.values() if p["bk"]]
     assert back and all(p["to"] in ("login", "login--done") for p in back), list(ps)
     assert all(p["op"] < 0.6 for p in back) and nxt["op"] == 1 and not nxt["bk"], "앞 화면으로 가는 연결은 흐리게"
@@ -319,27 +319,34 @@ def test_straight_neighbour_back_faint_and_under_cards(dpage):
     dpage.screenshot(path=str(ESHOTS / "3-after-job.png"))
 
 
-def test_tags_never_on_cards_and_float_on_hover(dpage):
+def test_tags_never_on_cards_gap_tag_ellipsis_then_full(dpage):
+    """곧은 선의 태그: 카드 사이 틈 칸 안, 선 바로 위 · 틈보다 길면 말줄임 · 마우스 올리면 전체 글자(맨 위) · 범례엔 늘."""
     focus_dayfine(dpage, "job")
     boxes = phone_boxes(dpage)
     tags = dpage.evaluate(TAGS_JS)
-    assert dpage.evaluate("document.querySelectorAll('#lgRows .lgrow[data-k]').length") == len(tags), "범례엔 연결마다 한 줄(태그가 떠 있어도)"
+    assert dpage.evaluate("document.querySelectorAll('#lgRows .lgrow[data-k]').length") == len(tags), "범례엔 연결마다 한 줄"
 
     def on_card(b):
-        return [i for i, l, t, r, bt in boxes if b[0] < r and l < b[2] and b[1] < bt and t < b[3]]
+        return [i for i, l, t, r, bt in boxes if b[0] < r - 0.5 and l + 0.5 < b[2] and b[1] < bt and t < b[3]]
     for t in tags:
         if t["vis"] == "visible":
             assert not on_card(t["box"]), ("보이는 태그는 카드 위에 놓이지 않는다", t, on_card(t["box"]))
-    fl = [t for t in tags if t["float"]]
-    assert fl and all(t["vis"] == "hidden" for t in fl), "곧은 선 위 자리 없는 태그는 평소 숨김"
-    k = fl[0]["k"]
+    k = [p for p in paths(dpage) if p["to"] == "language"][0]["k"]
+    t = [x for x in dpage.evaluate(TAGS_JS) if x["k"] == k][0]
+    job = [b for b in boxes if b[0] == "job"][0]
+    lang = [b for b in boxes if b[0] == "language"][0]
+    line_y = dpage.evaluate("""() => { const p = document.querySelector('#lks path.lk[data-to="language"]'); return p.getBoundingClientRect().top; }""")
+    assert t["vis"] == "visible" and not t["float"], t
+    assert job[3] <= t["box"][0] and t["box"][2] <= lang[1], ("틈 칸 안", t["box"], job, lang)
+    assert t["box"][3] <= line_y + 1 and line_y - t["box"][3] < 12, ("선 바로 위", t["box"], line_y)
+    clip = dpage.evaluate(f"""(() => {{ const n = document.querySelector('#lkl .ltag[data-k="{k}"]'); return [n.scrollWidth > n.clientWidth + 1, n.textContent]; }})()""")
+    assert clip[0], ("'다음으로'는 틈보다 길어 말줄임", clip)
     dpage.locator(f'#lgRows .lgrow[data-k="{k}"]').hover()
     dpage.wait_for_timeout(200)
-    t = [x for x in dpage.evaluate(TAGS_JS) if x["k"] == k][0]
-    assert t["vis"] == "visible" and not on_card(t["box"]), ("마우스 올리면 보이고, 그때도 카드 밖", t)
+    full = dpage.evaluate(f"""(() => {{ const n = document.querySelector('#lkl .ltag[data-k="{k}"]'); return [n.scrollWidth <= n.clientWidth + 1, getComputedStyle(n).zIndex, getComputedStyle(n).visibility]; }})()""")
+    assert full[0] and full[2] == "visible", ("마우스 올리면 전체 글자", full)
     dpage.screenshot(path=str(ESHOTS / "3-after-job-hover-tag.png"))
     dpage.mouse.move(5, 300)
-
 
 def bring_into_view(pg, sel):
     """휠로 판을 옮겨 그 요소를 판 가운데로(Ctrl 없이 = 이동)."""

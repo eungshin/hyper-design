@@ -143,7 +143,12 @@ out.side = [0.25, 0.5, 0.8].map(f => [HD.route.sideOf(f * 375, 375, 'R'), HD.rou
   m.geom = {src: {x: 1000, y: 1000, w: 375, h: 812, sc: 1}, rowTop: 1000, cap, left: 300, srcRow: 1,
             targets: {prev: T(541, 1, 1000), next: T(1459, 1, 1000)}, cards: [card(541), card(1000), card(1459)], tags: {0: {w: 60, h: 27}, 1: {w: 160, h: 27}}};
   const v = F.deriveView(m, F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m}));
-  out.viewStraight = v.groups.map(g => ({to: g.to, back: !!g.back, straight: g.pts[0].length === 2, tag: g.tag}));
+  out.viewStraight = v.groups.map(g => ({to: g.to, back: !!g.back, straight: g.pts[0].length === 2, tag: g.tag, lineY: g.pts[0][0][1]}));
+  // 틈이 TAG_MIN 보다 좁은 이웃(카드 사이 30px) → 줄 위 빈자리로 뜬다
+  const m2 = F.assignColors([links[1]], '', F.LINK_COLORS); m2.from = 'src'; m2.seq = ['src', 'next'];
+  m2.geom = {src: {x: 1000, y: 1000, w: 375, h: 812, sc: 1}, rowTop: 1000, cap, left: 300, srcRow: 1,
+             targets: {next: T(1405, 1, 1000)}, cards: [card(1000), card(1405)], tags: {0: {w: 160, h: 27}}};
+  out.narrowGap = F.deriveView(m2, F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m2})).groups[0].tag;
 }
 
 // 4. prefs (v2: 색 프리셋 · 랜덤 · 쌍 색 · 굵기 · 움직임, v1 sat 는 버림)
@@ -406,15 +411,15 @@ def test_plan_straight_neighbours(res):
     """3단계 직선 우선: 카드 목록이 있으면 같은 줄 · 사이에 카드 없는 이웃은 곧은 가로선 한 줄(옆면으로), 나머지는 지금 차선 길."""
     P = {p["k"]: p for p in res["planStraight"]}
     near, back = P[2], P[0]
-    for g, edge in ((near, 1459), (back, 541 + 375)):
+    for g, edge in ((near, 1459 - 10), (back, 541 + 375 + 10)):
         assert g["straight"] and g["verts"] == [], g
         for pts in g["pts"]:
-            assert len(pts) == 2 and pts[0][1] == pts[1][1] and pts[1][0] == edge, pts     # 꺾임 0 · 도착 카드 옆면
+            assert len(pts) == 2 and pts[0][1] == pts[1][1] and pts[1][0] == edge, pts     # 꺾임 0 · 옆면 10px 앞(위로 들어갈 때와 같은 틈 — 색 고리가 화살촉을 덮지 않게)
     assert [p[0][1] for p in near["pts"]] == [1524, 1584], near["pts"]                   # 요소 높이 그대로(멤버마다)
     assert back["pts"][0][0][0] == 1008 and back["pts"][0][1][0] < 1000                   # 왼쪽 요소는 왼쪽으로
     for k in (1, 3, 4):                                                                    # 사이에 카드(far · bell) · 다른 줄(up) = 차선 길
         assert not P[k]["straight"] and P[k]["verts"], P[k]
-    assert near["segs"][0]["a"] == 1375 and near["segs"][0]["b"] == 1459                  # 태그 후보 = 카드 사이 틈만(카드 안 구간 제외)
+    assert near["segs"][0]["a"] == 1375 and near["segs"][0]["b"] == 1459 - 10             # 태그 후보 = 카드 사이 틈 중 선이 지나는 곳
     assert near["floatAt"] and near["floatAt"]["y"] < 1000                                 # 자리 없으면 줄 위 빈자리
     for pts in P[1]["pts"] + P[3]["pts"]:                                                  # 차선 길은 곧은 선과 20px 넘게 겹치지 않는다
         for s1 in segs_of(pts):
@@ -422,8 +427,16 @@ def test_plan_straight_neighbours(res):
                 assert collinear_overlap(s1, s2) <= 20, (s1, s2)
     v = {g["to"]: g for g in res["viewStraight"]}
     assert v["prev"]["back"] and not v["next"]["back"], v                                  # 흐름 순서상 앞 화면 = 되돌아가는 연결
-    assert v["next"]["straight"] and v["next"]["tag"]["float"] and v["next"]["tag"]["y"] < 1000, v["next"]   # 84px 틈에 160px 태그 → 줄 위에 떠서
-    assert not v["prev"]["tag"].get("float"), v["prev"]                                    # 들어가면 선 위
+    # 곧은 선의 태그 = 카드 사이 틈 칸 안, 선 바로 위(틈 폭에 맞게 줄임 — 말줄임은 화면이) · 멀리 띄우기는 틈이 TAG_MIN 보다 좁을 때만
+    for to, lo, hi in (("next", 1375, 1459), ("prev", 916, 1000)):
+        t, line_y = v[to]["tag"], v[to]["lineY"]
+        assert t["gap"] and not t.get("float"), (to, t)
+        assert lo < t["x"] - t["maxW"] / 2 and t["x"] + t["maxW"] / 2 < hi and abs(t["x"] - (lo + hi) / 2) < 0.5, (to, t)   # 틈 가운데, 카드 침범 없음
+        above = t["y"] + t["h"] / 2 <= line_y - 2 and line_y - (t["y"] + t["h"] / 2) <= 6
+        below = t["y"] - t["h"] / 2 >= line_y + 2 and (t["y"] - t["h"] / 2) - line_y <= 6
+        assert (above if to == "next" else below), (to, t, line_y)                     # 선 바로 위 — 카드 맨 위 버튼이라 위에 자리가 없으면 바로 아래
+        assert 1000 < t["y"] - t["h"] / 2 and t["y"] + t["h"] / 2 < 1812, (to, t)         # 카드 높이 안(줄 제목·설명 줄 침범 없음)
+    assert res["narrowGap"]["float"] and not res["narrowGap"].get("gap"), res["narrowGap"]   # 틈 칸조차 없으면 줄 위 빈자리로
 
 
 def test_place_tags(res):

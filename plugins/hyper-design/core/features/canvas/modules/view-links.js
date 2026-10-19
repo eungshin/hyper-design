@@ -115,7 +115,10 @@ function mount(ctx) {
     v.groups.forEach(function (g) {
       var n = tagEls[g.k];
       n.style.color = g.color; n.title = g.text + ' → ' + (TITLES[g.to] || g.to) + ' · 두 번 눌러 이름 바꾸기';
-      if (g.tag) { n.style.left = g.tag.x + 'px'; n.style.top = g.tag.y + 'px'; n.classList.add(g.tag.float ? 'float' : 'on'); }   // float: 선 위에 자리가 없음 → 마우스 올릴 때만
+      if (g.tag) {                                  // gap: 곧은 선 — 틈 칸 폭에 맞게(말줄임, 마우스 올리면 전체) · float: 틈 칸도 없음 → 마우스 올릴 때만
+        n.style.left = g.tag.x + 'px'; n.style.top = g.tag.y + 'px'; n.classList.add(g.tag.float ? 'float' : 'on');
+        if (g.tag.gap) { n.classList.add('gap'); n.style.maxWidth = (g.tag.maxW / ts) + 'px'; }
+      }
       var ci = cols.indexOf(g.color); if (ci < 0) { ci = cols.length; cols.push(g.color); }
       g.paths.forEach(function (d, i) {
         paths += '<path class="lk' + (g.back ? ' bk' : '') + '" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +

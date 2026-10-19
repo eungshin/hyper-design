@@ -729,7 +729,7 @@ def test_v2_no_vertical_through_cards(gpage, gym_out):
 # ---------------------------------------------------------------- canvas-v3 (phase 1): 옆면 출발 · 선 위 태그 · 주요 흐름 점선
 LINK_GEOM_JS = """() => ({
     paths: [...document.querySelectorAll('#lks path.lk')].map(p => ({k: +p.dataset.k, to: p.dataset.to, pts: JSON.parse(p.dataset.pts)})),
-    tags: [...document.querySelectorAll('#lkl .ltag.on')].map(n => ({k: +n.dataset.k, text: n.textContent, x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight}))})"""
+    tags: [...document.querySelectorAll('#lkl .ltag.on')].map(n => ({k: +n.dataset.k, text: n.textContent, x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight, gap: n.classList.contains('gap')}))})"""
 
 
 def _segs(pts):
@@ -749,12 +749,16 @@ def check_tags(pg):
     """보이는 태그: 가운데가 자기 그룹의 가로(차선) 구간 위(±2px) · 태그끼리 안 겹침 · 다른 그룹 세로선과 안 겹침.
     서로 다른 그룹의 선은 20px 넘게 같은 줄을 나눠 쓰지 않는다(경로 계획 꺾은선으로 확인)."""
     g = pg.evaluate(LINK_GEOM_JS)
+    ts = pg.evaluate("+getComputedStyle(document.getElementById('rows')).getPropertyValue('--ts') || 1")   # 작게 볼 때 태그 배율
     by = {}
     for p in g["paths"]:
         by.setdefault(p["k"], []).extend(_segs(p["pts"]))
     for t in g["tags"]:
         hs = [s for s in by[t["k"]] if abs(s[0][1] - s[1][1]) < 0.01]
-        assert any(abs(t["y"] - a[1]) <= 2 and min(a[0], b[0]) - 2 <= t["x"] <= max(a[0], b[0]) + 2 for a, b in hs), ("태그가 자기 차선 위가 아님", t, hs)
+        if t.get("gap"):                                  # 곧은 선(canvas-edit 검문 A): 카드 사이 틈 칸, 선 바로 위(또는 아래)
+            assert any(min(a[0], b[0]) - 2 <= t["x"] <= max(a[0], b[0]) + 2 and 0 < abs(t["y"] - a[1]) <= t["h"] * ts / 2 + 8 for a, b in hs), ("태그가 자기 곧은 선에 붙어 있지 않음", t, hs)
+        else:
+            assert any(abs(t["y"] - a[1]) <= 2 and min(a[0], b[0]) - 2 <= t["x"] <= max(a[0], b[0]) + 2 for a, b in hs), ("태그가 자기 차선 위가 아님", t, hs)
         box = (t["x"] - t["w"] / 2, t["y"] - t["h"] / 2, t["x"] + t["w"] / 2, t["y"] + t["h"] / 2)
         for k, segs in by.items():
             if k == t["k"]:

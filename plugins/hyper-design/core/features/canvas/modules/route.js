@@ -53,7 +53,8 @@ function routeCurve(src, dst, o) {
 /* ---------- 연결 보기 색 링크 경로(계획) — 옆면 출발 · 바깥 통로 · 줄 위 차선 · 대상 카드 위 가운데
    모든 값은 판(stage) 단위. 카드는 판에서 배율 1(375×812)로 그려지므로 px 상수는 그대로 쓴다(판 확대는 transform 이 한다). */
 var LINK_R = 16, GUT0 = 14, GUT_STEP = 12, LANE_LIFT = 46, LANE_STEP = 30, LANE_PAD = 30, CAP_GAP = 12, CAP_LIFT = 24;
-var XLANE0 = 56, XLANE_STEP = 22;                 // 왼쪽 통로: left − 56 − 22·k (회색 갈래 화살표와 같은 자리)
+var XLANE0 = 56, XLANE_STEP = 22;
+var END_GAP = 10;                                  // 선 끝과 도착 카드 사이(화살촉이 보이는 틈)                 // 왼쪽 통로: left − 56 − 22·k (회색 갈래 화살표와 같은 자리)
 
 // 요소 가운데(카드 왼쪽에서 cx)가 카드 폭의 30% 보다 왼쪽이면 L, 70% 보다 오른쪽이면 R, 아니면 대상 쪽(facing)
 function sideOf(cx, w, facing) { return cx < 0.3 * w ? 'L' : cx > 0.7 * w ? 'R' : facing; }
@@ -140,18 +141,19 @@ function plan(o) {
   var stubs = [];
   return gs.map(function (g) {
     if (g.straight) {                               // 곧은 선: 꺾임 0. 태그 후보 = 카드 사이 틈(카드 안 구간 제외), 못 들어가면 줄 위 빈자리(floatAt)
-      var st = g.straight, ex = g.dir === 'R' ? st.hi : st.lo;
+      var st = g.straight, ex = g.dir === 'R' ? st.hi - END_GAP : st.lo + END_GAP;   // 위로 들어갈 때(T.y − 10)와 같은 틈 — 색 고리가 화살촉을 덮지 않게
       var sp = g.members.map(function (m, i) {
         var sx = g.dir === 'R' ? m.x + m.w : m.x;
         return [[sx, stubY(stubs, g.k, g.dir, sx, ex, st.ys[i], m.h)], [ex, 0]];
       });
       sp.forEach(function (p) { p[1][1] = p[0][1]; });
       return {k: g.k, to: g.to, side: g.dir, dir: g.dir, rev: false, same: true, straight: true, gx: null, lane: null, ly: sp[0][0][1], tx: ex,
-              laneSeg: {a: st.lo, b: st.hi, y: sp[0][0][1]}, laneSegs: [{a: st.lo, b: st.hi, y: sp[0][0][1]}],
+              laneSeg: {a: Math.min(st.lo, ex), b: Math.max(st.lo, ex), y: sp[0][0][1]}, laneSegs: [{a: g.dir === 'R' ? st.lo : ex, b: g.dir === 'R' ? ex : st.hi, y: sp[0][0][1]}],
+              gap: {lo: st.lo, hi: st.hi, top: Math.max(S.y, g.T.y), bottom: Math.min(S.y + S.h, g.T.y + g.T.h)},   // 태그 칸 = 카드 사이 틈(카드 높이 안)
               floatAt: {x: (st.lo + st.hi) / 2, y: laneY(o.rowTop, o.cap, 0)},
               pts: sp, d: sp.map(function (p) { return roundPath(p, LINK_R); }), verticals: []};
     }
-    var ty = g.T.y - 10, ys = [];
+    var ty = g.T.y - END_GAP, ys = [];
     var pts = g.members.map(function (m) {
       var sx = g.side === 'L' ? m.x : m.x + m.w;
       var sy = stubY(stubs, g.k, g.side, sx, g.gx, Math.max(S.y + 8, Math.min(S.y + S.h - 8, m.y + m.h / 2)), m.h);

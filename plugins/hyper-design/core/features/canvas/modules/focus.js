@@ -9,6 +9,7 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
+var TAG_MIN = 36, TAG_PAD = 4;                     // 곧은 선의 태그 칸(카드 사이 틈)이 이보다 좁으면 줄 위 빈자리로 띄운다
 var TAG_MAX = 14;                                  // 선 위 태그·범례 제목에서 버튼 글 하나의 최대 글자 수(넘으면 …)
 var LINK_COLORS = ['#C46F3E', '#B08F33', '#4F9563', '#3C918B', '#5B7DB5', '#8466AE', '#B85B83', '#B9514F'];   // 저채도 8색(= HD.lineStyle.PRESETS.calm)
 
@@ -67,6 +68,17 @@ function visibleOf(m, ui) {
   return m.order.map(function (t, k) { return ui.on ? !!ui.on[k] : stage === 0 || k === stage - 1; });
 }
 
+// 곧은 선의 태그: 카드 사이 틈 칸 안, 선 바로 위(위에 자리가 없으면 바로 아래). 폭은 틈에 맞게(maxW, 넘치면 화면이 말줄임 —
+// 마우스 올리면 전체 글자). 틈이 TAG_MIN 보다 좁으면 줄 위 빈자리(floatAt)에 떠서 마우스 올릴 때만.
+function gapTag(p, sz, t) {
+  var g = p.gap, w = g.hi - g.lo - 2 * TAG_PAD;
+  if (w < TAG_MIN) return {k: t.k, x: p.floatAt.x, y: p.floatAt.y, box: t.box, fallback: true, float: true};
+  var x = (g.lo + g.hi) / 2, y = p.ly - sz.h / 2 - TAG_PAD;
+  if (y - sz.h / 2 < g.top + 2) y = p.ly + sz.h / 2 + TAG_PAD;
+  return {k: t.k, x: x, y: y, h: sz.h, maxW: w, gap: true, fallback: false,
+          box: {x0: x - Math.min(w, sz.w) / 2, x1: x + Math.min(w, sz.w) / 2, y0: y - sz.h / 2, y1: y + sz.h / 2}};
+}
+
 /* Model + UI 상태(단계·체크·마우스·선 색) → 보일 것. DOM 없음.
    m.geom(있으면) = {src:{x,y,w,h,sc}, rowTop, cap, left, srcRow, targets:{id:{x,y,w,h,rowTop,cap,row}}, cards:[{x,y,w,h}], tags:{k:{w,h}}}
    m.seq(있으면) = 화면 흐름 순서(id 목록) — 앞 화면으로 가는 그룹은 back(같은 색, 가늘고 흐리게)
@@ -110,8 +122,8 @@ function deriveView(m, ui) {
       var sz = (geo.tags && geo.tags[p.k]) || {w: 120, h: 28};
       return {k: p.k, segs: p.laneSegs, w: sz.w, h: sz.h};
     }), verts).forEach(function (t) {
-      var p = planned[t.k];                          // 곧은 선 위에 자리가 없으면 줄 위 빈자리에 떠서(마우스 올릴 때만 보인다)
-      if (t.fallback && p && p.floatAt) t = {k: t.k, x: p.floatAt.x, y: p.floatAt.y, box: t.box, fallback: true, float: true};
+      var p = planned[t.k];
+      if (p && p.straight) t = gapTag(p, (geo.tags && geo.tags[t.k]) || {w: 120, h: 28}, t);
       tags[t.k] = t;
     });
   }
