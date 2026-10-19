@@ -1052,3 +1052,30 @@ def test_text_tool_edits_policy_line(dpage):
     wait_notes(dpage, n0)
     assert dpage.locator(sel).first.text_content() == old
     dpage.keyboard.press("h")
+
+
+def test_trigger_tool_click_selects_element_with_its_socket(dpage):
+    """S6: 트리거 도구에서 요소를 누르면 그 요소가 골라지고(테두리 고정 + 소켓) 그 소켓을 끌어 잇는다."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 330)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("l")
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector(".elbox.sel", timeout=3000)
+    dpage.keyboard.press("Escape")                   # 메뉴만 닫힌다, 고른 요소는 그대로
+    dpage.mouse.move(5, 300)
+    dpage.wait_for_timeout(200)
+    assert dpage.locator(".elbox.sel").count() == 1, "마우스가 떠나도 고른 요소 테두리는 남는다"
+    s = dpage.evaluate("(() => { const r = document.querySelector('.sock.selsock').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()")
+    n0 = len(notes_of(dpage))
+    q = visible_cover(dpage, skip=["job"])
+    drag(dpage, s, q["x"] - s["x"], q["y"] - s["y"])
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and "h1" in n["path"] and n["to"] == q["id"], n
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("Escape")
+    assert dpage.locator(".elbox.sel").count() == 0, "Esc 두 번째 = 고른 요소 풀기"
+    dpage.keyboard.press("h")

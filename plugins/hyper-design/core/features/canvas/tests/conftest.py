@@ -59,6 +59,7 @@ BROWSER = {
     "test_pres_button_and_modal_dblclick_edits_text": ("modal", "notes"),
     "test_annotate_tool_notes_an_element_on_the_board": ("tools", "notes"),
     "test_text_tool_edits_policy_line": ("tools", "notes"),
+    "test_trigger_tool_click_selects_element_with_its_socket": ("tools",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
