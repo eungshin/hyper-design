@@ -224,6 +224,23 @@ body.modal-open #tools{display:none}
 .card.moved{z-index:2}                            /* 옮긴 카드는 제자리 카드 위(링크 층 7 · 펼친 카드 6 아래) */
 .card.moving{z-index:6}
 .card.moving .phone{box-shadow:0 0 0 4px #2563eb,0 12px 34px rgba(0,0,0,.22)}
+#screens.space,#screens.space .cover{cursor:grab}
+.card.hid{display:none}                           /* 숨긴 화면: 줄에서 빠진다(목록에서 다시 보이기) */
+#tools .tb{position:relative}
+#tools .tb .cnt{position:absolute;right:1px;top:1px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:700;line-height:15px;text-align:center}
+#tools .tb[hidden],#tools hr[hidden]{display:none}
+.vbtn:disabled{opacity:.35;cursor:default;background:#fff}
+/* 우클릭 메뉴 · 숨긴 화면 목록: 화면 고정 좌표의 작은 판 */
+.cm{position:fixed;z-index:35;min-width:190px;max-width:300px;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.2);padding:5px;font-size:13px}
+.cm[hidden]{display:none}
+.cm .cmh{padding:5px 8px 4px;font-size:12px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm button{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;border-radius:7px;padding:7px 8px;cursor:pointer;font-size:13px;font-weight:600;text-align:left}
+.cm button:hover,.cm button:focus-visible{background:#F1F1EE;outline:0}
+.cm button kbd{margin-left:auto;font:600 11px system-ui,sans-serif;color:#888}
+.cm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
+#hidl .hrow{display:flex;align-items:center;gap:8px;padding:4px 4px 4px 8px}
+#hidl .hrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hidl .hrow button{width:auto;flex:none;padding:5px 8px;border:1px solid #dcdcd7}
 
 /* ---------- 주석 달기 · 메모 ---------- */
 #mpins{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
@@ -275,6 +292,8 @@ body.modal-open #tools{display:none}
   </div>
   <div class="pal" data-group="palette" aria-label="색 바꾸기"></div>
   <div class="view" data-group="view">
+    <button class="vbtn" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
+    <button class="vbtn" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기">↷</button>
     <button class="vbtn" id="arrows" aria-pressed="true" title="주요 흐름(회색 점선) 켜고 끄기 (A) · Shift+화면 클릭으로 연결만 보기">주요 흐름</button>
     <button class="vbtn" id="tbtn" aria-expanded="false" aria-controls="tmenu" title="캔버스 전환 보기 (T)">전환</button>
     <button class="vbtn" id="fit" title="모든 화면이 한 번에 들어오게 (0)">전체<span class="fit-long"> 보기</span></button>
@@ -292,6 +311,8 @@ body.modal-open #tools{display:none}
     <nav id="tools" aria-label="도구">
       <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
+      <hr id="thr" hidden>
+      <button type="button" class="tb" id="thid" data-tip="숨긴 화면|눌러서 목록을 열고 다시 보이게 해요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
     </nav>
     <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div>
       <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw">색 <button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="bottom-left" hidden></span></span>
@@ -309,6 +330,8 @@ body.modal-open #tools{display:none}
   <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
 </div>
 <div id="ttip" hidden></div>
+<div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
+<div id="hidl" class="cm t-dropdown" data-origin="top-left" role="dialog" aria-label="숨긴 화면" hidden></div>
 <div id="tmenu" class="t-dropdown" data-origin="top-right" hidden role="dialog" aria-label="전환"></div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
   <div class="ptitle" id="ptitle"></div>
@@ -423,8 +446,8 @@ var contentLeft = LEFT;
 // 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
 function drawArrows() {
   var svg = $('#ar'), box = {};
-  $$('.card', rowsEl).forEach(function (c) {
-    box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};   // offsetParent = .rows
+  $$('.card:not(.hid)', rowsEl).forEach(function (c) {
+    box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};   // offsetParent = .rows · 숨긴 화면의 화살표는 그리지 않는다
   });
   $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
   $$('path.ln', svg).forEach(function (n) { n.remove(); });
@@ -476,12 +499,34 @@ function saveCardPos() { try { localStorage.setItem(PKEY, JSON.stringify(cardPos
 function placeCard(c) { var p = cardPos[c.dataset.id]; c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p); }
 function cardExtent() {                           // 옮긴 카드까지 넣은 판 범위(판 좌표)
   var x0 = contentLeft, y0 = 0, x1 = stage.offsetWidth, y1 = stage.offsetHeight, ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop;
-  $$('.card', rowsEl).forEach(function (c) {
+  $$('.card:not(.hid)', rowsEl).forEach(function (c) {
     x0 = Math.min(x0, ox + c.offsetLeft); y0 = Math.min(y0, oy + c.offsetTop);
     x1 = Math.max(x1, ox + c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, oy + c.offsetTop + c.offsetHeight);
   });
   return {x0: x0, y0: y0, x1: x1, y1: y1};
 }
+function setCardPos(id, p) {                      // 되돌리기·다시 하기에서: 그 자리로 놓고 저장·화살표 다시
+  if (p) cardPos[id] = {dx: p.dx, dy: p.dy, g: p.g}; else delete cardPos[id];
+  $$('.card', rowsEl).forEach(function (c) { if (c.dataset.id === id) placeCard(c); });
+  saveCardPos(); drawArrows();
+}
+
+/* ---------- 되돌리기 50단계 — 캔버스 안 변경만(카드 옮기기·숨기기·태그 이름·선 색·굵기). 화면 파일에 보낸 요청은 여기에 들어오지 않는다 ---------- */
+var past = [], future = [], HMAX = 50;
+function record(op) {                             // op = {label, undo(), redo()}
+  past.push(op); if (past.length > HMAX) past.shift();
+  future = []; renderUndo();
+}
+function undo() { var op = past.pop(); if (!op) return; op.undo(); future.push(op); renderUndo(); }
+function redo() { var op = future.pop(); if (!op) return; op.redo(); past.push(op); renderUndo(); }
+function renderUndo() {
+  var u = $('#undo'), r = $('#redo'), lu = past[past.length - 1], lr = future[future.length - 1];
+  u.disabled = !lu; r.disabled = !lr;
+  u.title = '되돌리기' + (lu ? ': ' + lu.label : '') + ' (Ctrl+Z)'; r.title = '다시 하기' + (lr ? ': ' + lr.label : '') + ' (Ctrl+Shift+Z)';
+}
+$('#undo').addEventListener('click', undo);
+$('#redo').addEventListener('click', redo);
+
 var arrowRaf = 0;
 function scheduleArrows() { if (arrowRaf) return; arrowRaf = requestAnimationFrame(function () { arrowRaf = 0; drawArrows(); }); }
 
@@ -527,6 +572,7 @@ $('#zoom').addEventListener('click', home);
 pane.addEventListener('wheel', function (e) {
   e.preventDefault();
   if (VM) VM.stop();                               // 카메라 이동 중이면 바로 멈춤
+  closeCmenu();
   var r = pane.getBoundingClientRect(), k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? pane.clientHeight : 1;
   var dx = e.deltaX * k, dy = e.deltaY * k;
   if (e.ctrlKey || e.metaKey) { zoomAt(e.clientX - r.left, e.clientY - r.top, z * Math.exp(-dy * 0.0022)); return; }
@@ -541,29 +587,37 @@ function setTool(t) {
   $$('#tools [data-tool]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
   pane.classList.toggle('t-move', t === 'move');
 }
-$$('#tools [data-tool]').forEach(function (b) {
-  b.addEventListener('click', function () { setTool(b.dataset.tool); });
+$$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
+$$('#tools .tb').forEach(function (b) {
   b.addEventListener('pointerenter', function () {
     var p = b.dataset.tip.split('|'), tip = $('#ttip'), r = b.getBoundingClientRect();
-    tip.innerHTML = esc(p[0]) + '<kbd>' + esc(b.dataset.key) + '</kbd>' + (p[1] ? '<span>' + esc(p[1]) + '</span>' : '');
+    tip.innerHTML = esc(p[0]) + (b.dataset.key ? '<kbd>' + esc(b.dataset.key) + '</kbd>' : '') + (p[1] ? '<span>' + esc(p[1]) + '</span>' : '');
     tip.style.left = (r.right + 8) + 'px'; tip.style.top = (r.top + 2) + 'px'; tip.hidden = false;
   });
   b.addEventListener('pointerleave', function () { $('#ttip').hidden = true; });
 });
 
-var ptrs = new Map(), drag = null, pinch = null, justDragged = false;
+var ptrs = new Map(), drag = null, pinch = null, justDragged = false, spaceDown = false;
 function mid() { var a = Array.from(ptrs.values()); return {x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1}; }
 function startDrag(id, p, type) { drag = {id: id, x: p.x, y: p.y, tx: tx, ty: ty, moved: false, thr: type === 'touch' ? 8 : 4}; }
+// 마우스 버튼: 왼쪽 = 도구대로 · 가운데 = 늘 화면 이동 · 오른쪽 = 메뉴(contextmenu 가 받는다). Space 를 누른 채 끌기 = 화면 이동
 pane.addEventListener('pointerdown', function (e) {
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  var midBtn = e.pointerType === 'mouse' && e.button === 1;
+  if (e.pointerType === 'mouse' && e.button !== 0 && !midBtn) return;
   if (e.target.closest && e.target.closest('#tools')) return;   // 도구 막대 위에서는 판을 끌지 않는다
+  if (midBtn) { if (ptrs.size) return; e.preventDefault(); }    // 가운데 버튼 자동 스크롤을 막는다
   if (VM) VM.stop();
+  closeCmenu();
   justDragged = false;
   ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (ptrs.size === 1) {
     startDrag(e.pointerId, {x: e.clientX, y: e.clientY}, e.pointerType);
-    var cd = tool === 'move' && e.target.closest ? e.target.closest('.card') : null;
-    if (cd && !e.target.closest('.anno')) { var cp = cardPos[cd.dataset.id] || {dx: 0, dy: 0}; drag.card = cd; drag.ox = cp.dx; drag.oy = cp.dy; }
+    drag.mid = midBtn;
+    var cd = tool === 'move' && !midBtn && !spaceDown && e.target.closest ? e.target.closest('.card') : null;
+    if (cd && !e.target.closest('.anno')) {
+      var cp = cardPos[cd.dataset.id] || {dx: 0, dy: 0}; drag.card = cd; drag.ox = cp.dx; drag.oy = cp.dy;
+      drag.prev = cardPos[cd.dataset.id] ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null;
+    }
   } else if (ptrs.size === 2) {
     if (drag && drag.card) endCardDrag();
     var m = mid(); pinch = {m: m, z: z, tx: tx, ty: ty};
@@ -595,12 +649,16 @@ pane.addEventListener('pointermove', function (e) {
 });
 function endCardDrag() {
   var c = drag.card; drag.card = null; c.classList.remove('moving');
-  if (drag.moved) { saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; drawArrows(); }
+  if (drag.moved) {
+    saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; drawArrows();
+    var id = c.dataset.id, before = drag.prev, p = cardPos[id], after = p ? {dx: p.dx, dy: p.dy, g: p.g} : null;
+    record({label: '카드 옮기기', undo: function () { setCardPos(id, before); }, redo: function () { setCardPos(id, after); }});
+  }
 }
 function endPtr(e) {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
-  if (drag && drag.moved) justDragged = true;
+  if (drag && drag.moved && !drag.mid) justDragged = true;   // 가운데 버튼 끌기 뒤에는 click 이 오지 않는다
   if (drag && drag.card && drag.id === e.pointerId) endCardDrag();
   if (ptrs.size === 1) {                          // 핀치 끝 → 남은 손가락으로 이어서 이동
     pinch = null;
@@ -671,6 +729,7 @@ modal.addEventListener('click', function (e) { if (e.target === modal || e.targe
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();
+  if (!cmenu.hidden || !hidl.hidden) { closeCmenu(); closeHidl(); return; }   // 떠 있는 메뉴가 먼저
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
   if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
@@ -733,10 +792,27 @@ function setArrows(on) {
 // 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
 var LNKEY = 'hd-link-names:' + hashStr(location.pathname), linkNames = {};
 try { linkNames = JSON.parse(localStorage.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
+// 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버린다
+var HKEY = 'hd-hidden:' + hashStr(location.pathname), hidden = {};
+(function () {
+  var raw = []; try { raw = JSON.parse(localStorage.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
+  var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
+  (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
+  $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
+})();
+function setName(from, to, v) {
+  if (v) linkNames[from + '>' + to] = v; else delete linkNames[from + '>' + to];
+  try { localStorage.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {}
+}
 var names = {get: function (from, to) { return linkNames[from + '>' + to] || ''; },
-             set: function (from, to, v) { if (v) linkNames[from + '>' + to] = v; else delete linkNames[from + '>' + to];
-                                           try { localStorage.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {} }};
-var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled, names: names,
+             set: function (from, to, v) {
+               var old = names.get(from, to); if (old === v) return;
+               setName(from, to, v);
+               var redraw = function () { if (VL.focusId()) VL.render(true); };
+               record({label: '태그 이름', undo: function () { setName(from, to, old); redraw(); }, redo: function () { setName(from, to, v); redraw(); }});
+             }};
+var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled, names: names, record: record,
+                             isHidden: function (id) { return !!hidden[id]; },
                              isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
@@ -750,6 +826,122 @@ window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycl
 $('#arrows').addEventListener('click', function () { setArrows(!arrowsOn); });
 $('#lgFlow').addEventListener('change', function (e) { setArrows(e.target.checked); });
 setArrows(arrowsOn);
+
+/* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
+// 화면 파일을 바꾸는 항목(도착 바꾸기·끊기·이름·설명·복제·삭제·여기에 레이아웃·화면 안 요소)은 요청문과 함께 5·6단계에서 더한다
+var cmenu = $('#cmenu'), hidl = $('#hidl');
+function titleOf(id) { var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
+function saveHidden() { try { localStorage.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
+function setHidden(ids, on) {
+  ids.forEach(function (id) { if (on) hidden[id] = 1; else delete hidden[id]; var c = VL.cardEl(id); if (c) c.classList.toggle('hid', on); });
+  saveHidden(); renderHidden();
+  var f = VL.focusId();
+  if (f) { VL.dispatch({type: 'exitFocus'}); if (!hidden[f]) VL.dispatch({type: 'focus', id: f}); }   // 연결 보기는 숨김을 반영해 다시 받는다
+  drawArrows(); scheduleVisible();
+}
+function hide(ids, on) {
+  ids = ids.filter(function (id) { return !!hidden[id] !== on; }); if (!ids.length) return;
+  setHidden(ids, on);
+  record({label: on ? '화면 숨기기' : '숨긴 화면 보이기', undo: function () { setHidden(ids, !on); }, redo: function () { setHidden(ids, on); }});
+}
+function renderHidden() {
+  var n = Object.keys(hidden).length;
+  $('#thid').hidden = !n; $('#thr').hidden = !n; $('#thidn').textContent = n || '';
+  $('#thid').setAttribute('aria-label', '숨긴 화면 ' + n + '개');
+  if (!n) closeHidl(); else if (!hidl.hidden) fillHidl();
+}
+function fillHidl() {
+  var ids = Object.keys(hidden);
+  hidl.innerHTML = '<div class="cmh">숨긴 화면 ' + ids.length + '개</div>' + ids.map(function (id) {
+    return '<div class="hrow" data-id="' + esc(id) + '"><span>' + esc(titleOf(id)) + '</span><button type="button" data-act="show">보이기</button></div>';
+  }).join('') + '<hr><button type="button" data-act="all">모두 보이기</button>';
+}
+function openHidl() {
+  closeCmenu(); fillHidl();
+  var r = $('#tools').getBoundingClientRect();
+  hidl.hidden = false; hidl.classList.add('is-open'); $('#thid').setAttribute('aria-expanded', 'true');
+  hidl.style.left = (r.right + 8) + 'px';
+  hidl.style.top = Math.max(8, Math.min(innerHeight - hidl.offsetHeight - 8, r.top)) + 'px';
+}
+function closeHidl() { if (hidl.hidden) return; hidl.hidden = true; hidl.classList.remove('is-open'); $('#thid').setAttribute('aria-expanded', 'false'); }
+$('#thid').addEventListener('click', function () { if (hidl.hidden) openHidl(); else closeHidl(); });
+hidl.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-act]'); if (!b) return;
+  if (b.dataset.act === 'all') hide(Object.keys(hidden), false);
+  else hide([b.closest('.hrow').dataset.id], false);
+});
+function closeCmenu() { if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
+function openCmenu(x, y, head, items) {            // items: [{label, key?, act()}] · '-' = 구분선
+  closeHidl();
+  cmenu.innerHTML = (head ? '<div class="cmh">' + esc(head) + '</div>' : '') + items.map(function (it, i) {
+    return it === '-' ? '<hr>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + '</button>';
+  }).join('');
+  cmenu.items = items;
+  cmenu.hidden = false; cmenu.classList.add('is-open');
+  cmenu.style.left = Math.max(8, Math.min(innerWidth - cmenu.offsetWidth - 8, x)) + 'px';
+  cmenu.style.top = Math.max(8, Math.min(innerHeight - cmenu.offsetHeight - 8, y)) + 'px';
+  var first = $('button', cmenu); if (first) first.focus({preventScroll: true});
+}
+cmenu.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-i]'); if (!b) return;
+  var it = cmenu.items[+b.dataset.i]; closeCmenu(); it.act();
+});
+cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 항목 사이 이동
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  var bs = $$('button', cmenu), i = bs.indexOf(document.activeElement);
+  bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus();
+});
+document.addEventListener('pointerdown', function (e) {   // 밖을 누르면 닫기
+  var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
+  if (!cl('#cmenu')) closeCmenu();
+  if (!cl('#hidl') && !cl('#thid')) closeHidl();
+}, true);
+addEventListener('resize', function () { closeCmenu(); closeHidl(); });
+pane.addEventListener('contextmenu', function (e) {
+  var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
+  if (cl('#legend') || typing(e)) return;           // 범례·입력 칸은 브라우저 메뉴 그대로
+  e.preventDefault();
+  if (cl('#tools')) return;
+  if (VM) VM.stop();
+  var x = e.clientX, y = e.clientY, lkEl = cl('#lkl .ltag') || (t.classList && t.classList.contains('lk') ? t : null), card = cl('.card');
+  if (lkEl) {
+    var k = +lkEl.getAttribute('data-k');
+    openCmenu(x, y, '연결 → ' + titleOf(lkEl.getAttribute('data-to')), [
+      {label: '이름 고치기', key: '더블클릭', act: function () { VL.renameTag(k); }},
+      {label: '도착으로 가기', key: 'Ctrl+클릭', act: function () { VM.goGroup(k); }}]);
+    return;
+  }
+  if (card) {
+    var id = card.dataset.id, cv = $('.cover', card);
+    var open = function (pick) { if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); openModal(cv.dataset.file, cv.dataset.title, pick); };
+    openCmenu(x, y, titleOf(id), [
+      {label: '크게 보기', key: '클릭', act: function () { open(false); }},
+      {label: '주석 달기', act: function () { open(true); }},
+      {label: '연결 보기', key: 'Shift+클릭', act: function () { if (VL.focusId() !== id) VL.dispatch({type: 'focus', id: id}); }},
+      '-',
+      {label: '숨기기', act: function () { hide([id], true); }}]);
+    return;
+  }
+  var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(hidden).length;
+  var items = [{label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
+  if (n) items.push('-', {label: '숨긴 화면 ' + n + '개', act: openHidl});
+  openCmenu(x, y, '', items);
+});
+addEventListener('keydown', function (e) {         // Space 를 누른 채 끌기 = 화면 이동(어느 도구든)
+  if (e.code !== 'Space' || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens' || (e.target.closest && e.target.closest('.cm'))) return;
+  e.preventDefault();
+  if (!spaceDown) { spaceDown = true; pane.classList.add('space'); }
+});
+addEventListener('keyup', function (e) { if (e.code === 'Space') { spaceDown = false; pane.classList.remove('space'); } });
+addEventListener('blur', function () { spaceDown = false; pane.classList.remove('space'); });
+addEventListener('keydown', function (e) {         // Ctrl+Z 되돌리기 · Ctrl+Shift+Z / Ctrl+Y 다시 하기
+  if (typing(e) || !(e.ctrlKey || e.metaKey) || e.altKey || !modal.hidden || document.body.dataset.tab !== 'screens') return;
+  var k = (e.key || '').toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
+});
+renderHidden(); renderUndo();
 
 /* ---------- 주석 달기(Shift+클릭 = 여러 개) · 메모(자동 저장) · 보내기 ---------- */
 var mscale = 1, mscreen = null, picking = false, draft = null, editing = null;

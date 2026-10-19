@@ -394,3 +394,161 @@ def test_tag_rename_keeps_button_text(dpage):
     dpage.wait_for_timeout(150)
     assert dpage.text_content(f'#lkl .ltag[data-to="{to}"]') == old
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 4단계: 우클릭 메뉴 · 숨기기 · 되돌리기 50단계
+def cmenu_items(pg):
+    pg.wait_for_selector("#cmenu:not([hidden])")
+    return pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.childNodes[0].textContent)")
+
+
+def pick(pg, label):
+    pg.locator("#cmenu button", has_text=label).first.click()
+    pg.wait_for_timeout(150)
+
+
+def test_context_menu_by_target(epage):
+    from test_canvas_baseline import empty_point
+    epage.click("#fit")
+    epage.wait_for_timeout(150)
+    p = empty_point(epage)
+    epage.mouse.click(p["x"], p["y"], button="right")
+    assert cmenu_items(epage) == ["전체 보기", "100%"], "빈 곳: 전체 보기 · 100% (숨긴 화면이 없으면 그 줄은 없다)"
+    pick(epage, "100%")
+    assert epage.get_attribute("#stage", "data-zoom") == "1.0000"
+    assert epage.evaluate("document.getElementById('cmenu').hidden")
+    epage.click("#fit")
+    epage.wait_for_timeout(150)
+    c = visible_cover(epage)
+    title = epage.get_attribute(f'.card[data-id="{c["id"]}"] .cover', "data-title")
+    epage.mouse.click(c["x"], c["y"], button="right")
+    assert cmenu_items(epage) == ["크게 보기", "주석 달기", "연결 보기", "숨기기"]
+    assert epage.text_content("#cmenu .cmh") == title
+    assert not epage.evaluate("!document.getElementById('modal').hidden"), "오른쪽 클릭은 크게 보기를 열지 않는다"
+    epage.mouse.move(c["x"], c["y"])
+    epage.mouse.wheel(0, 100)                        # 휠(판 이동)은 메뉴를 닫는다
+    epage.wait_for_timeout(80)
+    assert epage.evaluate("document.getElementById('cmenu').hidden")
+    epage.click("#fit")
+    epage.wait_for_timeout(150)
+    c = visible_cover(epage)
+    epage.mouse.click(c["x"], c["y"], button="right")
+    cmenu_items(epage)
+    epage.keyboard.press("Escape")
+    assert epage.evaluate("document.getElementById('cmenu').hidden"), "Esc 는 메뉴부터 닫는다"
+    epage.mouse.click(c["x"], c["y"], button="right")
+    pick(epage, "주석 달기")
+    epage.wait_for_function("!document.getElementById('modal').hidden")
+    assert epage.get_attribute("#mpick", "aria-pressed") == "true", "메뉴의 주석 달기 = 주석 버튼과 같다"
+    epage.keyboard.press("Escape")
+    epage.wait_for_timeout(150)
+    if epage.evaluate("!document.getElementById('modal').hidden"):
+        epage.keyboard.press("Escape")
+        epage.wait_for_timeout(150)
+
+
+def test_hide_screen_and_hidden_list(epage):
+    from test_canvas_baseline import empty_point
+    epage.click("#fit")
+    epage.wait_for_timeout(150)
+    c = visible_cover(epage)
+    sid = c["id"]
+    assert not epage.locator("#thid").is_visible(), "숨긴 화면이 없으면 목록 버튼도 없다"
+    epage.mouse.click(c["x"], c["y"], button="right")
+    pick(epage, "숨기기")
+    assert not epage.locator(f'.card[data-id="{sid}"]').is_visible()
+    assert epage.locator("#thid").is_visible() and epage.text_content("#thidn") == "1"
+    assert epage.evaluate("(id) => [...document.querySelectorAll('#rows path.ln')].every(p => p.dataset.from !== id && p.dataset.to !== id)", sid), "숨긴 화면의 흐름 화살표는 그리지 않는다"
+    keys = epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-hidden:'))")
+    assert len(keys) == 1 and sid in epage.evaluate("(k) => localStorage.getItem(k)", keys[0])
+    assert sid not in (epage.evaluate("localStorage.getItem('hd-canvas-prefs')") or ""), "prefs 에 넣지 않는다"
+    reload(epage)
+    assert not epage.locator(f'.card[data-id="{sid}"]').is_visible(), "새로고침 뒤에도 숨김"
+    epage.keyboard.press("0")
+    epage.wait_for_timeout(150)
+    p = empty_point(epage)
+    epage.mouse.click(p["x"], p["y"], button="right")
+    assert cmenu_items(epage)[-1] == "숨긴 화면 1개"
+    pick(epage, "숨긴 화면 1개")
+    assert epage.locator("#hidl").is_visible()
+    title = epage.get_attribute(f'.card[data-id="{sid}"] .cover', "data-title")
+    assert title in epage.text_content("#hidl")
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    epage.screenshot(path=str(ESHOTS / "4-hidden-list.png"))
+    epage.locator(f'#hidl .hrow[data-id="{sid}"] button').click()
+    epage.wait_for_timeout(150)
+    assert epage.locator(f'.card[data-id="{sid}"]').is_visible()
+    assert not epage.locator("#thid").is_visible() and not epage.locator("#hidl").is_visible()
+    assert epage.evaluate("(k) => localStorage.getItem(k)", keys[0]) == "[]"
+
+
+def test_undo_redo_card_moves_capped_at_50(epage):
+    reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다
+    epage.click("#fit")
+    epage.wait_for_timeout(150)
+    assert epage.is_disabled("#undo") and epage.is_disabled("#redo")
+    z = float(epage.get_attribute("#stage", "data-zoom"))
+    epage.keyboard.press("v")
+    p = visible_cover(epage)
+    x0, _ = card_xy(epage, p["id"])
+    for i in range(51):                              # 오른쪽·왼쪽 번갈아 51번 → 홀수 번째 뒤 = x0 + 30/z, 짝수 번째 뒤 = x0
+        sx = p["x"] + (30 if i % 2 else 0)
+        epage.mouse.move(sx, p["y"])
+        epage.mouse.down()
+        epage.mouse.move(sx + (-30 if i % 2 else 30), p["y"], steps=3)
+        epage.mouse.up()
+    epage.wait_for_timeout(150)
+    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3
+    assert not epage.is_disabled("#undo")
+    assert "카드 옮기기" in epage.get_attribute("#undo", "title")
+    for _ in range(60):
+        epage.keyboard.press("Control+z")
+    epage.wait_for_timeout(150)
+    assert epage.is_disabled("#undo") and not epage.is_disabled("#redo"), "50단계까지만 기억한다"
+    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3, "가장 오래된 1단계는 버려져 첫 번째 옮김 뒤 자리에서 멈춘다"
+    epage.keyboard.press("Control+Shift+z")
+    epage.wait_for_timeout(100)
+    assert abs(card_xy(epage, p["id"])[0] - x0) < 3
+    epage.keyboard.press("Control+y")
+    epage.wait_for_timeout(100)
+    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3
+    epage.click("#undo")
+    epage.wait_for_timeout(100)
+    assert abs(card_xy(epage, p["id"])[0] - x0) < 3, "위쪽 막대 ↶ 버튼도 같다"
+    stored = epage.evaluate("Object.values(JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-card-pos:'))) || '{}'))")
+    assert all(abs(s["dx"]) < 3 for s in stored), "되돌린 자리가 저장된다"
+    epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")
+    epage.keyboard.press("h")
+    reload(epage)
+
+
+def test_link_menu_rename_undo_and_go(dpage):
+    focus_dayfine(dpage, "job")
+    k, to, old = dpage.evaluate("[...document.querySelectorAll('#lkl .ltag.on')].map(n => [+n.dataset.k, n.dataset.to, n.textContent])")[0]
+    sel = f'#lkl .ltag[data-k="{k}"]'
+    bring_into_view(dpage, sel)
+    dpage.click(sel, button="right")
+    assert cmenu_items(dpage) == ["이름 고치기", "도착으로 가기"]
+    assert dpage.text_content("#cmenu .cmh").startswith("연결 →")
+    pick(dpage, "이름 고치기")
+    inp = dpage.locator(f"{sel} input")
+    assert inp.is_visible()
+    inp.fill("맥락 이름")
+    inp.press("Enter")
+    dpage.wait_for_timeout(150)
+    assert dpage.text_content(sel) == "맥락 이름"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(150)
+    assert dpage.text_content(sel) == old, "되돌리면 버튼 글로"
+    assert "맥락 이름" not in (dpage.evaluate("localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-link-names:')))") or "")
+    dpage.keyboard.press("Control+Shift+z")
+    dpage.wait_for_timeout(150)
+    assert dpage.text_content(sel) == "맥락 이름"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(150)
+    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "되돌리기는 연결 보기를 끄지 않는다"
+    bring_into_view(dpage, sel)
+    dpage.click(sel, button="right")
+    pick(dpage, "도착으로 가기")
+    dpage.wait_for_function("(to) => window.__hdCam && window.__hdCam.to === to", arg=to)
+    dpage.keyboard.press("Escape")

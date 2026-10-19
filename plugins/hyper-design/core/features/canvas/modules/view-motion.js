@@ -1,6 +1,6 @@
 /* View — 움직임: Ctrl/Cmd+클릭 "어디로 가나" 카메라 · 전환 메뉴(T) · 애니메이션 끄기.
    계획은 HD.camera.plan(순수, 숫자만). 시간·곡선은 여기서 CSS 변수(modules/motion.css)를 읽어 넘긴다.
-   HD.viewMotion.mount(ctx) → {ctrlClick(e), stop(), go(from, toId), replay(id), toggleMenu()}
+   HD.viewMotion.mount(ctx) → {ctrlClick(e), stop(), go(from, toId), goGroup(k), replay(id), toggleMenu()}
    ctx = {VL, pane, rowsEl, CARD, $, $$, esc, prefs, savePrefs(), typing(e), getView(), setView(z,tx,ty), openModal(file,title), closeModal(), modalOpen(), mframe}
    Ctrl+클릭 대상: 카드 안 링크 요소(카드 iframe 에 hd-link-at 으로 물어 hd-link-go 답) · 선 위 태그 · 범례 줄.
    연결 보기 밖에서 링크를 Ctrl+클릭하면 그 쌍 하나만 강조(focus 의 'pair' 의도) — Esc · 빈 곳 클릭으로 해제. */
@@ -185,7 +185,7 @@ function mount(ctx) {
   }
 
   setMotion(ctx.prefs.motion !== false);
-  return {ctrlClick: ctrlClick, stop: stop, go: go, replay: replay, toggleMenu: toggleMenu, TRANSITIONS: TRANSITIONS};
+  return {ctrlClick: ctrlClick, stop: stop, go: go, goGroup: goGroup, replay: replay, toggleMenu: toggleMenu, TRANSITIONS: TRANSITIONS};
 }
 
 HD.viewMotion = {mount: mount, TRANSITIONS: TRANSITIONS};

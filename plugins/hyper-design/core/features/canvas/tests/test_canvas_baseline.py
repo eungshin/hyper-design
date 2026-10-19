@@ -2,7 +2,7 @@
 
 이미 test_canvas_v2.py 가 덮는 것(Shift+클릭 연결 보기·순환, 색, A, 0, T, Ctrl+클릭, 메모·보내기)은 다시 쓰지 않는다.
 여기서는 그 밖의 손 규칙: 휠 = 이동, Ctrl+휠 = 확대, 왼쪽 끌기 = 이동(카드 위에서 시작해도 크게 보기 안 열림),
-왼쪽이 아닌 버튼 = 무시, 클릭 = 크게 보기, Esc 순서, P 는 크게 보기 안에서만, 입력 중에는 단축키 무시.
+오른쪽 버튼 = 메뉴 · 가운데 = 이동(4단계에서 좁힘), 클릭 = 크게 보기, Esc 순서, P 는 크게 보기 안에서만, 입력 중에는 단축키 무시.
 """
 import pytest
 
@@ -86,19 +86,34 @@ def test_left_drag_pans_even_from_a_card(bpage):
         assert not modal_open(bpage), "끌기 끝의 클릭은 크게 보기를 열지 않는다"
 
 
-@pytest.mark.parametrize("button", ["right", "middle"])
-def test_non_left_buttons_do_not_pan(bpage, button):
+def test_right_button_menu_middle_pans(bpage):
+    """4단계에서 좁힌 규칙: 오른쪽 = 메뉴(끌어도 판은 그대로), 가운데 = 화면 이동(카드 위에서도, 크게 보기 안 열림)."""
     fit_view(bpage)
     p = empty_point(bpage)
     t0 = cam(bpage)
     bpage.mouse.move(p["x"], p["y"])
-    bpage.mouse.down(button=button)
+    bpage.mouse.down(button="right")
     bpage.mouse.move(p["x"] + 120, p["y"] + 60, steps=6)
-    bpage.mouse.up(button=button)
-    bpage.keyboard.press("Escape")                  # 오른쪽 버튼이 띄운 것이 있으면 닫는다
+    bpage.mouse.up(button="right")
     bpage.wait_for_timeout(80)
-    assert cam(bpage) == t0
-    assert not modal_open(bpage)
+    assert cam(bpage) == t0, "오른쪽 끌기는 판을 움직이지 않는다"
+    bpage.keyboard.press("Escape")
+    bpage.wait_for_timeout(80)
+    assert bpage.evaluate("document.getElementById('cmenu').hidden")
+    for start in (empty_point(bpage), cover_center(bpage)):
+        t0 = cam(bpage)
+        bpage.mouse.move(start["x"], start["y"])
+        bpage.mouse.down(button="middle")
+        bpage.mouse.move(start["x"] + 120, start["y"] + 60, steps=6)
+        bpage.mouse.up(button="middle")
+        bpage.wait_for_timeout(80)
+        assert cam(bpage)[0] != t0[0] and cam(bpage)[1] == t0[1], ("가운데 끌기 = 이동", start)
+        assert not modal_open(bpage)
+    c = cover_center(bpage)                         # 가운데 끌기 뒤 첫 왼쪽 클릭은 먹히지 않는다
+    bpage.mouse.click(c["x"], c["y"])
+    bpage.wait_for_function("!document.getElementById('modal').hidden")
+    bpage.keyboard.press("Escape")
+    bpage.wait_for_timeout(120)
 
 
 def test_click_opens_modal_and_esc_order(bpage):

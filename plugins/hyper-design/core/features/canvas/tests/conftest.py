@@ -9,7 +9,7 @@ AREAS = {
     "input": "이동·확대·끌기·클릭·단축키(판 조작)",
     "modal": "크게 보기·주석 달기(P)",
     "notes": "메모 패널·저장·보내기",
-    "tools": "도구 막대·카드 옮기기",
+    "tools": "도구 막대·카드 옮기기·우클릭 메뉴·숨기기·되돌리기",
     "flow": "주요 흐름 화살표(회색 점선)",
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
     "motion": "카메라·전환 메뉴·움직임 끄기",
@@ -19,7 +19,7 @@ BROWSER = {
     # test_canvas_baseline.py — 0단계 고정
     "test_wheel_pans_ctrl_wheel_zooms": ("input",),
     "test_left_drag_pans_even_from_a_card": ("input", "modal"),
-    "test_non_left_buttons_do_not_pan": ("input",),
+    "test_right_button_menu_middle_pans": ("input",),
     "test_click_opens_modal_and_esc_order": ("input", "modal", "links"),
     "test_p_picks_only_inside_modal": ("modal",),
     "test_typing_guard_blocks_shortcuts": ("input",),
@@ -34,6 +34,10 @@ BROWSER = {
     "test_straight_neighbour_back_faint_and_under_cards": ("links",),
     "test_tags_never_on_cards_gap_tag_ellipsis_then_full": ("links",),
     "test_tag_rename_keeps_button_text": ("links",),
+    "test_context_menu_by_target": ("input", "tools"),
+    "test_hide_screen_and_hidden_list": ("tools", "flow"),
+    "test_undo_redo_card_moves_capped_at_50": ("tools",),
+    "test_link_menu_rename_undo_and_go": ("links", "motion"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),

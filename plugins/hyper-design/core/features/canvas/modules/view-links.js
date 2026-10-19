@@ -1,8 +1,9 @@
 /* View — 연결 보기의 DOM/SVG: 색 링크 선·선 위 태그·테두리 고리·범례(색 드롭다운·쌍 색·굵기)·펼치기/접기·마우스 강조.
    경로·태그 자리는 HD.route.plan / HD.labels.placeTags(focus.deriveView 안)가 정한다. 여기서는 DOM 을 재고 그리기만.
    상태는 HD.focus 리듀서 하나. 이벤트는 의도를 만들어 dispatch(intent) 만 부른다 → reduce → 그리기.
-   HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown}
-   ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale(), names:{get(from,to), set(from,to,text)}}
+   HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown, renameTag(k)}
+   ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale(), names:{get(from,to), set(from,to,text)},
+          record?({label, undo(), redo()}) — 선 색·굵기 바꿈을 되돌리기에, isHidden?(id) — 숨긴 화면은 연결 대상·장애물에서 뺀다}
    names: 태그 이름(이 이동이 무슨 맥락인지) — 버튼 글과 따로. 없으면 태그는 버튼 글. */
 (function () {
 'use strict';
@@ -19,6 +20,7 @@ function mount(ctx) {
   (graph.screens || []).forEach(function (s) { TITLES[s.id] = s.title; });
 
   function cssMs(name, dflt) { return HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue(name), dflt); }
+  function shown(c) { return !(ctx.isHidden && ctx.isHidden(c.dataset.id)); }
   function cardEl(id) { return $$('.card', rowsEl).filter(function (c) { return c.dataset.id === id; })[0] || null; }
   function frameOf(id) { var c = cardEl(id); return c ? $('.phone iframe', c) : null; }
   function postTo(id, msg) { var f = frameOf(id); try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); } catch (e) {} }
@@ -33,7 +35,7 @@ function mount(ctx) {
   // hd-links 답 → 그래프의 link 간선 → 색 모델
   function buildModel(d) {
     var focusId = state.focusId, ids = {};
-    $$('.card', rowsEl).forEach(function (c) { ids[c.dataset.id] = 1; });
+    $$('.card', rowsEl).filter(shown).forEach(function (c) { ids[c.dataset.id] = 1; });
     var items = (d.links || []).filter(function (l) { return l && ids[l.to] && l.to !== focusId && l.rect; });
     if (!items.length) return null;
     graph = G.addLinks(graph, focusId, items.map(function (l) { return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect}; }));
@@ -110,7 +112,7 @@ function mount(ctx) {
     tagEls.forEach(function (n) { sizes[n.dataset.k] = {w: n.offsetWidth * ts, h: n.offsetHeight * ts}; });
     lk.geom = {src: {x: sg.x, y: sg.y, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w},
                rowTop: sg.rowTop, cap: sg.cap, srcRow: sg.row, left: ctx.LEFT || 0, targets: targets, tags: sizes,
-               cards: $$('.card', rowsEl).map(function (c) { var p = $('.phone', c); return {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight}; })};
+               cards: $$('.card', rowsEl).filter(shown).map(function (c) { var p = $('.phone', c); return {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight}; })};
     var v = curView = F.deriveView(lk, state), defs = '', paths = '', cols = [];
     v.groups.forEach(function (g) {
       var n = tagEls[g.k];
@@ -238,16 +240,22 @@ function mount(ctx) {
   });
   /* 태그 이름 바꾸기(두 번 누르기): 이 이동이 무슨 맥락인지 — 버튼 글은 그대로. 비우면 버튼 글로 돌아간다 */
   $('#lkl').addEventListener('dblclick', function (e) {
-    var n = e.target.closest && e.target.closest('.ltag'), lk = state.links;
-    if (!n || !lk || $('input', n)) return;
+    var n = e.target.closest && e.target.closest('.ltag');
+    if (!n || !state.links || $('input', n)) return;
     e.preventDefault(); e.stopPropagation();
-    var to = n.dataset.to, old = ctx.names ? ctx.names.get(lk.from, to) : '', inp = document.createElement('input');
+    startRename(n);
+  });
+  function renameTag(k) { var n = $('#lkl .ltag[data-k="' + k + '"]'); if (n && state.links && !$('input', n)) startRename(n); }
+  function startRename(n) {
+    var lk = state.links, to = n.dataset.to, old = ctx.names ? ctx.names.get(lk.from, to) : '', inp = document.createElement('input');
+    var base = old ? '' : n.textContent;               // 이름이 없을 때 보이던 버튼 글 — 그대로 두면 이름을 만들지 않는다
     inp.className = 'ltag-in'; inp.value = old || n.textContent; inp.setAttribute('aria-label', '연결 이름');
     inp.style.width = Math.max(6, inp.value.length + 2) + 'em';
     n.textContent = ''; n.appendChild(inp); n.classList.add('editing'); inp.focus(); inp.select();
     var done = false, finish = function (save) {
       if (done) return; done = true;
-      if (save && ctx.names) ctx.names.set(lk.from, to, inp.value.replace(/\s+/g, ' ').trim());
+      var v = inp.value.replace(/\s+/g, ' ').trim();
+      if (save && ctx.names) ctx.names.set(lk.from, to, v === base ? '' : v);
       renderLinks(true);
     };
     inp.addEventListener('keydown', function (ev) {
@@ -256,8 +264,8 @@ function mount(ctx) {
     });
     inp.addEventListener('input', function () { inp.style.width = Math.max(6, inp.value.length + 2) + 'em'; });
     inp.addEventListener('blur', function () { finish(true); });
-    ['pointerdown', 'click', 'dblclick'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
-  });
+    ['pointerdown', 'click', 'dblclick', 'contextmenu'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+  }
   var lg = $('#legend');
   ['pointerdown', 'wheel', 'dblclick'].forEach(function (ev) { lg.addEventListener(ev, function (e) { e.stopPropagation(); }); });
   $('#lgRows').addEventListener('change', function (e) {
@@ -277,11 +285,13 @@ function mount(ctx) {
     $('#lgW').value = String(prefs.width); $('#lgWv').textContent = prefs.width + 'px';
   }
   function applyWidth() { rowsEl.style.setProperty('--lkw', prefs.width + 'px'); }
-  function setStyle(patch) {
-    for (var k in patch) prefs[k] = patch[k];
+  function setStyle(patch, quiet) {                 // quiet: 되돌리기·다시 하기에서 부를 때(기록하지 않음)
+    var old = {};
+    for (var k in patch) { old[k] = prefs[k]; prefs[k] = patch[k]; }
     if (ctx.savePrefs) ctx.savePrefs();
     renderStyle();
     dispatch({type: 'style', colors: styleOf()});
+    if (!quiet && ctx.record) ctx.record({label: '선 색', undo: function () { setStyle(old, true); }, redo: function () { setStyle(patch, true); }});
   }
   function openMenu(el) { el.hidden = false; el.classList.remove('is-closing'); el.classList.add('is-open'); }
   function closeMenu(el) {
@@ -329,9 +339,12 @@ function mount(ctx) {
     var r = dot.closest('.lgrow[data-k]'), lk = state.links; if (!r || !lk) return;
     openSwatch(dot, lk.from + '>' + lk.order[+r.dataset.k], rgbHex(dot.style.backgroundColor));
   });
-  $('#lgW').addEventListener('input', function (e) {
-    prefs.width = Math.max(1, Math.min(6, +e.target.value || 2.5)); $('#lgWv').textContent = prefs.width + 'px';
-    applyWidth(); if (ctx.savePrefs) ctx.savePrefs();
+  function setWidth(w) { prefs.width = w; $('#lgW').value = String(w); $('#lgWv').textContent = w + 'px'; applyWidth(); if (ctx.savePrefs) ctx.savePrefs(); }
+  var wFrom = prefs.width;                            // 끌기 한 번(change) = 되돌리기 한 단계
+  $('#lgW').addEventListener('input', function (e) { setWidth(Math.max(1, Math.min(6, +e.target.value || 2.5))); });
+  $('#lgW').addEventListener('change', function () {
+    var a = wFrom, b = prefs.width; wFrom = b;
+    if (a !== b && ctx.record) ctx.record({label: '선 굵기', undo: function () { setWidth(a); wFrom = a; }, redo: function () { setWidth(b); wFrom = b; }});
   });
   document.addEventListener('click', function (e) {          // 밖을 누르면 드롭다운·색판 닫기
     var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
@@ -348,7 +361,7 @@ function mount(ctx) {
   }
 
   return {dispatch: dispatch, render: renderLinks, focusId: function () { return state.focusId; }, state: function () { return state; },
-          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown};
+          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown, renameTag: renameTag};
 }
 
 HD.viewLinks = {mount: mount};
