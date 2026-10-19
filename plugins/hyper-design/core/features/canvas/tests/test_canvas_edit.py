@@ -1151,3 +1151,27 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.wait_for_timeout(250)
     assert lk_to(dpage, "language"), "되돌리면 돌아온다"
     dpage.keyboard.press("Escape")
+
+
+def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
+    """스크린샷에서 찾은 버그: 글자 고치기 칸을 Esc 로 닫은 뒤 단축키가 먹혀야 하고, 작게 볼 때 선택 막대가 카드 바로 위에 붙어야 한다."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("e")
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")
+    assert tool(dpage) == ["hand"], "닫은 뒤 첫 단축키부터 먹힌다"
+    dpage.keyboard.press("0")
+    dpage.wait_for_timeout(300)
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"])
+    dpage.wait_for_timeout(150)
+    bar = dpage.locator("#selbar").bounding_box()
+    card = dpage.locator(f'.card[data-id="{c["id"]}"] .phone').bounding_box()
+    gap = card["y"] - (bar["y"] + bar["height"])
+    assert 0 <= gap <= 20, ("선택 막대는 카드 바로 위", gap)
+    dpage.keyboard.press("Escape")

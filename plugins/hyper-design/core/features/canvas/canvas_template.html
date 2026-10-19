@@ -1307,6 +1307,7 @@ function closeTedit(save) {
   if (tedit.hidden || !tedCtx) return;
   var t = tedCtx, v = $('textarea', tedit).value.replace(/[ \t]+/g, ' ').trim();
   tedCtx = null; tedit.hidden = true;
+  var ta = $('textarea', tedit); if (document.activeElement === ta) ta.blur();   // 숨긴 칸에 포커스가 남으면 다음 단축키를 '입력 중'으로 먹는다
   if (!modal.hidden) $('#mclose').focus({preventScroll: true});   // 크게 보기: 키(Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
   if (save && v && v !== t.old) {
     var n = editNote(t.id, t.h, HD.edits.say.text(v));
@@ -1459,7 +1460,8 @@ function placeSelbar() {                             // 고른 카드들 위 가
   ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
   $('[data-act="memo"]', bar).hidden = ids.length !== 1;
   bar.hidden = false;
-  bar.style.left = ((x0 + x1) / 2) + 'px'; bar.style.top = Math.max(60, y0 - 12 * tagScale() - 44) + 'px';
+  bar.hidden = false; bar.style.left = ((x0 + x1) / 2) + 'px';
+  bar.style.top = Math.max(60, y0 - bar.offsetHeight - 10 - 5 * Math.min(1, z) - 3) + 'px';   // 카드(고른 테두리 바깥) 바로 위 — 화면 좌표라 배율과 상관없이
 }
 $('#selbar').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;
