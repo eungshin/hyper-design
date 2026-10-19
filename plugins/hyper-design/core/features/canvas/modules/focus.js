@@ -68,8 +68,9 @@ function visibleOf(m, ui) {
 }
 
 /* Model + UI 상태(단계·체크·마우스·선 색) → 보일 것. DOM 없음.
-   m.geom(있으면) = {src:{x,y,w,h,sc}, rowTop, cap, left, srcRow, targets:{id:{x,y,w,h,rowTop,cap,row}}, tags:{k:{w,h}}}
-   → {groups:[{k,to,color,n,text,paths,pts,tag,lane,emph,dim}], legend:{title, all:'on'|'off'|'mixed', rows}, rings, dimCards, stage, nGroups, visible, groupOf} */
+   m.geom(있으면) = {src:{x,y,w,h,sc}, rowTop, cap, left, srcRow, targets:{id:{x,y,w,h,rowTop,cap,row}}, cards:[{x,y,w,h}], tags:{k:{w,h}}}
+   m.seq(있으면) = 화면 흐름 순서(id 목록) — 앞 화면으로 가는 그룹은 back(같은 색, 가늘고 흐리게)
+   → {groups:[{k,to,color,n,text,paths,pts,tag,lane,back,emph,dim}], legend:{title, all:'on'|'off'|'mixed', rows}, rings, dimCards, stage, nGroups, visible, groupOf} */
 function deriveView(m, ui) {
   ui = ui || {};
   var out = {groups: [], legend: null, rings: {}, dimCards: [], stage: 0, nGroups: 0, visible: [], groupOf: []};
@@ -96,7 +97,7 @@ function deriveView(m, ui) {
   var geo = m.geom, shown = gs.filter(function (g, k) { return vis[k]; }), planned = {}, tags = {};
   if (geo) {
     var S = geo.src, sc = S.sc || 1;
-    var pl = HD.route.plan({src: S, rowTop: geo.rowTop, cap: geo.cap, left: geo.left,
+    var pl = HD.route.plan({src: S, rowTop: geo.rowTop, cap: geo.cap, left: geo.left, cards: geo.cards,
       groups: shown.filter(function (g) { return geo.targets && geo.targets[g.to]; }).map(function (g) {
         var T = geo.targets[g.to];
         return {k: g.k, to: g.to, target: T, sameRow: T.row === geo.srcRow, members: g.items.map(function (i) {
@@ -108,12 +109,18 @@ function deriveView(m, ui) {
     HD.labels.placeTags(pl.map(function (p) {
       var sz = (geo.tags && geo.tags[p.k]) || {w: 120, h: 28};
       return {k: p.k, segs: p.laneSegs, w: sz.w, h: sz.h};
-    }), verts).forEach(function (t) { tags[t.k] = t; });
+    }), verts).forEach(function (t) {
+      var p = planned[t.k];                          // 곧은 선 위에 자리가 없으면 줄 위 빈자리에 떠서(마우스 올릴 때만 보인다)
+      if (t.fallback && p && p.floatAt) t = {k: t.k, x: p.floatAt.x, y: p.floatAt.y, box: t.box, fallback: true, float: true};
+      tags[t.k] = t;
+    });
   }
+  var seqAt = function (id) { return m.seq ? m.seq.indexOf(id) : -1; };
   shown.forEach(function (g) {
     var p = planned[g.k] || null;
     out.groups.push({k: g.k, from: m.from, to: g.to, color: col[g.k], n: m.targets[g.to].n, text: g.text, tagText: g.tag, count: g.items.length,
       items: g.items, paths: p ? p.d : [], pts: p ? p.pts : [], lane: p ? p.laneSeg : null, side: p ? p.side : null,
+      straight: !!(p && p.straight), back: seqAt(g.to) >= 0 && seqAt(m.from) >= 0 && seqAt(g.to) < seqAt(m.from),
       tag: tags[g.k] || null, emph: hv === g.k, dim: hv != null && hv !== g.k});
   });
   return out;

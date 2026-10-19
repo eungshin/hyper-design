@@ -81,7 +81,22 @@ function stubY(stubs, k, side, x0, x1, y, h) {
   return yy;
 }
 
-/* plan(o) — o = {src:{x,y,w,h}, rowTop, cap:{top,bottom}|null, left(왼쪽 통로 기준 x),
+// 직선 우선: 같은 줄 · 사이에 다른 카드가 없고 · 멤버 높이가 모두 도착 카드 높이 안이면 요소 높이 그대로 곧게 도착 카드 옆면으로.
+// 사이가 비었는지는 카드 목록(o.cards)으로만 안다 — 목록이 없으면 늘 차선 길(확인 못 한 것은 곧게 긋지 않는다).
+function straightOf(S, T, dir, members, cards) {
+  if (!cards) return null;
+  var lo = dir === 'R' ? S.x + S.w : T.x + T.w, hi = dir === 'R' ? T.x : S.x;
+  if (hi - lo < 8) return null;
+  var ys = members.map(function (m) { return Math.max(S.y + 8, Math.min(S.y + S.h - 8, m.y + m.h / 2)); });
+  if (ys.some(function (y) { return y < T.y + 8 || y > T.y + T.h - 8; })) return null;
+  var blocked = cards.some(function (c) {
+    if (Math.abs(c.x - S.x) < 1 && Math.abs(c.y - S.y) < 1 || Math.abs(c.x - T.x) < 1 && Math.abs(c.y - T.y) < 1) return false;
+    return c.x < hi && c.x + c.w > lo && ys.some(function (y) { return c.y < y && c.y + c.h > y; });
+  });
+  return blocked ? null : {ys: ys, lo: lo, hi: hi};
+}
+
+/* plan(o) — o = {src:{x,y,w,h}, rowTop, cap:{top,bottom}|null, left(왼쪽 통로 기준 x), cards:[{x,y,w,h}](있으면 직선 우선),
                   groups:[{k, to, members:[{x,y,w,h}](판 좌표), target:{x,y,w,h,rowTop,cap,row}, sameRow}]}
    → 그룹마다 {k, to, side, dir, rev, gx, lane, ly, tx(차선 끝), laneSeg:{a,b,y}, laneSegs(태그 후보 구간: 출발 줄 차선[, 대상 줄 차선]), pts:[[x,y]…](멤버마다), d:[…], verticals:[{x,y0,y1}]} */
 function plan(o) {
@@ -93,6 +108,8 @@ function plan(o) {
     var side = sides.every(function (s) { return s === sides[0]; }) ? sides[0] : dir;
     var edge = side === 'L' ? S.x : S.x + S.w;
     var r = {k: g.k, to: g.to, side: side, dir: dir, rev: side !== dir, edge: edge, same: same, T: T, tcx: tcx, members: g.members};
+    var st = same ? straightOf(S, T, dir, g.members, o.cards) : null;
+    if (st) { r.straight = st; r.side = dir; r.rev = false; return r; }
     if (!same) {
       r.xk = xk++; r.laneX = left - XLANE0 - XLANE_STEP * r.xk;                  // 잠정(바깥 통로 정한 뒤 다시)
       var rk = String(T.row != null ? T.row : T.rowTop);
@@ -105,14 +122,14 @@ function plan(o) {
   });
   var order = function (a, b) { return (a.rev - b.rev) || (a.span - b.span) || (a.k - b.k); };
   ['L', 'R'].forEach(function (s) {                 // 가까운 대상일수록 바깥 통로, 반대 방향은 가장 안쪽
-    var list = gs.filter(function (g) { return g.side === s; }).sort(order);
+    var list = gs.filter(function (g) { return g.side === s && !g.straight; }).sort(order);
     list.forEach(function (g, i) { var off = GUT0 + (list.length - 1 - i) * GUT_STEP; g.gx = s === 'L' ? g.edge - off : g.edge + off; });
   });
   // 왼쪽 통로는 이 카드의 왼쪽 바깥 통로들보다 더 왼쪽(줄 맨 앞 카드면 통로가 겹치지 않게 밀어낸다)
-  var minG = Math.min.apply(null, [left - XLANE0].concat(gs.filter(function (g) { return g.side === 'L'; }).map(function (g) { return g.gx - XLANE_STEP; })));
+  var minG = Math.min.apply(null, [left - XLANE0].concat(gs.filter(function (g) { return g.side === 'L' && !g.straight; }).map(function (g) { return g.gx - XLANE_STEP; })));
   gs.forEach(function (g) { if (!g.same) { g.laneX = minG - XLANE_STEP * g.xk; g.tx = g.laneX; } });
   var placed = [];                                  // 차선: 가로 구간이 겹치면 다른 차선(반대 방향은 겹치는 것들 위로)
-  gs.slice().sort(order).forEach(function (g) {
+  gs.filter(function (g) { return !g.straight; }).sort(order).forEach(function (g) {
     var lo = Math.min(g.gx, g.tx) - LANE_PAD, hi = Math.max(g.gx, g.tx) + LANE_PAD;
     var ov = placed.filter(function (p) { return p.lo < hi && lo < p.hi; }), lane = 0;
     if (g.rev) lane = ov.reduce(function (mx, p) { return Math.max(mx, p.lane + 1); }, 0);
@@ -122,6 +139,18 @@ function plan(o) {
   });
   var stubs = [];
   return gs.map(function (g) {
+    if (g.straight) {                               // 곧은 선: 꺾임 0. 태그 후보 = 카드 사이 틈(카드 안 구간 제외), 못 들어가면 줄 위 빈자리(floatAt)
+      var st = g.straight, ex = g.dir === 'R' ? st.hi : st.lo;
+      var sp = g.members.map(function (m, i) {
+        var sx = g.dir === 'R' ? m.x + m.w : m.x;
+        return [[sx, stubY(stubs, g.k, g.dir, sx, ex, st.ys[i], m.h)], [ex, 0]];
+      });
+      sp.forEach(function (p) { p[1][1] = p[0][1]; });
+      return {k: g.k, to: g.to, side: g.dir, dir: g.dir, rev: false, same: true, straight: true, gx: null, lane: null, ly: sp[0][0][1], tx: ex,
+              laneSeg: {a: st.lo, b: st.hi, y: sp[0][0][1]}, laneSegs: [{a: st.lo, b: st.hi, y: sp[0][0][1]}],
+              floatAt: {x: (st.lo + st.hi) / 2, y: laneY(o.rowTop, o.cap, 0)},
+              pts: sp, d: sp.map(function (p) { return roundPath(p, LINK_R); }), verticals: []};
+    }
     var ty = g.T.y - 10, ys = [];
     var pts = g.members.map(function (m) {
       var sx = g.side === 'L' ? m.x : m.x + m.w;

@@ -141,15 +141,18 @@ svg.ar marker path,svg.ar marker circle{fill:#9AA09A}
 #rows.focusing .card.lt .phone{box-shadow:0 0 0 8px var(--ring),0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.lt.em .phone{box-shadow:0 0 0 14px var(--ring),0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.lt.dim{opacity:.3}
-/* 색 링크 층: 카드(펼친 카드 포함) 위에 선·선 위 태그 */
-svg.lks{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:7}
+/* 색 링크 층: 선은 카드 아래(출발점은 화면 안 버튼 색칠이 보여 준다) · 선 위 태그는 카드 위 */
+svg.lks{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:-1}
 svg.lks path.lk{fill:none;stroke-width:var(--lkw,2.5px);stroke-linecap:round;stroke-linejoin:round;pointer-events:stroke;cursor:default}
-svg.lks path.lk.em{stroke-width:calc(var(--lkw,2.5px) + 2px)}
+svg.lks path.lk.bk{opacity:.45}   /* 앞 화면으로 가는 연결: 같은 색·같은 굵기(굵기 설정은 모든 선에 같게), 흐리게만 */
+svg.lks path.lk.em{stroke-width:calc(var(--lkw,2.5px) + 2px);opacity:1}
 svg.lks path.lk.dim{opacity:.15}
 #lkl{position:absolute;left:0;top:0;width:0;height:0;z-index:8}
 .ltag{position:absolute;left:0;top:0;visibility:hidden;transform:translate(-50%,-50%) scale(var(--ts,1));background:#fff;border:2px solid currentColor;border-radius:999px;padding:2px 12px;font-size:16px;line-height:1.35;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:default}
 /* --ts: 작게 볼 때(배율 < 1) 태그를 화면에서 글자 12px · 테두리 1.5px 이상으로(가운데 고정) */
 .ltag.on{visibility:visible}
+.ltag.float.em,.ltag.editing{visibility:visible}   /* 곧은 선 위에 자리가 없는 태그: 마우스 올릴 때만(범례엔 늘) */
+.ltag-in{font:inherit;color:#1c1c1c;border:0;outline:0;background:none;padding:0;text-align:center;min-width:4em}
 .ltag.em{box-shadow:0 0 0 3px currentColor}
 .ltag.dim{opacity:.15}
 .lnum{position:absolute;left:10px;top:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ring);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
@@ -725,7 +728,13 @@ function setArrows(on) {
   $('#lgFlow').checked = arrowsOn;
   prefs.arrows = arrowsOn; savePrefs();
 }
-var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled,
+// 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
+var LNKEY = 'hd-link-names:' + hashStr(location.pathname), linkNames = {};
+try { linkNames = JSON.parse(localStorage.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
+var names = {get: function (from, to) { return linkNames[from + '>' + to] || ''; },
+             set: function (from, to, v) { if (v) linkNames[from + '>' + to] = v; else delete linkNames[from + '>' + to];
+                                           try { localStorage.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {} }};
+var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled, names: names,
                              isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,

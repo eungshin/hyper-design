@@ -120,6 +120,31 @@ out.side = [0.25, 0.5, 0.8].map(f => [HD.route.sideOf(f * 375, 375, 'R'), HD.rou
   out.tags = HD.labels.placeTags(pl.map(p => ({k: p.k, segs: p.laneSegs, w: 90, h: 27})), verts);
   out.tagFallback = HD.labels.placeTags([{k: 0, segs: [{a: 0, b: 40, y: 0}], w: 90, h: 27}], []);
 }
+// 3d. 직선 우선(canvas-edit 3단계): 카드 목록을 주면 같은 줄 · 사이에 카드 없는 이웃은 요소 높이 그대로 곧게 옆면으로
+{
+  const S = {x: 1000, y: 1000, w: 375, h: 812}, cap = {top: 855, bottom: 896};
+  const T = (x, row, rowTop) => ({x, y: rowTop, w: 375, h: 812, rowTop, cap: {top: rowTop - 145, bottom: rowTop - 104}, row});
+  const card = x => ({x, y: 1000, w: 375, h: 812});
+  const groups = [
+    {k: 0, to: 'back', target: T(541, 1, 1000), sameRow: true, members: [{x: 1008, y: 1010, w: 40, h: 40}]},
+    {k: 1, to: 'far', target: T(1918, 1, 1000), sameRow: true, members: [{x: 1020, y: 1300, w: 335, h: 48}, {x: 1020, y: 1700, w: 335, h: 48}]},
+    {k: 2, to: 'near', target: T(1459, 1, 1000), sameRow: true, members: [{x: 1020, y: 1500, w: 335, h: 48}, {x: 1020, y: 1560, w: 335, h: 48}]},
+    {k: 3, to: 'bell', target: T(82, 1, 1000), sameRow: true, members: [{x: 1330, y: 1010, w: 40, h: 40}]},
+    {k: 4, to: 'up', target: T(1459, 0, 0), sameRow: false, members: [{x: 1030, y: 1100, w: 300, h: 40}]}];
+  const cards = [card(82), card(541), card(1000), card(1459), card(1918), {x: 1459, y: 0, w: 375, h: 812}];
+  const pl = HD.route.plan({src: S, rowTop: 1000, cap, left: 300, groups, cards});
+  out.planStraight = pl.map(p => ({k: p.k, straight: !!p.straight, side: p.side, pts: p.pts, segs: p.laneSegs, verts: p.verticals, floatAt: p.floatAt || null}));
+  const verts = [];
+  pl.forEach(p => p.verticals.forEach(v => verts.push({k: p.k, x: v.x, y0: v.y0, y1: v.y1})));
+  out.tagsStraight = HD.labels.placeTags(pl.map(p => ({k: p.k, segs: p.laneSegs, w: 90, h: 27})), verts);
+  // 되돌아가는 연결(흐름 순서상 앞 화면으로) 표시 · 태그 자리가 없으면 줄 위 빈자리(floatAt)에 떠서 마우스 올릴 때만
+  const links = [{to: 'prev', path: 'p0', text: '이전', rect: {x: 8, y: 10, w: 40, h: 40}}, {to: 'next', path: 'p1', text: '다음으로 가기 버튼', rect: {x: 20, y: 700, w: 335, h: 48}}];
+  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src'; m.seq = ['prev', 'src', 'next'];
+  m.geom = {src: {x: 1000, y: 1000, w: 375, h: 812, sc: 1}, rowTop: 1000, cap, left: 300, srcRow: 1,
+            targets: {prev: T(541, 1, 1000), next: T(1459, 1, 1000)}, cards: [card(541), card(1000), card(1459)], tags: {0: {w: 60, h: 27}, 1: {w: 160, h: 27}}};
+  const v = F.deriveView(m, F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m}));
+  out.viewStraight = v.groups.map(g => ({to: g.to, back: !!g.back, straight: g.pts[0].length === 2, tag: g.tag}));
+}
 
 // 4. prefs (v2: 색 프리셋 · 랜덤 · 쌍 색 · 굵기 · 움직임, v1 sat 는 버림)
 const mk = o => k => (k in o ? o[k] : null);
@@ -375,6 +400,30 @@ def test_plan_routes(res):
             for s1 in (s for pts in p["pts"] for s in segs_of(pts)):
                 for s2 in (s for pts in q["pts"] for s in segs_of(pts)):
                     assert collinear_overlap(s1, s2) <= 20, (p["k"], q["k"], s1, s2)
+
+
+def test_plan_straight_neighbours(res):
+    """3단계 직선 우선: 카드 목록이 있으면 같은 줄 · 사이에 카드 없는 이웃은 곧은 가로선 한 줄(옆면으로), 나머지는 지금 차선 길."""
+    P = {p["k"]: p for p in res["planStraight"]}
+    near, back = P[2], P[0]
+    for g, edge in ((near, 1459), (back, 541 + 375)):
+        assert g["straight"] and g["verts"] == [], g
+        for pts in g["pts"]:
+            assert len(pts) == 2 and pts[0][1] == pts[1][1] and pts[1][0] == edge, pts     # 꺾임 0 · 도착 카드 옆면
+    assert [p[0][1] for p in near["pts"]] == [1524, 1584], near["pts"]                   # 요소 높이 그대로(멤버마다)
+    assert back["pts"][0][0][0] == 1008 and back["pts"][0][1][0] < 1000                   # 왼쪽 요소는 왼쪽으로
+    for k in (1, 3, 4):                                                                    # 사이에 카드(far · bell) · 다른 줄(up) = 차선 길
+        assert not P[k]["straight"] and P[k]["verts"], P[k]
+    assert near["segs"][0]["a"] == 1375 and near["segs"][0]["b"] == 1459                  # 태그 후보 = 카드 사이 틈만(카드 안 구간 제외)
+    assert near["floatAt"] and near["floatAt"]["y"] < 1000                                 # 자리 없으면 줄 위 빈자리
+    for pts in P[1]["pts"] + P[3]["pts"]:                                                  # 차선 길은 곧은 선과 20px 넘게 겹치지 않는다
+        for s1 in segs_of(pts):
+            for s2 in (s for q in near["pts"] + back["pts"] for s in segs_of(q)):
+                assert collinear_overlap(s1, s2) <= 20, (s1, s2)
+    v = {g["to"]: g for g in res["viewStraight"]}
+    assert v["prev"]["back"] and not v["next"]["back"], v                                  # 흐름 순서상 앞 화면 = 되돌아가는 연결
+    assert v["next"]["straight"] and v["next"]["tag"]["float"] and v["next"]["tag"]["y"] < 1000, v["next"]   # 84px 틈에 160px 태그 → 줄 위에 떠서
+    assert not v["prev"]["tag"].get("float"), v["prev"]                                    # 들어가면 선 위
 
 
 def test_place_tags(res):

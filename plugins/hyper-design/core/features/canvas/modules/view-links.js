@@ -2,7 +2,8 @@
    경로·태그 자리는 HD.route.plan / HD.labels.placeTags(focus.deriveView 안)가 정한다. 여기서는 DOM 을 재고 그리기만.
    상태는 HD.focus 리듀서 하나. 이벤트는 의도를 만들어 dispatch(intent) 만 부른다 → reduce → 그리기.
    HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown}
-   ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale()} */
+   ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale(), names:{get(from,to), set(from,to,text)}}
+   names: 태그 이름(이 이동이 무슨 맥락인지) — 버튼 글과 따로. 없으면 태그는 버튼 글. */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -38,6 +39,7 @@ function mount(ctx) {
     graph = G.addLinks(graph, focusId, items.map(function (l) { return {to: String(l.to), path: String(l.path || ''), text: String(l.text || ''), rect: l.rect}; }));
     var m = F.assignColors(G.edgesFrom(graph, focusId, 'link').map(function (e) { return {to: e.to, path: e.via.path, text: e.via.text, rect: e.via.rect}; }), d.accent, F.LINK_COLORS);
     m.from = focusId; m.accent = d.accent || ''; m.titles = TITLES; m.docHeight = +d.docHeight || 0;
+    m.seq = (graph.screens || []).map(function (s) { return s.id; });   // 흐름 순서 — 앞 화면으로 가는 연결은 가늘고 흐리게
     return m;
   }
   function applyFocus() {
@@ -95,7 +97,9 @@ function mount(ctx) {
     var src = lk && lk.from === state.focusId ? cardEl(lk.from) : null;
     if (!src) { curView = null; applyFocus(); renderLegend(null); return; }
     var layer = $('#lkl'), svg = $('#lks'), gs = F.groupsOf(lk);
-    layer.innerHTML = gs.map(function (g) { return '<div class="ltag"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(g.tag) + '</div>'; }).join('');
+    layer.innerHTML = gs.map(function (g) {
+      var nm = ctx.names ? ctx.names.get(lk.from, g.to) : '';
+      return '<div class="ltag' + (nm ? ' named' : '') + '"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(nm || g.tag) + '</div>'; }).join('');
     var tagEls = $$('.ltag', layer), ph = $('.phone', src), sg = geomOf(src), targets = {}, sizes = {};
     lk.order.forEach(function (t) {
       var c = cardEl(t); if (!c) return;
@@ -105,15 +109,16 @@ function mount(ctx) {
     var ts = ctx.tagScale ? ctx.tagScale() : 1;        // 작게 볼 때 태그는 화면에서 읽히는 크기로 키운다 → 겹침 상자도 그 크기로
     tagEls.forEach(function (n) { sizes[n.dataset.k] = {w: n.offsetWidth * ts, h: n.offsetHeight * ts}; });
     lk.geom = {src: {x: sg.x, y: sg.y, w: ph.offsetWidth, h: ph.offsetHeight, sc: ph.offsetWidth / CARD.w},
-               rowTop: sg.rowTop, cap: sg.cap, srcRow: sg.row, left: ctx.LEFT || 0, targets: targets, tags: sizes};
+               rowTop: sg.rowTop, cap: sg.cap, srcRow: sg.row, left: ctx.LEFT || 0, targets: targets, tags: sizes,
+               cards: $$('.card', rowsEl).map(function (c) { var p = $('.phone', c); return {x: c.offsetLeft, y: c.offsetTop, w: p.offsetWidth, h: p.offsetHeight}; })};
     var v = curView = F.deriveView(lk, state), defs = '', paths = '', cols = [];
     v.groups.forEach(function (g) {
       var n = tagEls[g.k];
-      n.style.color = g.color; n.title = g.text + ' → ' + (TITLES[g.to] || g.to);
-      if (g.tag) { n.style.left = g.tag.x + 'px'; n.style.top = g.tag.y + 'px'; n.classList.add('on'); }
+      n.style.color = g.color; n.title = g.text + ' → ' + (TITLES[g.to] || g.to) + ' · 두 번 눌러 이름 바꾸기';
+      if (g.tag) { n.style.left = g.tag.x + 'px'; n.style.top = g.tag.y + 'px'; n.classList.add(g.tag.float ? 'float' : 'on'); }   // float: 선 위에 자리가 없음 → 마우스 올릴 때만
       var ci = cols.indexOf(g.color); if (ci < 0) { ci = cols.length; cols.push(g.color); }
       g.paths.forEach(function (d, i) {
-        paths += '<path class="lk" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
+        paths += '<path class="lk' + (g.back ? ' bk' : '') + '" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
           '" stroke="' + g.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + d + '"><title>' + esc(g.text) + ' → ' + esc(TITLES[g.to] || g.to) + '</title></path>';
       });
     });
@@ -227,6 +232,28 @@ function mount(ctx) {
     }
     if (k != null && !vis[k]) k = null;
     dispatch({type: 'hover', k: k});
+  });
+  /* 태그 이름 바꾸기(두 번 누르기): 이 이동이 무슨 맥락인지 — 버튼 글은 그대로. 비우면 버튼 글로 돌아간다 */
+  $('#lkl').addEventListener('dblclick', function (e) {
+    var n = e.target.closest && e.target.closest('.ltag'), lk = state.links;
+    if (!n || !lk || $('input', n)) return;
+    e.preventDefault(); e.stopPropagation();
+    var to = n.dataset.to, old = ctx.names ? ctx.names.get(lk.from, to) : '', inp = document.createElement('input');
+    inp.className = 'ltag-in'; inp.value = old || n.textContent; inp.setAttribute('aria-label', '연결 이름');
+    inp.style.width = Math.max(6, inp.value.length + 2) + 'em';
+    n.textContent = ''; n.appendChild(inp); n.classList.add('editing'); inp.focus(); inp.select();
+    var done = false, finish = function (save) {
+      if (done) return; done = true;
+      if (save && ctx.names) ctx.names.set(lk.from, to, inp.value.replace(/\s+/g, ' ').trim());
+      renderLinks(true);
+    };
+    inp.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();                             // Esc 가 연결 보기를 끄지 않게 · 캔버스 단축키도 막는다
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('input', function () { inp.style.width = Math.max(6, inp.value.length + 2) + 'em'; });
+    inp.addEventListener('blur', function () { finish(true); });
+    ['pointerdown', 'click', 'dblclick'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
   });
   var lg = $('#legend');
   ['pointerdown', 'wheel', 'dblclick'].forEach(function (ev) { lg.addEventListener(ev, function (e) { e.stopPropagation(); }); });
