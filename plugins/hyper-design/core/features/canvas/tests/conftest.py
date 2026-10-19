@@ -21,7 +21,7 @@ BROWSER = {
     "test_wheel_pans_ctrl_wheel_zooms": ("input",),
     "test_left_drag_pans_even_from_a_card": ("input", "modal"),
     "test_right_button_menu_middle_pans": ("input",),
-    "test_click_opens_modal_and_esc_order": ("input", "modal", "links"),
+    "test_dblclick_opens_modal_and_esc_order": ("input", "modal", "links"),
     "test_p_picks_only_inside_modal": ("modal",),
     "test_typing_guard_blocks_shortcuts": ("input",),
     "test_notes_roundtrip_same_key": ("notes",),
@@ -56,6 +56,7 @@ BROWSER = {
     "test_memo_tool_opens_card_memo": ("tools", "notes"),
     "test_modal_pins_follow_navigated_screen": ("modal", "notes"),
     "test_element_tools_outline_hovered_element_by_kind": ("tools",),
+    "test_pres_button_and_modal_dblclick_edits_text": ("modal", "notes"),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),

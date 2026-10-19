@@ -95,7 +95,7 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 .card{flex:none;width:var(--card-w,375px);position:relative}
 .phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:var(--card-r,28px);overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
 .card.xp{z-index:6}
-.card.xp>:not(.phone):not(.anno){visibility:hidden}
+.card.xp>:not(.phone):not(.pres){visibility:hidden}
 .phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
 .cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:var(--card-r,28px);cursor:pointer}
 .cover:hover,.cover:focus-visible{outline:4px solid #2563eb;outline-offset:0}
@@ -202,10 +202,11 @@ svg.lks path.lk.dim{opacity:.15}
 #legend .lgflow{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#555;cursor:pointer}
 
 /* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
-.anno{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
-.anno::before{content:"\270E\00a0";font-weight:400}
-.anno::after{content:'';position:absolute;left:0;right:0;top:100%;height:10px}
-.card:hover .anno,.anno:focus-visible{display:block}
+.pres{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
+.pres::before{content:"\25B6\00a0";font-weight:400;font-size:.8em}
+.pres::after{content:'';position:absolute;left:0;right:0;top:100%;height:10px}
+.card:hover .pres,.pres:focus-visible{display:block}
+.card.draft .pres{display:none!important}
 #khint{position:absolute;left:12px;bottom:10px;z-index:3;pointer-events:none;font-size:13px;color:#6b6b66;background:rgba(255,255,255,.82);border-radius:8px;padding:5px 10px;white-space:nowrap}
 body.modal-open #khint{display:none}
 /* 도구 막대(왼쪽): 손 = 기본(끌면 화면 이동) · 이동 = 카드를 끌어 옮기기. 단계마다 도구가 늘어난다 */
@@ -341,7 +342,7 @@ svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-widt
       <div class="rows" id="rows"></div>
       <div class="foot" id="foot"></div>
     </div>
-    <div id="khint">Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 클릭 크게 보기</div>
+    <div id="khint">Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 두 번 눌러 크게 보기</div>
     <nav id="tools" aria-label="도구">
       <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
@@ -450,8 +451,8 @@ var html = '<svg class="ar" id="ar" width="1" height="1"><defs><marker id="hd-he
       pol.slice(3).map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></details>' : '';
     html += '<div class="card" data-id="' + esc(s.id) + '"><div class="phone"><iframe scrolling="no" tabindex="-1" title="' + esc(s.title) +
       '" data-src="' + esc(s.file) + '"></iframe><button class="cover" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="anno" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" title="이 화면에 주석 달기" aria-label="' + esc(s.title) + ' 주석 달기">주석</button>' +
+      '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="pres" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
+      '" title="실제로 눌러 보기(두 번 눌러도 같아요)" aria-label="' + esc(s.title) + ' 크게 보기">보기</button>' +
       '<div class="ftitle">' + (s.state ? '<span class="state">상태</span>' : '') + esc(s.title) + '</div>' +
       (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + (shown ? '<ul class="pol">' + shown + '</ul>' : '') + more + '</div>';
   });
@@ -648,7 +649,7 @@ $$('#tools .tb').forEach(function (b) {
   b.addEventListener('pointerleave', function () { $('#ttip').hidden = true; });
 });
 
-var ptrs = new Map(), drag = null, pinch = null, justDragged = false, spaceDown = false, cutJust = false, openT = 0;
+var ptrs = new Map(), drag = null, pinch = null, justDragged = false, spaceDown = false, cutJust = false;
 function mid() { var a = Array.from(ptrs.values()); return {x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1}; }
 function startDrag(id, p, type) { drag = {id: id, x: p.x, y: p.y, tx: tx, ty: ty, moved: false, thr: type === 'touch' ? 8 : 4}; }
 // 마우스 버튼: 왼쪽 = 도구대로 · 가운데 = 늘 화면 이동 · 오른쪽 = 누르면 메뉴(contextmenu 가 받는다), 끌면 자르기. Space 를 누른 채 끌기 = 화면 이동
@@ -671,8 +672,8 @@ pane.addEventListener('pointerdown', function (e) {
     var cd = tool === 'move' && !midBtn && !rightBtn && !spaceDown && e.target.closest ? e.target.closest('.card') : null;
     if (rightBtn || (tool === 'knife' && !midBtn && !spaceDown)) { drag.cut = [[e.clientX, e.clientY]]; drag.right = rightBtn; }
     else if (sk) startTrig([VL.item(+sk.dataset.i)], sk.closest('.card'), e);
-    else if (tc && !e.target.closest('.anno')) startTrig(null, tc, e);
-    else if (cd && !e.target.closest('.anno')) {
+    else if (tc && !e.target.closest('.pres')) startTrig(null, tc, e);
+    else if (cd && !e.target.closest('.pres')) {
       var cp = cardPos[cd.dataset.id] || {dx: 0, dy: 0}; drag.card = cd; drag.ox = cp.dx; drag.oy = cp.dy;
       drag.prev = cardPos[cd.dataset.id] ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null;
     }
@@ -742,16 +743,15 @@ pane.addEventListener('click', function (e) {
   if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
   var mc = cl('.card');
   if (mc && !e.shiftKey && (tool === 'memo' || mc.classList.contains('draft'))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }
-  var an = cl('.anno');
+  var an = cl('.pres');
   var focusId = VL.focusId();
-  if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title, true); return; }
+  if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title); return; }   // ▶ 보기 = 실제로 눌러 보기
   var c = cl('.cover');
   if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; VL.dispatch(focusId === id ? {type: 'cycle'} : {type: 'focus', id: id}); return; }
-  if (c) {                                         // 한 번 = 크게 보기(두 번 누르기와 나누려고 조금 늦게) · 두 번 = 글자 고치기(dblclick 이 받는다)
-    clearTimeout(openT);
-    if (e.detail >= 2) return;
-    var go = function () { if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); openModal(c.dataset.file, c.dataset.title); };
-    if (e.detail === 1) openT = setTimeout(go, 260); else go();
+  if (c) {                                         // 마우스 한 번 = 크게 보기 아님(판 위에서 고르고 고친다) · 두 번 · 키보드(Enter/Space, detail 0) = 크게 보기
+    if (e.detail === 1) { if (focusId) VL.dispatch({type: 'exitFocus'}); return; }
+    if (focusId) VL.dispatch({type: 'exitFocus'});
+    openModal(c.dataset.file, c.dataset.title);
     return;
   }
   if (focusId && !e.shiftKey && !cl('.card, .ltag, path.lk')) VL.dispatch({type: 'exitFocus'});   // 빈 판을 그냥 누르면 연결 보기 끝
@@ -798,9 +798,16 @@ function closeModal() {                            // hidden 은 바로(상태),
   mcloseT = setTimeout(function () { modal.classList.remove('is-closing'); if (modal.hidden) mframe.removeAttribute('src'); },
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
-mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) sendPending(mframe, mscreen); });
+mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) sendPending(mframe, mscreen); try { mframe.contentWindow.postMessage({type: 'hd-edit', on: true}, '*'); } catch (e) {} });
+addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl) → 그 자리에 고치기 칸
+  var d = e.data; if (!d || d.type !== 'hd-dbl' || modal.hidden || e.source !== mframe.contentWindow) return;
+  if (!d.path) { toast('여기에는 고칠 글자가 없어요'); return; }
+  editScreenText(String(d.screen || mscreen), d, true);
+});
 addEventListener('message', function (e) {         // 크게 보기 안에서 다른 화면으로 넘어감(palette.js hd-here) → 그 화면의 제목·번호·미리보기만
-  var d = e.data; if (!d || d.type !== 'hd-here' || modal.hidden || e.source !== mframe.contentWindow || !d.screen || d.screen === mscreen) return;
+  var d = e.data; if (!d || d.type !== 'hd-here' || modal.hidden || e.source !== mframe.contentWindow || !d.screen) return;
+  try { e.source.postMessage({type: 'hd-edit', on: true}, '*'); } catch (err) {}   // 그림·글꼴을 다 받기(load) 전에도 두 번 누르기 고치기가 되게
+  if (d.screen === mscreen) return;
   mscreen = String(d.screen); $('#mtitle').textContent = titleOf(mscreen);
   hidePop(); drawPins(); sendPending(mframe, mscreen);
 });
@@ -1025,7 +1032,7 @@ addEventListener('keydown', function (e) {         // Space 를 누른 채 끌�
 addEventListener('keyup', function (e) { if (e.code === 'Space') { spaceDown = false; pane.classList.remove('space'); } });
 addEventListener('blur', function () { spaceDown = false; pane.classList.remove('space'); });
 addEventListener('keydown', function (e) {         // Ctrl+Z 되돌리기 · Ctrl+Shift+Z / Ctrl+Y 다시 하기
-  if (typing(e) || !(e.ctrlKey || e.metaKey) || e.altKey || !modal.hidden || document.body.dataset.tab !== 'screens') return;
+  if (typing(e) || !(e.ctrlKey || e.metaKey) || e.altKey || document.body.dataset.tab !== 'screens') return;   // 크게 보기 안 편집도 되돌린다
   var k = (e.key || '').toLowerCase();
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
@@ -1223,10 +1230,10 @@ function editCardText(el, field) {
   ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
 }
 var tedCtx = null;
-function editScreenText(id, h) {                     // 화면 안 글자: 그 요소 자리에 고치기 칸
+function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소 자리에 고치기 칸(판 위 카드 또는 크게 보기)
   closeCmenu(); endPick();
-  var c = VL.cardEl(id), ph = c ? $('.phone', c) : null; if (!ph) return;
-  var r = ph.getBoundingClientRect(), s = r.width / CARD.w, q = h.rect || {x: 0, y: 0, w: 120, h: 20};
+  var c = inModal ? null : VL.cardEl(id), ph = inModal ? mbox : c ? $('.phone', c) : null; if (!ph) return;
+  var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / CARD.w, q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
   tedCtx = {id: id, h: h, old: old};
   ta.value = old;
@@ -1240,6 +1247,7 @@ function closeTedit(save) {
   if (tedit.hidden || !tedCtx) return;
   var t = tedCtx, v = $('textarea', tedit).value.replace(/[ \t]+/g, ' ').trim();
   tedCtx = null; tedit.hidden = true;
+  if (!modal.hidden) $('#mclose').focus({preventScroll: true});   // 크게 보기: 키(Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
   if (save && v && v !== t.old) {
     var n = editNote(t.id, t.h, HD.edits.say.text(v));
     n.edit = 'text'; n.value = v;
@@ -1258,11 +1266,6 @@ pane.addEventListener('dblclick', function (e) {
   var ft = cl('.ftitle'), fd = cl('.fdesc'), cv = cl('.cover');
   if (ft) { e.preventDefault(); editCardText(ft, 'title'); return; }
   if (fd) { e.preventDefault(); editCardText(fd, 'purpose'); return; }
-  if (cv && tool !== 'knife') {
-    e.preventDefault(); clearTimeout(openT);
-    var card = cv.closest('.card');
-    askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); else if (h) toast('여기에는 고칠 글자가 없어요'); }, true);
-  }
 });
 /* ---------- 요소 테두리(요소 도구 — modules/tools.js 의 hit 가 있는 도구): 마우스를 올린 카드 안 요소를 화면에 물어(hd-hit-at) 종류별 테두리 ---------- */
 var hov = {busy: false, next: null, card: null};

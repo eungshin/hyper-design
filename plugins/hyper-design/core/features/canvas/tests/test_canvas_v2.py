@@ -369,19 +369,19 @@ def test_gym_annotate_button(gpage):
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(150)
     assert gpage.evaluate("document.getElementById('modal').hidden")
-    # 카드에 올리면 '주석' → 누르면 주석 달기가 켜진 채로 크게 보기
+    # 카드에 올리면 '▶ 보기' → 누르면 실제로 눌러 보는 크게 보기(재작업 S3: 주석 버튼은 왼쪽 도구로)
     b = zoom_to(gpage, sid)
-    anno = gpage.locator(f'.card[data-id="{sid}"] .anno')
+    pres = gpage.locator(f'.card[data-id="{sid}"] .pres')
     gpage.mouse.move(5, 5)
-    assert not anno.is_visible()
+    assert not pres.is_visible()
     gpage.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
     gpage.wait_for_timeout(100)
-    assert anno.is_visible() and anno.text_content().strip() == "주석"
-    ab = anno.bounding_box()
-    assert ab["y"] + ab["height"] <= b["y"] + 0.5, (ab, b)      # v2: 카드 바깥(오른쪽 위)
-    anno.click()
+    assert pres.is_visible() and pres.text_content().strip() == "보기"
+    ab = pres.bounding_box()
+    assert ab["y"] + ab["height"] <= b["y"] + 0.5, (ab, b)      # 카드 바깥(오른쪽 위)
+    pres.click()
     gpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert gpage.get_attribute("#mpick", "aria-pressed") == "true"
+    assert gpage.get_attribute("#mpick", "aria-pressed") != "true"
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(150)
 
@@ -389,7 +389,7 @@ def test_gym_annotate_button(gpage):
 def test_gym_shortcut_hint(gpage):
     hint = gpage.locator("#khint")
     assert hint.is_visible()
-    assert hint.text_content().strip() == "Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 클릭 크게 보기"   # v3: 화살표 → 주요 흐름
+    assert hint.text_content().strip() == "Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 두 번 눌러 크게 보기"   # 재작업 S3
     hb, pr = hint.bounding_box(), gpage.locator("#screens").bounding_box()
     assert hb["x"] < pr["x"] + 40 and hb["y"] + hb["height"] > pr["y"] + pr["height"] - 40
     gpage.evaluate("document.querySelector('#rows .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))")

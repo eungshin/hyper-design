@@ -13,7 +13,8 @@
    kind = link·button·field·text·box — 캔버스가 종류별 테두리를 그린다, 요소가 없으면 path:null).
    leaf:true 면 그 자리 요소 그대로(글자 고치기).
    반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다).
-   불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다. */
+   불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
+   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다. */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -144,10 +145,10 @@
     if (t === 'input' || t === 'select' || t === 'textarea') return 'field';
     return ownText(el) ? 'text' : 'box';
   }
-  function sendHit(at, leaf) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
+  function sendHit(at, leaf, type) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
-    if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: 'hd-hit', screen: screenId(), path: null}); return; }
-    send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
+    if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
+    send({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
           rect: rectOf(el), to: toOf(el), kind: kindOf(el)});
   }
   var pend = [];
@@ -199,6 +200,13 @@
   }
 
   send({type: 'hd-here', screen: screenId()});
+  var editOn = false;
+  document.addEventListener('dblclick', function (e) {    // 크게 보기에서 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸
+    if (!editOn || picking || !window.parent || window.parent === window) return;
+    var el = leafOf(e.target); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    sendHit(el, true, 'hd-dbl');
+  }, true);
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);
@@ -207,6 +215,7 @@
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
     else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
     else if (d.type === 'hd-pending') pending(d.items);
+    else if (d.type === 'hd-edit') editOn = !!d.on;
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
       if (!picking && box) box.style.display = 'none';

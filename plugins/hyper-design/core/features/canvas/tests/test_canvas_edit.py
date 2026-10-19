@@ -166,12 +166,12 @@ def test_move_tool_moves_card_and_persists(epage):
     assert "pos" not in (epage.evaluate("localStorage.getItem('hd-canvas-prefs')") or ""), "prefs 에 넣지 않는다"
     reload(epage)
     assert card_xy(epage, p["id"]) == [x1, y1], "새로고침 뒤에도 옮긴 자리"
-    # 이동 도구에서도 그냥 클릭 = 크게 보기(1A)
+    # 이동 도구에서도 두 번 누르기 = 크게 보기(재작업 S3)
     epage.click("#fit")
     epage.wait_for_timeout(150)
     epage.keyboard.press("v")
     q = visible_cover(epage)
-    epage.mouse.click(q["x"], q["y"])
+    epage.mouse.dblclick(q["x"], q["y"])
     epage.wait_for_function("!document.getElementById('modal').hidden")
     epage.keyboard.press("Escape")
     epage.wait_for_timeout(150)
@@ -743,10 +743,12 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     sc = ph["width"] / dpage.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card?.w || 375")
     x, y = ph["x"] + leaf["x"] * sc, ph["y"] + leaf["y"] * sc
     n0 = len(notes_of(dpage))
-    dpage.mouse.dblclick(x, y)
+    dpage.mouse.click(x, y, button="right")
+    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /글자 고치기/.test(b.textContent))", timeout=3000)
+    pick(dpage, "글자 고치기")
     dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
     assert dpage.input_value("#tedit textarea") == leaf["text"]
-    assert dpage.evaluate("document.getElementById('modal').hidden"), "두 번 누르기는 크게 보기를 열지 않는다"
+    assert dpage.evaluate("document.getElementById('modal').hidden")
     dpage.fill("#tedit textarea", "바뀐 글자")
     dpage.press("#tedit textarea", "Enter")
     wait_notes(dpage, n0 + 1)
@@ -756,16 +758,7 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     fr.wait_for_function("(t) => [...document.querySelectorAll('*')].some(el => !el.children.length && el.textContent.trim() === t)", arg=leaf["text"], timeout=3000)
-    box = fr.evaluate("""(() => { for (const el of document.querySelectorAll('section, main, div')) {   // 자기 글자가 없는 큰 요소의 빈 자리
-        const r = el.getBoundingClientRect(); if (r.width < 200 || r.height < 200) continue;
-        for (let yy = r.top + 4; yy < Math.min(r.bottom, 600); yy += 6) for (let xx = r.left + 4; xx < r.right; xx += 12)
-          if (document.elementFromPoint(xx, yy) === el) return {x: xx, y: yy}; } return null; })()""")
-    if box:
-        dpage.mouse.dblclick(ph["x"] + box["x"] * sc, ph["y"] + box["y"] * sc)
-        dpage.wait_for_function("(document.getElementById('toast') || {}).textContent === '여기에는 고칠 글자가 없어요'", timeout=3000)
-        assert dpage.evaluate("document.getElementById('tedit').hidden"), "글자 없는 큰 요소는 고치지 않는다"
-        dpage.wait_for_timeout(400)
-    dpage.mouse.click(x, y)                          # 한 번 누르기는 그대로 크게 보기(조금 늦게)
+    dpage.mouse.dblclick(x, y)                       # 두 번 누르기 = 크게 보기(재작업 S3)
     dpage.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
     dpage.keyboard.press("Escape")
     dpage.wait_for_timeout(200)
@@ -973,3 +966,33 @@ def test_element_tools_outline_hovered_element_by_kind(dpage):
     dpage.mouse.move(x + 2, y + 2)
     dpage.wait_for_timeout(200)
     assert elbox(dpage) is None, "손 도구에서는 테두리 없음"
+
+
+def test_pres_button_and_modal_dblclick_edits_text(dpage):
+    """S3: 카드 위 [▶ 보기] = 실제로 눌러 보는 크게 보기. 그 안에서 글자를 두 번 누르면 그 자리에서 고친다."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
+    dpage.mouse.move(ph["x"] + ph["width"] / 2, ph["y"] + ph["height"] / 2)
+    pres = dpage.locator('.card[data-id="job"] .pres')
+    pres.wait_for(state="visible")
+    assert "보기" in pres.text_content() and dpage.locator(".anno").count() == 0, "검정 [주석] 버튼은 없어졌다"
+    pres.click()
+    dpage.wait_for_function("!document.getElementById('modal').hidden")
+    assert dpage.get_attribute("#mpick", "aria-pressed") != "true", "보기는 주석 달기를 켜지 않는다"
+    fr = dpage.frame_locator("#mframe")
+    fr.locator("h1").wait_for()
+    dpage.wait_for_timeout(300)
+    n0 = len(notes_of(dpage))
+    old = fr.locator("h1").text_content().strip()
+    fr.locator("h1").dblclick()
+    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    assert dpage.input_value("#tedit textarea") == old
+    dpage.fill("#tedit textarea", "크게 보기에서 고침")
+    dpage.press("#tedit textarea", "Enter")
+    wait_notes(dpage, n0 + 1)
+    assert notes_of(dpage)[-1]["screen"] == "job"
+    fr.locator("h1", has_text="크게 보기에서 고침").wait_for(timeout=3000)
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_timeout(200)

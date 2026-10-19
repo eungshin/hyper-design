@@ -109,17 +109,21 @@ def test_right_button_menu_middle_pans(bpage):
         bpage.wait_for_timeout(80)
         assert cam(bpage)[0] != t0[0] and cam(bpage)[1] == t0[1], ("가운데 끌기 = 이동", start)
         assert not modal_open(bpage)
-    c = cover_center(bpage)                         # 가운데 끌기 뒤 첫 왼쪽 클릭은 먹히지 않는다
-    bpage.mouse.click(c["x"], c["y"])
+    c = cover_center(bpage)                         # 가운데 끌기 뒤 첫 왼쪽 두 번 누르기는 먹히지 않는다
+    bpage.mouse.dblclick(c["x"], c["y"])
     bpage.wait_for_function("!document.getElementById('modal').hidden")
     bpage.keyboard.press("Escape")
     bpage.wait_for_timeout(120)
 
 
-def test_click_opens_modal_and_esc_order(bpage):
+def test_dblclick_opens_modal_and_esc_order(bpage):
+    """재작업 S3: 마우스 한 번 = 크게 보기 아님(판 위에서 고른다), 두 번 = 크게 보기."""
     fit_view(bpage)
     c = cover_center(bpage)
     bpage.mouse.click(c["x"], c["y"])
+    bpage.wait_for_timeout(300)
+    assert not modal_open(bpage), "한 번 누르기는 크게 보기를 열지 않는다"
+    bpage.mouse.dblclick(c["x"], c["y"])
     bpage.wait_for_function("!document.getElementById('modal').hidden")
     bpage.keyboard.press("Escape")
     bpage.wait_for_timeout(120)
@@ -140,7 +144,7 @@ def test_p_picks_only_inside_modal(bpage):
     assert not modal_open(bpage)
     assert bpage.get_attribute("#mpick", "aria-pressed") != "true", "판에서 P 는 아무것도 안 한다"
     c = cover_center(bpage)
-    bpage.mouse.click(c["x"], c["y"])
+    bpage.mouse.dblclick(c["x"], c["y"])
     bpage.wait_for_function("!document.getElementById('modal').hidden")
     bpage.keyboard.press("p")
     bpage.wait_for_timeout(80)
