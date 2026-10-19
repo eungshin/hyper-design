@@ -43,6 +43,9 @@ BROWSER = {
     "test_trigger_tool_shows_sockets_and_socket_drag_changes_target": ("tools", "links"),
     "test_element_menu_via_hit_at": ("tools", "input"),
     "test_hit_at_without_palette_says_cannot_edit": ("tools",),
+    "test_dblclick_title_and_desc_queue_pending_edits": ("tools", "notes"),
+    "test_dblclick_screen_text_edits_with_preview": ("tools", "modal", "notes"),
+    "test_element_menu_edit_text": ("tools",),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),

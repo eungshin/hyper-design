@@ -230,6 +230,14 @@ body.modal-open #tools{display:none}
 #ghost path.cut{stroke:#e5484d}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:42;background:#1c1c1c;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);pointer-events:none}
 #toast[hidden]{display:none}
+.ftitle.pend,.fdesc.pend{background:#FFF4D6;border-radius:6px;box-shadow:0 0 0 3px #FFF4D6;white-space:pre-line}
+.ftitle input.cedit,.fdesc textarea.cedit{font:inherit;color:inherit;width:100%;box-sizing:border-box;border:2px solid #0f7ec2;border-radius:6px;padding:2px 6px;background:#fff}
+.fdesc textarea.cedit{min-height:4.5em;resize:vertical}
+.pchip{position:absolute;left:8px;top:8px;z-index:3;background:#F59E0B;color:#fff;border-radius:999px;padding:2px 9px;font-size:13px;font-weight:700;pointer-events:none}
+#tedit{position:fixed;z-index:36;background:#fff;border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.22);padding:6px}
+#tedit[hidden]{display:none}
+#tedit textarea{display:block;font:14px/1.4 system-ui,sans-serif;border:2px solid #0f7ec2;border-radius:6px;padding:4px 6px;min-height:2.4em;resize:both;box-sizing:border-box}
+#tedit .th{font-size:11px;color:#888;margin-top:4px;white-space:nowrap}
 .card.moved{z-index:2}                            /* 옮긴 카드는 제자리 카드 위(링크 층 7 · 펼친 카드 6 아래) */
 .card.moving{z-index:6}
 .card.moving .phone{box-shadow:0 0 0 4px #2563eb,0 12px 34px rgba(0,0,0,.22)}
@@ -344,6 +352,7 @@ body.modal-open #tools{display:none}
 </div>
 <div id="ttip" hidden></div>
 <div id="toast" role="status" hidden></div>
+<div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소</div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
 <div id="hidl" class="cm t-dropdown" data-origin="top-left" role="dialog" aria-label="숨긴 화면" hidden></div>
 <div id="tmenu" class="t-dropdown" data-origin="top-right" hidden role="dialog" aria-label="전환"></div>
@@ -614,7 +623,7 @@ $$('#tools .tb').forEach(function (b) {
   b.addEventListener('pointerleave', function () { $('#ttip').hidden = true; });
 });
 
-var ptrs = new Map(), drag = null, pinch = null, justDragged = false, spaceDown = false, cutJust = false;
+var ptrs = new Map(), drag = null, pinch = null, justDragged = false, spaceDown = false, cutJust = false, openT = 0;
 function mid() { var a = Array.from(ptrs.values()); return {x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1}; }
 function startDrag(id, p, type) { drag = {id: id, x: p.x, y: p.y, tx: tx, ty: ty, moved: false, thr: type === 'touch' ? 8 : 4}; }
 // 마우스 버튼: 왼쪽 = 도구대로 · 가운데 = 늘 화면 이동 · 오른쪽 = 누르면 메뉴(contextmenu 가 받는다), 끌면 자르기. Space 를 누른 채 끌기 = 화면 이동
@@ -707,7 +716,13 @@ pane.addEventListener('click', function (e) {
   if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title, true); return; }
   var c = cl('.cover');
   if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; VL.dispatch(focusId === id ? {type: 'cycle'} : {type: 'focus', id: id}); return; }
-  if (c) { if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(c.dataset.file, c.dataset.title); return; }
+  if (c) {                                         // 한 번 = 크게 보기(두 번 누르기와 나누려고 조금 늦게) · 두 번 = 글자 고치기(dblclick 이 받는다)
+    clearTimeout(openT);
+    if (e.detail >= 2) return;
+    var go = function () { if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); openModal(c.dataset.file, c.dataset.title); };
+    if (e.detail === 1) openT = setTimeout(go, 260); else go();
+    return;
+  }
   if (focusId && !e.shiftKey && !cl('.card, .ltag, path.lk')) VL.dispatch({type: 'exitFocus'});   // 빈 판을 그냥 누르면 연결 보기 끝
 }, true);
 
@@ -719,7 +734,7 @@ function loadVisible() {
   $$('.phone iframe[data-src]', rowsEl).forEach(function (f) {
     var r = f.parentNode.getBoundingClientRect();
     if (r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
-      f.addEventListener('load', function () { sendTo(f); });
+      f.addEventListener('load', function () { sendTo(f); sendPending(f, f.closest('.card').dataset.id); });
       f.src = f.getAttribute('data-src'); f.removeAttribute('data-src');
     }
   });
@@ -752,7 +767,7 @@ function closeModal() {                            // hidden 은 바로(상태),
   mcloseT = setTimeout(function () { modal.classList.remove('is-closing'); if (modal.hidden) mframe.removeAttribute('src'); },
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
-mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); });
+mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) sendPending(mframe, mscreen); });
 $('#mclose').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal || e.target.id === 'mtitle') closeModal(); });
 addEventListener('keydown', function (e) {
@@ -760,6 +775,7 @@ addEventListener('keydown', function (e) {
   if (VM) VM.stop();
   if (!cmenu.hidden || !hidl.hidden) { closeCmenu(); closeHidl(); return; }   // 떠 있는 메뉴가 먼저
   if (pickT) { endPick(); return; }
+  if (!tedit.hidden) { closeTedit(false); return; }
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
   if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
@@ -983,12 +999,12 @@ renderHidden(); renderUndo();
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
 var toastT = 0, hitWait = [], pickT = null;
 function toast(msg) { var t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 2600); }
-function askHit(card, cx, cy, quiet, cb) {          // cb(null) = 1.5초 안에 답 없음(palette.js 없음) · {none} = 그 자리에 요소 없음 · 아니면 hd-hit 답
+function askHit(card, cx, cy, quiet, cb, leaf) {    // cb(null) = 1.5초 안에 답 없음(palette.js 없음) · {none} = 그 자리에 요소 없음 · 아니면 hd-hit 답 · leaf = 그 요소 그대로(글자)
   var ph = $('.phone', card), f = ph ? $('iframe', ph) : null; if (!f) { cb(null); return; }
   var r = ph.getBoundingClientRect(), s = r.width / CARD.w, w = {f: f, cb: cb};
   w.t = setTimeout(function () { var i = hitWait.indexOf(w); if (i < 0) return; hitWait.splice(i, 1); if (!quiet) toast('이 화면은 편집할 수 없어요'); cb(null); }, 1500);
   hitWait.push(w);
-  var ask = function () { try { f.contentWindow.postMessage({type: 'hd-hit-at', x: (cx - r.left) / s, y: (cy - r.top) / s}, '*'); } catch (e) {} };
+  var ask = function () { try { f.contentWindow.postMessage({type: 'hd-hit-at', x: (cx - r.left) / s, y: (cy - r.top) / s, leaf: !!leaf}, '*'); } catch (e) {} };
   if (f.hasAttribute('data-src')) { f.addEventListener('load', ask, {once: true}); f.src = f.getAttribute('data-src'); f.removeAttribute('data-src'); }
   else ask();
 }
@@ -1002,7 +1018,13 @@ addEventListener('message', function (e) {
 function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
 function editNote(screen, h, text) {
   return {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: screen, targets: [{path: h.path, text: h.text, rect: h.rect}],
-          path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false};
+          path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link'};
+}
+var ELKEY = 'hd-edit-log:' + hashStr(location.pathname);
+function logEdit(label, list) {                      // 변경 기록 — 메모를 지워도 남는다(최근 200개). 다시 빌드해 화면이 바뀌어도 무엇을 요청했는지 확인용
+  var log = []; try { log = JSON.parse(localStorage.getItem(ELKEY) || '[]') || []; } catch (e) { log = []; }
+  log.push({at: new Date().toISOString(), label: label, items: list.map(function (n) { return n.screen + ' · ' + n.note; })});
+  try { localStorage.setItem(ELKEY, JSON.stringify(log.slice(-200))); } catch (e) {}
 }
 function addEdits(label, list) {
   if (!list.length) return;
@@ -1019,10 +1041,10 @@ function addEdits(label, list) {
       if (cur && cur.sent) { var c = editNote(n.screen, n, '앞서 보낸 요청 취소: ' + n.note); cancels.push(c); notes.push(c); }
       else notes = notes.filter(function (x) { return x.id !== n.id; });
     });
-    saveNotes();
+    saveNotes(); logEdit('되돌림: ' + label, list);
   };
-  put();
-  record({label: label, undo: take, redo: put});
+  put(); logEdit(label, list);
+  record({label: label, undo: take, redo: function () { put(); logEdit(label, list); }});
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
   var list = hits.filter(function (h) { return h.to !== to; }).map(function (h) {
@@ -1037,11 +1059,12 @@ function cutGroups(ks) {
   ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) { list.push(editNote(g.from, it, cutText(it.to))); }); });
   addEdits('선 자르기', list);
 }
-function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정/해제 · 도착 바꾸기(글자 고치기는 6단계)
+function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기
   var els = h.to ? [{label: '도착 바꾸기', act: function () { startPick(from, [h], x, y); }},
                     {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, '트리거 해제: 이 요소를 눌러도 화면이 바뀌지 않게(지금 ' + scr(h.to) + '로 가는 연결 없애기)')]); }}]
                  : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)')]); }},
                     {label: '잇기', key: 'L 끌기', act: function () { startPick(from, [h], x, y); }}];
+  els.push({label: '글자 고치기', key: '더블클릭', act: function () { editScreenText(from, h); }});
   openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
 }
 function startTrig(hits, card, e) {                  // hits 를 알면(소켓) 바로, 모르면 화면에 물어 본다
@@ -1098,6 +1121,106 @@ function pickClick(e) {
   if (c && !c.classList.contains('hid') && c.dataset.id !== pt.from) linkTo(pt.from, pt.hits, c.dataset.id);
 }
 pane.addEventListener('pointermove', function (e) { if (pickT) drawGhost(e.clientX, e.clientY); });
+
+/* ---------- 더블클릭 고치기(6단계): 카드 이름·설명(screens.json) · 화면 안 글자 → 메모(intent=change). 반영 대기 = 파일에 아직 안 들어간 편집 메모 ---------- */
+var ORIG = {}, tedit = $('#tedit');
+(D.rows || []).forEach(function (row) { row.screens.forEach(function (sc) { ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || ''}; }); });
+var FIELD = {title: '화면 이름', purpose: '화면 설명'};
+function pendingOf(id, field) {                      // 그 화면·그 칸의 마지막 편집 값(없으면 null)
+  var v = null; notes.forEach(function (n) { if (n.screen === id && n.edit === field) v = n.value; }); return v;
+}
+function paintCardText() {
+  $$('.card', rowsEl).forEach(function (c) {
+    var id = c.dataset.id, o = ORIG[id]; if (!o) return;
+    [['title', '.ftitle'], ['purpose', '.fdesc']].forEach(function (fs) {
+      var el = $(fs[1], c); if (!el || $('input, textarea', el)) return;
+      var v = pendingOf(id, fs[0]), keep = $('.state', el);
+      el.textContent = v != null ? v : o[fs[0]]; if (keep) el.insertBefore(keep, el.firstChild);
+      el.classList.toggle('pend', v != null);
+      if (v != null) el.title = '반영 대기 · 원래: ' + o[fs[0]]; else el.removeAttribute('title');
+    });
+  });
+}
+function editCardText(el, field) {
+  if ($('input, textarea', el)) return;
+  closeCmenu();
+  var id = el.closest('.card').dataset.id, p = pendingOf(id, field), cur = p != null ? p : ORIG[id][field], multi = field === 'purpose';
+  var inp = document.createElement(multi ? 'textarea' : 'input'), keep = $('.state', el);
+  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', FIELD[field]);
+  el.textContent = ''; if (keep) el.appendChild(keep); el.appendChild(inp); inp.focus(); inp.select();
+  var done = false, finish = function (save) {
+    if (done) return; done = true;
+    var v = multi ? inp.value.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim() : inp.value.replace(/\s+/g, ' ').trim();
+    inp.remove();
+    if (save && v && v !== cur) {
+      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > ' + field, text: cur, rect: null},
+                       FIELD[field] + '을 "' + v + '"(으)로 바꾸기 (screens.json의 ' + field + ')');
+      n.edit = field; n.value = v;
+      addEdits(FIELD[field], [n]);
+    }
+    paintCardText();
+  };
+  inp.addEventListener('keydown', function (ev) {
+    ev.stopPropagation();                           // 캔버스 단축키·Esc 사슬을 막는다
+    if (ev.key === 'Enter' && !(multi && ev.shiftKey)) { ev.preventDefault(); finish(true); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+  });
+  inp.addEventListener('blur', function () { finish(true); });
+  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+}
+var tedCtx = null;
+function editScreenText(id, h) {                     // 화면 안 글자: 그 요소 자리에 고치기 칸
+  closeCmenu(); endPick();
+  var c = VL.cardEl(id), ph = c ? $('.phone', c) : null; if (!ph) return;
+  var r = ph.getBoundingClientRect(), s = r.width / CARD.w, q = h.rect || {x: 0, y: 0, w: 120, h: 20};
+  var ta = $('textarea', tedit), old = h.full || h.text || '';
+  tedCtx = {id: id, h: h, old: old};
+  ta.value = old;
+  tedit.hidden = false;
+  ta.style.width = Math.max(180, Math.min(innerWidth - 40, q.w * s + 16)) + 'px';
+  tedit.style.left = Math.max(8, Math.min(innerWidth - tedit.offsetWidth - 8, r.left + q.x * s - 8)) + 'px';
+  tedit.style.top = Math.max(8, Math.min(innerHeight - tedit.offsetHeight - 8, r.top + q.y * s - 8)) + 'px';
+  ta.focus(); ta.select();
+}
+function closeTedit(save) {
+  if (tedit.hidden || !tedCtx) return;
+  var t = tedCtx, v = $('textarea', tedit).value.replace(/[ \t]+/g, ' ').trim();
+  tedCtx = null; tedit.hidden = true;
+  if (save && v && v !== t.old) {
+    var n = editNote(t.id, t.h, '글자를 "' + v + '"(으)로 바꾸기');
+    n.edit = 'text'; n.value = v;
+    addEdits('글자 고치기', [n]);
+  }
+}
+$('textarea', tedit).addEventListener('keydown', function (e) {
+  e.stopPropagation();
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closeTedit(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeTedit(false); }
+});
+$('textarea', tedit).addEventListener('blur', function () { closeTedit(true); });
+pane.addEventListener('dblclick', function (e) {
+  var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
+  if (cl('#legend') || cl('#tools') || cl('#lkl') || typing(e)) return;
+  var ft = cl('.ftitle'), fd = cl('.fdesc'), cv = cl('.cover');
+  if (ft) { e.preventDefault(); editCardText(ft, 'title'); return; }
+  if (fd) { e.preventDefault(); editCardText(fd, 'purpose'); return; }
+  if (cv && tool !== 'knife') {
+    e.preventDefault(); clearTimeout(openT);
+    var card = cv.closest('.card');
+    askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); }, true);
+  }
+});
+function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
+  var items = notes.filter(function (n) { return n.screen === id && n.edit === 'text'; }).map(function (n) { return {path: n.path, text: n.value}; });
+  try { if (f && f.contentWindow) f.contentWindow.postMessage({type: 'hd-pending', items: items}, '*'); } catch (e) {}
+}
+function sendAllPending() {
+  $$('.card', rowsEl).forEach(function (c) { var f = $('.phone iframe', c); if (f && !f.hasAttribute('data-src')) sendPending(f, c.dataset.id); });
+  if (!modal.hidden && mscreen) sendPending(mframe, mscreen);
+}
+addEventListener('beforeunload', function (e) {     // 보내지 않은 편집이 있으면 새로고침·닫기 전에 묻는다(다시 빌드하면 화면 파일이 바뀌어도 메모는 남는다)
+  if (notes.some(function (n) { return n.edit && !n.sent; })) { e.preventDefault(); e.returnValue = ''; }
+});
 
 /* ---------- 주석 달기(Shift+클릭 = 여러 개) · 메모(자동 저장) · 보내기 ---------- */
 var mscale = 1, mscreen = null, picking = false, draft = null, editing = null;
@@ -1217,6 +1340,15 @@ function renderNotes() {
     if (!b) { b = document.createElement('span'); b.className = 'nbadge'; $('.phone', c).appendChild(b); }
     b.textContent = k; b.title = '메모 ' + k + '건';
   });
+  var pc = {};                                     // 반영 대기 = 화면 파일을 바꾸는 편집 메모(보냈어도 '보낸 것 지우기' 전까지)
+  notes.forEach(function (n) { if (n.edit) pc[n.screen] = (pc[n.screen] || 0) + 1; });
+  $$('.card', rowsEl).forEach(function (c) {
+    var b = $('.pchip', c), k = pc[c.dataset.id] || 0;
+    if (!k) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('span'); b.className = 'pchip'; $('.phone', c).appendChild(b); }
+    b.textContent = '반영 대기 ' + k;
+  });
+  if (typeof paintCardText === 'function' && ORIG) { paintCardText(); sendAllPending(); }
 }
 $('#nlist').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;

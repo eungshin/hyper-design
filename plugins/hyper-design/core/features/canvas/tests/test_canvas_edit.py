@@ -672,3 +672,100 @@ def test_hit_at_without_palette_says_cannot_edit(dpage):
     assert len(notes_of(dpage)) == n0
     dpage.keyboard.press("h")
     reload(dpage)
+
+
+# ---------------------------------------------------------------- 6단계: 더블클릭 고치기 → 요청문 · 반영 대기 표시 · 닫기 전 확인
+def unsent_guard(pg):
+    """닫기 전 확인이 걸려 있나 — 실제 대화 상자 없이 beforeunload 를 흉내 낸다."""
+    return pg.evaluate("(() => { const e = new Event('beforeunload', {cancelable: true}); dispatchEvent(e); return e.defaultPrevented; })()")
+
+
+def test_dblclick_title_and_desc_queue_pending_edits(dpage):
+    dpage.on("dialog", lambda d: d.accept())         # 새로고침 전 확인 창은 받아들인다
+    fit_view(dpage)
+    zoom_to = __import__("test_canvas_v2").zoom_to
+    zoom_to(dpage, "job", 200)
+    t_sel, d_sel = '.card[data-id="job"] .ftitle', '.card[data-id="job"] .fdesc'
+    bring_into_view(dpage, t_sel)
+    old = dpage.text_content(t_sel)
+    n0 = len(notes_of(dpage))
+    assert not unsent_guard(dpage)
+    dpage.dblclick(t_sel)
+    inp = dpage.locator(f"{t_sel} input")
+    assert inp.is_visible() and inp.input_value() == old
+    inp.fill("새 이름")
+    inp.press("Enter")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and n["intent"] == "change" and "screens.json" in n["path"] and "새 이름" in n["note"], n
+    assert dpage.text_content(t_sel) == "새 이름" and "pend" in dpage.get_attribute(t_sel, "class"), "반영 대기: 새 글을 보여 주고 표시"
+    assert unsent_guard(dpage), "보내지 않은 편집이 있으면 닫기 전에 묻는다"
+    reload(dpage)
+    assert dpage.text_content(t_sel) == "새 이름", "새로고침 뒤에도 반영 대기 표시"
+    assert dpage.locator('.card[data-id="job"] .pchip').is_visible()
+    dpage.keyboard.press("0")
+    zoom_to(dpage, "job", 200)
+    bring_into_view(dpage, d_sel)
+    dpage.dblclick(d_sel)
+    ta = dpage.locator(f"{d_sel} textarea")
+    assert ta.is_visible()
+    ta.fill("첫 줄")
+    ta.press("Shift+Enter")
+    ta.type("둘째 줄")
+    ta.press("Enter")
+    wait_notes(dpage, n0 + 2)
+    n = notes_of(dpage)[-1]
+    assert "purpose" in n["path"] and "첫 줄\n둘째 줄" in n["note"], n
+    assert "둘째 줄" in dpage.text_content(d_sel)
+    log = dpage.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-edit-log:'))) || '[]')")
+    assert len(log) >= 1, "변경 기록은 별도 키에 남는다"
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0 + 1)
+    assert "둘째 줄" not in dpage.text_content(d_sel)
+    # 새로고침 앞의 이름 고치기는 되돌리기 기록이 없다(새로고침하면 비어 있다) → 메모를 처음 개수로 잘라 정리
+    dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
+        localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
+    reload(dpage)
+    assert dpage.text_content(t_sel) == old and not unsent_guard(dpage)
+
+
+def test_dblclick_screen_text_edits_with_preview(dpage):
+    fit_view(dpage)
+    zoom_to = __import__("test_canvas_v2").zoom_to
+    ph = zoom_to(dpage, "job", 420)
+    fr = next(f for f in dpage.frames if f.url.split("?")[0].endswith("/job.html"))
+    leaf = fr.evaluate("""(() => { for (const el of document.querySelectorAll('h1, h2, p, span, button, a, div')) {
+        if (el.children.length || !el.textContent.trim()) continue; const r = el.getBoundingClientRect();
+        if (r.width > 20 && r.height > 8 && r.top > 0 && r.top < 500) return {text: el.textContent.trim(), x: r.left + r.width / 2, y: r.top + r.height / 2}; } return null; })()""")
+    assert leaf, "글자 요소가 있어야 한다"
+    sc = ph["width"] / dpage.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card?.w || 375")
+    x, y = ph["x"] + leaf["x"] * sc, ph["y"] + leaf["y"] * sc
+    n0 = len(notes_of(dpage))
+    dpage.mouse.dblclick(x, y)
+    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    assert dpage.input_value("#tedit textarea") == leaf["text"]
+    assert dpage.evaluate("document.getElementById('modal').hidden"), "두 번 누르기는 크게 보기를 열지 않는다"
+    dpage.fill("#tedit textarea", "바뀐 글자")
+    dpage.press("#tedit textarea", "Enter")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and "바뀐 글자" in n["note"] and n["text"].startswith(leaf["text"][:20]), n
+    fr.wait_for_function("[...document.querySelectorAll('*')].some(el => !el.children.length && el.textContent.trim() === '바뀐 글자')", timeout=3000)
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    fr.wait_for_function("(t) => [...document.querySelectorAll('*')].some(el => !el.children.length && el.textContent.trim() === t)", arg=leaf["text"], timeout=3000)
+    dpage.mouse.click(x, y)                          # 한 번 누르기는 그대로 크게 보기(조금 늦게)
+    dpage.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_timeout(200)
+
+
+def test_element_menu_edit_text(dpage):
+    fit_view(dpage)
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"], button="right")
+    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /글자 고치기/.test(b.textContent))", timeout=3000)
+    pick(dpage, "글자 고치기")
+    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    dpage.keyboard.press("Escape")
+    assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc 는 고치기를 취소"

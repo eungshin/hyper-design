@@ -9,7 +9,9 @@
    어디로 가나(Ctrl/Cmd+클릭): 링크 요소를 Ctrl/Cmd+클릭하면 이동하지 않고 {type:'hd-link-go', screen, to, path, rect} 를 보낸다.
    캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로.
    편집(트리거·도착 바꾸기): {type:'hd-hit-at', x, y} 를 받으면 그 자리의 요소(링크 → 누를 수 있는 요소 → 그 요소 순)로
-   {type:'hd-hit', screen, path, text, rect, to} 를 보낸다(to = 지금 가는 화면 id 또는 null, 요소가 없으면 path:null). */
+   {type:'hd-hit', screen, path, text, full, rect, to} 를 보낸다(to = 지금 가는 화면 id 또는 null, full = 고칠 글 전체, 요소가 없으면 path:null).
+   leaf:true 면 그 자리 요소 그대로(글자 고치기).
+   반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다). */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -127,10 +129,24 @@
     send(el ? {type: 'hd-link-go', screen: screenId(), to: toOf(el), path: pathOf(el), rect: rectOf(el)} : {type: 'hd-link-go', screen: screenId(), to: null});
   }
   var HIT_SEL = 'button, a, input, select, textarea, label, [role=button], [role=link], [role=tab], [tabindex], li';
-  function sendHit(at) {                             // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음)
-    var el = linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
+  function sendHit(at, leaf) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 그 요소 그대로
+    var el = leaf ? at : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: 'hd-hit', screen: screenId(), path: null}); return; }
-    send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), rect: rectOf(el), to: toOf(el)});
+    send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
+          rect: rectOf(el), to: toOf(el)});
+  }
+  var pend = [];
+  function pending(items) {                           // 반영 대기 글: 첫 글자 마디만 바꾸고, 다음 호출에서 되돌린다
+    pend.reverse().forEach(function (q) { q.node.nodeValue = q.orig; q.el.style.outline = q.o; q.el.style.outlineOffset = q.oo; }); pend = [];
+    (items || []).forEach(function (it) {
+      var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
+      if (!el) return;
+      var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, first = null;
+      while ((n = w.nextNode())) if (n.nodeValue.trim()) { first = n; break; }
+      if (!first) return;
+      pend.push({el: el, node: first, orig: first.nodeValue, o: el.style.outline, oo: el.style.outlineOffset});
+      first.nodeValue = String(it.text); el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px';
+    });
   }
   document.addEventListener('click', function (e) {    // Ctrl/Cmd+클릭: 이동 대신 '어디로 가나'
     if (picking || !(e.ctrlKey || e.metaKey) || !window.parent || window.parent === window) return;
@@ -173,7 +189,8 @@
     else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
-    else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0));
+    else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
+    else if (d.type === 'hd-pending') pending(d.items);
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
       if (!picking && box) box.style.display = 'none';
