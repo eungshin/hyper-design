@@ -228,6 +228,11 @@ body.modal-open #tools{display:none}
 #ghost{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:6;overflow:visible}
 #ghost path{fill:none;stroke:#0f7ec2;stroke-width:2;stroke-dasharray:6 4}
 #ghost path.cut{stroke:#e5484d}
+.card.draft{position:absolute}
+.card.draft .phone{border:2px dashed #b9b9b9;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
+.card.draft .blank{font-size:28px;color:#aaa;font-weight:600;pointer-events:none}
+#screens.t-layout,#screens.t-layout .cover{cursor:copy}
+#screens.t-memo .cover{cursor:text}
 svg.lks path.lk.pd{stroke-dasharray:.018 .012}   /* 반영 대기: 새로 이은 선·바뀐 도착(pathLength=1 기준 점선) */
 svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-width:calc(var(--lkw,2.5px) + 2px)}
 #lkl .ltag.pd{font-style:italic;border-style:dashed}
@@ -335,6 +340,9 @@ svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-widt
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
       <button type="button" class="tb" data-tool="trigger" data-key="L" data-tip="트리거|화면 안 요소를 다른 화면에 끌어 놓으면 연결 · 누르면 메뉴" aria-pressed="false" aria-label="트리거 (L)"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
       <button type="button" class="tb" data-tool="knife" data-key="C" data-tip="선 자르기|그은 선이 지나간 연결을 끊어요 · 오른쪽 버튼 끌기도 같아요" aria-pressed="false" aria-label="선 자르기 (C)"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg></button>
+      <hr>
+      <button type="button" class="tb" data-tool="layout" data-key="N" data-tip="빈 레이아웃|빈 곳을 누르면 흰 카드를 놓아요 · 메모를 남기고 보내면 채워져요" aria-pressed="false" aria-label="빈 레이아웃 (N)"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg></button>
+      <button type="button" class="tb" data-tool="memo" data-key="M" data-tip="메모|화면을 누르면 그 화면 전체에 메모를 남겨요" aria-pressed="false" aria-label="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button>
       <hr id="thr" hidden>
       <button type="button" class="tb" id="thid" data-tip="숨긴 화면|눌러서 목록을 열고 다시 보이게 해요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
     </nav>
@@ -524,7 +532,10 @@ function loadCardPos() {
   $$('.card', rowsEl).forEach(placeCard);
 }
 function saveCardPos() { try { localStorage.setItem(PKEY, JSON.stringify(cardPos)); } catch (e) {} }
-function placeCard(c) { var p = cardPos[c.dataset.id]; c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p); }
+function placeCard(c) {
+  var p = cardPos[c.dataset.id];
+  if (c.classList.contains('draft')) { c.style.left = (+c.dataset.x + (p ? p.dx : 0)) + 'px'; c.style.top = (+c.dataset.y + (p ? p.dy : 0)) + 'px'; return; }   // 빈 레이아웃: 놓은 자리 + 옮긴 거리
+  c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p); }
 function cardExtent() {                           // 옮긴 카드까지 넣은 판 범위(판 좌표)
   var x0 = contentLeft, y0 = 0, x1 = stage.offsetWidth, y1 = stage.offsetHeight, ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop;
   $$('.card:not(.hid)', rowsEl).forEach(function (c) {
@@ -616,6 +627,8 @@ function setTool(t) {
   pane.classList.toggle('t-move', t === 'move');
   pane.classList.toggle('t-trigger', t === 'trigger');
   pane.classList.toggle('t-knife', t === 'knife');
+  pane.classList.toggle('t-layout', t === 'layout');
+  pane.classList.toggle('t-memo', t === 'memo');
   endPick();
 }
 $$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
@@ -719,6 +732,9 @@ pane.addEventListener('click', function (e) {
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#legend') || cl('#tools')) return;       // 범례·도구 막대 안 조작은 연결 보기를 끄지 않는다
+  if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
+  var mc = cl('.card');
+  if (mc && !e.shiftKey && (tool === 'memo' || mc.classList.contains('draft'))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }
   var an = cl('.anno');
   var focusId = VL.focusId();
   if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title, true); return; }
@@ -892,7 +908,7 @@ $('#lgFlow').addEventListener('change', function (e) { setArrows(e.target.checke
 setArrows(arrowsOn);
 
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
-// 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거는 아래 편집(메모로 쌓기), 이름·설명·글자는 6단계, 복제·삭제·여기에 레이아웃은 아직
+// 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
 var cmenu = $('#cmenu'), hidl = $('#hidl');
 function titleOf(id) { var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
 function saveHidden() { try { localStorage.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
@@ -994,7 +1010,7 @@ pane.addEventListener('contextmenu', function (e) {
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(hidden).length;
-  var items = [{label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
+  var items = [{label: '여기에 레이아웃', key: 'N', act: function () { addLayout(x, y); }}, {label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
   if (n) items.push('-', {label: '숨긴 화면 ' + n + '개', act: openHidl});
   openCmenu(x, y, '', items);
 });
@@ -1105,8 +1121,10 @@ function finishTrig(tr, moved, cx, cy) {
     if (!moved) { openElemMenu(tr.from, hits[0], cx, cy, []); return; }
     if (to && to !== tr.from) { linkTo(tr.from, hits, to); return; }
     if (to) return;                                  // 제 화면에 놓음 = 취소
-    var items = [{label: '새 화면 만들고 잇기', act: function () {
-      addEdits('새 화면 잇기', hits.map(function (h) { return editNote(tr.from, h, '새 빈 화면을 만들고 이 요소를 누르면 그 화면으로 가게 연결', 'new'); })); }}];
+    var items = [{label: '새 화면 만들고 잇기', act: function () {           // 빈 레이아웃 카드를 그 자리에 놓고, 끈 요소를 그 카드로 — 되돌리기 한 단계
+      var ln = layoutNote(cx, cy);
+      addEdits('새 화면 잇기', [ln].concat(hits.map(function (h) {
+        return editNote(tr.from, h, '이 요소를 누르면 새 화면 "' + ln.value + '"(' + ln.screen + ')으로 가게 연결', 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
       addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to), 'cut', h.to); })); }});
     items.push('-', {label: '취소', act: function () {}});
@@ -1179,7 +1197,9 @@ function paintCardText() {
 function editCardText(el, field) {
   if ($('input, textarea', el)) return;
   closeCmenu();
-  var id = el.closest('.card').dataset.id, p = pendingOf(id, field), cur = p != null ? p : ORIG[id][field], multi = field === 'purpose';
+  var id = el.closest('.card').dataset.id;
+  if (!ORIG[id]) { if (field === 'title') renameLayout(el, id); return; }
+  var p = pendingOf(id, field), cur = p != null ? p : ORIG[id][field], multi = field === 'purpose';
   var inp = document.createElement(multi ? 'textarea' : 'input'), keep = $('.state', el);
   inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', FIELD[field]);
   el.textContent = ''; if (keep) el.appendChild(keep); el.appendChild(inp); inp.focus(); inp.select();
@@ -1245,6 +1265,54 @@ pane.addEventListener('dblclick', function (e) {
     askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); else if (h) toast('여기에는 고칠 글자가 없어요'); }, true);
   }
 });
+/* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
+function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }
+function layoutText(n) { return '새 화면 "' + n.value + '"(' + n.screen + ')을 빈 레이아웃으로 만들기 — 내용은 이 화면에 남긴 메모를 따라 채우기'; }
+function layoutNote(cx, cy) {
+  var p = boardPt(cx, cy), id = 'new-' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
+  var n = editNote(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
+  n.edit = 'new-screen'; n.value = '빈 레이아웃'; n.x = p.x; n.y = p.y; n.note = layoutText(n);
+  return n;
+}
+function addLayout(cx, cy) { addEdits('빈 레이아웃', [layoutNote(cx, cy)], '빈 레이아웃을 놓았어요 — 메모를 남기고 보내면 채워져요'); }
+function renderDrafts() {                            // 메모의 빈 레이아웃 → 판 위 흰 카드(없어진 것은 지운다)
+  var want = {};
+  notes.forEach(function (n) { if (n.edit === 'new-screen') want[n.screen] = n; });
+  $$('.card.draft', rowsEl).forEach(function (c) { if (!want[c.dataset.id]) c.remove(); });
+  Object.keys(want).forEach(function (id) {
+    var n = want[id], c = VL.cardEl(id);
+    if (!c) {
+      c = document.createElement('div'); c.className = 'card draft'; c.dataset.id = id;
+      c.innerHTML = '<div class="phone"><div class="blank">빈 레이아웃</div><button class="cover" data-file=""></button></div><div class="ftitle"></div>';
+      rowsEl.appendChild(c);
+    }
+    c.dataset.x = n.x; c.dataset.y = n.y;
+    var cv = $('.cover', c); cv.dataset.title = n.value; cv.setAttribute('aria-label', n.value + ' — 빈 레이아웃(누르면 메모)');
+    if (!$('input', $('.ftitle', c))) $('.ftitle', c).textContent = n.value;
+    placeCard(c);
+  });
+}
+function renameLayout(el, id) {
+  var n = notes.filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0]; if (!n) return;
+  var inp = document.createElement('input'), cur = n.value;
+  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', '빈 레이아웃 이름');
+  el.textContent = ''; el.appendChild(inp); inp.focus(); inp.select();
+  var set = function (v) { n.value = v; n.note = layoutText(n); n.sent = false; saveNotes(); };
+  var done = false, finish = function (save) {
+    if (done) return; done = true;
+    var v = inp.value.replace(/\s+/g, ' ').trim(); inp.remove();
+    if (save && v && v !== cur) { set(v); record({label: '빈 레이아웃 이름', undo: function () { set(cur); }, redo: function () { set(v); }}); }
+    else renderDrafts();
+  };
+  inp.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } });
+  inp.addEventListener('blur', function () { finish(true); });
+  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+}
+function openCardMemo(id) {                          // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body)
+  if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
+  editing = null; draft = {screen: id, targets: [{path: 'body', text: titleOf(id), rect: null}]};
+  showPop({text: titleOf(id) + ' — 화면 전체', path: 'body', rect: null}, '', 'change');
+}
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
   var items = notes.filter(function (n) { return n.screen === id && n.edit === 'text'; }).map(function (n) { return {path: n.path, text: n.value}; });
   try { if (f && f.contentWindow) f.contentWindow.postMessage({type: 'hd-pending', items: items}, '*'); } catch (e) {}
@@ -1384,7 +1452,7 @@ function renderNotes() {
     if (!b) { b = document.createElement('span'); b.className = 'pchip'; $('.phone', c).appendChild(b); }
     b.textContent = '반영 대기 ' + k;
   });
-  if (typeof paintCardText === 'function' && ORIG) { paintCardText(); sendAllPending(); }
+  if (typeof paintCardText === 'function' && ORIG) { renderDrafts(); paintCardText(); sendAllPending(); }
   if (VL && VL.refresh) VL.refresh();
 }
 $('#nlist').addEventListener('click', function (e) {
@@ -1482,7 +1550,7 @@ addEventListener('keydown', function (e) {
   if (k === 'a' && modal.hidden) { e.preventDefault(); setArrows(!arrowsOn); }
   else if (k === '0' && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); fit(); }
   else if (k === 'p' && !modal.hidden) { e.preventDefault(); setPick(!picking); }
-  else if (k && 'vhlc'.indexOf(k) >= 0 && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool({v: 'move', h: 'hand', l: 'trigger', c: 'knife'}[k]); }
+  else if (k && 'vhlcnm'.indexOf(k) >= 0 && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool({v: 'move', h: 'hand', l: 'trigger', c: 'knife', n: 'layout', m: 'memo'}[k]); }
 });
 renderNotes();
 

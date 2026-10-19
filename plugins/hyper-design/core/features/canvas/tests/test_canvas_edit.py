@@ -413,7 +413,7 @@ def test_context_menu_by_target(epage):
     epage.wait_for_timeout(150)
     p = empty_point(epage)
     epage.mouse.click(p["x"], p["y"], button="right")
-    assert cmenu_items(epage) == ["전체 보기", "100%"], "빈 곳: 전체 보기 · 100% (숨긴 화면이 없으면 그 줄은 없다)"
+    assert cmenu_items(epage) == ["여기에 레이아웃", "전체 보기", "100%"], "빈 곳: 여기에 레이아웃 · 전체 보기 · 100% (숨긴 화면이 없으면 그 줄은 없다)"
     pick(epage, "100%")
     assert epage.get_attribute("#stage", "data-zoom") == "1.0000"
     assert epage.evaluate("document.getElementById('cmenu').hidden")
@@ -822,3 +822,93 @@ def test_socket_drag_draws_pending_line_at_once(dpage):
     assert lk_to(dpage, q["id"]) == [], "되돌리면 사라진다"
     dpage.keyboard.press("h")
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 재작업 B: 레이아웃 N · 메모 M · 도구 막대 세 묶음 · 여기에 레이아웃
+def drafts(pg):
+    return pg.evaluate("[...document.querySelectorAll('#rows .card.draft')].map(c => ({id: c.dataset.id, vis: c.offsetWidth > 0}))")
+
+
+def test_toolbar_has_add_group(dpage):
+    tools = dpage.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => b.dataset.tool)")
+    assert tools == ["hand", "move", "trigger", "knife", "layout", "memo"], tools
+    assert dpage.evaluate("document.querySelectorAll('#tools hr').length") >= 2, "도구 / 추가 / 보기 세 묶음"
+
+
+def test_layout_tool_drops_blank_card_and_undo(dpage):
+    from test_canvas_baseline import empty_point
+    fit_view(dpage)
+    n0 = len(notes_of(dpage))
+    dpage.keyboard.press("n")
+    assert tool(dpage) == ["layout"]
+    e = empty_point(dpage)
+    dpage.mouse.click(e["x"], e["y"])
+    dpage.wait_for_timeout(200)
+    d = drafts(dpage)
+    assert len(d) == 1 and d[0]["vis"], d
+    box = dpage.locator("#rows .card.draft .phone").bounding_box()
+    assert abs(box["x"] - e["x"]) < 6 and abs(box["y"] - e["y"]) < 6, ("누른 자리에 빈 카드", box, e)
+    assert tool(dpage) == ["move"], "놓은 뒤 이동 도구로"
+    n = notes_of(dpage)[-1]
+    assert n["edit"] == "new-screen" and n["screen"] == d[0]["id"] and len(notes_of(dpage)) == n0 + 1
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(200)
+    assert drafts(dpage) == [] and len(notes_of(dpage)) == n0
+    dpage.keyboard.press("h")
+
+
+def test_empty_drop_makes_layout_and_links_it(dpage):
+    from test_canvas_baseline import empty_point
+    focus_dayfine(dpage, "job")
+    dpage.keyboard.press("l")
+    s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none');
+        const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()""")
+    e = empty_point(dpage)
+    drag(dpage, s, e["x"] - s["x"], e["y"] - s["y"])
+    assert cmenu_items(dpage)[0] == "새 화면 만들고 잇기"
+    pick(dpage, "새 화면 만들고 잇기")
+    dpage.wait_for_timeout(300)
+    d = drafts(dpage)
+    assert len(d) == 1, d
+    assert lk_to(dpage, d[0]["id"]), "새 빈 카드로 가는 선이 바로 그려진다"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(250)
+    assert drafts(dpage) == [] and lk_to(dpage, d[0]["id"]) == [], "되돌리기 한 번에 카드와 선이 같이"
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")
+
+
+def test_empty_right_click_layout_here(dpage):
+    from test_canvas_baseline import empty_point
+    fit_view(dpage)
+    e = empty_point(dpage)
+    dpage.mouse.click(e["x"], e["y"], button="right")
+    assert "여기에 레이아웃" in cmenu_items(dpage)
+    pick(dpage, "여기에 레이아웃")
+    dpage.wait_for_timeout(200)
+    assert len(drafts(dpage)) == 1
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(200)
+    assert drafts(dpage) == []
+
+
+def test_memo_tool_opens_card_memo(dpage):
+    fit_view(dpage)
+    n0 = len(notes_of(dpage))
+    dpage.keyboard.press("m")
+    assert tool(dpage) == ["memo"]
+    c = visible_cover(dpage)
+    title = dpage.get_attribute(f'.card[data-id="{c["id"]}"] .cover', "data-title")
+    dpage.mouse.click(c["x"], c["y"])
+    dpage.wait_for_selector("#pop:not([hidden])")
+    assert title in dpage.text_content("#ptitle")
+    assert dpage.evaluate("document.getElementById('modal').hidden"), "메모 도구에서는 크게 보기를 열지 않는다"
+    dpage.fill("#pnote", "이 화면 전체를 더 밝게")
+    dpage.click("#padd")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == c["id"] and n["path"] == "body" and "밝게" in n["note"], n
+    dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
+        localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
+    dpage.keyboard.press("h")
+    reload(dpage)

@@ -49,6 +49,11 @@ BROWSER = {
     "test_element_menu_edit_text": ("tools",),
     "test_cut_hides_line_at_once_with_live_mark_and_toast_undo": ("tools", "links"),
     "test_socket_drag_draws_pending_line_at_once": ("tools", "links"),
+    "test_toolbar_has_add_group": ("tools",),
+    "test_layout_tool_drops_blank_card_and_undo": ("tools", "notes"),
+    "test_empty_drop_makes_layout_and_links_it": ("tools", "links"),
+    "test_empty_right_click_layout_here": ("tools", "input"),
+    "test_memo_tool_opens_card_memo": ("tools", "notes"),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
