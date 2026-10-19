@@ -203,6 +203,22 @@ svg.lks path.lk.dim{opacity:.15}
 .card:hover .anno,.anno:focus-visible{display:block}
 #khint{position:absolute;left:12px;bottom:10px;z-index:3;pointer-events:none;font-size:13px;color:#6b6b66;background:rgba(255,255,255,.82);border-radius:8px;padding:5px 10px;white-space:nowrap}
 body.modal-open #khint{display:none}
+/* 도구 막대(왼쪽): 손 = 기본(끌면 화면 이동) · 이동 = 카드를 끌어 옮기기. 단계마다 도구가 늘어난다 */
+#tools{position:absolute;left:12px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:4px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.14);cursor:default}
+body.modal-open #tools{display:none}
+#tools hr{width:24px;border:0;border-top:1px solid #e6e6e2;margin:2px auto}
+#tools .tb{width:36px;height:36px;border:0;border-radius:9px;background:none;color:#444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+#tools .tb:hover{background:#F1F1EE}
+#tools .tb[aria-pressed="true"]{background:#1c1c1c;color:#fff}
+#tools svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#ttip{position:fixed;z-index:41;background:#1c1c1c;color:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;pointer-events:none;white-space:nowrap}
+#ttip[hidden]{display:none}
+#ttip kbd{font:600 11px system-ui,sans-serif;background:#444;border-radius:4px;padding:1px 5px;margin-left:8px}
+#ttip span{display:block;color:#bbb;font-size:11.5px;margin-top:1px}
+#screens.t-move .cover{cursor:move}
+.card.moved{z-index:2}                            /* 옮긴 카드는 제자리 카드 위(링크 층 7 · 펼친 카드 6 아래) */
+.card.moving{z-index:6}
+.card.moving .phone{box-shadow:0 0 0 4px #2563eb,0 12px 34px rgba(0,0,0,.22)}
 
 /* ---------- 주석 달기 · 메모 ---------- */
 #mpins{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
@@ -268,6 +284,10 @@ body.modal-open #khint{display:none}
       <div class="foot" id="foot"></div>
     </div>
     <div id="khint">Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 클릭 크게 보기</div>
+    <nav id="tools" aria-label="도구">
+      <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
+      <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
+    </nav>
     <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div>
       <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw">색 <button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="bottom-left" hidden></span></span>
         <label class="lgw">굵기 <input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5"><b id="lgWv">2.5px</b></label></div>
@@ -283,6 +303,7 @@ body.modal-open #khint{display:none}
   <button class="mpick" id="mpick" aria-pressed="false" title="화면 안 요소를 눌러 주석 남기기 (P) · Shift+클릭으로 여러 개">주석 달기</button>
   <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
 </div>
+<div id="ttip" hidden></div>
 <div id="tmenu" class="t-dropdown" data-origin="top-right" hidden role="dialog" aria-label="전환"></div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
   <div class="ptitle" id="ptitle"></div>
@@ -430,6 +451,35 @@ function drawArrows() {
   VL.render(true);
 }
 
+/* ---------- 카드 옮긴 자리(6A): 줄 배치는 그대로, 카드마다 옮긴 거리만 별도 키에 ---------- */
+// prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다). 없는 화면·다른 그룹으로 간 화면의 값은 버린다.
+var PKEY = 'hd-card-pos:' + hashStr(location.pathname), cardPos = {};
+function groupOf(c) { var f = c.closest('.flow'), g = f ? $('.glabel', f) : null; return g ? g.textContent : ''; }
+function loadCardPos() {
+  var raw = {}; try { raw = JSON.parse(localStorage.getItem(PKEY) || '{}') || {}; } catch (e) { raw = {}; }
+  var live = {}, dirty = false;
+  $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = groupOf(c); });
+  Object.keys(raw).forEach(function (id) {
+    var p = raw[id];
+    if (live[id] === undefined || !p || !isFinite(p.dx) || !isFinite(p.dy) || (p.g != null && p.g !== live[id])) { dirty = true; return; }
+    cardPos[id] = {dx: +p.dx, dy: +p.dy, g: live[id]};
+  });
+  if (dirty) saveCardPos();
+  $$('.card', rowsEl).forEach(placeCard);
+}
+function saveCardPos() { try { localStorage.setItem(PKEY, JSON.stringify(cardPos)); } catch (e) {} }
+function placeCard(c) { var p = cardPos[c.dataset.id]; c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p); }
+function cardExtent() {                           // 옮긴 카드까지 넣은 판 범위(판 좌표)
+  var x0 = contentLeft, y0 = 0, x1 = stage.offsetWidth, y1 = stage.offsetHeight, ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop;
+  $$('.card', rowsEl).forEach(function (c) {
+    x0 = Math.min(x0, ox + c.offsetLeft); y0 = Math.min(y0, oy + c.offsetTop);
+    x1 = Math.max(x1, ox + c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, oy + c.offsetTop + c.offsetHeight);
+  });
+  return {x0: x0, y0: y0, x1: x1, y1: y1};
+}
+var arrowRaf = 0;
+function scheduleArrows() { if (arrowRaf) return; arrowRaf = requestAnimationFrame(function () { arrowRaf = 0; drawArrows(); }); }
+
 /* ---------- 이동·확대 ---------- */
 var z = Z0, tx = 0, ty = 0;
 function apply() {
@@ -457,13 +507,13 @@ function home() {
   ty = 0; apply();
 }
 function fit() {
-  var w = stage.offsetWidth - contentLeft, h = stage.offsetHeight;
+  var ex = cardExtent(), w = ex.x1 - ex.x0, h = ex.y1 - ex.y0;
   var pw = pane.clientWidth, ph = pane.clientHeight;
   var fz = Math.min((pw - 32) / w, (ph - 32) / h);
   fitMin = Math.min(ZMIN, fz);
   z = clampZ(fz);
-  tx = (pw - w * z) / 2 - contentLeft * z;
-  ty = Math.max(16, (ph - h * z) / 2);
+  tx = (pw - w * z) / 2 - ex.x0 * z;
+  ty = Math.max(16, (ph - h * z) / 2) - ex.y0 * z;
   apply();
 }
 $('#fit').addEventListener('click', fit);
@@ -479,16 +529,38 @@ pane.addEventListener('wheel', function (e) {
   tx -= dx; ty -= dy; apply();
 }, {passive: false});
 
+/* ---------- 도구(4B): 손 = 기본(지금처럼 끌면 화면 이동) · 이동(V) = 카드를 끌어 옮기기. 클릭 = 크게 보기는 두 도구 모두 ---------- */
+var tool = 'hand';
+function setTool(t) {
+  tool = t;
+  $$('#tools [data-tool]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
+  pane.classList.toggle('t-move', t === 'move');
+}
+$$('#tools [data-tool]').forEach(function (b) {
+  b.addEventListener('click', function () { setTool(b.dataset.tool); });
+  b.addEventListener('pointerenter', function () {
+    var p = b.dataset.tip.split('|'), tip = $('#ttip'), r = b.getBoundingClientRect();
+    tip.innerHTML = esc(p[0]) + '<kbd>' + esc(b.dataset.key) + '</kbd>' + (p[1] ? '<span>' + esc(p[1]) + '</span>' : '');
+    tip.style.left = (r.right + 8) + 'px'; tip.style.top = (r.top + 2) + 'px'; tip.hidden = false;
+  });
+  b.addEventListener('pointerleave', function () { $('#ttip').hidden = true; });
+});
+
 var ptrs = new Map(), drag = null, pinch = null, justDragged = false;
 function mid() { var a = Array.from(ptrs.values()); return {x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1}; }
 function startDrag(id, p, type) { drag = {id: id, x: p.x, y: p.y, tx: tx, ty: ty, moved: false, thr: type === 'touch' ? 8 : 4}; }
 pane.addEventListener('pointerdown', function (e) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.target.closest && e.target.closest('#tools')) return;   // 도구 막대 위에서는 판을 끌지 않는다
   if (VM) VM.stop();
   justDragged = false;
   ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
-  if (ptrs.size === 1) startDrag(e.pointerId, {x: e.clientX, y: e.clientY}, e.pointerType);
-  else if (ptrs.size === 2) {
+  if (ptrs.size === 1) {
+    startDrag(e.pointerId, {x: e.clientX, y: e.clientY}, e.pointerType);
+    var cd = tool === 'move' && e.target.closest ? e.target.closest('.card') : null;
+    if (cd && !e.target.closest('.anno')) { var cp = cardPos[cd.dataset.id] || {dx: 0, dy: 0}; drag.card = cd; drag.ox = cp.dx; drag.oy = cp.dy; }
+  } else if (ptrs.size === 2) {
+    if (drag && drag.card) endCardDrag();
     var m = mid(); pinch = {m: m, z: z, tx: tx, ty: ty};
     if (drag) drag.moved = true;
     try { ptrs.forEach(function (_, id) { pane.setPointerCapture(id); }); } catch (err) {}
@@ -510,12 +582,21 @@ pane.addEventListener('pointermove', function (e) {
     drag.moved = true; pane.classList.add('dragging');
     try { pane.setPointerCapture(e.pointerId); } catch (err) {}
   }
-  if (drag.moved) { tx = drag.tx + dx; ty = drag.ty + dy; apply(); }
+  if (drag.moved && drag.card) {                 // 이동 도구: 카드만 움직이고(판은 그대로) 화살표는 한 프레임에 한 번
+    drag.card.classList.add('moving');
+    cardPos[drag.card.dataset.id] = {dx: Math.round(drag.ox + dx / z), dy: Math.round(drag.oy + dy / z), g: groupOf(drag.card)};
+    placeCard(drag.card); scheduleArrows();
+  } else if (drag.moved) { tx = drag.tx + dx; ty = drag.ty + dy; apply(); }
 });
+function endCardDrag() {
+  var c = drag.card; drag.card = null; c.classList.remove('moving');
+  if (drag.moved) { saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; drawArrows(); }
+}
 function endPtr(e) {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
   if (drag && drag.moved) justDragged = true;
+  if (drag && drag.card && drag.id === e.pointerId) endCardDrag();
   if (ptrs.size === 1) {                          // 핀치 끝 → 남은 손가락으로 이어서 이동
     pinch = null;
     var id = ptrs.keys().next().value, p = ptrs.get(id);
@@ -528,7 +609,7 @@ pane.addEventListener('click', function (e) {
   if (justDragged) { justDragged = false; e.preventDefault(); e.stopPropagation(); return; }
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
-  if (cl('#legend')) return;                       // 범례 안 조작은 연결 보기를 끄지 않는다
+  if (cl('#legend') || cl('#tools')) return;       // 범례·도구 막대 안 조작은 연결 보기를 끄지 않는다
   var an = cl('.anno');
   var focusId = VL.focusId();
   if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title, true); return; }
@@ -839,6 +920,7 @@ addEventListener('keydown', function (e) {
   if (k === 'a' && modal.hidden) { e.preventDefault(); setArrows(!arrowsOn); }
   else if (k === '0' && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); fit(); }
   else if (k === 'p' && !modal.hidden) { e.preventDefault(); setPick(!picking); }
+  else if ((k === 'v' || k === 'h') && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool(k === 'v' ? 'move' : 'hand'); }
 });
 renderNotes();
 
@@ -850,6 +932,7 @@ renderNotes();
   var mw = Math.round((pw - left - 24) / Z0) + 'px';
   $('#intro').style.maxWidth = mw; $('#foot').style.maxWidth = mw;
 })();
+loadCardPos();
 drawArrows();
 home();
 loadVisible();
