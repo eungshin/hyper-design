@@ -818,6 +818,10 @@ def test_socket_drag_draws_pending_line_at_once(dpage):
     dpage.wait_for_timeout(250)
     cls = lk_to(dpage, q["id"])
     assert cls and all("pd" in c for c in cls), ("새 도착으로 가는 선이 바로 반영 대기 모양(점선)으로", cls)
+    dash = dpage.evaluate("""(to) => { const p = [...document.querySelectorAll('#lks path.lk.pd')].find(p => p.dataset.to === to);
+        const z = +document.getElementById('stage').dataset.zoom, d = getComputedStyle(p).strokeDasharray.split(',').map(parseFloat);
+        return [d[0] * z, p.hasAttribute('pathLength')]; }""", q["id"])
+    assert dash[0] >= 4 and not dash[1], ("점선 한 칸이 화면에서 4px 이상(길이 비율이 아니라 화면 px) — 재검증 C2", dash)
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(250)
     assert lk_to(dpage, q["id"]) == [], "되돌리면 사라진다"
@@ -1063,7 +1067,8 @@ def test_trigger_tool_click_selects_element_with_its_socket(dpage):
     x, y = el_point(dpage, ph, fr, "h1")
     dpage.mouse.click(x, y)
     dpage.wait_for_selector(".elbox.sel", timeout=3000)
-    dpage.keyboard.press("Escape")                   # 메뉴만 닫힌다, 고른 요소는 그대로
+    dpage.wait_for_timeout(200)
+    assert dpage.evaluate("document.getElementById('cmenu').hidden"), "누르기 = 고르기만(메뉴는 우클릭) — 소켓 끌기를 막지 않는다(재검증 C1)"
     dpage.mouse.move(5, 300)
     dpage.wait_for_timeout(200)
     assert dpage.locator(".elbox.sel").count() == 1, "마우스가 떠나도 고른 요소 테두리는 남는다"
@@ -1077,7 +1082,7 @@ def test_trigger_tool_click_selects_element_with_its_socket(dpage):
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     dpage.keyboard.press("Escape")
-    assert dpage.locator(".elbox.sel").count() == 0, "Esc 두 번째 = 고른 요소 풀기"
+    assert dpage.locator(".elbox.sel").count() == 0, "Esc = 고른 요소 풀기"
     dpage.keyboard.press("h")
 
 
@@ -1106,10 +1111,13 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.locator("#selbar button", has_text="삭제").click()
     wait_notes(dpage, n0 + 2)
     assert {n["edit"] for n in notes_of(dpage)[-2:]} == {"delete"}
-    assert not dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible() and not dpage.locator(f'.card[data-id="{q["id"]}"]').is_visible()
+    for cid in (p["id"], q["id"]):                    # 재검증 C3: 사라지지 않고 흐리게 + '삭제 대기'
+        card = dpage.locator(f'.card[data-id="{cid}"]')
+        assert card.is_visible() and "del" in card.get_attribute("class") and float(card.evaluate("c => getComputedStyle(c).opacity")) < 0.6
+        assert "삭제 대기" in card.locator(".delchip").text_content()
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
-    assert dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible()
+    assert "del" not in dpage.locator(f'.card[data-id="{p["id"]}"]').get_attribute("class")
     e = empty_point(dpage)
     dpage.mouse.click(e["x"], e["y"])
     dpage.wait_for_timeout(150)
@@ -1117,7 +1125,7 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.mouse.click(p["x"], p["y"])
     dpage.keyboard.press("Delete")
     wait_notes(dpage, n0 + 1)
-    assert not dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible()
+    assert "del" in dpage.locator(f'.card[data-id="{p["id"]}"]').get_attribute("class")
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     dpage.keyboard.press("h")
@@ -1175,3 +1183,9 @@ def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
     gap = card["y"] - (bar["y"] + bar["height"])
     assert 0 <= gap <= 20, ("선택 막대는 카드 바로 위", gap)
     dpage.keyboard.press("Escape")
+
+
+def test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element(dpage):
+    """재검증 C6: 메모(M) = 화면 전체, 주석(P) = 요소 하나 — 툴팁 첫 줄에서 바로 구분."""
+    tips = dpage.evaluate("Object.fromEntries([...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.dataset.tip.split('|')[0]]))")
+    assert "화면 전체" in tips["memo"] and "요소" in tips["annotate"], tips

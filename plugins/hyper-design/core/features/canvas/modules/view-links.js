@@ -141,7 +141,8 @@ function mount(ctx) {
       }
       var ci = cols.indexOf(g.color); if (ci < 0) { ci = cols.length; cols.push(g.color); }
       g.paths.forEach(function (d, i) {
-        paths += '<path class="lk' + (g.back ? ' bk' : '') + (lk.pend && lk.pend[g.k] ? ' pd' : '') + '" pathLength="1"' + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
+        var pd = !!(lk.pend && lk.pend[g.k]);           // 반영 대기 선: 점선은 화면 px(길이 비율 pathLength 를 쓰면 짧은 선에서 실선처럼 보인다)
+        paths += '<path class="lk' + (g.back ? ' bk' : '') + (pd ? ' pd' : '') + '"' + (pd ? '' : ' pathLength="1"') + still + ' data-k="' + g.k + '" data-from="' + esc(g.from) + '" data-to="' + esc(g.to) + '" data-pts="' + esc(JSON.stringify(g.pts[i])) +
           '" stroke="' + g.color + '" marker-end="url(#hd-lk-' + ci + ')" d="' + d + '"><title>' + esc(g.text) + ' → ' + esc(TITLES[g.to] || g.to) + '</title></path>';
       });
     });
