@@ -221,10 +221,15 @@ body.modal-open #khint{display:none}
 #pop .seg button[aria-pressed="true"]{background:#fff;color:#1c1c1c;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .nbtn{min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
 .nbtn.pri{background:#2563eb;border-color:#2563eb;color:#fff}
-#notes{position:fixed;z-index:30;right:12px;top:72px;width:320px;max-height:calc(100vh - 96px);display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:14px}
+#notes{position:fixed;z-index:30;right:12px;top:72px;width:320px;max-height:min(60vh,calc(100vh - 96px));display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:14px}
 #notes[hidden]{display:none}
 #notes h2{font-size:15px;margin:0;padding:12px 14px 6px}
-#notes ol{list-style:none;margin:0;padding:0 8px;overflow:auto;flex:1}
+#notes h2 button{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+#notes .ncaret{margin-left:auto;width:8px;height:8px;border-right:2px solid #888;border-bottom:2px solid #888;transform:translateY(2px) rotate(-135deg);transition:transform .15s}
+#notes.collapsed .ncaret{transform:translateY(-2px) rotate(45deg)}
+#notes.collapsed h2{padding-bottom:10px}
+#notes.collapsed ol,#notes.collapsed .nmsg{display:none}
+#notes ol{list-style:none;margin:0;padding:0 8px;overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
 #notes li{padding:8px 6px;border-top:1px solid #eee}
 #notes li.sent{opacity:.55}
 #notes .nn{font-weight:700;color:#e5484d;margin-right:4px}
@@ -290,7 +295,7 @@ body.modal-open #khint{display:none}
   </div>
 </div>
 <aside id="notes" hidden aria-label="메모 목록">
-  <h2>메모 <span id="ncount"></span></h2>
+  <h2><button type="button" id="ntoggle" aria-expanded="true" aria-controls="nlist" title="메모 목록 접기 · 펴기">메모 <span id="ncount"></span><span class="ncaret" aria-hidden="true"></span></button></h2>
   <ol id="nlist"></ol>
   <div class="nfoot">
     <button class="nbtn pri" id="nsend">보내기</button>
@@ -814,6 +819,15 @@ $('#nsend').addEventListener('click', function () {
   saveNotes();
   $('#nmsg').textContent = '복사했어요 — 터미널에 붙여넣으세요';
 });
+// 메모 목록 접기 · 펴기 — 상태는 prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
+var NUI = 'hd-notes-ui';
+function setNotesOpen(open, save) {
+  notesEl.classList.toggle('collapsed', !open);
+  $('#ntoggle').setAttribute('aria-expanded', String(open));
+  if (save) { try { localStorage.setItem(NUI, open ? 'open' : 'closed'); } catch (e) {} }
+}
+(function () { var open = true; try { open = localStorage.getItem(NUI) !== 'closed'; } catch (e) {} setNotesOpen(open, false); })();
+$('#ntoggle').addEventListener('click', function () { setNotesOpen(notesEl.classList.contains('collapsed'), true); });
 $('#nclear').addEventListener('click', function () {
   notes = notes.filter(function (n) { return !n.sent; });
   $('#nmsg').textContent = '';
