@@ -64,6 +64,7 @@ BROWSER = {
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),
     "test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element": ("tools",),
+    "test_partly_pending_group_keeps_solid_line_and_marks_tag": ("tools", "links"),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),

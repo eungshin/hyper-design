@@ -1190,3 +1190,22 @@ def test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element(dpage):
     """재검증 C6: 메모(M) = 화면 전체, 주석(P) = 요소 하나 — 툴팁 첫 줄에서 바로 구분."""
     tips = dpage.evaluate("Object.fromEntries([...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.dataset.tip.split('|')[0]]))")
     assert "화면 전체" in tips["memo"] and "요소" in tips["annotate"], tips
+
+
+def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
+    """재검증 남은 한계: 기존 연결과 같은 도착으로 합쳐진 반영 대기는 선을 점선으로 만들지 않고 태그에 '반영 대기 n'."""
+    focus_dayfine(dpage, "job")
+    dpage.keyboard.press("l")
+    s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none' && n.dataset.to !== 'language');
+        const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()""")
+    t = dpage.locator('.card[data-id="language"] .cover').bounding_box()
+    drag(dpage, s, t["x"] + t["width"] / 2 - s["x"], t["y"] + t["height"] / 2 - s["y"])
+    dpage.wait_for_timeout(250)
+    cls = lk_to(dpage, "language")
+    assert cls and not any("pd" in c for c in cls), ("기존 연결이 섞인 그룹의 선은 실선", cls)
+    assert "반영 대기 1" in dpage.text_content('#lkl .ltag[data-to="language"]')
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(250)
+    assert "반영 대기" not in dpage.text_content('#lkl .ltag[data-to="language"]')
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")

@@ -58,8 +58,10 @@ function mount(ctx) {
     var m = F.assignColors(G.edgesFrom(graph, focusId, 'link').map(function (e) { return {to: e.to, path: e.via.path, text: e.via.text, rect: e.via.rect}; }), d.accent, F.LINK_COLORS);
     m.from = focusId; m.accent = d.accent || ''; m.titles = TITLES; m.docHeight = +d.docHeight || 0;
     m.seq = (graph.screens || []).map(function (s) { return s.id; });   // 흐름 순서 — 앞 화면으로 가는 연결은 가늘고 흐리게
-    m.pend = {};
-    m.items.forEach(function (it) { if (pend[it.path + '>' + it.to]) m.pend[it.ci] = 1; });
+    m.pend = {}; m.part = {};                         // pend = 그 도착 그룹이 모두 반영 대기(점선) · part = 기존 연결과 섞임(선은 실선, 태그에 '반영 대기 n')
+    var pc = {}, tc = {};
+    m.items.forEach(function (it) { tc[it.ci] = (tc[it.ci] || 0) + 1; if (pend[it.path + '>' + it.to]) pc[it.ci] = (pc[it.ci] || 0) + 1; });
+    Object.keys(pc).forEach(function (k) { if (pc[k] === tc[k]) m.pend[k] = 1; else m.part[k] = pc[k]; });
     return m;
   }
   function applyFocus() {
@@ -119,7 +121,9 @@ function mount(ctx) {
     var layer = $('#lkl'), svg = $('#lks'), gs = F.groupsOf(lk);
     layer.innerHTML = gs.map(function (g) {
       var nm = ctx.names ? ctx.names.get(lk.from, g.to) : '';
-      return '<div class="ltag' + (nm ? ' named' : '') + (lk.pend && lk.pend[g.k] ? ' pd' : '') + '"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' + esc(nm || g.tag) + '</div>'; }).join('');
+      var part = lk.part && lk.part[g.k];
+      return '<div class="ltag' + (nm ? ' named' : '') + (lk.pend && lk.pend[g.k] || part ? ' pd' : '') + '"' + still + ' data-k="' + g.k + '" data-to="' + esc(g.to) + '">' +
+        esc(nm || g.tag) + (part ? ' · 반영 대기 ' + part : '') + '</div>'; }).join('');
     var tagEls = $$('.ltag', layer), ph = $('.phone', src), sg = geomOf(src), targets = {}, sizes = {};
     lk.order.forEach(function (t) {
       var c = cardEl(t); if (!c) return;
