@@ -3,6 +3,7 @@
 ```
 python3 $SK/features/canvas/build_canvas.py <out>
 python3 $SK/features/canvas/canvas_test.py <out> [--shot PNG]   # 상호작용 점검(Playwright, 선택)
+python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우미(선택) — 출력한 주소로 열면 '보내기'가 화면 파일에 바로 쓴다
 ```
 
 ## 입력 (out 안)
@@ -23,15 +24,21 @@ python3 $SK/features/canvas/canvas_test.py <out> [--shot PNG]   # 상호작용 �
 - `hd-pending {items:[{path, text}]}` → 화면이 그 요소 글을 잠시 바꿔 점선으로 보인다(반영 대기 미리보기, `items:[]`이면 되돌림)
 - 화면 파일을 바꾸는 편집(트리거 지정·해제, 잇기, 도착 바꾸기, 연결 끊기, 글자·카드 이름·설명 고치기)은 메모(`intent=change`, 메모 안 `edit` 종류)로 쌓여 같은 "보내기" 요청문으로 나간다. 카드 이름·설명은 `path=screens.json > screens[id=…] > title|purpose`. 보내지 않은 편집이 있으면 새로고침·닫기 전에 묻고, 변경 기록은 `hd-edit-log:` 키에 남는다
 
+## 로컬 도우미 (`helper.py`, 선택)
+- 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고, 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 `build_canvas.py`로 다시 만든다(실패하면 되돌림)
+- 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
+- 도우미로 열어도 저장 키는 file://로 열 때와 같다(`window.__hdKeyPath`). 도우미가 없거나 꺼져 있으면 '보내기'는 지금처럼 요청문을 복사한다
+
 ## 테스트 층 (캔버스를 고치는 모든 세션이 따른다)
 
 | 층 | 파일 | 무엇을 | 시간 |
 |---|---|---|---|
 | unit | `tests/test_canvas_modules.py` | 순수 모듈(node): 그래프·길찾기·태그 자리·색·리듀서·설정·카메라 계획·순수성 | 약 1초 |
 | 브라우저 | `test_canvas_baseline.py`(지금 입력 규칙 고정) · `test_canvas_v2.py` · `test_canvas_edit.py`(편집 기능) | DOM 연결·실제 조작 | 테스트당 1~17초 |
+| 도우미 | `test_canvas_helper.py` | `helper.py` 편집·적용·서버(브라우저 1개) | 약 11초 |
 
 브라우저 테스트는 영역 표시를 받는다(`tests/conftest.py`의 `BROWSER` 표 — 표에 없는 브라우저 테스트는 수집 단계에서 실패하니, 새 테스트는 표에 한 줄을 더한다):
-`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기) · `flow`(주요 흐름 화살표) · `links`(연결 보기) · `motion`(카메라·전환).
+`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(주요 흐름 화살표) · `links`(연결 보기) · `motion`(카메라·전환) · `helper`(로컬 도우미).
 
 **어디를 고치면 무엇을 돌리나**
 
@@ -42,7 +49,8 @@ python3 $SK/features/canvas/canvas_test.py <out> [--shot PNG]   # 상호작용 �
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
-| `foundation/palette.js` | `links or modal` |
+| `foundation/palette.js` | `links or modal or tools` |
+| `helper.py` | `helper` |
 | `build_canvas.py` · 여러 영역에 걸친 변경 | 전체 |
 
 **돌리는 순서 (전체를 반복해서 돌리지 않는다)**

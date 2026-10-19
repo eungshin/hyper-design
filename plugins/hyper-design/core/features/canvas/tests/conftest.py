@@ -13,6 +13,7 @@ AREAS = {
     "flow": "주요 흐름 화살표(회색 점선)",
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
     "motion": "카메라·전환 메뉴·움직임 끄기",
+    "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
 }
 
 BROWSER = {
@@ -46,6 +47,10 @@ BROWSER = {
     "test_dblclick_title_and_desc_queue_pending_edits": ("tools", "notes"),
     "test_dblclick_screen_text_edits_with_preview": ("tools", "modal", "notes"),
     "test_element_menu_edit_text": ("tools",),
+    # test_canvas_helper.py — 7단계 로컬 도우미
+    "test_helper_edit_html_ops": ("helper",),
+    "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
+    "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),

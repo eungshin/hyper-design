@@ -504,7 +504,8 @@ function drawArrows() {
 
 /* ---------- 카드 옮긴 자리(6A): 줄 배치는 그대로, 카드마다 옮긴 거리만 별도 키에 ---------- */
 // prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다). 없는 화면·다른 그룹으로 간 화면의 값은 버린다.
-var PKEY = 'hd-card-pos:' + hashStr(location.pathname), cardPos = {};
+var KEYPATH = window.__hdKeyPath || location.pathname;   // 도우미(helper.py)로 열면 file:// 때의 경로를 받아 저장 키를 같게
+var PKEY = 'hd-card-pos:' + hashStr(KEYPATH), cardPos = {};
 function groupOf(c) { var f = c.closest('.flow'), g = f ? $('.glabel', f) : null; return g ? g.textContent : ''; }
 function loadCardPos() {
   var raw = {}; try { raw = JSON.parse(localStorage.getItem(PKEY) || '{}') || {}; } catch (e) { raw = {}; }
@@ -836,10 +837,10 @@ function setArrows(on) {
   prefs.arrows = arrowsOn; savePrefs();
 }
 // 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
-var LNKEY = 'hd-link-names:' + hashStr(location.pathname), linkNames = {};
+var LNKEY = 'hd-link-names:' + hashStr(KEYPATH), linkNames = {};
 try { linkNames = JSON.parse(localStorage.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
 // 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버린다
-var HKEY = 'hd-hidden:' + hashStr(location.pathname), hidden = {};
+var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
 (function () {
   var raw = []; try { raw = JSON.parse(localStorage.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
   var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
@@ -1016,11 +1017,11 @@ addEventListener('message', function (e) {
   }
 });
 function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
-function editNote(screen, h, text) {
+function editNote(screen, h, text, op, to) {           // op: link · cut · untrigger · trigger · new (도우미가 바로 쓰는 것: link·cut·untrigger)
   return {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: screen, targets: [{path: h.path, text: h.text, rect: h.rect}],
-          path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link'};
+          path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link', op: op || '', to: to || ''};
 }
-var ELKEY = 'hd-edit-log:' + hashStr(location.pathname);
+var ELKEY = 'hd-edit-log:' + hashStr(KEYPATH);
 function logEdit(label, list) {                      // 변경 기록 — 메모를 지워도 남는다(최근 200개). 다시 빌드해 화면이 바뀌어도 무엇을 요청했는지 확인용
   var log = []; try { log = JSON.parse(localStorage.getItem(ELKEY) || '[]') || []; } catch (e) { log = []; }
   log.push({at: new Date().toISOString(), label: label, items: list.map(function (n) { return n.screen + ' · ' + n.note; })});
@@ -1048,7 +1049,7 @@ function addEdits(label, list) {
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
   var list = hits.filter(function (h) { return h.to !== to; }).map(function (h) {
-    return editNote(from, h, h.to ? '도착 바꾸기: 지금 ' + scr(h.to) + ' → ' + scr(to) + ' 화면으로 가게' : '이 요소를 누르면 ' + scr(to) + ' 화면으로 가게 연결');
+    return editNote(from, h, h.to ? '도착 바꾸기: 지금 ' + scr(h.to) + ' → ' + scr(to) + ' 화면으로 가게' : '이 요소를 누르면 ' + scr(to) + ' 화면으로 가게 연결', 'link', to);
   });
   if (!list.length) { toast('이미 그 화면으로 가요'); return; }
   addEdits(hits.some(function (h) { return h.to; }) ? '트리거 도착 바꾸기' : '트리거 연결', list);
@@ -1056,13 +1057,13 @@ function linkTo(from, hits, to) {                    // 요소들 → 도착 화
 function cutText(to) { return '연결 끊기: 이 요소를 눌러도 ' + scr(to) + ' 화면으로 가지 않게'; }
 function cutGroups(ks) {
   var list = [];
-  ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) { list.push(editNote(g.from, it, cutText(it.to))); }); });
+  ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) { list.push(editNote(g.from, it, cutText(it.to), 'cut', it.to)); }); });
   addEdits('선 자르기', list);
 }
 function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기
   var els = h.to ? [{label: '도착 바꾸기', act: function () { startPick(from, [h], x, y); }},
-                    {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, '트리거 해제: 이 요소를 눌러도 화면이 바뀌지 않게(지금 ' + scr(h.to) + '로 가는 연결 없애기)')]); }}]
-                 : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)')]); }},
+                    {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, '트리거 해제: 이 요소를 눌러도 화면이 바뀌지 않게(지금 ' + scr(h.to) + '로 가는 연결 없애기)', 'untrigger', h.to)]); }}]
+                 : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)', 'trigger')]); }},
                     {label: '잇기', key: 'L 끌기', act: function () { startPick(from, [h], x, y); }}];
   els.push({label: '글자 고치기', key: '더블클릭', act: function () { editScreenText(from, h); }});
   openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
@@ -1083,9 +1084,9 @@ function finishTrig(tr, moved, cx, cy) {
     if (to && to !== tr.from) { linkTo(tr.from, hits, to); return; }
     if (to) return;                                  // 제 화면에 놓음 = 취소
     var items = [{label: '새 화면 만들고 잇기', act: function () {
-      addEdits('새 화면 잇기', hits.map(function (h) { return editNote(tr.from, h, '새 빈 화면을 만들고 이 요소를 누르면 그 화면으로 가게 연결'); })); }}];
+      addEdits('새 화면 잇기', hits.map(function (h) { return editNote(tr.from, h, '새 빈 화면을 만들고 이 요소를 누르면 그 화면으로 가게 연결', 'new'); })); }}];
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
-      addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to)); })); }});
+      addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to), 'cut', h.to); })); }});
     items.push('-', {label: '취소', act: function () {}});
     openCmenu(cx, cy, '연결 → 빈 곳', items);
   });
@@ -1227,7 +1228,7 @@ var mscale = 1, mscreen = null, picking = false, draft = null, editing = null;
 var pop = $('#pop'), notesEl = $('#notes');
 function idOf(file) { return decodeURIComponent(String(file || '').split(/[?#]/)[0].split('/').pop()).replace(/\.html?$/i, ''); }
 function hashStr(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
-var NKEY = 'hd-notes:' + hashStr(location.pathname);
+var NKEY = 'hd-notes:' + hashStr(KEYPATH);
 var notes = [];
 try { notes = JSON.parse(localStorage.getItem(NKEY) || '[]') || []; } catch (e) { notes = []; }
 function tgts(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }   // 예전 한 요소 메모도 읽는다
@@ -1238,6 +1239,7 @@ function popItem(dr, last) {
 function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); }
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
 function outDir() {
+  if (window.__hdOut) return window.__hdOut;
   var p = decodeURIComponent(location.pathname).replace(/\/[^\/]*$/, '');
   if (/^\/[A-Za-z]:/.test(p)) p = p.slice(1);
   return p || '/';
@@ -1380,16 +1382,50 @@ function copyText(t) {
     else fallback();
   } catch (e) { fallback(); }
 }
-$('#nsend').addEventListener('click', function () {
-  var list = notes.filter(function (n) { return !n.sent; });
-  if (!list.length) list = notes.slice();
-  if (!list.length) return;
+function copySend(list, msg) {
   var t = requestText(list);
   window.__hdLastSend = t;
   copyText(t);
   list.forEach(function (n) { n.sent = true; });
   saveNotes();
-  $('#nmsg').textContent = '복사했어요 — 터미널에 붙여넣으세요';
+  $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요';
+}
+// 로컬 도우미(helper.py, 7단계): http 로 열렸고 토큰이 있을 때만. 바로 쓰는 편집 → /api/apply, 나머지 → /api/forward(Paseo 또는 대기열 파일)
+var HELPER = !!window.__hdHelper && /^https?:$/.test(location.protocol), HTOKEN = new URLSearchParams(location.search).get('hd') || '';
+function helperPost(url, body) {
+  return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-HD-Token': HTOKEN}, body: JSON.stringify(body)})
+    .then(function (r) { if (!r.ok) throw new Error('helper ' + r.status); return r.json(); });
+}
+function directOf(n) {                               // 도우미가 화면 파일에 바로 쓸 수 있는 편집
+  return n.edit === 'text' || n.edit === 'title' || n.edit === 'purpose' ||
+         (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
+}
+$('#nsend').addEventListener('click', function () {
+  var list = notes.filter(function (n) { return !n.sent; });
+  if (!list.length) list = notes.slice();
+  if (!list.length) return;
+  if (!HELPER || !HTOKEN) { copySend(list); return; }
+  var direct = list.filter(directOf), rest = list.filter(function (n) { return !directOf(n); });
+  $('#nmsg').textContent = '도우미에게 보내는 중…';
+  helperPost('/api/apply', {edits: direct.map(function (n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value}; })})
+    .then(function (res) {
+      var ok = {}; (res.applied || []).forEach(function (id) { ok[id] = 1; });
+      var done = direct.filter(function (n) { return ok[n.id]; }), left = rest.concat(direct.filter(function (n) { return !ok[n.id]; }));   // 못 쓴 편집도 요청문으로
+      var after = function (fw) {
+        if (done.length) logEdit('바로 반영', done);
+        notes = notes.filter(function (n) { return !ok[n.id]; });
+        left.forEach(function (n) { n.sent = true; });
+        saveNotes();
+        window.__hdLastHelper = {apply: res, forward: fw};
+        $('#nmsg').textContent = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && left.length ? ' · ' : '') +
+          (left.length ? '터미널로 ' + left.length + '건(' + (fw && fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : '');
+        if (done.length) setTimeout(function () { location.reload(); }, 700);   // 다시 빌드된 캔버스로
+      };
+      if (!left.length) { after(null); return; }
+      var t = requestText(left); window.__hdLastSend = t;
+      return helperPost('/api/forward', {text: t}).then(after);
+    })
+    .catch(function () { copySend(list, '도우미가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
 });
 // 메모 목록 접기 · 펴기 — 상태는 prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
 var NUI = 'hd-notes-ui';
