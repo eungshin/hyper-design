@@ -4,7 +4,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
 - 127.0.0.1 에만 열고, 실행마다 새 토큰을 만든다. 출력한 주소(…/index.html?hd=<토큰>)로 캔버스를 열면 '보내기'가 도우미를 쓴다.
 - 쓰는 곳은 <out> 안뿐이다. 쓰기 전에 원본을 <out>/.hd-history/<시각>/ 에 남기고, 쓴 뒤 build_canvas.py 로 캔버스를 다시 만든다(실패하면 원본으로 되돌림).
-- 바로 쓰는 편집(결정형): 글자(text) · 카드 이름(title) · 설명(purpose) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
+- 바로 쓰는 편집(결정형): 글자(text) · 카드 이름(title) · 설명(purpose) · 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
   나머지 메모(질문, 새 화면, 도착 없는 트리거 지정 등)는 요청문 그대로 <out>/.hd-queue/<시각>.txt 대기열 파일에 쓰고,
   --paseo-agent 가 있으면 그 파일을 `paseo send <agent> --prompt-file … --no-wait` 로 그 에이전트 터미널에 넣는다
   (없으면 터미널에서 /hyper-design:fix 에 그 내용을 붙여 넣는다).
@@ -207,8 +207,10 @@ def apply_edits(out, edits, stamp=None):
         try:
             if sid not in files:
                 raise ValueError("없는 화면: %s" % sid)
-            if kind in ("title", "purpose"):
-                json_ops.append((eid, sid, kind, str(e.get("value", ""))))
+            if kind in ("title", "purpose", "policy"):
+                if kind == "policy" and not isinstance(e.get("index"), int):
+                    raise ValueError("정책 줄 번호가 없어요")
+                json_ops.append((eid, sid, kind if kind != "policy" else ("policy", e["index"]), str(e.get("value", ""))))
                 continue
             if kind == "text":
                 op = ("text", str(e.get("value", "")))
@@ -252,7 +254,14 @@ def apply_edits(out, edits, stamp=None):
     if json_ops:
         by = {s["id"]: s for s in data["screens"]}
         for eid, sid, kind, v in json_ops:
-            by[sid][kind] = v; applied.append(eid)
+            if isinstance(kind, tuple):                 # 정책 줄 i
+                pol = by[sid].setdefault("policies", [])
+                if not 0 <= kind[1] < len(pol):
+                    failed.append({"id": eid, "reason": "없는 정책 줄: %d" % kind[1]}); continue
+                pol[kind[1]] = v
+            else:
+                by[sid][kind] = v
+            applied.append(eid)
         raw = sj.read_text(encoding="utf-8")
         keep(sj)
         sj.write_text(json.dumps(data, ensure_ascii=False, indent=2 if '\n  "' in raw else None) + ("\n" if raw.endswith("\n") else ""), encoding="utf-8", newline="")

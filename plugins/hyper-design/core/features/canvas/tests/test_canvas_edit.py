@@ -743,9 +743,8 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     sc = ph["width"] / dpage.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card?.w || 375")
     x, y = ph["x"] + leaf["x"] * sc, ph["y"] + leaf["y"] * sc
     n0 = len(notes_of(dpage))
-    dpage.mouse.click(x, y, button="right")
-    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /글자 고치기/.test(b.textContent))", timeout=3000)
-    pick(dpage, "글자 고치기")
+    dpage.keyboard.press("e")                        # 글자 도구(재작업 S5): 글자 위를 한 번 누르면 그 자리에서 고친다
+    dpage.mouse.click(x, y)
     dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
     assert dpage.input_value("#tedit textarea") == leaf["text"]
     assert dpage.evaluate("document.getElementById('modal').hidden")
@@ -758,6 +757,15 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     fr.wait_for_function("(t) => [...document.querySelectorAll('*')].some(el => !el.children.length && el.textContent.trim() === t)", arg=leaf["text"], timeout=3000)
+    box = fr.evaluate("""(() => { for (const el of document.querySelectorAll('section, main, div')) {   // 자기 글자가 없는 큰 요소의 빈 자리
+        const r = el.getBoundingClientRect(); if (r.width < 200 || r.height < 200) continue;
+        for (let yy = r.top + 4; yy < Math.min(r.bottom, 600); yy += 6) for (let xx = r.left + 4; xx < r.right; xx += 12)
+          if (document.elementFromPoint(xx, yy) === el) return {x: xx, y: yy}; } return null; })()""")
+    if box:
+        dpage.mouse.click(ph["x"] + box["x"] * sc, ph["y"] + box["y"] * sc)
+        dpage.wait_for_function("(document.getElementById('toast') || {}).textContent === '여기에는 고칠 글자가 없어요'", timeout=3000)
+        assert dpage.evaluate("document.getElementById('tedit').hidden"), "글자 없는 큰 요소는 고치지 않는다"
+    dpage.keyboard.press("h")
     dpage.mouse.dblclick(x, y)                       # 두 번 누르기 = 크게 보기(재작업 S3)
     dpage.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
     dpage.keyboard.press("Escape")
@@ -824,7 +832,7 @@ def drafts(pg):
 
 def test_toolbar_has_add_group(dpage):
     tools = dpage.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => b.dataset.tool)")
-    assert tools == ["hand", "move", "trigger", "knife", "layout", "memo"], tools
+    assert tools == ["hand", "move", "trigger", "knife", "annotate", "text", "layout", "memo"], tools
     assert dpage.evaluate("document.querySelectorAll('#tools hr').length") >= 2, "도구 / 추가 / 보기 세 묶음"
 
 
@@ -996,3 +1004,51 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     wait_notes(dpage, n0)
     dpage.keyboard.press("Escape")
     dpage.wait_for_timeout(200)
+
+
+def test_annotate_tool_notes_an_element_on_the_board(dpage):
+    """S4: 주석 도구(P) — 크게 보기 없이 판 위 카드 안 요소를 누르면 그 요소에 메모."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("p")
+    assert tool(dpage) == ["annotate"]
+    n0 = len(notes_of(dpage))
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector("#pop:not([hidden])", timeout=3000)
+    assert dpage.evaluate("document.getElementById('modal').hidden"), "크게 보기를 열지 않는다"
+    assert "h1" in dpage.text_content("#ppath")
+    dpage.fill("#pnote", "제목을 더 짧게")
+    dpage.click("#padd")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and "h1" in n["path"] and n["targets"][0]["rect"], n
+    dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
+        localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
+    dpage.keyboard.press("h")
+    reload(dpage)
+
+
+def test_text_tool_edits_policy_line(dpage):
+    """S5 + 버그 F7: 글자 도구로 카드 아래 정책(•) 줄을 한 번 눌러 고친다 → screens.json policies[i] 메모 · 반영 대기."""
+    fit_view(dpage)
+    __import__("test_canvas_v2").zoom_to(dpage, "job", 200)
+    sel = '.card[data-id="job"] ul.pol li'
+    bring_into_view(dpage, sel + ':first-child')
+    old = dpage.locator(sel).first.text_content()
+    n0 = len(notes_of(dpage))
+    dpage.keyboard.press("e")
+    dpage.locator(sel).first.click()
+    inp = dpage.locator(sel + " input").first
+    assert inp.is_visible() and inp.input_value() == old
+    inp.fill("새 정책 문장")
+    inp.press("Enter")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["edit"] == "policy" and n["index"] == 0 and "policies[0]" in n["path"], n
+    assert dpage.locator(sel).first.text_content() == "새 정책 문장" and "pend" in dpage.locator(sel).first.get_attribute("class")
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    assert dpage.locator(sel).first.text_content() == old
+    dpage.keyboard.press("h")

@@ -62,14 +62,16 @@ def test_helper_apply_backup_rebuild_and_refusals(out):
         {"id": "d", "screen": "nope", "edit": "text", "path": "h1", "value": "x"},
         {"id": "e", "screen": "job", "edit": "link", "op": "new", "path": "h1"},
         {"id": "f", "screen": "job", "edit": "text", "path": "h9.none:nth-of-type(1)", "value": "x"},
+        {"id": "g", "screen": "job", "edit": "policy", "index": 0, "value": "새 정책"},
     ], stamp="t1")
-    assert sorted(res["applied"]) == ["a", "b", "c"], res
+    assert sorted(res["applied"]) == ["a", "b", "c", "g"], res
     assert {f["id"] for f in res["failed"]} == {"d", "e", "f"}, res
     after = job.read_text(encoding="utf-8")
     assert "무슨 일을 하세요?" in after and 'href="usage.html">다음으로' in after
     assert (out / ".hd-history" / "t1" / "screens" / "job.html").read_text(encoding="utf-8") == before, "쓰기 전 원본을 남긴다"
     sj = json.loads((out / "screens.json").read_text(encoding="utf-8"))
     assert next(s for s in sj["screens"] if s["id"] == "job")["purpose"] == "새 설명"
+    assert next(s for s in sj["screens"] if s["id"] == "job")["policies"][0] == "새 정책", "정책 줄도 바로 쓴다"
     assert "새 설명" in (out / "index.html").read_text(encoding="utf-8"), "다시 빌드한다"
     q = helper.forward(out, "[hyper-design 수정 요청] …")
     assert q["via"] == "queue" and pathlib.Path(q["path"]).read_text(encoding="utf-8").startswith("[hyper-design")

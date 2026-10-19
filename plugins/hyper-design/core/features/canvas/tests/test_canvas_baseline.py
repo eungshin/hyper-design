@@ -142,7 +142,8 @@ def test_p_picks_only_inside_modal(bpage):
     bpage.keyboard.press("p")
     bpage.wait_for_timeout(80)
     assert not modal_open(bpage)
-    assert bpage.get_attribute("#mpick", "aria-pressed") != "true", "판에서 P 는 아무것도 안 한다"
+    assert bpage.get_attribute("#mpick", "aria-pressed") != "true", "판에서 P 는 크게 보기·주석 달기를 켜지 않는다(재작업 S4: 주석 도구)"
+    bpage.keyboard.press("h")
     c = cover_center(bpage)
     bpage.mouse.dblclick(c["x"], c["y"])
     bpage.wait_for_function("!document.getElementById('modal').hidden")

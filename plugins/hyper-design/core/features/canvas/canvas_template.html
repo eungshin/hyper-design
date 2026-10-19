@@ -241,6 +241,11 @@ body.modal-open #tools{display:none}
 .card.draft .blank{font-size:28px;color:#aaa;font-weight:600;pointer-events:none}
 #screens.t-layout,#screens.t-layout .cover{cursor:copy}
 #screens.t-memo .cover{cursor:text}
+#screens.t-annotate .cover{cursor:cell}
+#screens.t-text .cover,#screens.t-text .ftitle,#screens.t-text .fdesc,#screens.t-text .pol li{cursor:text}
+#screens.t-text .ftitle:hover,#screens.t-text .fdesc:hover,#screens.t-text .pol li:hover{outline:2px dashed #0f7ec2;outline-offset:3px;border-radius:4px}
+.pol li.pend{background:#FFF4D6;border-radius:4px}
+.pol li input.cedit{font:inherit;width:100%;box-sizing:border-box;border:2px solid #0f7ec2;border-radius:6px;padding:1px 6px}
 svg.lks path.lk.pd{stroke-dasharray:.018 .012}   /* 반영 대기: 새로 이은 선·바뀐 도착(pathLength=1 기준 점선) */
 svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-width:calc(var(--lkw,2.5px) + 2px)}
 #lkl .ltag.pd{font-style:italic;border-style:dashed}
@@ -348,6 +353,8 @@ svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-widt
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
       <button type="button" class="tb" data-tool="trigger" data-key="L" data-tip="트리거|화면 안 요소를 다른 화면에 끌어 놓으면 연결 · 누르면 메뉴" aria-pressed="false" aria-label="트리거 (L)"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
       <button type="button" class="tb" data-tool="knife" data-key="C" data-tip="선 자르기|그은 선이 지나간 연결을 끊어요 · 오른쪽 버튼 끌기도 같아요" aria-pressed="false" aria-label="선 자르기 (C)"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg></button>
+      <button type="button" class="tb" data-tool="annotate" data-key="P" data-tip="주석|카드 안 요소를 누르면 그 요소에 메모를 남겨요(크게 보기 없이)" aria-pressed="false" aria-label="주석 (P)"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
+      <button type="button" class="tb" data-tool="text" data-key="E" data-tip="글자|글자 위를 누르면 그 자리에서 고쳐요 · 카드 아래 제목·설명·정책 줄도" aria-pressed="false" aria-label="글자 (E)"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg></button>
       <hr>
       <button type="button" class="tb" data-tool="layout" data-key="N" data-tip="빈 레이아웃|빈 곳을 누르면 흰 카드를 놓아요 · 메모를 남기고 보내면 채워져요" aria-pressed="false" aria-label="빈 레이아웃 (N)"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg></button>
       <button type="button" class="tb" data-tool="memo" data-key="M" data-tip="메모|화면을 누르면 그 화면 전체에 메모를 남겨요" aria-pressed="false" aria-label="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button>
@@ -637,6 +644,8 @@ function setTool(t) {
   pane.classList.toggle('t-knife', t === 'knife');
   pane.classList.toggle('t-layout', t === 'layout');
   pane.classList.toggle('t-memo', t === 'memo');
+  pane.classList.toggle('t-annotate', t === 'annotate');
+  pane.classList.toggle('t-text', t === 'text');
   endPick(); clearElbox();
 }
 $$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
@@ -742,6 +751,18 @@ pane.addEventListener('click', function (e) {
   if (cl('#legend') || cl('#tools')) return;       // 범례·도구 막대 안 조작은 연결 보기를 끄지 않는다
   if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
   var mc = cl('.card');
+  if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
+    e.preventDefault(); e.stopPropagation();
+    var tf = cl('.ftitle'), td = cl('.fdesc'), tp = cl('.pol li');
+    if (tool === 'text' && (tf || td || tp)) { if (tp) editPolicy(tp); else editCardText(tf || td, tf ? 'title' : 'purpose'); return; }
+    if (!cl('.phone')) return;
+    var mid = mc.dataset.id, mx = e.clientX, my = e.clientY;
+    askHit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
+      if (!h || h.none) { if (h) toast(tool === 'text' ? '여기에는 고칠 글자가 없어요' : '여기에는 고를 요소가 없어요'); return; }
+      if (tool === 'text') editScreenText(mid, h); else openElemMemo(mid, h, mx, my);
+    }, tool === 'text');
+    return;
+  }
   if (mc && !e.shiftKey && (tool === 'memo' || mc.classList.contains('draft'))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }
   var an = cl('.pres');
   var focusId = VL.focusId();
@@ -1184,10 +1205,10 @@ pane.addEventListener('pointermove', function (e) { if (pickT) drawGhost(e.clien
 
 /* ---------- 더블클릭 고치기(6단계): 카드 이름·설명(screens.json) · 화면 안 글자 → 메모(intent=change). 반영 대기 = 파일에 아직 안 들어간 편집 메모 ---------- */
 var ORIG = {}, tedit = $('#tedit');
-(D.rows || []).forEach(function (row) { row.screens.forEach(function (sc) { ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || ''}; }); });
+(D.rows || []).forEach(function (row) { row.screens.forEach(function (sc) { ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; }); });
 var FIELD = HD.edits.FIELD;
-function pendingOf(id, field) {                      // 그 화면·그 칸의 마지막 편집 값(없으면 null)
-  var v = null; notes.forEach(function (n) { if (n.screen === id && n.edit === field) v = n.value; }); return v;
+function pendingOf(id, field, index) {               // 그 화면·그 칸(정책은 몇 번째 줄)의 마지막 편집 값(없으면 null)
+  var v = null; notes.forEach(function (n) { if (n.screen === id && n.edit === field && (field !== 'policy' || n.index === index)) v = n.value; }); return v;
 }
 function paintCardText() {
   $$('.card', rowsEl).forEach(function (c) {
@@ -1198,6 +1219,12 @@ function paintCardText() {
       el.textContent = v != null ? v : o[fs[0]]; if (keep) el.insertBefore(keep, el.firstChild);
       el.classList.toggle('pend', v != null);
       if (v != null) el.title = '반영 대기 · 원래: ' + o[fs[0]]; else el.removeAttribute('title');
+    });
+    $$('.pol li', c).forEach(function (li, i) {        // 정책 줄(screens.json policies[i])
+      if ($('input', li)) return;
+      var v = pendingOf(id, 'policy', i); li.textContent = v != null ? v : (o.policies[i] || li.textContent);
+      li.classList.toggle('pend', v != null);
+      if (v != null) li.title = '반영 대기 · 원래: ' + o.policies[i]; else li.removeAttribute('title');
     });
   });
 }
@@ -1263,7 +1290,8 @@ $('textarea', tedit).addEventListener('blur', function () { closeTedit(true); })
 pane.addEventListener('dblclick', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
   if (cl('#legend') || cl('#tools') || cl('#lkl') || typing(e)) return;
-  var ft = cl('.ftitle'), fd = cl('.fdesc'), cv = cl('.cover');
+  var ft = cl('.ftitle'), fd = cl('.fdesc'), fp = cl('.pol li');
+  if (fp) { e.preventDefault(); editPolicy(fp); return; }
   if (ft) { e.preventDefault(); editCardText(ft, 'title'); return; }
   if (fd) { e.preventDefault(); editCardText(fd, 'purpose'); return; }
 });
@@ -1324,6 +1352,35 @@ function renderDrafts() {                            // 메모의 빈 레이아�
     if (!$('input', $('.ftitle', c))) $('.ftitle', c).textContent = n.value;
     placeCard(c);
   });
+}
+function editPolicy(li) {                           // 카드 아래 정책 줄 한 줄 — screens.json policies[i]
+  if ($('input', li)) return;
+  closeCmenu();
+  var c = li.closest('.card'), id = c.dataset.id, i = $$('.pol li', c).indexOf(li); if (!ORIG[id] || i < 0) return;
+  var p = pendingOf(id, 'policy', i), cur = p != null ? p : (ORIG[id].policies[i] || li.textContent), inp = document.createElement('input');
+  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', '정책 ' + (i + 1) + '번째 줄');
+  var det = li.closest('details'); if (det) det.open = true;
+  li.textContent = ''; li.appendChild(inp); inp.focus(); inp.select();
+  var done = false, finish = function (save) {
+    if (done) return; done = true;
+    var v = inp.value.replace(/\s+/g, ' ').trim(); inp.remove();
+    if (save && v && v !== cur) {
+      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > policies[' + i + ']', text: cur, rect: null}, HD.edits.say.field('policy', v, i));
+      n.edit = 'policy'; n.index = i; n.value = v;
+      addEdits('정책 줄', [n]);
+    }
+    paintCardText();
+  };
+  inp.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } });
+  inp.addEventListener('blur', function () { finish(true); });
+  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+}
+function openElemMemo(id, h, x, y) {                 // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이)
+  if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
+  editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect}]};
+  showPop({text: h.text || h.path, path: h.path, rect: null}, '', 'change');
+  pop.style.left = Math.max(8, Math.min(innerWidth - 308, x + 14)) + 'px';
+  pop.style.top = Math.max(8, Math.min(innerHeight - 240, y + 14)) + 'px';
 }
 function renameLayout(el, id) {
   var n = notes.filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0]; if (!n) return;
@@ -1539,7 +1596,7 @@ $('#nsend').addEventListener('click', function () {
   if (!HELPER || !HTOKEN) { copySend(list); return; }
   var direct = list.filter(directOf), rest = list.filter(function (n) { return !directOf(n); });
   $('#nmsg').textContent = '도우미에게 보내는 중…';
-  helperPost('/api/apply', {edits: direct.map(function (n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value}; })})
+  helperPost('/api/apply', {edits: direct.map(function (n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value, index: n.index}; })})
     .then(function (res) {
       var ok = {}; (res.applied || []).forEach(function (id) { ok[id] = 1; });
       var done = direct.filter(function (n) { return ok[n.id]; }), left = rest.concat(direct.filter(function (n) { return !ok[n.id]; }));   // 못 쓴 편집도 요청문으로
