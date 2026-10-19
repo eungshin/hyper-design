@@ -936,3 +936,40 @@ def test_modal_pins_follow_navigated_screen(dpage):
     dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
         localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
     reload(dpage)
+
+
+def frame_of(pg, sid):
+    return next(f for f in pg.frames if f.url.split("?")[0].endswith("/" + sid + ".html"))
+
+
+def el_point(pg, ph, fr, sel):
+    """카드 안 요소 sel 의 가운데 → 화면 좌표."""
+    q = fr.evaluate("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }", sel)
+    sc = ph["width"] / pg.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card.w")
+    return ph["x"] + q[0] * sc, ph["y"] + q[1] * sc
+
+
+def elbox(pg):
+    return pg.evaluate("""(() => { const b = document.querySelector('.elbox'); if (!b || getComputedStyle(b).display === 'none') return null;
+        const r = b.getBoundingClientRect(); return {kind: b.dataset.kind, label: b.dataset.label, x: r.left, y: r.top, w: r.width, h: r.height}; })()""")
+
+
+def test_element_tools_outline_hovered_element_by_kind(dpage):
+    """S2: 트리거 도구에서 카드 안 요소에 마우스를 올리면 종류별 테두리(글자·버튼/링크)."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("l")
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.move(x, y)
+    dpage.wait_for_function("document.querySelector('.elbox') && document.querySelector('.elbox').dataset.kind === 'text'", timeout=3000)
+    b = elbox(dpage)
+    assert b["label"] == "글자" and b["x"] <= x <= b["x"] + b["w"], b
+    x, y = el_point(dpage, ph, fr, 'a[href="language.html"]')
+    dpage.mouse.move(x, y)
+    dpage.wait_for_function("document.querySelector('.elbox') && document.querySelector('.elbox').dataset.kind === 'link'", timeout=3000)
+    assert elbox(dpage)["label"].startswith("링크")
+    dpage.keyboard.press("h")
+    dpage.mouse.move(x + 2, y + 2)
+    dpage.wait_for_timeout(200)
+    assert elbox(dpage) is None, "손 도구에서는 테두리 없음"

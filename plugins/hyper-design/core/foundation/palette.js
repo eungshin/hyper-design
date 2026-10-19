@@ -9,7 +9,8 @@
    어디로 가나(Ctrl/Cmd+클릭): 링크 요소를 Ctrl/Cmd+클릭하면 이동하지 않고 {type:'hd-link-go', screen, to, path, rect} 를 보낸다.
    캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로.
    편집(트리거·도착 바꾸기): {type:'hd-hit-at', x, y} 를 받으면 그 자리의 요소(링크 → 누를 수 있는 요소 → 그 요소 순)로
-   {type:'hd-hit', screen, path, text, full, rect, to} 를 보낸다(to = 지금 가는 화면 id 또는 null, full = 고칠 글 전체, 요소가 없으면 path:null).
+   {type:'hd-hit', screen, path, text, full, rect, to, kind} 를 보낸다(to = 지금 가는 화면 id 또는 null, full = 고칠 글 전체,
+   kind = link·button·field·text·box — 캔버스가 종류별 테두리를 그린다, 요소가 없으면 path:null).
    leaf:true 면 그 자리 요소 그대로(글자 고치기).
    반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다. */
@@ -136,11 +137,18 @@
     var hits = Array.prototype.filter.call(at.querySelectorAll('*'), ownText);
     return hits.length === 1 ? hits[0] : null;
   }
+  function kindOf(el) {                               // 요소 종류: 화면 링크 · 버튼 · 입력칸 · 글자 · 영역
+    var t = el.tagName.toLowerCase(), role = el.getAttribute('role') || '';
+    if (toOf(el)) return 'link';
+    if (t === 'a' || t === 'button' || /^(button|link|tab|menuitem)$/.test(role)) return 'button';
+    if (t === 'input' || t === 'select' || t === 'textarea') return 'field';
+    return ownText(el) ? 'text' : 'box';
+  }
   function sendHit(at, leaf) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: 'hd-hit', screen: screenId(), path: null}); return; }
     send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
-          rect: rectOf(el), to: toOf(el)});
+          rect: rectOf(el), to: toOf(el), kind: kindOf(el)});
   }
   var pend = [];
   function pending(items) {                           // 반영 대기 글: 첫 글자 마디만 바꾸고, 다음 호출에서 되돌린다

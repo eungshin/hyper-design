@@ -228,6 +228,13 @@ body.modal-open #tools{display:none}
 #ghost{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:6;overflow:visible}
 #ghost path{fill:none;stroke:#0f7ec2;stroke-width:2;stroke-dasharray:6 4}
 #ghost path.cut{stroke:#e5484d}
+.elbox{position:absolute;z-index:5;pointer-events:none;border-radius:4px;box-sizing:border-box;border:2px dashed #9a9a9a;--kc:#9a9a9a}
+.elbox[data-kind=text]{border-style:dashed;--kc:#0f7ec2}
+.elbox[data-kind=button],.elbox[data-kind=link]{border-style:solid;--kc:#e8890c}
+.elbox[data-kind=field]{border-style:solid;--kc:#22a06b}
+.elbox{border-color:var(--kc)}
+.elbox::before{content:attr(data-label);position:absolute;left:-2px;bottom:100%;margin-bottom:2px;background:var(--kc);font:600 11px/1.5 system-ui,sans-serif;color:#fff;padding:0 6px;border-radius:4px;white-space:nowrap;transform:scale(var(--ts,1));transform-origin:0 100%}
+.elbox.in::before{bottom:auto;top:0;margin:0;transform-origin:0 0}
 .card.draft{position:absolute}
 .card.draft .phone{border:2px dashed #b9b9b9;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
 .card.draft .blank{font-size:28px;color:#aaa;font-weight:600;pointer-events:none}
@@ -629,7 +636,7 @@ function setTool(t) {
   pane.classList.toggle('t-knife', t === 'knife');
   pane.classList.toggle('t-layout', t === 'layout');
   pane.classList.toggle('t-memo', t === 'memo');
-  endPick();
+  endPick(); clearElbox();
 }
 $$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
 $$('#tools .tb').forEach(function (b) {
@@ -1257,6 +1264,37 @@ pane.addEventListener('dblclick', function (e) {
     askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); else if (h) toast('여기에는 고칠 글자가 없어요'); }, true);
   }
 });
+/* ---------- 요소 테두리(요소 도구 — modules/tools.js 의 hit 가 있는 도구): 마우스를 올린 카드 안 요소를 화면에 물어(hd-hit-at) 종류별 테두리 ---------- */
+var hov = {busy: false, next: null, card: null};
+function clearElbox() { $$('.elbox', rowsEl).forEach(function (b) { b.remove(); }); hov.card = null; }
+function drawElbox(card, h) {
+  clearElbox();
+  if (!h || h.none || !h.rect) return;
+  var ph = $('.phone', card), sc = ph.offsetWidth / CARD.w, ts = tagScale(), q = h.rect, b = document.createElement('div');
+  b.className = 'elbox' + (q.y * sc < 18 * ts ? ' in' : '');
+  b.dataset.kind = h.kind || 'box';
+  b.dataset.label = (HD.tools.LABEL[h.kind] || '영역') + (h.kind === 'link' && h.to ? ' → ' + titleOf(h.to) : '');
+  b.style.left = q.x * sc + 'px'; b.style.top = q.y * sc + 'px'; b.style.width = q.w * sc + 'px'; b.style.height = q.h * sc + 'px';
+  b.style.borderWidth = (2 * ts) + 'px'; b.style.setProperty('--ts', ts);
+  ph.appendChild(b); hov.card = card;
+}
+function hoverAsk(card, x, y) {                      // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억
+  var mode = HD.tools.hitOf(tool); if (!mode) return;
+  if (hov.busy) { hov.next = [card, x, y]; return; }
+  hov.busy = true;
+  askHit(card, x, y, true, function (h) {
+    hov.busy = false;
+    if (HD.tools.hitOf(tool) && !(drag && drag.moved) && !pickT) drawElbox(card, h);
+    var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2]);
+  }, mode === 'leaf');
+}
+pane.addEventListener('mousemove', function (e) {
+  if (!HD.tools.hitOf(tool) || (drag && drag.moved) || pickT) { if (hov.card) clearElbox(); return; }
+  var c = e.target.closest ? e.target.closest('.card:not(.draft)') : null, ph = c ? $('.phone', c) : null;
+  if (!ph || !ph.contains(e.target) || e.target.closest('.sock')) { if (hov.card) clearElbox(); hov.next = null; return; }
+  hoverAsk(c, e.clientX, e.clientY);
+});
+
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }
 function layoutText(n) { return HD.edits.say.layout(n.value, n.screen); }
@@ -1538,7 +1576,7 @@ addEventListener('keydown', function (e) {
   if (k === 'a' && modal.hidden) { e.preventDefault(); setArrows(!arrowsOn); }
   else if (k === '0' && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); fit(); }
   else if (k === 'p' && !modal.hidden) { e.preventDefault(); setPick(!picking); }
-  else if (k && 'vhlcnm'.indexOf(k) >= 0 && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool({v: 'move', h: 'hand', l: 'trigger', c: 'knife', n: 'layout', m: 'memo'}[k]); }
+  else if (HD.tools.byKey(k) && $('#tools [data-tool="' + HD.tools.byKey(k) + '"]') && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool(HD.tools.byKey(k)); }   // 도구 키(modules/tools.js)
 });
 renderNotes();
 

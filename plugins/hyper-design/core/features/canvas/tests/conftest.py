@@ -55,6 +55,7 @@ BROWSER = {
     "test_empty_right_click_layout_here": ("tools", "input"),
     "test_memo_tool_opens_card_memo": ("tools", "notes"),
     "test_modal_pins_follow_navigated_screen": ("modal", "notes"),
+    "test_element_tools_outline_hovered_element_by_kind": ("tools",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
