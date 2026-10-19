@@ -52,7 +52,10 @@ var say = {
            (field === 'policy' ? 'policies[' + index + ']' : field) + ')';
   },
   layout: function (value, id) { return '새 화면 "' + value + '"(' + id + ')을 빈 레이아웃으로 만들기 — 내용은 이 화면에 남긴 메모를 따라 채우기'; },
-  linkNew: function (value, id) { return '이 요소를 누르면 새 화면 "' + value + '"(' + id + ')으로 가게 연결'; }
+  linkNew: function (value, id) { return '이 요소를 누르면 새 화면 "' + value + '"(' + id + ')으로 가게 연결'; },
+  copy: function (value, id, src) { return '새 화면 "' + value + '"(' + id + ')을 ' + src + ' 화면을 복제해 만들기'; },
+  remove: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },
+  cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
 };
 
 HD.edits = {note: note, newId: newId, pendingFor: pendingFor, directOf: directOf, tally: tally, say: say, FIELD: FIELD};

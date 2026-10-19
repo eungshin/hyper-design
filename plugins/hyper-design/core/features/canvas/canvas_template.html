@@ -238,6 +238,13 @@ body.modal-open #tools{display:none}
 .elbox.in::before{bottom:auto;top:0;margin:0;transform-origin:0 0}
 .elbox.sel{background:rgba(15,126,194,.08)}
 .sock.selsock{display:block;background:#0f7ec2}
+.card.picked .phone{outline:calc(3px * var(--ts,1)) solid #0f7ec2;outline-offset:calc(5px * var(--ts,1))}
+.card.del{display:none}
+#selbar{position:fixed;z-index:34;display:flex;gap:2px;padding:4px;background:#1c1c1c;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.25);transform:translateX(-50%)}
+#selbar[hidden]{display:none}
+#selbar button{border:0;background:none;color:#fff;font:600 13px system-ui,sans-serif;padding:6px 10px;border-radius:7px;cursor:pointer}
+#selbar button:hover{background:#3a3a3a}
+#selbar button[hidden]{display:none}
 .card.draft{position:absolute}
 .card.draft .phone{border:2px dashed #b9b9b9;box-sizing:border-box;display:flex;align-items:center;justify-content:center}
 .card.draft .blank{font-size:28px;color:#aaa;font-weight:600;pointer-events:none}
@@ -381,6 +388,7 @@ svg.lks path.lk.cutting{stroke:#e5484d!important;opacity:1!important;stroke-widt
 </div>
 <div id="ttip" hidden></div>
 <div id="toast" role="status" hidden></div>
+<div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="memo">메모</button><button type="button" data-act="hide">숨기기</button><button type="button" data-act="del">삭제</button></div>
 <div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소</div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
 <div id="hidl" class="cm t-dropdown" data-origin="top-left" role="dialog" aria-label="숨긴 화면" hidden></div>
@@ -498,7 +506,7 @@ var contentLeft = LEFT;
 // 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
 function drawArrows() {
   var svg = $('#ar'), box = {};
-  $$('.card:not(.hid)', rowsEl).forEach(function (c) {
+  $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {
     box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};   // offsetParent = .rows · 숨긴 화면의 화살표는 그리지 않는다
   });
   $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
@@ -555,7 +563,7 @@ function placeCard(c) {
   c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p); }
 function cardExtent() {                           // 옮긴 카드까지 넣은 판 범위(판 좌표)
   var x0 = contentLeft, y0 = 0, x1 = stage.offsetWidth, y1 = stage.offsetHeight, ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop;
-  $$('.card:not(.hid)', rowsEl).forEach(function (c) {
+  $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {
     x0 = Math.min(x0, ox + c.offsetLeft); y0 = Math.min(y0, oy + c.offsetTop);
     x1 = Math.max(x1, ox + c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, oy + c.offsetTop + c.offsetHeight);
   });
@@ -595,6 +603,7 @@ function apply() {
   rowsEl.style.setProperty('--lw', Math.max(2, 1.2 / z).toFixed(2));   // 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
   var ts = tagScale();                             // 선 위 태그: 작게 볼 때 화면에서 읽히는 크기로(겹침 상자도 다시 잰다)
   rowsEl.style.setProperty('--ts', ts.toFixed(3));
+  placeSelbar();
   if (Math.abs(ts - lastTs) > 0.02) { lastTs = ts; clearTimeout(tsT); tsT = setTimeout(function () { if (VL && VL.focusId()) VL.render(true); }, 120); }
   scheduleVisible();
 }
@@ -685,9 +694,10 @@ pane.addEventListener('pointerdown', function (e) {
     else if (sk && sk.classList.contains('selsock') && selEl) startTrig([selEl.h], selEl.card, e);
     else if (sk) startTrig([VL.item(+sk.dataset.i)], sk.closest('.card'), e);
     else if (tc && !e.target.closest('.pres')) startTrig(null, tc, e);
-    else if (cd && !e.target.closest('.pres')) {
-      var cp = cardPos[cd.dataset.id] || {dx: 0, dy: 0}; drag.card = cd; drag.ox = cp.dx; drag.oy = cp.dy;
-      drag.prev = cardPos[cd.dataset.id] ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null;
+    else if (cd && !e.target.closest('.pres')) {        // 고른 카드를 끌면 고른 카드 모두
+      var gids = picked[cd.dataset.id] && Object.keys(picked).length > 1 ? Object.keys(picked) : [cd.dataset.id];
+      drag.card = cd; drag.group = gids; drag.origins = {};
+      gids.forEach(function (id) { var cp = cardPos[id]; drag.origins[id] = {dx: cp ? cp.dx : 0, dy: cp ? cp.dy : 0, prev: cp ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null}; });
     }
   } else if (ptrs.size === 2) {
     if (drag && drag.card) endCardDrag();
@@ -716,18 +726,27 @@ pane.addEventListener('pointermove', function (e) {
   if (drag.moved && drag.cut) { drag.cut.push([e.clientX, e.clientY]); closeCmenu(); drawGhost(e.clientX, e.clientY); markCut(drag.cut); }
   else if (drag.moved && drag.trig) drawGhost(e.clientX, e.clientY);
   else if (drag.moved && drag.card) {            // 이동 도구: 카드만 움직이고(판은 그대로) 화살표는 한 프레임에 한 번
-    drag.card.classList.add('moving');
-    cardPos[drag.card.dataset.id] = {dx: Math.round(drag.ox + dx / z), dy: Math.round(drag.oy + dy / z), g: groupOf(drag.card)};
-    placeCard(drag.card); scheduleArrows();
+    drag.group.forEach(function (id) {
+      var c = VL.cardEl(id), o = drag.origins[id]; if (!c) return;
+      c.classList.add('moving');
+      cardPos[id] = {dx: Math.round(o.dx + dx / z), dy: Math.round(o.dy + dy / z), g: groupOf(c)};
+      placeCard(c);
+    });
+    scheduleArrows(); $('#selbar').hidden = true;
   } else if (drag.moved) { tx = drag.tx + dx; ty = drag.ty + dy; apply(); }
 });
 function endCardDrag() {
-  var c = drag.card; drag.card = null; c.classList.remove('moving');
+  var ids = drag.group || [drag.card.dataset.id]; drag.card = null;
+  ids.forEach(function (id) { var c = VL.cardEl(id); if (c) c.classList.remove('moving'); });
   if (drag.moved) {
     saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; drawArrows();
-    var id = c.dataset.id, before = drag.prev, p = cardPos[id], after = p ? {dx: p.dx, dy: p.dy, g: p.g} : null;
-    record({label: '카드 옮기기', undo: function () { setCardPos(id, before); }, redo: function () { setCardPos(id, after); }});
+    var before = {}, after = {};
+    ids.forEach(function (id) { var p = cardPos[id]; before[id] = drag.origins[id].prev; after[id] = p ? {dx: p.dx, dy: p.dy, g: p.g} : null; });
+    record({label: ids.length > 1 ? '카드 ' + ids.length + '장 옮기기' : '카드 옮기기',
+            undo: function () { ids.forEach(function (id) { setCardPos(id, before[id]); }); placeSelbar(); },
+            redo: function () { ids.forEach(function (id) { setCardPos(id, after[id]); }); placeSelbar(); }});
   }
+  placeSelbar();
 }
 function swallowClick() {                         // 끌기 뒤 따라오는 click 하나만 삼킨다 — click 이 안 오면(다른 요소 위에서 놓음) 다음 진짜 클릭을 먹지 않게 곧 푼다
   justDragged = true; setTimeout(function () { justDragged = false; }, 0);
@@ -750,6 +769,7 @@ pane.addEventListener('pointercancel', endPtr);
 pane.addEventListener('click', function (e) {
   if (justDragged) { justDragged = false; e.preventDefault(); e.stopPropagation(); return; }
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
+  if ((e.ctrlKey || e.metaKey) && tool === 'move' && cl('.card') && !cl('.pres')) { e.preventDefault(); e.stopPropagation(); togglePick(cl('.card').dataset.id); return; }   // 이동 도구 Ctrl+클릭 = 여러 장 고르기(결정 2)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#legend') || cl('#tools')) return;       // 범례·도구 막대 안 조작은 연결 보기를 끄지 않는다
   if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
@@ -773,12 +793,12 @@ pane.addEventListener('click', function (e) {
   var c = cl('.cover');
   if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; VL.dispatch(focusId === id ? {type: 'cycle'} : {type: 'focus', id: id}); return; }
   if (c) {                                         // 마우스 한 번 = 크게 보기 아님(판 위에서 고르고 고친다) · 두 번 · 키보드(Enter/Space, detail 0) = 크게 보기
-    if (e.detail === 1) { if (focusId) VL.dispatch({type: 'exitFocus'}); return; }
+    if (e.detail === 1) { if (focusId) VL.dispatch({type: 'exitFocus'}); setPicks([c.closest('.card').dataset.id]); return; }   // 한 번 = 그 카드 고르기
     if (focusId) VL.dispatch({type: 'exitFocus'});
     openModal(c.dataset.file, c.dataset.title);
     return;
   }
-  if (focusId && !e.shiftKey && !cl('.card, .ltag, path.lk')) VL.dispatch({type: 'exitFocus'});   // 빈 판을 그냥 누르면 연결 보기 끝
+  if (!e.shiftKey && !cl('.card, .ltag, path.lk')) { setPicks([]); if (focusId) VL.dispatch({type: 'exitFocus'}); }   // 빈 판을 그냥 누르면 고르기 풀기 · 연결 보기 끝
 }, true);
 
 /* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) ---------- */
@@ -843,10 +863,11 @@ addEventListener('keydown', function (e) {
   if (!cmenu.hidden || !hidl.hidden) { closeCmenu(); closeHidl(); return; }   // 떠 있는 메뉴가 먼저
   if (pickT) { endPick(); return; }
   if (!tedit.hidden) { closeTedit(false); return; }
-  if (selEl) { unselectEl(); return; }
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
-  if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
+  if (selEl) { unselectEl(); return; }               // 판 위: 고른 요소 → 연결 보기 → 고른 카드 순으로 푼다
+  if (VL.focusId()) { VL.dispatch({type: 'exitFocus'}); return; }
+  if (Object.keys(picked).length) setPicks([]);
 });
 addEventListener('resize', function () { if (!modal.hidden) { sizeModal(); drawPins(); } });
 
@@ -927,7 +948,7 @@ var names = {get: function (from, to) { return linkNames[from + '>' + to] || '';
              }};
 function pendingFor(from) { return HD.edits.pendingFor(notes, from); }   // 아직 파일에 안 들어간 연결 편집 → 연결 보기가 바로 겹쳐 그린다(모델: edits.js)
 var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled, names: names, record: record, pending: pendingFor,
-                             isHidden: function (id) { return !!hidden[id]; },
+                             isHidden: function (id) { return !!hidden[id] || !!deleted[id]; },
                              isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
@@ -1033,12 +1054,20 @@ pane.addEventListener('contextmenu', function (e) {
   if (card) {
     var id = card.dataset.id, cv = $('.cover', card);
     var open = function (pick) { if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); openModal(cv.dataset.file, cv.dataset.title, pick); };
-    var cardItems = [
-      {label: '크게 보기', key: '클릭', act: function () { open(false); }},
-      {label: '주석 달기', act: function () { open(true); }},
+    var multi = picked[id] && Object.keys(picked).length > 1, ids = multi ? Object.keys(picked) : [id], suf = multi ? ' (' + ids.length + ')' : '';
+    var isDraft = card.classList.contains('draft');
+    var cardItems = (isDraft ? [] : [
+      {label: '크게 보기', key: '두 번', act: function () { open(false); }},
       {label: '연결 보기', key: 'Shift+클릭', act: function () { if (VL.focusId() !== id) VL.dispatch({type: 'focus', id: id}); }},
+      '-']).concat([
+      {label: '이름', act: function () { var t = $('.ftitle', card); if (t) editCardText(t, 'title'); }},
+      {label: '설명', act: function () { var d = $('.fdesc', card); if (d) editCardText(d, 'purpose'); else toast('설명 줄이 없는 화면이에요'); }},
+      {label: '메모', act: function () { openCardMemo(id); }},
+      {label: '복제', act: function () { duplicateCard(id); }},
+      {label: '들어오는 연결 끊기' + suf, act: function () { cutIncoming(ids); }},
       '-',
-      {label: '숨기기', act: function () { hide([id], true); }}];
+      {label: '숨기기' + suf, act: function () { hide(ids, true); setPicks([]); }},
+      {label: '삭제' + suf, key: 'Del', act: function () { deleteCards(ids); }}]);
     openCmenu(x, y, titleOf(id), cardItems);
     var tok = cmenu.tok = {};                         // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
     askHit(card, x, y, true, function (h) { if (cmenu.tok === tok && !cmenu.hidden && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
@@ -1403,7 +1432,7 @@ function renameLayout(el, id) {
   var inp = document.createElement('input'), cur = n.value;
   inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', '빈 레이아웃 이름');
   el.textContent = ''; el.appendChild(inp); inp.focus(); inp.select();
-  var set = function (v) { n.value = v; n.note = layoutText(n); n.sent = false; saveNotes(); };
+  var set = function (v) { n.value = v; n.note = n.copyOf ? HD.edits.say.copy(v, n.screen, scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes(); };
   var done = false, finish = function (save) {
     if (done) return; done = true;
     var v = inp.value.replace(/\s+/g, ' ').trim(); inp.remove();
@@ -1414,6 +1443,69 @@ function renameLayout(el, id) {
   inp.addEventListener('blur', function () { finish(true); });
   ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
 }
+/* ---------- 카드 고르기(한 번 누르기 · 이동 도구 Ctrl+클릭) · 선택 막대 · 삭제·복제·들어오는 연결 끊기 ---------- */
+var picked = {}, deleted = {};
+function setPicks(ids) {
+  picked = {}; ids.forEach(function (id) { picked[id] = 1; });
+  $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('picked', !!picked[c.dataset.id]); });
+  placeSelbar();
+}
+function togglePick(id) { var ids = Object.keys(picked || {}); setPicks(picked[id] ? ids.filter(function (x) { return x !== id; }) : ids.concat([id])); }
+function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 한 장일 때만
+  var bar = $('#selbar'); if (!bar || !picked) return;
+  var ids = Object.keys(picked).filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
+  if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden) { bar.hidden = true; return; }
+  var x0 = 1e9, x1 = -1e9, y0 = 1e9;
+  ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
+  $('[data-act="memo"]', bar).hidden = ids.length !== 1;
+  bar.hidden = false;
+  bar.style.left = ((x0 + x1) / 2) + 'px'; bar.style.top = Math.max(60, y0 - 12 * tagScale() - 44) + 'px';
+}
+$('#selbar').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-act]'); if (!b) return;
+  var ids = Object.keys(picked);
+  if (b.dataset.act === 'memo') openCardMemo(ids[0]);
+  else if (b.dataset.act === 'hide') { hide(ids, true); setPicks([]); }
+  else if (b.dataset.act === 'del') deleteCards(ids);
+});
+addEventListener('resize', placeSelbar);
+function paintDeleted() {                            // 삭제 대기(메모 edit=delete) → 판에서 빼고, 그 화면으로 오는 선도 겹쳐 그리기에서 뺀다
+  deleted = {}; notes.forEach(function (n) { if (n.edit === 'delete') deleted[n.screen] = 1; });
+  var changed = false;
+  $$('.card', rowsEl).forEach(function (c) { var d = !!deleted[c.dataset.id]; if (c.classList.contains('del') !== d) { c.classList.toggle('del', d); changed = true; } });
+  if (changed) { drawArrows(); scheduleVisible(); }
+}
+function deleteCards(ids) {                          // 진짜 화면 = 삭제 요청 메모 · 빈 레이아웃 = 그 메모(와 그리로 가는 잇기)를 지움 — 되돌리기 됨
+  var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
+  var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
+  setPicks([]);
+  if (real.length) addEdits('화면 삭제', real.map(function (id) {
+    var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.remove(scr(id))); n.edit = 'delete'; return n;
+  }), real.length + '개 화면을 지웠어요 — 반영 대기');
+  if (drafts.length) {
+    var gone = notes.filter(function (n) { return drafts.indexOf(n.screen) >= 0 || (n.op === 'link' && drafts.indexOf(n.to) >= 0); });
+    var drop = function () { notes = notes.filter(function (n) { return gone.indexOf(n) < 0; }); saveNotes(); };
+    drop();
+    record({label: '빈 레이아웃 지우기', undo: function () { gone.forEach(function (n) { notes.push(n); }); saveNotes(); }, redo: drop});
+    toast('빈 레이아웃을 지웠어요', true);
+  }
+}
+function duplicateCard(id) {                         // 오른쪽 옆에 흰 복제 카드(빈 레이아웃과 같은 메모, 보내면 AI 가 복제)
+  var c = VL.cardEl(id); if (!c) return;
+  var r = $('.phone', c).getBoundingClientRect(), n = layoutNote(r.right + 40 * tagScale(), r.top);
+  n.value = titleOf(id) + ' 복사'; n.copyOf = id; n.note = HD.edits.say.copy(n.value, n.screen, scr(id));
+  addEdits('복제', [n], '복제했어요 — 반영 대기');
+}
+function cutIncoming(ids) {
+  addEdits('들어오는 연결 끊기', ids.map(function (id) {
+    var n = editNote(id, {path: '(이 화면으로 오는 연결)', text: titleOf(id), rect: null}, HD.edits.say.cutIn(scr(id))); n.edit = 'cut-in'; return n;
+  }), '이 화면으로 오는 연결을 끊었어요');
+}
+addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
+  if ((e.key !== 'Delete' && e.key !== 'Backspace') || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens') return;
+  var ids = Object.keys(picked); if (!ids.length) return;
+  e.preventDefault(); deleteCards(ids);
+});
 function openCardMemo(id) {                          // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body)
   if (VL.focusId()) VL.dispatch({type: 'exitFocus'});
   editing = null; draft = {screen: id, targets: [{path: 'body', text: titleOf(id), rect: null}]};
@@ -1557,7 +1649,7 @@ function renderNotes() {
     if (!b) { b = document.createElement('span'); b.className = 'pchip'; $('.phone', c).appendChild(b); }
     b.textContent = '반영 대기 ' + k;
   });
-  if (typeof paintCardText === 'function' && ORIG) { renderDrafts(); paintCardText(); sendAllPending(); }
+  if (typeof paintCardText === 'function' && ORIG) { renderDrafts(); paintDeleted(); paintCardText(); sendAllPending(); }
   if (VL && VL.refresh) VL.refresh();
 }
 $('#nlist').addEventListener('click', function (e) {

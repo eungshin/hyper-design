@@ -424,7 +424,7 @@ def test_context_menu_by_target(epage):
     epage.mouse.click(c["x"], c["y"], button="right")
     cmenu_items(epage)
     epage.wait_for_timeout(400)                      # 5단계: 그 자리 요소(hd-hit-at)가 답하면 요소 항목이 위에 붙는다
-    assert cmenu_items(epage)[-4:] == ["크게 보기", "주석 달기", "연결 보기", "숨기기"]
+    assert cmenu_items(epage)[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"]
     assert epage.text_content("#cmenu .cmh") == title
     assert not epage.evaluate("!document.getElementById('modal').hidden"), "오른쪽 클릭은 크게 보기를 열지 않는다"
     epage.mouse.move(c["x"], c["y"])
@@ -439,9 +439,9 @@ def test_context_menu_by_target(epage):
     epage.keyboard.press("Escape")
     assert epage.evaluate("document.getElementById('cmenu').hidden"), "Esc 는 메뉴부터 닫는다"
     epage.mouse.click(c["x"], c["y"], button="right")
-    pick(epage, "주석 달기")
+    pick(epage, "크게 보기")
     epage.wait_for_function("!document.getElementById('modal').hidden")
-    assert epage.get_attribute("#mpick", "aria-pressed") == "true", "메뉴의 주석 달기 = 주석 버튼과 같다"
+    assert epage.get_attribute("#mpick", "aria-pressed") != "true", "메뉴의 크게 보기 = ▶ 보기와 같다(주석은 왼쪽 도구)"
     epage.keyboard.press("Escape")
     epage.wait_for_timeout(150)
     if epage.evaluate("!document.getElementById('modal').hidden"):
@@ -1079,3 +1079,75 @@ def test_trigger_tool_click_selects_element_with_its_socket(dpage):
     dpage.keyboard.press("Escape")
     assert dpage.locator(".elbox.sel").count() == 0, "Esc 두 번째 = 고른 요소 풀기"
     dpage.keyboard.press("h")
+
+
+def picked(pg):
+    return pg.evaluate("[...document.querySelectorAll('#rows .card.picked')].map(c => c.dataset.id)")
+
+
+def selbar(pg):
+    return pg.evaluate("(() => { const b = document.getElementById('selbar'); return b && !b.hidden ? [...b.querySelectorAll('button')].filter(x => !x.hidden).map(x => x.textContent) : null; })()")
+
+
+def test_pick_cards_selection_bar_delete_and_del_key(dpage):
+    """S7: 카드 누르기 = 고르기 · 이동 도구 Ctrl+클릭 = 여러 장 · 선택 막대(메모·숨기기·삭제) · Del."""
+    from test_canvas_baseline import empty_point
+    fit_view(dpage)
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    dpage.mouse.click(p["x"], p["y"])
+    dpage.wait_for_timeout(150)
+    assert picked(dpage) == [p["id"]] and selbar(dpage) == ["메모", "숨기기", "삭제"]
+    dpage.keyboard.press("v")
+    dpage.keyboard.down("Control"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Control")
+    dpage.wait_for_timeout(150)
+    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage) == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
+    n0 = len(notes_of(dpage))
+    dpage.locator("#selbar button", has_text="삭제").click()
+    wait_notes(dpage, n0 + 2)
+    assert {n["edit"] for n in notes_of(dpage)[-2:]} == {"delete"}
+    assert not dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible() and not dpage.locator(f'.card[data-id="{q["id"]}"]').is_visible()
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    assert dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible()
+    e = empty_point(dpage)
+    dpage.mouse.click(e["x"], e["y"])
+    dpage.wait_for_timeout(150)
+    assert picked(dpage) == [] and selbar(dpage) is None, "빈 곳 = 고르기 풀기"
+    dpage.mouse.click(p["x"], p["y"])
+    dpage.keyboard.press("Delete")
+    wait_notes(dpage, n0 + 1)
+    assert not dpage.locator(f'.card[data-id="{p["id"]}"]').is_visible()
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("h")
+
+
+def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
+    """S7: 카드 우클릭 = 크게 보기·연결 보기·이름·설명·메모·복제·들어오는 연결 끊기·숨기기·삭제."""
+    fit_view(dpage)
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"], button="right")
+    dpage.wait_for_timeout(400)
+    items = cmenu_items(dpage)
+    assert items[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"], items
+    pick(dpage, "복제")
+    dpage.wait_for_timeout(200)
+    d = drafts(dpage)
+    assert len(d) == 1 and "복사" in dpage.text_content(f'.card[data-id="{d[0]["id"]}"] .ftitle')
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(200)
+    assert drafts(dpage) == []
+    focus_dayfine(dpage, "job")
+    assert lk_to(dpage, "language")
+    dpage.keyboard.press("Escape")
+    zoom_to = __import__("test_canvas_v2").zoom_to
+    b = zoom_to(dpage, "language", 200)
+    dpage.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2, button="right")
+    pick(dpage, "들어오는 연결 끊기")
+    focus_dayfine(dpage, "job")
+    assert lk_to(dpage, "language") == [], "그 화면으로 오는 선이 바로 사라진다"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(250)
+    assert lk_to(dpage, "language"), "되돌리면 돌아온다"
+    dpage.keyboard.press("Escape")

@@ -60,6 +60,8 @@ BROWSER = {
     "test_annotate_tool_notes_an_element_on_the_board": ("tools", "notes"),
     "test_text_tool_edits_policy_line": ("tools", "notes"),
     "test_trigger_tool_click_selects_element_with_its_socket": ("tools",),
+    "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
+    "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
