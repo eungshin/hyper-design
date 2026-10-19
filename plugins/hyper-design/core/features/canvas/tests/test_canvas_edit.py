@@ -422,7 +422,9 @@ def test_context_menu_by_target(epage):
     c = visible_cover(epage)
     title = epage.get_attribute(f'.card[data-id="{c["id"]}"] .cover', "data-title")
     epage.mouse.click(c["x"], c["y"], button="right")
-    assert cmenu_items(epage) == ["크게 보기", "주석 달기", "연결 보기", "숨기기"]
+    cmenu_items(epage)
+    epage.wait_for_timeout(400)                      # 5단계: 그 자리 요소(hd-hit-at)가 답하면 요소 항목이 위에 붙는다
+    assert cmenu_items(epage)[-4:] == ["크게 보기", "주석 달기", "연결 보기", "숨기기"]
     assert epage.text_content("#cmenu .cmh") == title
     assert not epage.evaluate("!document.getElementById('modal').hidden"), "오른쪽 클릭은 크게 보기를 열지 않는다"
     epage.mouse.move(c["x"], c["y"])
@@ -528,7 +530,7 @@ def test_link_menu_rename_undo_and_go(dpage):
     sel = f'#lkl .ltag[data-k="{k}"]'
     bring_into_view(dpage, sel)
     dpage.click(sel, button="right")
-    assert cmenu_items(dpage) == ["이름 고치기", "도착으로 가기"]
+    assert cmenu_items(dpage) == ["이름 고치기", "도착으로 가기", "도착 바꾸기", "끊기"]
     assert dpage.text_content("#cmenu .cmh").startswith("연결 →")
     pick(dpage, "이름 고치기")
     inp = dpage.locator(f"{sel} input")
@@ -552,3 +554,121 @@ def test_link_menu_rename_undo_and_go(dpage):
     pick(dpage, "도착으로 가기")
     dpage.wait_for_function("(to) => window.__hdCam && window.__hdCam.to === to", arg=to)
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 5단계: 트리거(L) · 소켓 끌기 · 자르기(C·오른쪽 끌기) · hd-hit-at
+# 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓인다 — 보내기 요청문 형식은 그대로(contract.md)
+NOTES_JS = "JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')"
+
+
+def notes_of(pg):
+    return pg.evaluate(NOTES_JS)
+
+
+def wait_notes(pg, n):
+    pg.wait_for_function(f"({NOTES_JS}).length === {n}", timeout=4000)
+
+
+def fit_view(pg):
+    pg.keyboard.press("Escape")
+    pg.keyboard.press("0")
+    pg.wait_for_timeout(200)
+
+
+def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
+    from test_canvas_baseline import empty_point
+    fit_view(dpage)
+    dpage.keyboard.press("l")
+    assert tool(dpage) == ["trigger"]
+    n0 = len(notes_of(dpage))
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    drag(dpage, p, q["x"] - p["x"], q["y"] - p["y"])
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == p["id"] and n["intent"] == "change" and q["id"] in n["note"], n
+    assert dpage.locator("#notes").is_visible()
+    assert "트리거" in dpage.get_attribute("#undo", "title")
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("Control+Shift+z")
+    wait_notes(dpage, n0 + 1)
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    e = empty_point(dpage)
+    drag(dpage, p, e["x"] - p["x"], e["y"] - p["y"])
+    items = cmenu_items(dpage)
+    assert items[0] == "새 화면 만들고 잇기" and items[-1] == "취소", items
+    pick(dpage, "취소")
+    assert len(notes_of(dpage)) == n0, "취소는 아무것도 남기지 않는다"
+    dpage.keyboard.press("h")
+
+
+def test_knife_right_drag_cuts_link_into_note(dpage):
+    focus_dayfine(dpage, "job")
+    n0 = len(notes_of(dpage))
+    lk = paths(dpage)[0]
+    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
+    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
+        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
+    dpage.mouse.move(sx - 12, sy - 12)
+    dpage.mouse.down(button="right")
+    dpage.mouse.move(sx + 12, sy + 12, steps=6)
+    dpage.mouse.up(button="right")
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and "연결 끊기" in n["note"] and lk["to"] in n["note"], n
+    assert dpage.evaluate("document.getElementById('cmenu').hidden"), "오른쪽 끌기 뒤에는 메뉴를 띄우지 않는다"
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("c")
+    assert tool(dpage) == ["knife"]
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")
+
+
+def test_trigger_tool_shows_sockets_and_socket_drag_changes_target(dpage):
+    focus_dayfine(dpage, "job")
+    assert dpage.evaluate("[...document.querySelectorAll('.sock')].every(s => getComputedStyle(s).display === 'none')"), "손 도구에서는 소켓을 숨긴다"
+    dpage.keyboard.press("l")
+    socks = dpage.evaluate("""[...document.querySelectorAll('.sock')].filter(s => getComputedStyle(s).display !== 'none').map(s => {
+        const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2, to: s.dataset.to}; })""")
+    assert socks, "트리거 도구에서 연결 출발 요소마다 소켓"
+    s = socks[0]
+    n0 = len(notes_of(dpage))
+    q = visible_cover(dpage, skip=["job", s["to"]])
+    drag(dpage, s, q["x"] - s["x"], q["y"] - s["y"])
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and "도착 바꾸기" in n["note"] and q["id"] in n["note"], n
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")
+
+
+def test_element_menu_via_hit_at(dpage):
+    fit_view(dpage)
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"], button="right")
+    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /트리거/.test(b.textContent))", timeout=3000)
+    items = cmenu_items(dpage)
+    assert ("트리거 지정" in items or "트리거 해제" in items) and "크게 보기" in items, items
+    assert items.index("크게 보기") > 0, "요소 항목이 먼저, 카드 항목이 뒤"
+    dpage.keyboard.press("Escape")
+
+
+def test_hit_at_without_palette_says_cannot_edit(dpage):
+    fit_view(dpage)
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    dpage.evaluate("""(id) => { const f = document.querySelector('.card[data-id="' + id + '"] iframe');
+        f.removeAttribute('data-src'); f.removeAttribute('src'); f.srcdoc = '<p>palette 없음</p>'; }""", p["id"])
+    dpage.wait_for_timeout(300)
+    n0 = len(notes_of(dpage))
+    dpage.keyboard.press("l")
+    drag(dpage, p, q["x"] - p["x"], q["y"] - p["y"])
+    dpage.wait_for_function("(document.getElementById('toast') || {}).textContent === '이 화면은 편집할 수 없어요'", timeout=3000)
+    assert len(notes_of(dpage)) == n0
+    dpage.keyboard.press("h")
+    reload(dpage)

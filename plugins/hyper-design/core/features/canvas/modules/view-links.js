@@ -1,7 +1,8 @@
 /* View — 연결 보기의 DOM/SVG: 색 링크 선·선 위 태그·테두리 고리·범례(색 드롭다운·쌍 색·굵기)·펼치기/접기·마우스 강조.
    경로·태그 자리는 HD.route.plan / HD.labels.placeTags(focus.deriveView 안)가 정한다. 여기서는 DOM 을 재고 그리기만.
    상태는 HD.focus 리듀서 하나. 이벤트는 의도를 만들어 dispatch(intent) 만 부른다 → reduce → 그리기.
-   HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown, renameTag(k)}
+   HD.viewLinks.mount(ctx) → {dispatch, render, focusId, state, cardEl, demoExpand, openDropdown, closeDropdown, renameTag(k), group(k), item(i)}
+   소켓(.sock): 연결 출발 요소마다 출발 카드 위 점 — 보이기는 CSS(트리거 도구 · 그 연결 강조 .lit), 끌기는 캔버스가 받는다
    ctx = {graph, rowsEl, pane, CARD, LEFT, $, $$, esc, circled, isDragging(), prefs, savePrefs(), tagScale(), names:{get(from,to), set(from,to,text)},
           record?({label, undo(), redo()}) — 선 색·굵기 바꿈을 되돌리기에, isHidden?(id) — 숨긴 화면은 연결 대상·장애물에서 뺀다}
    names: 태그 이름(이 이동이 무슨 맥락인지) — 버튼 글과 따로. 없으면 태그는 버튼 글. */
@@ -71,7 +72,7 @@ function mount(ctx) {
     var svg = $('#lks');
     $$('path.lk, marker.lkm', svg).forEach(function (n) { n.remove(); });
     $('#lkl').innerHTML = '';
-    $$('.lnum', rowsEl).forEach(function (n) { n.remove(); });
+    $$('.lnum, .sock', rowsEl).forEach(function (n) { n.remove(); });
   }
   function renderLegend(v) {
     var lg = $('#legend');
@@ -136,6 +137,16 @@ function mount(ctx) {
       var g = v.rings[t], c = cardEl(t); if (!g.n || !c) return;
       var b = document.createElement('span'); b.className = 'lnum'; b.textContent = circled(g.n); $('.phone', c).appendChild(b);
     });
+    var sc = ph.offsetWidth / CARD.w;
+    v.groups.forEach(function (g) {                 // 소켓: 출발 요소 오른쪽 가운데
+      g.items.forEach(function (i) {
+        var q = lk.items[i].rect, b = document.createElement('span');
+        b.className = 'sock'; b.setAttribute('data-k', g.k); b.setAttribute('data-i', i); b.setAttribute('data-to', g.to);
+        b.style.left = ((q.x + q.w) * sc) + 'px'; b.style.top = ((q.y + q.h / 2) * sc) + 'px'; b.style.background = g.color;
+        b.title = '끌어서 도착 바꾸기 (지금 → ' + (TITLES[g.to] || g.to) + ')';
+        ph.appendChild(b);
+      });
+    });
     applyFocus(); renderLegend(v); markHover();
     var paint = [];
     v.groups.forEach(function (g) { g.items.forEach(function (i) { paint.push({path: lk.items[i].path, color: g.color, n: g.n || undefined}); }); });
@@ -158,6 +169,7 @@ function mount(ctx) {
       var g = v.rings[c.dataset.id];
       c.classList.toggle('em', !!g && g.emph); c.classList.toggle('dim', !!g && g.dim);
     });
+    $$('.sock', rowsEl).forEach(function (n) { var g = by[n.getAttribute('data-k')]; n.classList.toggle('lit', !!g && g.emph); });
   }
   // 펼치기(겹쳐서): 화면 전체 높이까지(카드 2.5배 한도), 다른 카드 자리는 그대로
   function expand(id, h, done) {
@@ -360,8 +372,16 @@ function mount(ctx) {
     expand(id, Math.round(CARD.h * 1.4), function () { setTimeout(function () { if (xpId === id && state.focusId !== id) collapse(id); }, 500); });
   }
 
+  // 편집(트리거·자르기)이 읽는 연결: 그룹 k = 한 도착 · 항목 i = 출발 요소 하나
+  function item(i) { var lk = state.links, it = lk && lk.items[i]; return it ? {from: lk.from, to: it.to, path: it.path, text: it.text, rect: it.rect} : null; }
+  function group(k) {
+    var lk = state.links; if (!lk || lk.order[k] == null) return null;
+    var its = []; lk.items.forEach(function (it, i) { if (it.ci === k) its.push(item(i)); });
+    return {from: lk.from, to: lk.order[k], items: its};
+  }
+
   return {dispatch: dispatch, render: renderLinks, focusId: function () { return state.focusId; }, state: function () { return state; },
-          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown, renameTag: renameTag};
+          cardEl: cardEl, demoExpand: demoExpand, openDropdown: openDropdown, closeDropdown: closeDropdown, renameTag: renameTag, group: group, item: item};
 }
 
 HD.viewLinks = {mount: mount};

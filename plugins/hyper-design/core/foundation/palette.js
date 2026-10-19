@@ -7,7 +7,9 @@
    {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움).
    한 요소에 쌍이 여럿이면 테두리를 3px 간격 동심으로 겹친다.
    어디로 가나(Ctrl/Cmd+클릭): 링크 요소를 Ctrl/Cmd+클릭하면 이동하지 않고 {type:'hd-link-go', screen, to, path, rect} 를 보낸다.
-   캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로. */
+   캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로.
+   편집(트리거·도착 바꾸기): {type:'hd-hit-at', x, y} 를 받으면 그 자리의 요소(링크 → 누를 수 있는 요소 → 그 요소 순)로
+   {type:'hd-hit', screen, path, text, rect, to} 를 보낸다(to = 지금 가는 화면 id 또는 null, 요소가 없으면 path:null). */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -124,6 +126,12 @@
   function sendGo(el) {
     send(el ? {type: 'hd-link-go', screen: screenId(), to: toOf(el), path: pathOf(el), rect: rectOf(el)} : {type: 'hd-link-go', screen: screenId(), to: null});
   }
+  var HIT_SEL = 'button, a, input, select, textarea, label, [role=button], [role=link], [role=tab], [tabindex], li';
+  function sendHit(at) {                             // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음)
+    var el = linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
+    if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: 'hd-hit', screen: screenId(), path: null}); return; }
+    send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), rect: rectOf(el), to: toOf(el)});
+  }
   document.addEventListener('click', function (e) {    // Ctrl/Cmd+클릭: 이동 대신 '어디로 가나'
     if (picking || !(e.ctrlKey || e.metaKey) || !window.parent || window.parent === window) return;
     var el = linkAt(e.target); if (!el) return;
@@ -165,6 +173,7 @@
     else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
+    else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0));
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
       if (!picking && box) box.style.display = 'none';

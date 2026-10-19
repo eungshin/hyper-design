@@ -18,6 +18,8 @@ python3 $SK/features/canvas/canvas_test.py <out> [--shot PNG]   # 상호작용 �
 - `modules/` — 연결 보기. Model(`graph`·`route`·`labels`·`camera`·`style`) / ViewModel(`focus`·`prefs`) / View(`view-links`·`view-motion`·`motion.css`)
 - Model·ViewModel 파일은 DOM·저장소·메시지를 쓰지 않는다(`tests/test_canvas_modules.py`의 순수성 검사)
 - 화면 ↔ 캔버스 메시지(`hd-pick`·`hd-links`·`hd-link-go` 등)와 "보내기" 요청문 형식은 `/hyper-design:fix`가 읽으므로 바꾸지 않는다
+- 추가된 메시지(기존 것은 그대로): `hd-hit-at {x, y}` → 화면이 `hd-hit {screen, path, text, rect, to}`로 답한다(그 자리 요소, 없으면 `path:null`). 1.5초 안에 답이 없으면(palette.js 없음) 캔버스는 "이 화면은 편집할 수 없어요"를 띄운다
+- 화면 파일을 바꾸는 편집(트리거 지정·해제, 잇기, 도착 바꾸기, 연결 끊기)은 메모(`intent=change`)로 쌓여 같은 "보내기" 요청문으로 나간다
 
 ## 테스트 층 (캔버스를 고치는 모든 세션이 따른다)
 

@@ -38,6 +38,11 @@ BROWSER = {
     "test_hide_screen_and_hidden_list": ("tools", "flow"),
     "test_undo_redo_card_moves_capped_at_50": ("tools",),
     "test_link_menu_rename_undo_and_go": ("links", "motion"),
+    "test_trigger_drag_to_card_adds_link_note_and_undo": ("tools", "notes"),
+    "test_knife_right_drag_cuts_link_into_note": ("tools", "links", "notes"),
+    "test_trigger_tool_shows_sockets_and_socket_drag_changes_target": ("tools", "links"),
+    "test_element_menu_via_hit_at": ("tools", "input"),
+    "test_hit_at_without_palette_says_cannot_edit": ("tools",),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),
