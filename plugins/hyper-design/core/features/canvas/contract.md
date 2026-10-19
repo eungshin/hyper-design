@@ -16,7 +16,8 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
-- `modules/` — 연결 보기. Model(`graph`·`route`·`labels`·`camera`·`style`) / ViewModel(`focus`·`prefs`) / View(`view-links`·`view-motion`·`motion.css`)
+- `modules/` — 연결 보기·편집. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`) / View(`view-links`·`view-motion`·`motion.css`)
+- `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
 - Model·ViewModel 파일은 DOM·저장소·메시지를 쓰지 않는다(`tests/test_canvas_modules.py`의 순수성 검사)
 - 화면 ↔ 캔버스 메시지(`hd-pick`·`hd-links`·`hd-link-go` 등)와 "보내기" 요청문 형식은 `/hyper-design:fix`가 읽으므로 바꾸지 않는다
 - 추가된 메시지(기존 것은 그대로): `hd-hit-at {x, y}` → 화면이 `hd-hit {screen, path, text, rect, to}`로 답한다(그 자리 요소, 없으면 `path:null`). 1.5초 안에 답이 없으면(palette.js 없음) 캔버스는 "이 화면은 편집할 수 없어요"를 띄운다
@@ -45,6 +46,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | 고친 곳 | `-m` |
 |---|---|
 | `modules/route.js` · `labels.js` · `focus.js` · `graph.js` · `style.js` · `prefs.js` · `view-links.js` | `unit or links` |
+| `modules/edits.js` | `unit or tools or notes` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |

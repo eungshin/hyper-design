@@ -886,16 +886,7 @@ var names = {get: function (from, to) { return linkNames[from + '>' + to] || '';
                var redraw = function () { if (VL.focusId()) VL.render(true); };
                record({label: '태그 이름', undo: function () { setName(from, to, old); redraw(); }, redo: function () { setName(from, to, v); redraw(); }});
              }};
-function pendingFor(from) {                          // 아직 파일에 안 들어간 연결 편집(메모) → 연결 보기가 바로 겹쳐 그린다
-  var pd = {byPath: {}, adds: [], cutIn: {}};
-  (notes || []).forEach(function (n) {
-    if (n.edit === 'cut-in' || n.edit === 'delete') pd.cutIn[n.screen] = 1;
-    if (n.edit !== 'link' || n.screen !== from) return;
-    if (n.op === 'link' && n.to) { pd.byPath[n.path] = {op: 'link', to: n.to}; pd.adds.push({to: n.to, path: n.path, text: n.text, rect: n.rect}); }
-    else if (n.op === 'cut' || n.op === 'untrigger') pd.byPath[n.path] = {op: 'cut'};
-  });
-  return pd;
-}
+function pendingFor(from) { return HD.edits.pendingFor(notes, from); }   // 아직 파일에 안 들어간 연결 편집 → 연결 보기가 바로 겹쳐 그린다(모델: edits.js)
 var VL = HD.viewLinks.mount({graph: G, rowsEl: rowsEl, pane: pane, CARD: CARD, LEFT: LEFT, $: $, $$: $$, esc: esc, circled: circled, names: names, record: record, pending: pendingFor,
                              isHidden: function (id) { return !!hidden[id]; },
                              isDragging: function () { return !!(drag && drag.moved); }, prefs: prefs, savePrefs: savePrefs, tagScale: tagScale});
@@ -1059,10 +1050,7 @@ addEventListener('message', function (e) {
   }
 });
 function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
-function editNote(screen, h, text, op, to) {           // op: link · cut · untrigger · trigger · new (도우미가 바로 쓰는 것: link·cut·untrigger)
-  return {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: screen, targets: [{path: h.path, text: h.text, rect: h.rect}],
-          path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link', op: op || '', to: to || ''};
-}
+function editNote(screen, h, text, op, to) { return HD.edits.note(screen, h, text, op, to); }   // op: link · cut · untrigger · trigger · new
 var ELKEY = 'hd-edit-log:' + hashStr(KEYPATH);
 function logEdit(label, list) {                      // 변경 기록 — 메모를 지워도 남는다(최근 200개). 다시 빌드해 화면이 바뀌어도 무엇을 요청했는지 확인용
   var log = []; try { log = JSON.parse(localStorage.getItem(ELKEY) || '[]') || []; } catch (e) { log = []; }
@@ -1092,12 +1080,12 @@ function addEdits(label, list, msg) {
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
   var list = hits.filter(function (h) { return h.to !== to; }).map(function (h) {
-    return editNote(from, h, h.to ? '도착 바꾸기: 지금 ' + scr(h.to) + ' → ' + scr(to) + ' 화면으로 가게' : '이 요소를 누르면 ' + scr(to) + ' 화면으로 가게 연결', 'link', to);
+    return editNote(from, h, h.to ? HD.edits.say.retarget(scr(h.to), scr(to)) : HD.edits.say.link(scr(to)), 'link', to);
   });
   if (!list.length) { toast('이미 그 화면으로 가요'); return; }
   addEdits(hits.some(function (h) { return h.to; }) ? '트리거 도착 바꾸기' : '트리거 연결', list, titleOf(to) + '(으)로 이었어요 — 반영 대기');
 }
-function cutText(to) { return '연결 끊기: 이 요소를 눌러도 ' + scr(to) + ' 화면으로 가지 않게'; }
+function cutText(to) { return HD.edits.say.cut(scr(to)); }
 function cutGroups(ks) {
   var list = [];
   ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) { list.push(editNote(g.from, it, cutText(it.to), 'cut', it.to)); }); });
@@ -1105,8 +1093,8 @@ function cutGroups(ks) {
 }
 function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기
   var els = h.to ? [{label: '도착 바꾸기', act: function () { startPick(from, [h], x, y); }},
-                    {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, '트리거 해제: 이 요소를 눌러도 화면이 바뀌지 않게(지금 ' + scr(h.to) + '로 가는 연결 없애기)', 'untrigger', h.to)]); }}]
-                 : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)', 'trigger')]); }},
+                    {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, HD.edits.say.untrigger(scr(h.to)), 'untrigger', h.to)]); }}]
+                 : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, HD.edits.say.trigger(), 'trigger')]); }},
                     {label: '잇기', key: 'L 끌기', act: function () { startPick(from, [h], x, y); }}];
   els.push({label: '글자 고치기', key: '더블클릭', act: function () { editScreenText(from, h); }});
   openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
@@ -1129,7 +1117,7 @@ function finishTrig(tr, moved, cx, cy) {
     var items = [{label: '새 화면 만들고 잇기', act: function () {           // 빈 레이아웃 카드를 그 자리에 놓고, 끈 요소를 그 카드로 — 되돌리기 한 단계
       var ln = layoutNote(cx, cy);
       addEdits('새 화면 잇기', [ln].concat(hits.map(function (h) {
-        return editNote(tr.from, h, '이 요소를 누르면 새 화면 "' + ln.value + '"(' + ln.screen + ')으로 가게 연결', 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
+        return editNote(tr.from, h, HD.edits.say.linkNew(ln.value, ln.screen), 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
       addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to), 'cut', h.to); })); }});
     items.push('-', {label: '취소', act: function () {}});
@@ -1183,7 +1171,7 @@ pane.addEventListener('pointermove', function (e) { if (pickT) drawGhost(e.clien
 /* ---------- 더블클릭 고치기(6단계): 카드 이름·설명(screens.json) · 화면 안 글자 → 메모(intent=change). 반영 대기 = 파일에 아직 안 들어간 편집 메모 ---------- */
 var ORIG = {}, tedit = $('#tedit');
 (D.rows || []).forEach(function (row) { row.screens.forEach(function (sc) { ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || ''}; }); });
-var FIELD = {title: '화면 이름', purpose: '화면 설명'};
+var FIELD = HD.edits.FIELD;
 function pendingOf(id, field) {                      // 그 화면·그 칸의 마지막 편집 값(없으면 null)
   var v = null; notes.forEach(function (n) { if (n.screen === id && n.edit === field) v = n.value; }); return v;
 }
@@ -1213,8 +1201,7 @@ function editCardText(el, field) {
     var v = multi ? inp.value.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim() : inp.value.replace(/\s+/g, ' ').trim();
     inp.remove();
     if (save && v && v !== cur) {
-      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > ' + field, text: cur, rect: null},
-                       FIELD[field] + '을 "' + v + '"(으)로 바꾸기 (screens.json의 ' + field + ')');
+      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > ' + field, text: cur, rect: null}, HD.edits.say.field(field, v));
       n.edit = field; n.value = v;
       addEdits(FIELD[field], [n]);
     }
@@ -1247,7 +1234,7 @@ function closeTedit(save) {
   var t = tedCtx, v = $('textarea', tedit).value.replace(/[ \t]+/g, ' ').trim();
   tedCtx = null; tedit.hidden = true;
   if (save && v && v !== t.old) {
-    var n = editNote(t.id, t.h, '글자를 "' + v + '"(으)로 바꾸기');
+    var n = editNote(t.id, t.h, HD.edits.say.text(v));
     n.edit = 'text'; n.value = v;
     addEdits('글자 고치기', [n]);
   }
@@ -1272,7 +1259,7 @@ pane.addEventListener('dblclick', function (e) {
 });
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }
-function layoutText(n) { return '새 화면 "' + n.value + '"(' + n.screen + ')을 빈 레이아웃으로 만들기 — 내용은 이 화면에 남긴 메모를 따라 채우기'; }
+function layoutText(n) { return HD.edits.say.layout(n.value, n.screen); }
 function layoutNote(cx, cy) {
   var p = boardPt(cx, cy), id = 'new-' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
   var n = editNote(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
@@ -1449,8 +1436,7 @@ function renderNotes() {
     if (!b) { b = document.createElement('span'); b.className = 'nbadge'; $('.phone', c).appendChild(b); }
     b.textContent = k; b.title = '메모 ' + k + '건';
   });
-  var pc = {};                                     // 반영 대기 = 화면 파일을 바꾸는 편집 메모(보냈어도 '보낸 것 지우기' 전까지)
-  notes.forEach(function (n) { if (n.edit) pc[n.screen] = (pc[n.screen] || 0) + 1; });
+  var pc = HD.edits.tally(notes);                  // 반영 대기 = 화면 파일을 바꾸는 편집 메모(보냈어도 '보낸 것 지우기' 전까지)
   $$('.card', rowsEl).forEach(function (c) {
     var b = $('.pchip', c), k = pc[c.dataset.id] || 0;
     if (!k) { if (b) b.remove(); return; }
@@ -1504,10 +1490,7 @@ function helperPost(url, body) {
   return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-HD-Token': HTOKEN}, body: JSON.stringify(body)})
     .then(function (r) { if (!r.ok) throw new Error('helper ' + r.status); return r.json(); });
 }
-function directOf(n) {                               // 도우미가 화면 파일에 바로 쓸 수 있는 편집
-  return n.edit === 'text' || n.edit === 'title' || n.edit === 'purpose' ||
-         (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
-}
+function directOf(n) { return HD.edits.directOf(n); }   // 도우미가 화면 파일에 바로 쓸 수 있는 편집(모델: edits.js)
 $('#nsend').addEventListener('click', function () {
   var list = notes.filter(function (n) { return !n.sent; });
   if (!list.length) list = notes.slice();

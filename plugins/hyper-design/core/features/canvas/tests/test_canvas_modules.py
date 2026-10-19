@@ -13,8 +13,8 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "labels", "style", "camera", "focus", "prefs"]
-ALL_MODULES = ["graph", "route", "labels", "style", "camera", "focus", "prefs", "view-links", "view-motion"]
+PURE = ["graph", "route", "labels", "style", "camera", "edits", "focus", "prefs"]
+ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "focus", "prefs", "view-links", "view-motion"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -455,3 +455,39 @@ def test_place_tags(res):
             assert not (abs(a["x"] - b["x"]) < W and abs(a["y"] - b["y"]) < H), (a, b)
     fb = res["tagFallback"][0]
     assert fb["fallback"] and fb["x"] == 20                                         # 자리가 없으면 50%
+
+
+EDITS_JS = r"""
+const fs = require('fs'), vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[2] + '/edits.js', 'utf8'), {filename: 'edits.js'});
+const E = globalThis.HD.edits, h = {path: 'a.x', text: 'X', rect: {x: 1, y: 2, w: 3, h: 4}}, out = {};
+const notes = [E.note('s1', h, 'link', 'link', 's3'), E.note('s1', {path: 'b.y', text: 'Y', rect: null}, 'cut', 'cut', 's2'),
+               E.note('s2', h, 'other', 'link', 's1'), Object.assign(E.note('s4', h, 'gone'), {edit: 'delete'}),
+               Object.assign(E.note('s1', h, 'txt'), {edit: 'text', value: 'v'}), {id: 'm', screen: 's1', note: 'memo', intent: 'question'}];
+out.pd = E.pendingFor(notes, 's1');
+out.direct = notes.map(E.directOf);
+out.tally = E.tally(notes);
+out.ids = new Set(notes.slice(0, 5).map(n => n.id)).size;
+out.field = E.say.field('policy', '새 정책', 1);
+console.log(JSON.stringify(out));
+"""
+
+
+def test_edits_model():
+    """편집 모델: 반영 대기 계산(출발 화면 기준) · 도우미가 바로 쓸 편집 · 화면별 수 · 글귀."""
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-edits-js-"))
+    try:
+        (tmp / "e.js").write_text(EDITS_JS, encoding="utf-8")
+        r = subprocess.run([NODE, str(tmp / "e.js"), str(MOD)], capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    pd = out["pd"]
+    assert pd["byPath"] == {"a.x": {"op": "link", "to": "s3"}, "b.y": {"op": "cut"}}, "s1 에서 나가는 편집만(s2 의 것은 빼고)"
+    assert [a["to"] for a in pd["adds"]] == ["s3"] and pd["cutIn"] == {"s4": 1}, "삭제한 화면으로 오는 선은 모두 끊긴 것으로"
+    assert out["direct"] == [True, True, True, False, True, False], "잇기·끊기·글자는 바로 쓰고, 삭제·메모는 터미널로"
+    assert out["tally"] == {"s1": 3, "s2": 1, "s4": 1} and out["ids"] == 5
+    assert out["field"] == "정책 2번째 줄을 \"새 정책\"(으)로 바꾸기 (screens.json의 policies[1])"
