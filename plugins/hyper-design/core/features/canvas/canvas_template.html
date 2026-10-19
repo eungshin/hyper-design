@@ -1208,7 +1208,7 @@ pane.addEventListener('dblclick', function (e) {
   if (cv && tool !== 'knife') {
     e.preventDefault(); clearTimeout(openT);
     var card = cv.closest('.card');
-    askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); }, true);
+    askHit(card, e.clientX, e.clientY, false, function (h) { if (h && !h.none) editScreenText(card.dataset.id, h); else if (h) toast('여기에는 고칠 글자가 없어요'); }, true);
   }
 });
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)

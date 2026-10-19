@@ -137,12 +137,13 @@ function mount(ctx) {
       var g = v.rings[t], c = cardEl(t); if (!g.n || !c) return;
       var b = document.createElement('span'); b.className = 'lnum'; b.textContent = circled(g.n); $('.phone', c).appendChild(b);
     });
-    var sc = ph.offsetWidth / CARD.w;
+    var sc = ph.offsetWidth / CARD.w, sk = 16 * ts;   // 소켓 지름: 화면에서 12px 안팎(태그와 같은 배율 보정)
     v.groups.forEach(function (g) {                 // 소켓: 출발 요소 오른쪽 가운데
       g.items.forEach(function (i) {
         var q = lk.items[i].rect, b = document.createElement('span');
         b.className = 'sock'; b.setAttribute('data-k', g.k); b.setAttribute('data-i', i); b.setAttribute('data-to', g.to);
         b.style.left = ((q.x + q.w) * sc) + 'px'; b.style.top = ((q.y + q.h / 2) * sc) + 'px'; b.style.background = g.color;
+        b.style.width = b.style.height = sk + 'px'; b.style.margin = (-sk / 2) + 'px 0 0 ' + (-sk / 2) + 'px'; b.style.borderWidth = (2 * ts) + 'px';
         b.title = '끌어서 도착 바꾸기 (지금 → ' + (TITLES[g.to] || g.to) + ')';
         ph.appendChild(b);
       });

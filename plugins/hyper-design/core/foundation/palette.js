@@ -129,8 +129,14 @@
     send(el ? {type: 'hd-link-go', screen: screenId(), to: toOf(el), path: pathOf(el), rect: rectOf(el)} : {type: 'hd-link-go', screen: screenId(), to: null});
   }
   var HIT_SEL = 'button, a, input, select, textarea, label, [role=button], [role=link], [role=tab], [tabindex], li';
-  function sendHit(at, leaf) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 그 요소 그대로
-    var el = leaf ? at : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
+  function ownText(el) { for (var c = el.firstChild; c; c = c.nextSibling) if (c.nodeType === 3 && c.nodeValue.trim()) return true; return false; }
+  function leafOf(at) {                               // 글자 고치기: 자기 글자가 있는 요소. 없으면 글자 가진 자손이 딱 하나일 때만 그것
+    if (!at || at.nodeType !== 1 || ownText(at)) return at;
+    var hits = Array.prototype.filter.call(at.querySelectorAll('*'), ownText);
+    return hits.length === 1 ? hits[0] : null;
+  }
+  function sendHit(at, leaf) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
+    var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: 'hd-hit', screen: screenId(), path: null}); return; }
     send({type: 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
           rect: rectOf(el), to: toOf(el)});

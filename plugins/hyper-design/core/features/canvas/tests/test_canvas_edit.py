@@ -634,6 +634,8 @@ def test_trigger_tool_shows_sockets_and_socket_drag_changes_target(dpage):
     socks = dpage.evaluate("""[...document.querySelectorAll('.sock')].filter(s => getComputedStyle(s).display !== 'none').map(s => {
         const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2, to: s.dataset.to}; })""")
     assert socks, "트리거 도구에서 연결 출발 요소마다 소켓"
+    w = dpage.evaluate("document.querySelector('.sock').getBoundingClientRect().width")
+    assert 10 <= w <= 16, ("소켓은 판 배율과 상관없이 화면에서 12px 안팎", w)
     s = socks[0]
     n0 = len(notes_of(dpage))
     q = visible_cover(dpage, skip=["job", s["to"]])
@@ -754,6 +756,15 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     fr.wait_for_function("(t) => [...document.querySelectorAll('*')].some(el => !el.children.length && el.textContent.trim() === t)", arg=leaf["text"], timeout=3000)
+    box = fr.evaluate("""(() => { for (const el of document.querySelectorAll('section, main, div')) {   // 자기 글자가 없는 큰 요소의 빈 자리
+        const r = el.getBoundingClientRect(); if (r.width < 200 || r.height < 200) continue;
+        for (let yy = r.top + 4; yy < Math.min(r.bottom, 600); yy += 6) for (let xx = r.left + 4; xx < r.right; xx += 12)
+          if (document.elementFromPoint(xx, yy) === el) return {x: xx, y: yy}; } return null; })()""")
+    if box:
+        dpage.mouse.dblclick(ph["x"] + box["x"] * sc, ph["y"] + box["y"] * sc)
+        dpage.wait_for_function("(document.getElementById('toast') || {}).textContent === '여기에는 고칠 글자가 없어요'", timeout=3000)
+        assert dpage.evaluate("document.getElementById('tedit').hidden"), "글자 없는 큰 요소는 고치지 않는다"
+        dpage.wait_for_timeout(400)
     dpage.mouse.click(x, y)                          # 한 번 누르기는 그대로 크게 보기(조금 늦게)
     dpage.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
     dpage.keyboard.press("Escape")
