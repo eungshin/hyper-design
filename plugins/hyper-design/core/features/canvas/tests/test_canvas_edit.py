@@ -1113,7 +1113,8 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     assert {n["edit"] for n in notes_of(dpage)[-2:]} == {"delete"}
     for cid in (p["id"], q["id"]):                    # 재검증 C3: 사라지지 않고 흐리게 + '삭제 대기'
         card = dpage.locator(f'.card[data-id="{cid}"]')
-        assert card.is_visible() and "del" in card.get_attribute("class") and float(card.evaluate("c => getComputedStyle(c).opacity")) < 0.6
+        assert card.is_visible() and "del" in card.get_attribute("class")
+        dpage.wait_for_function("(id) => +getComputedStyle(document.querySelector('.card[data-id=\"' + id + '\"]')).opacity < 0.6", arg=cid, timeout=3000)   # 흐려지는 움직임이 끝난 뒤
         assert "삭제 대기" in card.locator(".delchip").text_content()
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
