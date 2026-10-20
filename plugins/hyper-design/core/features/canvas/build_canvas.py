@@ -24,11 +24,12 @@ screens.json:
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 """
 import sys, os, json, re, html, pathlib, shutil
+from html.parser import HTMLParser
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select"]   # 순서 고정: Model → ViewModel → View
+MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]   # 순서 고정: Model → ViewModel → View
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
@@ -72,6 +73,61 @@ def inline_modules(tpl):
     return tpl.replace(MOTION_MARKER, css, 1)
 
 
+VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+GO_ONCLICK = re.compile(r"""['"]([^'"]+\.html?)(?:[?#][^'"]*)?['"]""", re.I)
+
+
+class _Links(HTMLParser):
+    """화면 HTML → 같은 폴더 다른 화면으로 가는 링크 [(to, 글)] — foundation/palette.js 의 links()(href · data-href · onclick 안 .html)와 같은 규칙."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out, self.open = [], []                   # open = [태그, 깊이, 도착, 글 조각]
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        h = a.get("href") or a.get("data-href")
+        if not h and a.get("onclick"):
+            m = GO_ONCLICK.search(a["onclick"]); h = m and m.group(1)
+        for o in self.open:
+            if o[0] == tag: o[1] += 1
+        if h and tag not in VOID:
+            self.open.append([tag, 1, h, []])
+        elif h:
+            self.out.append((h, ""))
+
+    def handle_endtag(self, tag):
+        for o in reversed(self.open):
+            if o[0] == tag:
+                o[1] -= 1
+                if o[1] == 0:
+                    self.open.remove(o); self.out.append((o[2], re.sub(r"\s+", " ", "".join(o[3])).strip()[:40]))
+                break
+
+    def handle_data(self, d):
+        for o in self.open: o[3].append(d)
+
+
+def screen_links(out, card, ids):
+    """카드 하나의 화면 파일에서 다른 화면으로 가는 링크 → [{to, text}] (도착 = 같은 폴더 .html 파일 이름)."""
+    f = out / card["file"]
+    try:
+        src = f.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    p = _Links(); p.feed(src); p.close()
+    res = []
+    for h, text in p.out:
+        if re.match(r"^(#|javascript:|mailto:|tel:)", h, re.I) or "://" in h or h.startswith("/"):
+            continue
+        h = h.split("#")[0].split("?")[0]
+        if "/" in h.lstrip("./") or not re.search(r"\.html?$", h, re.I):
+            continue
+        to = re.sub(r"\.html?$", "", h.lstrip("./"), flags=re.I)
+        if to and to != card["id"] and to in ids:
+            res.append({"to": to, "text": text})
+    return res
+
+
 def build_index(out, m):
     screens = m["screens"]
     groups = list(m.get("groups") or [])
@@ -98,6 +154,8 @@ def build_index(out, m):
     arrows = [{"from": s["id"], "to": b.get("to"), "label": b.get("label") or ""}
               for s in screens for b in (s.get("branches") or [])
               if b.get("to") in ids and b.get("to") != s["id"]]
+    # 화면 안 링크(판에 늘 그리는 선) — 화면 파일에서 미리 뽑는다(카드를 불러오지 않아도 모든 선이 보이게)
+    links = {c["id"]: ls for r in data_rows for c in r["screens"] if (ls := screen_links(out, c, ids))}
 
     D = load(out / "decisions.json")
     decisions = None
@@ -125,15 +183,15 @@ def build_index(out, m):
     scale, card_sz, modal_sz, radius = frame(out)
     data = {"title": m.get("title") or "전체 화면 한눈에 보기", "scale": scale, "card": card_sz, "modal": modal_sz, "radius": radius,
             "story": m.get("story") or None, "people": [{"name": p.get("name", ""), "why": p.get("why", ""), "win": p.get("win", ""), "core": bool(p.get("core")),
-                                                     "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows,
+                                                     "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows, "links": links,
             "palettes": pal, "credits": credits if isinstance(credits, list) else []}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
     tpl = TEMPLATE.read_text(encoding="utf-8")
     marker = '<script id="hd-data" type="application/json">{}</script>'
     assert marker in tpl, "canvas_template.html 에 hd-data 자리가 없다"
     # 스크립트 없이도(그리고 도달성 검사가) 따라갈 수 있는 화면 링크 목록
-    links = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
-    nos = f'<noscript id="hd-links"><ul>{links}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
+    lis = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
+    nos = f'<noscript id="hd-links"><ul>{lis}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
     tpl = inline_modules(tpl)
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")

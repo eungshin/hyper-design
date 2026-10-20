@@ -12,11 +12,11 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 플러그인 쪽: `foundation/palette.js`, `foundation/specimens.html`(환경변수 `HD_SPECIMENS`로 바꿈)
 
 ## 출력
-- `out/index.html` — `canvas_template.html`에 데이터(`hd-data`)·`modules/*.js`·`modules/motion.css`를 끼워 넣은 한 파일. 화면 카드는 보일 때 한 번만 불러온다
+- `out/index.html` — `canvas_template.html`에 데이터(`hd-data`, 화면 파일에서 미리 뽑은 화면 사이 링크 `links` 포함 — `palette.js` 의 `links()` 와 같은 규칙: `href`·`data-href`·`onclick` 안 `.html`)·`modules/*.js`·`modules/motion.css`를 끼워 넣은 한 파일. 화면 카드는 보일 때 한 번만 불러온다
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
-- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`motion.css`)
+- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pHidden`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
@@ -52,7 +52,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | 도우미 | `test_canvas_helper.py` | `helper.py` 편집·적용·서버(브라우저 1개) | 약 11초 |
 
 브라우저 테스트는 영역 표시를 받는다(`tests/conftest.py`의 `BROWSER` 표 — 표에 없는 브라우저 테스트는 수집 단계에서 실패하니, 새 테스트는 표에 한 줄을 더한다):
-`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(주요 흐름 화살표) · `links`(연결 보기) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
+`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(연결 보기) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
 
 **어디를 고치면 무엇을 돌리나**
 
@@ -67,14 +67,18 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
+| `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판에 늘 그리는 선: 쌍마다 하나·줄 색·보이기/굵기/투명도) | `unit or flow or links or tools` |
 | `foundation/palette.js` | `links or modal or tools` |
 | `helper.py` | `helper` |
-| `build_canvas.py` · 여러 영역에 걸친 변경 | 전체 |
+| `build_canvas.py` | `unit or flow or links` |
+| 여러 영역에 걸친 변경 | 그 영역들을 `or` 로 묶어서(전체는 아래 3 에서만) |
 
 **돌리는 순서 (전체를 반복해서 돌리지 않는다)**
 1. 고치는 동안: `-m unit` + 그 기능의 테스트 하나(`-k 이름`) — 수 초.
-2. 커밋 직전: 위 표의 영역(`-m "unit or 영역"`).
-3. 단계(슬라이스) 끝: 전체 한 번(약 3.5분). 실패하면 그 테스트만 고쳐 다시 돌리고, 전체는 끝에 한 번 더.
-4. 스크린샷은 검문·눈 판정이 필요할 때만 따로 찍는다.
+2. 큰 실행 전: 바꾸거나 지운 선택자·키·문구를 `tests/` 에서 먼저 찾아(grep) 걸리는 옛 테스트를 고친다 — 큰 실행을 '어디가 깨지나' 찾기에 쓰지 않는다.
+3. 커밋 직전: 위 표의 영역(`-m "unit or 영역"`). 실패하면 고친 뒤 실패한 것만(`--lf`) 다시.
+4. 번호 조각(2.5 · 2 · 2.2 …) 끝: 전체 한 번(약 9분). a·b·c 하위 조각에서는 돌리지 않는다. 실패하면 `--lf` 로 확인하고, 전체를 다시 돌리지 않는다.
+5. 스크린샷은 검문·눈 판정이 필요할 때만 따로 찍는다.
+6. 검토 비용 기록(`tests/tracking/`): 실행은 conftest 가 `runs.json` 에 자동으로 남긴다. 조각을 커밋할 때 `process.json` 에 한 항목(테스트 분·전체 수·게이트 걸림 진짜/잡음·잡은 버그·낭비와 고칠 점), 번호 조각 끝에 `python3 tests/tracking/review.py` 로 한도를 넘은 곳을 보고 규칙을 고친다.
 
 고정본(`runs/laundry-v1`·`gym-v2`·`dayfine-onboarding-v1`)은 저장소에 없으면 그 테스트가 건너뛰어진다 — "통과"가 아니라 "건너뜀"인지 요약 줄에서 확인한다.

@@ -78,15 +78,19 @@ def visible_paths(pg):
 
 
 def test_arrow_toggle_persists(page):
+    """E7: 판에 늘 그리는 선 — 표시 패널의 보이기 버튼으로 끄고 켜며, 새로고침 뒤에도 그대로. [주요 흐름] 버튼·A 키는 없다(D9)."""
     total = page.locator("#rows path.ln").count()
     assert total > 0
     assert visible_paths(page) == total
-    page.click("#arrows")
+    assert page.locator("#arrows").count() == 0
+    page.click("#lnShow")
     assert visible_paths(page) == 0
     reload(page)
     assert visible_paths(page) == 0
-    assert page.get_attribute("#arrows", "aria-pressed") == "false"
-    page.keyboard.press("a")                       # 단축키 A 로 다시 켜기
+    assert page.get_attribute("#lnShow", "aria-pressed") == "false"
+    page.keyboard.press("a")                       # A 는 비워 둔다
+    assert visible_paths(page) == 0
+    page.click("#lnShow")
     assert visible_paths(page) == total
     reload(page)
     assert visible_paths(page) == total
@@ -111,8 +115,8 @@ def test_shift_click_focus(page):
             assert hl and op == 1, (cid, hl, op)
         else:
             assert not hl and op < 0.5, (cid, hl, op)
-    on = page.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => [p.classList.contains('on'), +getComputedStyle(p).opacity])")
-    assert any(o for o, _ in on) and all((op == 1) if o else (op < 0.5) for o, op in on)
+    on = page.evaluate("[...document.querySelectorAll('#rows path.ln:not(.rep)')].map(p => [p.classList.contains('on'), +getComputedStyle(p).opacity])")
+    assert all((op == 1) if o else (op < 0.5) for o, op in on), on     # 그 화면에서 나가는 선은 색 링크가 대신(.rep), 들어오는 선은 진하게, 나머지는 흐리게
     SHOTS.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(SHOTS / "focus-mode.png"))
     page.keyboard.press("Escape")
@@ -387,7 +391,7 @@ def test_gym_annotate_button(gpage):
 def test_gym_shortcut_hint(gpage):
     hint = gpage.locator("#khint")
     assert hint.is_visible()
-    assert hint.text_content().strip() == "누르면 연결 · Shift+클릭 여러 장 · A 주요 흐름 · 0 전체 · 두 번 눌러 크게 보기"   # 재작업 S3
+    assert hint.text_content().strip() == "누르면 연결 · Shift+클릭 여러 장 · 0 전체 · 두 번 눌러 크게 보기"   # 재작업 S3
     hb, pr = hint.bounding_box(), gpage.locator("#screens").bounding_box()
     assert hb["x"] < pr["x"] + 40 and hb["y"] + hb["height"] > pr["y"] + pr["height"] - 40
     gpage.evaluate("document.querySelector('#rows .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))")
@@ -834,48 +838,35 @@ def test_v3_same_target_merge(gpage, gym_out):
 
 
 def test_v3_main_flow_dashed(gpage):
-    """S3: 회색 갈래 화살표 = '주요 흐름' 회색 점선. 버튼 · A · 범례 체크로 켜고 끄기, 새로고침 뒤에도. 설명 문단 없음."""
+    """2.5b(E7·E14·D9): 판에 늘 그리는 선은 실선(점선 = 반영 대기뿐), [주요 흐름] 버튼·범례 체크·A 키 없음, 태그는 평소 숨김.
+    연결 보기 중 다른 선은 흐리게(.18), 그 화면에서 나가는 선은 색 링크가 대신(.rep)."""
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(200)
     vis = lambda: gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].filter(p => getComputedStyle(p).display !== 'none').length")
     total = gpage.locator("#rows path.ln").count()
     assert total > 0 and vis() == total
-    dash = gpage.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => getComputedStyle(p).strokeDasharray)")
-    assert all(d and d != "none" for d in dash), dash
-    assert gpage.text_content("#arrows").strip() == "주요 흐름"
+    dash = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.pd)')].map(p => getComputedStyle(p).strokeDasharray)")
+    assert all(d in ("none", "") for d in dash), dash
+    assert gpage.locator("#arrows").count() == 0 and gpage.locator("#lgFlow").count() == 0
     assert "설계 단계" not in gpage.evaluate("document.body.innerText")
+    gpage.mouse.move(5, 300)
     assert gpage.evaluate("[...document.querySelectorAll('#rows .alabel')].every(n => getComputedStyle(n).display === 'none')")
     zoom_to(gpage, "pt-detail", 300)
     gpage.mouse.wheel(-420, -160)
     gpage.wait_for_timeout(500)
     V3SHOTS.mkdir(parents=True, exist_ok=True)
     gpage.screenshot(path=str(V3SHOTS / "p1-e-base.png"))
-    gpage.click("#arrows")
-    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
-    gpage.reload()
-    gpage.wait_for_function("window.__hdReady !== undefined")
-    gpage.wait_for_timeout(300)
-    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
-    gpage.keyboard.press("a")
-    assert vis() == total
-    # 범례 맨 아래 체크(연결 보기 중)
     zoom_to(gpage, "pass", 300)
     shift_click(gpage, "pass")
     gpage.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
-    assert gpage.evaluate("document.getElementById('lgFlow').checked")
-    assert gpage.text_content("#pShow .lgflow").strip() == "주요 흐름 (회색 점선)"
-    gpage.locator("#lgFlow").uncheck()
-    assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
     assert gpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
-    # 연결 보기 중 주요 흐름은 흐리게(.18), 태그를 덮지 않는다(태그 층이 위)
-    gpage.locator("#lgFlow").check()
-    assert vis() == total - gpage.locator("#rows path.ln.rep").count()   # 색 링크가 대신 그리는 갈래(.rep)는 연결 보기 중 숨김
-    ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on)')].map(p => +getComputedStyle(p).opacity)")
+    gpage.mouse.move(5, 300)
+    gpage.wait_for_timeout(250)
+    assert vis() == total - gpage.locator("#rows path.ln.rep").count()
+    ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on):not(.rep)')].map(p => +getComputedStyle(p).opacity)")
     assert ops and all(abs(o - 0.18) < 0.01 for o in ops), ops
-    gpage.reload()
-    gpage.wait_for_function("window.__hdReady !== undefined")
-    gpage.wait_for_timeout(300)
-    assert vis() == total
+    gpage.keyboard.press("Escape")
+    gpage.keyboard.press("Escape")
 
 
 # ---------------------------------------------------------------- canvas-v3 (phase 2): Ctrl+클릭 카메라 · 전환 메뉴 · 선 색/굵기

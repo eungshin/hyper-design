@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection"]
-ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select"]
+ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -28,8 +28,9 @@ const input = JSON.parse(fs.readFileSync(inPath, 'utf8'));
 const g = HD.graph.fromData(input.D);
 out.flow = HD.graph.edgesFrom(g, null, 'flow').length;
 out.flowKinds = [...new Set(g.edges.map(e => e.kind))];
+out.linkEdges = HD.graph.edgesFrom(g, null, 'link').length; out.linkData = Object.values(input.D.links || {}).reduce((n, l) => n + l.length, 0);
 out.screens = g.screens.length;
-out.sameAsArrows = JSON.stringify(g.edges.map(e => [e.from, e.to, e.label])) === JSON.stringify((input.D.arrows || []).map(a => [a.from, a.to, a.label || '']));
+out.sameAsArrows = JSON.stringify(g.edges.filter(e => e.kind === 'flow').map(e => [e.from, e.to, e.label])) === JSON.stringify((input.D.arrows || []).map(a => [a.from, a.to, a.label || '']));
 
 // 2. addLinks 교체 · groupByTarget
 const L1 = [{to: 'b', path: 'p1', text: 't1', rect: {x: 0, y: 0, w: 1, h: 1}}, {to: 'c', path: 'p2', text: 't2', rect: {x: 0, y: 5, w: 1, h: 1}}];
@@ -159,12 +160,13 @@ out.prefs = {
   fresh: HD.prefs.load(mk({})),
   badJson: HD.prefs.load(mk({'hd-canvas-prefs': '{bad', 'hd-arrows': '0'})),
   v1: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 1, arrows: false, sat: 1.1}), 'hd-arrows': '1'})),
-  stored: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 2, arrows: false, preset: 'random', rand: RS, custom: {'a>b': '#ABCDEF'}, width: 4.5, motion: false})})),
-  badFields: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 2, arrows: 'no', preset: 'random', rand: [1], custom: {x: '#ABCDEF', 'a>b': 'red', 'c>d': '#123456'}, width: 9, motion: 'x'})})),
+  v2: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 2, arrows: false, preset: 'random', rand: RS, custom: {'a>b': '#ABCDEF'}, width: 4.5, motion: false})})),
+  stored: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: false, op: 0.3, preset: 'deep', custom: {}, width: 4, motion: true})})),
+  badFields: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: 'no', op: 9, preset: 'random', rand: [1], custom: {x: '#ABCDEF', 'a>b': 'red', 'c>d': '#123456'}, width: 9, motion: 'x'})})),
   throws: HD.prefs.load(() => { throw new Error('denied'); }),
 };
 const writes = {};
-HD.prefs.save({v: 1, arrows: false, sat: 0.5, width: 5}, (k, v) => { writes[k] = v; });
+HD.prefs.save({v: 1, arrows: false, sat: 0.5, width: 5, op: 0.01}, (k, v) => { writes[k] = v; });
 out.prefs.writes = writes;
 
 // 5. 카메라 계획(S4)
@@ -235,7 +237,8 @@ def res():
 
 def test_graph_from_data(res):
     assert res["flow"] == res["_branches"] == 9
-    assert res["flowKinds"] == ["flow"] and res["sameAsArrows"]
+    assert res["flowKinds"] == ["flow", "link"] and res["sameAsArrows"]
+    assert res["linkEdges"] == res["linkData"] > 0, "빌드가 화면 파일에서 뽑은 링크(D.links) = 그래프의 link 간선"
     assert res["screens"] == 28
 
 
@@ -259,19 +262,18 @@ def test_focus_reducer(res):
     assert res["pair"] == {"focusId": "src", "on": {"0": False, "1": True, "2": False}, "visible": [False, True, False]}   # Ctrl+클릭 쌍 하나만
 
 
-DEF = {"v": 2, "arrows": True, "preset": "calm", "rand": None, "custom": {}, "width": 2.5, "motion": True}
+DEF = {"v": 3, "lines": True, "op": 0.55, "preset": "calm", "rand": None, "custom": {}, "width": 2.5, "motion": True}
 
 
 def test_prefs(res):
+    """v3: 늘 그리는 선 보이기(lines)·투명도(op, 0.15–1). 주요 흐름(arrows, v2)·sat(v1)·예전 키(hd-arrows)는 버린다(D9)."""
     p = res["prefs"]
-    assert p["migrate"] == dict(DEF, arrows=False)                                   # 예전 키(hd-link-sat 는 버림)
-    assert p["fresh"] == DEF and p["throws"] == DEF
-    assert p["badJson"] == dict(DEF, arrows=False)
-    assert p["v1"] == dict(DEF, arrows=False)                                        # v1 → v2: sat 버림
-    assert p["stored"] == {"v": 2, "arrows": False, "preset": "random", "rand": ["#AA3344", "#33AA44", "#3344AA", "#AAAA33", "#33AAAA", "#AA33AA"],
-                           "custom": {"a>b": "#ABCDEF"}, "width": 4.5, "motion": False}
-    assert p["badFields"] == dict(DEF, custom={"c>d": "#123456"})                     # 틀린 값은 기본값(랜덤인데 rand 없음 → 차분)
-    assert list(p["writes"]) == ["hd-canvas-prefs"] and json.loads(p["writes"]["hd-canvas-prefs"]) == dict(DEF, arrows=False, width=5)
+    assert p["migrate"] == DEF and p["fresh"] == DEF and p["throws"] == DEF and p["badJson"] == DEF and p["v1"] == DEF
+    assert p["v2"] == dict(DEF, preset="random", rand=["#AA3344", "#33AA44", "#3344AA", "#AAAA33", "#33AAAA", "#AA33AA"],
+                           custom={"a>b": "#ABCDEF"}, width=4.5, motion=False), "v2 → v3: 색·굵기·움직임은 옮기고 arrows 는 버림"
+    assert p["stored"] == dict(DEF, lines=False, op=0.3, preset="deep", width=4)
+    assert p["badFields"] == dict(DEF, op=1, custom={"c>d": "#123456"})              # 틀린 값은 기본값, op 는 범위 안으로
+    assert list(p["writes"]) == ["hd-canvas-prefs"] and json.loads(p["writes"]["hd-canvas-prefs"]) == dict(DEF, width=5, op=0.15)
 
 
 def test_camera_plan(res):
@@ -593,7 +595,7 @@ LAYER = {"graph": "Model", "route": "Model", "labels": "Model", "style": "Model"
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 # 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
-SHELL_MAX = {"var": 85, "function": 115}   # 2.5a: picked·setPicks·togglePick → selection.js·view-select.js
+SHELL_MAX = {"var": 84, "function": 114}   # 2.5a: picked·setPicks·togglePick → selection.js·view-select.js · 2.5b: arrowsOn·setArrows 지움, drawArrows 본체 → view-lines.js
 
 
 def _layer(name):
@@ -680,3 +682,51 @@ def test_selection_model():
     assert out["sub"] == ["b"] and out["pr1"] == "b"
     assert out["set"] == ["x", "y", "3"] and out["drop"] == ["a", "c"] and out["clearSame"]
     assert out["has"] == [True, False]
+
+
+OV_JS = r"""
+const fs = require('fs'), vm = require('vm');
+for (const n of ['graph', 'style', 'edits']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + n + '.js', 'utf8'), {filename: n + '.js'});
+const G = globalThis.HD.graph, E = globalThis.HD.edits, S = globalThis.HD.lineStyle, out = {};
+const g = G.fromData({rows: [], arrows: [{from: 'a', to: 'b'}, {from: 'c', to: 'd', label: '갈래'}],
+                      links: {a: [{to: 'b', text: '다음'}, {to: 'b', text: '건너뛰기'}], b: [{to: 'a', text: '이전'}], c: [{to: 'a', text: '처음'}]}});
+const sum = ps => ps.map(p => [p.a, p.b, p.ab, p.ba, p.pend, p.plan].join(',')).sort();
+out.base = sum(G.overview(g, {}));
+out.labels = G.overview(g, {}).find(p => p.a === 'a').labels;
+const h = {path: 'x', text: 'X', rect: null};
+const add = E.note('a', h, '', 'link', 'd'), re = Object.assign(E.note('c', h, '', 'link', 'b'), {was: 'a'});
+const cut1 = E.note('a', h, '', 'cut', 'b'), cut2 = E.note('a', h, '', 'cut', 'b'), cutB = E.note('b', h, '', 'cut', 'a');
+out.pd = E.overviewPending([add, re, cut1, cutB]);
+out.withPend = sum(G.overview(g, E.overviewPending([add, re])));
+out.cutOne = sum(G.overview(g, E.overviewPending([cut1])));
+out.cutAll = sum(G.overview(g, E.overviewPending([cut1, cut2, cutB])));
+out.cutIn = sum(G.overview(g, E.overviewPending([Object.assign(E.note('a', h, ''), {edit: 'delete'})])));
+const P = {preset: 'calm', custom: {}}, pal = S.paletteOf(P);
+out.rows = [0, 1, 2, 7, 8, 9].map(r => S.rowColor(P, r)); out.pal = pal;
+console.log(JSON.stringify(out));
+"""
+
+
+def test_overview_lines_model():
+    """늘 그리는 선(E7·D6b·D6c·D8·E14): 쌍마다 하나(양방향 = ab·ba) · 반영 대기 잇기 = pend · 끊기는 그 방향 링크 수만큼 빼야 사라짐 ·
+    도착 바꾸기는 예전 도착을 뺌 · 삭제한 화면으로 오는 선은 모두 뺌 · 화면 안 링크 없는 갈래 = plan · 줄 색은 8색을 돌려 이웃 줄이 다름."""
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-ov-js-"))
+    try:
+        (tmp / "o.js").write_text(OV_JS, encoding="utf-8")
+        r = subprocess.run([NODE, str(tmp / "o.js"), str(MOD)], capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    assert out["base"] == ["a,b,true,true,false,false", "c,a,true,false,false,false", "c,d,true,false,false,true"], "a↔b 하나 · c→a · c→d 는 기획 갈래"
+    assert out["labels"] == ["다음", "건너뛰기", "이전"]
+    assert out["pd"] == {"add": [{"from": "a", "to": "d"}, {"from": "c", "to": "b"}], "drop": {"c>a": 1, "a>b": 1, "b>a": 1}, "cutIn": {}}
+    assert out["withPend"] == ["a,b,true,true,false,false", "a,d,true,false,true,false", "c,b,true,false,true,false", "c,d,true,false,false,true"], \
+        "새 잇기 = 점선 쌍 · 도착 바꾸기 = 예전 도착(c→a) 사라짐"
+    assert out["cutOne"] == out["base"], "a→b 링크 둘 중 하나만 끊으면 선은 그대로"
+    assert out["cutAll"] == ["a,b,true,false,false,true", "c,a,true,false,false,false", "c,d,true,false,false,true"],         "모두 끊으면 화면 안 링크 선은 사라지고, screens.json 갈래(a→b)만 기획 갈래로 남는다"
+    assert out["cutIn"] == ["a,b,true,false,false,false", "c,d,true,false,false,true"], "삭제한 a 로 오는 선(b→a·c→a)은 빠지고 a→b 만"
+    pal = out["pal"]
+    assert out["rows"] == [pal[0], pal[3], pal[6], pal[5], pal[0], pal[3]], "3칸씩 건너뛰어 이웃 줄이 갈리고, 8줄 뒤에 다시 돈다"

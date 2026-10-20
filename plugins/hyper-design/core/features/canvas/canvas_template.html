@@ -109,10 +109,14 @@ body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
 .more summary,.foot summary{cursor:pointer;min-height:44px;display:flex;align-items:center}
 .more .pol{margin-top:0}
 svg.ar{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
-/* 주요 흐름(screens.json 갈래) = 회색 점선 */
-svg.ar path.ln{fill:none;stroke:#9AA09A;stroke-width:calc(var(--lw,2) * .8);stroke-dasharray:calc(var(--lw,2) * 3) calc(var(--lw,2) * 2.5);stroke-linecap:butt;stroke-linejoin:round;marker-end:url(#hd-head)}
-svg.ar marker path,svg.ar marker circle{fill:#9AA09A}
-/* 갈래 이름표: 평소엔 숨김(선만). 연결 보기에서 화면 안 링크 답이 없을 때만 출발 카드 오른쪽에 */
+/* 판에 늘 그리는 선(modules/view-lines.js): 쌍마다 하나, 출발 줄 색(stroke 속성), 굵기 = 선 굵기 설정 · 투명도 = 표시 패널(--lnop) */
+svg.ar path.ln{fill:none;stroke-width:calc(var(--lw,2) * .8px * var(--lnk,1));opacity:var(--lnop,.55);stroke-linecap:round;stroke-linejoin:round}
+svg.ar path.ln.pd{stroke-dasharray:calc(var(--lw,2) * 3) calc(var(--lw,2) * 2.5);stroke-linecap:butt;opacity:1}   /* 점선 = 반영 대기뿐(E14) · 투명도와 상관없이 진하게 */
+svg.ar path.ln.plan{stroke-width:calc(var(--lw,2) * .5px * var(--lnk,1))}          /* 기획 갈래(D8): 얇은 회색 실선, 글자 표시 없음 */
+#rows.lnhov path.ln{opacity:calc(var(--lnop,.55) * .4)}
+#rows.lnhov path.ln.em,#rows.lnhov path.ln.pd{opacity:1}
+#rows.lnhov .alabel.em{display:block}
+/* 선 태그: 평소엔 숨김(선만). 마우스를 올린 카드의 선 · 연결 보기에서 화면 안 링크 답이 없을 때만 출발 카드 오른쪽에 */
 .alabel{position:absolute;display:none;background:#fff;border:2px solid #8a8d86;color:#4a4c47;font-size:17px;font-weight:700;padding:3px 12px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.10)}
 .foot{padding:20px 0 120px;font-size:17px;color:#777;max-width:1500px}
 .foot p{margin:0 0 6px}
@@ -131,13 +135,13 @@ svg.ar marker path,svg.ar marker circle{fill:#9AA09A}
 
 /* ---------- 연결 보기: 화살표 켜고 끄기 · Shift+클릭 강조 ---------- */
 .vbtn[aria-pressed="false"]{color:#999;text-decoration:line-through}
-#rows.noarrows path.ln,#rows.noarrows .alabel{display:none}
+#rows.nolines path.ln,#rows.nolines .alabel{display:none}
 #rows.focusing .card{opacity:.22}
 #rows.focusing .card.hl{opacity:1}
 #rows.focusing .card.hl .phone{box-shadow:0 0 0 6px #8a8d86,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.focus .phone{box-shadow:0 0 0 10px #1c1c1c,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing path.ln{opacity:.18}
-#rows.focusing path.ln.on{opacity:1;stroke:#7d827d;display:inline}
+#rows.focusing path.ln.on{opacity:1}
 #rows.focusing path.ln.rep{display:none}
 #rows.focusing:not(.haslk):not(.lkwait) .alabel.on{display:block}
 #rows.focusing .card.lt .phone{box-shadow:0 0 0 8px var(--ring),0 3px 14px rgba(0,0,0,.10)}
@@ -200,7 +204,10 @@ svg.lks path.lk.dim{opacity:.15}
 #tmenu .tplay{grid-column:2;grid-row:1 / span 3;min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:13px;font-weight:600;cursor:pointer}
 #tmenu .tplay:hover{background:#F5F5F2}
 #tmenu .toff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;padding:9px 4px 2px;cursor:pointer}
-#pShow .lgflow{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#555;cursor:pointer}
+#pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
+#pShow .lnshow{width:28px;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;display:grid;place-items:center;cursor:pointer;color:#444}
+#pShow .lnshow svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+#pShow .lnshow[aria-pressed="false"]{color:#aaa;background:var(--ui-subtle,#f3f3f1)}
 
 /* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
 .pres{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
@@ -382,7 +389,6 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
   <div class="view" data-group="view">
     <button class="vbtn" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
     <button class="vbtn" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기">↷</button>
-    <button class="vbtn" id="arrows" aria-pressed="true" title="주요 흐름(회색 점선) 켜고 끄기 (A) · Shift+화면 클릭으로 연결만 보기">주요 흐름</button>
     <button class="vbtn" id="tbtn" aria-expanded="false" aria-controls="tmenu" title="캔버스 전환 보기 (T)">전환</button>
     <button class="vbtn" id="fit" title="모든 화면이 한 번에 들어오게 (0)">전체<span class="fit-long"> 보기</span></button>
     <button class="vbtn zoom" id="zoom" title="처음 배율로">72%</button>
@@ -395,7 +401,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
       <div class="rows" id="rows"></div>
       <div class="foot" id="foot"></div>
     </div>
-    <div id="khint">누르면 연결 · Shift+클릭 여러 장 · A 주요 흐름 · 0 전체 · 두 번 눌러 크게 보기</div>
+    <div id="khint">누르면 연결 · Shift+클릭 여러 장 · 0 전체 · 두 번 눌러 크게 보기</div>
     <nav id="tools" aria-label="도구">
       <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
@@ -419,12 +425,13 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
 <div id="dkhold" hidden>
   <div class="dkp" id="pLinks" data-panel="links">
     <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div></div>
-    <p class="dkp-empty">Shift+클릭으로 한 화면의 연결을 봐요</p>
+    <p class="dkp-empty">화면을 누르면 그 연결을 봐요</p>
   </div>
   <div class="dkp" id="pShow" data-panel="show">
     <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw"><span class="lgi" title="선 색"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></svg></span><button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false" aria-label="선 색"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="top-left" hidden></span></span></div>
     <label class="lgw"><span class="lgi" title="선 굵기"><svg viewBox="0 0 24 24"><path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2.2"/><path d="M4 18h16" stroke-width="3.6"/></svg></span><input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5" aria-label="선 굵기"><b id="lgWv">2.5px</b></label>
-    <label class="lgflow"><input type="checkbox" id="lgFlow" checked> 주요 흐름 (회색 점선)</label>
+    <div class="lgln"><button type="button" class="lnshow" id="lnShow" aria-pressed="true" aria-label="선 보이기"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <label class="lgw"><span class="lgi" title="선 투명도"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></span><input id="lnOp" type="range" min="0.15" max="1" step="0.05" value="0.55" aria-label="선 투명도"></label></div>
     <div class="lgsw t-dropdown" id="lgSw" hidden><div class="g" id="lgSwG"></div><label class="x">직접 고르기 <input type="color" id="lgSwC"></label></div>
   </div>
   <div class="dkp" id="pNotes" data-panel="notes">
@@ -557,38 +564,8 @@ var G = HD.graph.fromData(D);
 var RADIUS = HD.route.RADIUS, routeCurve = HD.route.routeCurve;
 var contentLeft = LEFT;
 // 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
-function drawArrows() {
-  var svg = $('#ar'), box = {};
-  $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {
-    box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};   // offsetParent = .rows · 숨긴 화면의 화살표는 그리지 않는다
-  });
-  $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
-  $$('path.ln', svg).forEach(function (n) { n.remove(); });
-  var paths = '', labels = '', cross = 0, per = {}, seen = {}, lab = {}, minX = LEFT, flow = HD.graph.edgesFrom(G, null, 'flow');
-  flow.forEach(function (a) { per[a.from] = (per[a.from] || 0) + 1; });
-  flow.forEach(function (a) {
-    var s = box[a.from], t = box[a.to]; if (!s || !t) return;
-    var j = seen[a.from] || 0, n = per[a.from]; seen[a.from] = j + 1;
-    var sx = s.x + CARD.w / 2 + (j - (n - 1) / 2) * 28, tx = t.x + CARD.w / 2;
-    if (Math.abs(sx - tx) < 3 * RADIUS) sx = tx + (tx > s.x + CARD.w / 2 - 1 ? -1 : 1) * (CARD.w / 2 - 40);   // 같은 칸(위아래 줄): 세로선이 겹치지 않게
-    var same = s.row === t.row, d;
-    if (same) d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 10}, {lift: 54, apex: 14 * j});
-    else {                                          // 다른 줄: 왼쪽 통로(LEFT − 56 − 22·k)로 우회
-      var ck = cross++, lane = LEFT - 56 - 22 * (ck % 4);
-      sx = s.x + 60 + 24 * (ck % 3); tx = t.x + 60 + 24 * (ck % 3);
-      d = routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 8}, {lift: 16, apex: 10 * (ck % 4), laneX: lane});
-      minX = Math.min(minX, lane);
-    }
-    var ft = ' data-from="' + esc(a.from) + '" data-to="' + esc(a.to) + '"';
-    paths += '<path class="ln"' + ft + ' d="' + d + '"/>';
-    if (a.label) {
-      var li = lab[a.from] || 0; lab[a.from] = li + 1;
-      labels += '<div class="alabel"' + ft + ' style="left:' + (s.x + CARD.w + 10) + 'px;top:' + (s.y + 24 + li * 44) + 'px">' + esc(a.label) + '</div>';
-    }
-  });
-  svg.insertAdjacentHTML('beforeend', paths);
-  rowsEl.insertAdjacentHTML('beforeend', labels);
-  contentLeft = Math.max(0, minX - 24);
+function drawArrows() {                            // 판에 늘 그리는 선(modules/view-lines.js) → 연결 보기 다시 그리기
+  contentLeft = Math.max(0, LN.render() - 24);
   VL.render(true);
 }
 
@@ -979,14 +956,8 @@ if (P && P.options && P.options.length) {
 function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
 var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
 function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
-var arrowsOn = prefs.arrows;
-function setArrows(on) {
-  arrowsOn = !!on;
-  rowsEl.classList.toggle('noarrows', !arrowsOn);
-  $('#arrows').setAttribute('aria-pressed', String(arrowsOn));
-  $('#lgFlow').checked = arrowsOn;
-  prefs.arrows = arrowsOn; savePrefs();
-}
+var LN = HD.viewLines.mount({rowsEl: rowsEl, svg: $('#ar'), $: $, $$: $$, esc: esc, CARD: CARD, LEFT: LEFT, prefs: prefs, savePrefs: savePrefs, record: record,
+                             graph: function () { return G; }, pending: function () { return HD.edits.overviewPending(notes); }});   // 늘 그리는 선(E7)
 // 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
 var LNKEY = 'hd-link-names:' + hashStr(KEYPATH), linkNames = {};
 try { linkNames = JSON.parse(localStorage.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
@@ -1046,9 +1017,6 @@ if (window.MutationObserver) new MutationObserver(function () {   // 연결 보�
 window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycleNext, routeCurve: HD.route.routeCurve, plan: HD.route.plan,
                    deriveView: HD.focus.deriveView, LINK_COLORS: HD.focus.LINK_COLORS, camera: HD.camera, style: HD.lineStyle,
                    view: function () { return {z: z, tx: tx, ty: ty}; }};
-$('#arrows').addEventListener('click', function () { setArrows(!arrowsOn); });
-$('#lgFlow').addEventListener('change', function (e) { setArrows(e.target.checked); });
-setArrows(arrowsOn);
 
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
 // 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
@@ -1230,7 +1198,9 @@ function addEdits(label, list, msg, drops) {      // drops = 같이 취소할 �
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
   var list = hits.filter(function (h) { return h.to !== to; }).map(function (h) {
-    return editNote(from, h, h.to ? HD.edits.say.retarget(scr(h.to), scr(to)) : HD.edits.say.link(scr(to)), 'link', to);
+    var n = editNote(from, h, h.to ? HD.edits.say.retarget(scr(h.to), scr(to)) : HD.edits.say.link(scr(to)), 'link', to);
+    if (h.to) n.was = h.to;                          // 도착 바꾸기: 판의 선에서 예전 도착을 뺀다
+    return n;
   });
   if (!list.length) { toast('이미 그 화면으로 가요'); return; }
   addEdits(hits.some(function (h) { return h.to; }) ? '트리거 도착 바꾸기' : '트리거 연결', list, titleOf(to) + '(으)로 이었어요 — 반영 대기');
@@ -1640,7 +1610,7 @@ function popItem(dr, last) {
   var n = dr.targets.length;
   return {text: n > 1 ? n + '개 요소 · ' + (last.text || '') : last.text, path: dr.targets.map(function (t) { return t.path; }).join('\n'), rect: last.rect};
 }
-function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); }
+function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); scheduleArrows(); }   // 편집이 바뀌면 늘 그리는 선도
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
 function outDir() {
   if (window.__hdOut) return window.__hdOut;
@@ -1837,8 +1807,7 @@ $('#nclear').addEventListener('click', function () {
 addEventListener('keydown', function (e) {
   if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
   var k = (e.key || '').toLowerCase();
-  if (k === 'a' && modal.hidden) { e.preventDefault(); setArrows(!arrowsOn); }
-  else if (k === '0' && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); fit(); }
+  if (k === '0' && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); fit(); }
   else if (k === 'p' && !modal.hidden) { e.preventDefault(); setPick(!picking); }
   else if (HD.tools.byKey(k) && $('#tools [data-tool="' + HD.tools.byKey(k) + '"]') && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool(HD.tools.byKey(k)); }   // 도구 키(modules/tools.js)
 });

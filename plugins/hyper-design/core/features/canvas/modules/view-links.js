@@ -322,7 +322,7 @@ function mount(ctx) {
       '<hr><button type="button" class="mut" data-act="reset">● 점으로 바꾼 색 초기화</button>';
     $('#lgW').value = String(prefs.width); $('#lgWv').textContent = prefs.width + 'px';
   }
-  function applyWidth() { rowsEl.style.setProperty('--lkw', prefs.width + 'px'); }
+  function applyWidth() { rowsEl.style.setProperty('--lkw', prefs.width + 'px'); rowsEl.style.setProperty('--lnk', (prefs.width / 2.5).toFixed(2)); }   // 늘 그리는 선도 같은 굵기 설정
   function setStyle(patch, quiet) {                 // quiet: 되돌리기·다시 하기에서 부를 때(기록하지 않음)
     var old = {};
     for (var k in patch) { old[k] = prefs[k]; prefs[k] = patch[k]; }

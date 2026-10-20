@@ -1438,3 +1438,95 @@ def test_trigger_drag_esc_cancels_and_deleted_card_refuses(dpage):
     wait_notes(dpage, n0)
     dpage.keyboard.press("h")
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 조각 2.5b 늘 보이는 선 (E7·E12·E14·D6b·D6c·D8·D9, rework §8-3)
+LINES_JS = """[...document.querySelectorAll('#ar path.ln')].map(p => ({from: p.dataset.from, to: p.dataset.to, both: p.dataset.both === '1',
+    pd: p.classList.contains('pd'), plan: p.classList.contains('plan'), stroke: p.getAttribute('stroke'),
+    dash: getComputedStyle(p).strokeDasharray, op: +getComputedStyle(p).opacity, w: parseFloat(getComputedStyle(p).strokeWidth),
+    shown: getComputedStyle(p).display !== 'none'}))"""
+
+
+def lines(pg):
+    return pg.evaluate(LINES_JS)
+
+
+def test_all_lines_visible_without_clicking(dpage):
+    """E7·D6b: 아무것도 누르지 않아도 모든 화면 연결이 판에 보인다(출발 줄마다 한 색, 양방향은 선 하나, 점선 없음).
+    D9: [주요 흐름] 버튼·표시 패널 체크·A 키는 없다. 누르면(한 화면 연결 보기) 그 화면의 자세한 선이 대신한다."""
+    fit_view(dpage)
+    assert not dpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
+    ls = [l for l in lines(dpage) if not l["plan"]]
+    assert len(ls) >= 3 and all(l["shown"] for l in ls), ls
+    assert all(l["dash"] in ("none", "") for l in ls if not l["pd"]), "점선은 반영 대기에만"
+    pairs = [frozenset((l["from"], l["to"])) for l in ls]
+    assert len(pairs) == len(set(pairs)), "양방향 연결도 선 하나"
+    row = dpage.evaluate("""(() => { const m = {}; document.querySelectorAll('#rows .flow').forEach((f, i) => f.querySelectorAll('.card').forEach(c => m[c.dataset.id] = i)); return m; })()""")
+    by_row = {}
+    for l in ls:
+        by_row.setdefault(row[l["from"]], set()).add(l["stroke"])
+    assert all(len(v) == 1 for v in by_row.values()), ("출발 줄마다 한 색", by_row)
+    if len(by_row) >= 2:
+        assert len({next(iter(v)) for v in by_row.values()}) >= 2, "줄이 다르면 색도 다르다"
+    assert dpage.locator("#arrows").count() == 0 and dpage.locator("#lgFlow").count() == 0
+    n = len(lines(dpage))
+    dpage.keyboard.press("a")
+    dpage.wait_for_timeout(150)
+    assert len([l for l in lines(dpage) if l["shown"]]) == n, "A 키는 비워 둔다"
+    # 화면 안 링크(palette.js hd-links)와 같은 연결이어야 한다
+    focus_dayfine(dpage, "job")
+    want = {p["to"] for p in paths(dpage)}
+    have = {l["to"] if l["from"] == "job" else l["from"] for l in ls if "job" in (l["from"], l["to"]) and (l["from"] == "job" or l["both"])}
+    assert want <= have, (want, have)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+
+
+def test_line_controls_show_width_opacity_persist(dpage):
+    """E7: 표시 패널에서 전체 선 보이기/숨기기 · 굵기 · 투명도 — 새로고침 뒤에도 그대로."""
+    fit_view(dpage)
+    d = dpage.locator("#dock").bounding_box()
+    dpage.mouse.move(d["x"] + d["width"] / 2, d["y"] + d["height"] - 20)   # 카드 위가 아니게(올린 카드 선은 진하게 바뀐다)
+    dpage.wait_for_timeout(250)
+    l0 = [l for l in lines(dpage) if not l["plan"]][0]
+    dpage.evaluate("(v) => { const r = document.getElementById('lnOp'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "0.3")
+    dpage.evaluate("(v) => { const r = document.getElementById('lgW'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "5")
+    dpage.wait_for_timeout(300)
+    l1 = next(l for l in lines(dpage) if l["from"] == l0["from"] and l["to"] == l0["to"])
+    assert abs(l1["op"] - 0.3) < 0.05 and l1["w"] > l0["w"], (l0, l1)
+    dpage.click("#lnShow")
+    dpage.wait_for_timeout(150)
+    assert not any(l["shown"] for l in lines(dpage)), "숨기기 = 선 모두 숨김"
+    reload(dpage)
+    assert not any(l["shown"] for l in lines(dpage)), "새로고침 뒤에도 숨김"
+    assert dpage.evaluate("document.getElementById('lnOp').value") == "0.3"
+    dpage.click("#lnShow")
+    dpage.evaluate("(v) => { const r = document.getElementById('lnOp'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "0.55")
+    dpage.evaluate("(v) => { const r = document.getElementById('lgW'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "2.5")
+    dpage.wait_for_timeout(150)
+    assert all(l["shown"] for l in lines(dpage))
+
+
+def test_trigger_link_draws_dashed_line_without_clicking(dpage):
+    """E7·E14: 트리거로 다른 화면에 이으면 아무것도 누르지 않아도 판에 반영 대기 점선이 바로 보인다(투명도와 상관없이 진하게). 되돌리면 사라진다."""
+    fit_view(dpage)
+    dpage.keyboard.press("l")
+    have = {frozenset((l["from"], l["to"])) for l in lines(dpage)}
+    cards = dpage.evaluate("[...document.querySelectorAll('#rows .card:not(.hid)')].map(c => c.dataset.id)")
+    p = visible_cover(dpage)
+    q = next((visible_cover(dpage, skip=[c for c in cards if c != t]) for t in cards if t != p["id"] and frozenset((p["id"], t)) not in have
+              and dpage.evaluate("(id) => { const c = document.querySelector('.card[data-id=\"' + id + '\"] .cover'), r = document.getElementById('screens').getBoundingClientRect(), b = c.getBoundingClientRect(); return b.left + b.width / 2 > r.left + 80 && b.left + b.width / 2 < r.right - 380; }", t)), None)
+    assert q, "이을 곳(아직 연결 없는 카드)이 판에 보여야 한다"
+    n0 = len(notes_of(dpage))
+    drag(dpage, p, q["x"] - p["x"], q["y"] - p["y"])
+    wait_notes(dpage, n0 + 1)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_timeout(200)
+    pd = [l for l in lines(dpage) if l["pd"] and {l["from"], l["to"]} == {p["id"], q["id"]}]
+    assert pd and pd[0]["shown"] and pd[0]["dash"] not in ("none", "") and pd[0]["op"] > 0.9, (pd, lines(dpage))
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.wait_for_timeout(200)
+    assert not [l for l in lines(dpage) if l["pd"]], "되돌리면 점선이 사라진다"
+    dpage.keyboard.press("h")

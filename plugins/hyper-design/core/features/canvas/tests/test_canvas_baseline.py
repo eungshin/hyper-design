@@ -160,13 +160,13 @@ def test_p_picks_only_inside_modal(bpage):
 
 def test_typing_guard_blocks_shortcuts(bpage):
     fit_view(bpage)
-    on = bpage.get_attribute("#arrows", "aria-pressed")
+    tool0 = bpage.evaluate("[...document.querySelectorAll('#tools [aria-pressed=\"true\"]')].map(b => b.dataset.tool)")
     bpage.evaluate("""() => { const i = document.createElement('input'); i.id = 'hd-test-input';
         document.body.appendChild(i); i.focus(); }""")
-    for k in ("a", "0", "t", "p"):
+    for k in ("l", "0", "t", "p"):
         bpage.keyboard.press(k)
     bpage.wait_for_timeout(80)
-    assert bpage.get_attribute("#arrows", "aria-pressed") == on, "입력 중 A 는 주요 흐름을 바꾸지 않는다"
+    assert bpage.evaluate("[...document.querySelectorAll('#tools [aria-pressed=\"true\"]')].map(b => b.dataset.tool)") == tool0, "입력 중 L 은 도구를 바꾸지 않는다"
     assert not modal_open(bpage)
     assert bpage.evaluate("document.querySelector('#tmenu:not([hidden])') === null")
     bpage.evaluate("document.getElementById('hd-test-input').remove()")

@@ -3,6 +3,9 @@
 test_canvas_modules.py 는 통째로 unit(node, 약 1초). 브라우저 테스트는 아래 표에서 영역을 받는다.
 표에 없는 브라우저 테스트가 생기면 수집 단계에서 실패한다 — 새 테스트는 여기에 한 줄을 더한다.
 """
+import json, time
+from pathlib import Path
+
 import pytest
 
 AREAS = {
@@ -10,7 +13,7 @@ AREAS = {
     "modal": "크게 보기·주석 달기(P)",
     "notes": "메모 패널·저장·보내기",
     "tools": "도구 막대·카드 옮기기·우클릭 메뉴·숨기기·되돌리기",
-    "flow": "주요 흐름 화살표(회색 점선)",
+    "flow": "판에 늘 그리는 선(쌍마다 하나·줄 색·보이기/굵기/투명도)",
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
     "motion": "카메라·전환 메뉴·움직임 끄기",
     "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
@@ -67,6 +70,9 @@ BROWSER = {
     "test_trigger_drag_can_reach_a_far_card_in_another_row": ("tools", "input"),
     "test_click_selects_and_shows_links_shift_adds": ("input", "links"),
     "test_trigger_drag_esc_cancels_and_deleted_card_refuses": ("tools",),
+    "test_all_lines_visible_without_clicking": ("links", "flow"),
+    "test_line_controls_show_width_opacity_persist": ("links", "dock"),
+    "test_trigger_link_draws_dashed_line_without_clicking": ("tools", "links"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),
@@ -128,3 +134,44 @@ def pytest_collection_modifyitems(config, items):
             it.add_marker(getattr(pytest.mark, a))
     if missing:
         raise pytest.UsageError("영역 표(tests/conftest.py BROWSER)에 없는 브라우저 테스트: " + ", ".join(missing))
+
+
+# ── 검토 과정 기록(tracking/README.md): 테스트를 돌릴 때마다 무엇을·얼마나·결과를 tracking/runs.json 에 한 줄 — review.py 가 과한 검토를 찾는다
+RUNS = Path(__file__).resolve().parent / "tracking" / "runs.json"
+_RUN = {}
+
+
+def pytest_sessionstart(session):
+    _RUN.update(t0=time.time(), failed=[], passed=0, skipped=0)
+
+
+def pytest_runtest_logreport(report):
+    if report.when == "call" or (report.when == "setup" and report.outcome != "passed"):
+        if report.failed:
+            _RUN.setdefault("failed", []).append(report.nodeid.split("::")[-1])
+        elif report.skipped:
+            _RUN["skipped"] = _RUN.get("skipped", 0) + 1
+        elif report.when == "call":
+            _RUN["passed"] = _RUN.get("passed", 0) + 1
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if "t0" not in _RUN or getattr(session.config.option, "collectonly", False):
+        return
+    o = session.config.option
+    sel = {"m": o.markexpr or "", "k": o.keyword or "", "lf": bool(getattr(o, "lf", False)),
+           "files": sorted({Path(str(a)).name for a in session.config.args if str(a).endswith(".py")})}
+    scope = "full" if not (sel["m"] or sel["k"] or sel["lf"] or sel["files"]) else ("unit" if sel["m"] == "unit" and not sel["k"] else "part")
+    rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "scope": scope, "sel": sel, "n": session.testscollected,
+           "passed": _RUN.get("passed", 0), "failed": _RUN.get("failed", []), "skipped": _RUN.get("skipped", 0),
+           "sec": round(time.time() - _RUN["t0"], 1)}
+    try:
+        runs = json.loads(RUNS.read_text(encoding="utf-8")) if RUNS.exists() else []
+    except (OSError, ValueError):
+        runs = []
+    runs.append(rec)
+    try:
+        RUNS.parent.mkdir(exist_ok=True)
+        RUNS.write_text(json.dumps(runs[-500:], ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass

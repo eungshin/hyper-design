@@ -2,7 +2,7 @@
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, screen, targets:[{path,text,rect}], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index) · new-screen · cut-in · delete · copy
-   HD.edits = {note, pendingFor, pendingLink, directOf, tally, say} */
+   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, tally, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -23,6 +23,18 @@ function pendingFor(notes, from) {
     if (n.edit !== 'link' || n.screen !== from) return;
     if (n.op === 'link' && n.to) { pd.byPath[n.path] = {op: 'link', to: n.to}; pd.adds.push({to: n.to, path: n.path, text: n.text, rect: n.rect}); }
     else if (n.op === 'cut' || n.op === 'untrigger') pd.byPath[n.path] = {op: 'cut'};
+  });
+  return pd;
+}
+
+// 판에 늘 그리는 선에 겹칠 편집(graph.overview 의 pend) — 잇기 = 더함, 끊기·트리거 해제·도착 바꾸기 전 도착(was) = 뺌, 삭제·들어오는 연결 끊기 = 그 화면으로 오는 선 모두 뺌
+function overviewPending(notes) {
+  var pd = {add: [], drop: {}, cutIn: {}}, dec = function (k) { pd.drop[k] = (pd.drop[k] || 0) + 1; };
+  (notes || []).forEach(function (n) {
+    if (n.edit === 'cut-in' || n.edit === 'delete') pd.cutIn[n.screen] = 1;
+    if (n.edit !== 'link' || !n.to) return;
+    if (n.op === 'link') { pd.add.push({from: n.screen, to: String(n.to)}); if (n.was) dec(n.screen + '>' + n.was); }
+    else if (n.op === 'cut' || n.op === 'untrigger') dec(n.screen + '>' + n.to);
   });
   return pd;
 }
@@ -65,5 +77,5 @@ var say = {
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, pendingLink: pendingLink, directOf: directOf, tally: tally, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, tally: tally, say: say, FIELD: FIELD};
 })();

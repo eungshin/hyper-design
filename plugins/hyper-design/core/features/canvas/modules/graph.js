@@ -1,5 +1,6 @@
 /* Model — 링크 그래프 하나. 화면(노드) + 연결(간선).
-   kind:'flow' = screens.json branches(회색 갈래 화살표), kind:'link' = 화면 안 링크(hd-links 답, 색 링크).
+   kind:'flow' = screens.json branches(기획 갈래), kind:'link' = 화면 안 링크(빌드가 화면 파일에서 뽑은 D.links, 연결 보기에서는 hd-links 답으로 바꿔 끼움).
+   overview(g, pend) = 판에 늘 그리는 선(화면 쌍마다 하나).
    순수 함수만(DOM 없음). */
 (function () {
 'use strict';
@@ -15,6 +16,9 @@ function fromData(D) {
     });
   });
   var edges = (D.arrows || []).map(function (a) { return {from: a.from, to: a.to, kind: 'flow', label: a.label || ''}; });
+  Object.keys(D.links || {}).forEach(function (from) {
+    (D.links[from] || []).forEach(function (l) { edges.push({from: from, to: String(l.to), kind: 'link', label: l.text || ''}); });
+  });
   return {screens: screens, edges: edges};
 }
 
@@ -42,5 +46,40 @@ function groupByTarget(edges) {
   return out;
 }
 
-HD.graph = {fromData: fromData, addLinks: addLinks, edgesFrom: edgesFrom, groupByTarget: groupByTarget};
+// 판에 늘 그리는 선 — 화면 쌍마다 하나(E7·D6c). pend = edits.overviewPending(메모): {add:[{from,to}], drop:{'a>b':n}, cutIn:{id:1}}
+// → [{a, b, ab, ba, pend, plan, labels}]  a = 처음 나온 방향의 출발 · ab/ba = 그 방향 연결이 있나 · pend = 반영 대기로만 있는 선(점선)
+//   plan = 화면 안 링크도 반영 대기도 없는 screens.json 갈래(기획 갈래 — 얇은 회색 실선, D8)
+function overview(g, pend) {
+  pend = pend || {}; var drop = pend.drop || {}, cutIn = pend.cutIn || {};
+  var real = {}, lab = {}, wait = {}, pairs = [], at = {};
+  function pair(a, b) {
+    var k = a < b ? a + '|' + b : b + '|' + a;
+    if (!(k in at)) { at[k] = pairs.length; pairs.push({a: a, b: b, ab: false, ba: false, pend: false, plan: false, labels: []}); }
+    return pairs[at[k]];
+  }
+  (g.edges || []).forEach(function (e) {
+    if (e.kind !== 'link' || e.from === e.to) return;
+    var k = e.from + '>' + e.to; real[k] = (real[k] || 0) + 1;
+    if (e.label && (lab[k] = lab[k] || []).indexOf(e.label) < 0) lab[k].push(e.label);
+  });
+  Object.keys(drop).forEach(function (k) { if (real[k]) real[k] -= drop[k]; });
+  Object.keys(real).forEach(function (k) { var to = k.slice(k.indexOf('>') + 1); if (cutIn[to]) real[k] = 0; });
+  (pend.add || []).forEach(function (x) { if (x.from !== x.to) wait[x.from + '>' + x.to] = 1; });
+  var dirs = Object.keys(real).filter(function (k) { return real[k] > 0; }).concat(Object.keys(wait));
+  dirs.forEach(function (k) {
+    var i = k.indexOf('>'), from = k.slice(0, i), to = k.slice(i + 1), p = pair(from, to);
+    if (p.a === from) p.ab = true; else p.ba = true;
+    (lab[k] || []).forEach(function (t) { if (p.labels.indexOf(t) < 0) p.labels.push(t); });
+  });
+  pairs.forEach(function (p) { p.pend = !(real[p.a + '>' + p.b] > 0) && !(real[p.b + '>' + p.a] > 0); });
+  (g.edges || []).forEach(function (e) {
+    if (e.kind !== 'flow' || e.from === e.to) return;
+    var k = e.from < e.to ? e.from + '|' + e.to : e.to + '|' + e.from;
+    if (k in at || cutIn[e.to]) return;
+    var p = pair(e.from, e.to); p.ab = true; p.plan = true; if (e.label) p.labels.push(e.label);
+  });
+  return pairs;
+}
+
+HD.graph = {fromData: fromData, addLinks: addLinks, edgesFrom: edgesFrom, groupByTarget: groupByTarget, overview: overview};
 })();

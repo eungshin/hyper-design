@@ -35,6 +35,9 @@ function hueOf(hx) {
 }
 function hueGap(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
 // 프리셋 색 목록(random 은 prefs.rand, 없으면 차분)
+// 판에 늘 그리는 선의 색 = 출발 화면의 줄(row)마다 한 색(D6b). 팔레트를 3칸씩 건너뛰어 이웃 줄이 비슷한 색(주황·황토)이 되지 않게 —
+// 8색이면 0,3,6,1,4,7,2,5 로 모두 쓴 뒤에야 다시 돈다(D6c ③)
+function rowColor(prefs, row) { var p = paletteOf(prefs), n = p.length, step = n % 3 ? 3 : 1; return p[(((row * step) % n) + n) % n]; }
 function paletteOf(prefs) {
   var p = prefs || {};
   if (p.preset === 'random' && Array.isArray(p.rand) && p.rand.length && p.rand.every(isHex)) return p.rand.slice();
@@ -62,5 +65,5 @@ function swatches() {
 }
 
 HD.lineStyle = {PRESETS: PRESETS, ORDER: ORDER, GREY: GREY, isHex: isHex, hsl2hex: hsl2hex, randomSet: randomSet, hueOf: hueOf,
-            paletteOf: paletteOf, skipAccent: skipAccent, colourOf: colourOf, swatches: swatches};
+            paletteOf: paletteOf, skipAccent: skipAccent, colourOf: colourOf, swatches: swatches, rowColor: rowColor};
 })();

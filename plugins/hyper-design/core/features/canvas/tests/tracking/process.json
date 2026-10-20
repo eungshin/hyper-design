@@ -1,0 +1,139 @@
+{
+  "about": "조각마다 검토(테스트·책임 게이트) 비용과 그 값어치. review.py 가 이 파일과 runs.json(자동 기록)을 읽어 과한 검토를 찾는다. 조각을 커밋할 때 한 항목을 더한다.",
+  "policy": {
+    "max_full_per_numbered_slice": 1,
+    "full_runs_in_sub_slice": 0,
+    "gate_noise_max_ratio": 1.0,
+    "gate_minutes_per_slice": 10,
+    "repeat_full_within_min": 60,
+    "review_after_slice": "2.2"
+  },
+  "slices": [
+    {
+      "slice": "gate",
+      "commit": "eff89a3",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 0,
+        "minutes": 0.1
+      },
+      "gate": {
+        "checks": 14,
+        "sec": 0.28,
+        "fired": []
+      },
+      "caught": [],
+      "waste": [],
+      "note": "책임 게이트 도입 — 일부러 어긴 사본 3개(Model→ViewModel, View→View, 셸 +2 var +1 function) 모두 잡음"
+    },
+    {
+      "slice": "E3·E4·E6",
+      "commit": "071a67b",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 8.4
+      },
+      "gate": {
+        "checks": 15,
+        "sec": 0.3,
+        "fired": [
+          {
+            "rule": "shell-ratchet",
+            "verdict": "noise",
+            "minutes": 3,
+            "why": "새 모듈을 붙이는 var EP = HD.viewEdgePan.mount(…) 한 줄을 비대로 셈",
+            "fix": "붙이는 줄은 세지 않게 규칙을 다듬음"
+          }
+        ]
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "E3·E4·E6 실패 테스트 3개 먼저(빨강 확인) → 고침"
+        }
+      ],
+      "waste": [],
+      "note": ""
+    },
+    {
+      "slice": "2.5a",
+      "commit": "07d7ccb",
+      "numbered": false,
+      "tests": {
+        "full": 2,
+        "area": 0,
+        "module": 1,
+        "minutes": 24.1
+      },
+      "gate": {
+        "checks": 17,
+        "sec": 0.3,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "트리거 끄는 중 Esc 뒤 놓을 때까지 판이 밀림"
+        },
+        {
+          "by": "full",
+          "what": "삭제한 카드가 연결 강조 상태라 흐려지지 않음(test_pick_cards_selection_bar)"
+        }
+      ],
+      "waste": [
+        {
+          "what": "하위 조각인데 두 번째 전체 실행 + 편집 모듈 실행",
+          "minutes": 15,
+          "fix": "하위 조각은 영역(-m)만, 실패 뒤엔 --lf, 전체는 번호 조각 끝 1회"
+        },
+        {
+          "what": "첫 전체 실행(9분) 대신 영역이면 됐음 — 실패 7개 중 6개가 지운 동작(Shift+클릭·Ctrl+클릭)에 묶인 옛 테스트",
+          "minutes": 6,
+          "fix": "큰 실행 전 바꾼 선택자·키를 tests/ 에서 grep"
+        }
+      ],
+      "note": "test_move_tool_moves_card 4px 흔들림 1회(따로 3회 통과) — 새로고침 직후 자리 재기 타이밍"
+    },
+    {
+      "slice": "2.5b",
+      "commit": "(이번)",
+      "numbered": false,
+      "tests": {
+        "full": 2,
+        "area": 0,
+        "minutes": 19.2
+      },
+      "gate": {
+        "checks": 18,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "선 굵기 calc 에 단위가 없어 브라우저가 px 를 계산 못 함"
+        },
+        {
+          "by": "full",
+          "what": "선 투명도 transition 이 멈춰 연결 보기에서 다른 선이 흐려지지 않음(옛 test_shift_click_focus 가 잡음)"
+        }
+      ],
+      "waste": [
+        {
+          "what": "하위 조각인데 두 번째 전체 실행",
+          "minutes": 9,
+          "fix": "영역(unit or flow or links or tools) + --lf"
+        },
+        {
+          "what": "첫 전체 실행(10분) 대신 영역이면 됐음 — 실패 5개 중 4개가 지운 #arrows·A 키·안내 문구에 묶인 옛 테스트",
+          "minutes": 6,
+          "fix": "큰 실행 전 grep"
+        }
+      ],
+      "note": "첫 전체 실행이 진짜 버그 1개(transition)도 잡았다 — 전체를 아예 빼면 안 되고, 번호 조각 끝 1회는 남긴다"
+    }
+  ]
+}
