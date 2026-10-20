@@ -43,47 +43,102 @@ def seed_notes(pg, n):
     return key
 
 
-# ---------------------------------------------------------------- 1단계: 메모 패널 드롭다운 + 긴 목록 스크롤
-def test_notes_dropdown_scrolls_and_collapses(epage):
+# ---------------------------------------------------------------- 메모 패널(오른쪽 도크) + 긴 목록 스크롤
+def test_notes_panel_in_dock_scrolls(epage):
     key = seed_notes(epage, 18)
     epage.wait_for_selector("#notes:not([hidden])")
-    assert epage.get_attribute("#ntoggle", "aria-expanded") == "true"
-    vh = epage.viewport_size["height"]
-    pb = epage.locator("#notes").bounding_box()
-    assert pb["height"] <= vh * 0.6 + 1, ("메모가 많아도 패널은 화면의 60% 안", pb["height"])
-    lst = epage.locator("#nlist")
-    assert epage.evaluate("(() => { const l = document.getElementById('nlist'); return l.scrollHeight > l.clientHeight + 20; })()")
+    assert epage.evaluate("!!document.getElementById('notes').closest('#dock')"), "메모 목록은 오른쪽 도크 안"
+    body = "document.getElementById('notes').closest('.dk-body')"
+    assert epage.evaluate(f"(() => {{ const l = {body}; return l.scrollHeight > l.clientHeight + 20; }})()")
     cam0 = epage.evaluate("document.getElementById('stage').style.transform")
-    lb = lst.bounding_box()
-    epage.mouse.move(lb["x"] + lb["width"] / 2, lb["y"] + lb["height"] / 2)
+    lb = epage.locator("#nlist").bounding_box()
+    epage.mouse.move(lb["x"] + lb["width"] / 2, min(lb["y"] + 60, epage.viewport_size["height"] - 60))
     for _ in range(30):
         epage.mouse.wheel(0, 400)
     epage.wait_for_timeout(200)
-    at_end = epage.evaluate("(() => { const l = document.getElementById('nlist'); return l.scrollTop + l.clientHeight >= l.scrollHeight - 2; })()")
-    assert at_end, "휠로 목록 끝까지 내려간다"
+    assert epage.evaluate(f"(() => {{ const l = {body}; return l.scrollTop + l.clientHeight >= l.scrollHeight - 2; }})()"), "휠로 목록 끝까지 내려간다"
     assert epage.evaluate("document.getElementById('stage').style.transform") == cam0, "목록 위 휠은 판을 움직이지 않는다"
-    assert epage.locator("#nsend").is_visible()
+    assert epage.locator("#nsend").is_visible(), "보내기는 아래에 붙어 늘 보인다"
+    assert epage.text_content('#dock .dk-tab[data-p="notes"] .dk-cnt') == "18", "탭에 메모 수"
     ESHOTS.mkdir(parents=True, exist_ok=True)
     epage.screenshot(path=str(ESHOTS / "1-notes-open-scrolled.png"))
-
-    epage.click("#ntoggle")
-    assert epage.get_attribute("#ntoggle", "aria-expanded") == "false"
-    assert not lst.is_visible()
-    assert epage.locator("#nsend").is_visible(), "접어도 보내기는 남는다"
-    assert "18" in epage.text_content("#ncount")
-    assert epage.locator("#notes").bounding_box()["height"] < 140
-    epage.wait_for_timeout(250)
-    epage.screenshot(path=str(ESHOTS / "1-notes-collapsed.png"))
-    reload(epage)
-    assert epage.get_attribute("#ntoggle", "aria-expanded") == "false", "접힌 상태가 새로고침 뒤에도"
-    assert epage.evaluate("Object.keys(localStorage).some(k => k.startsWith('hd-canvas-prefs') && localStorage.getItem(k).includes('notes'))") is False, "prefs 에 넣지 않는다(normalize 가 버림)"
-    epage.click("#ntoggle")
-    assert epage.get_attribute("#ntoggle", "aria-expanded") == "true" and lst.is_visible()
     epage.evaluate("(k) => localStorage.removeItem(k)", key)
     reload(epage)
+    assert epage.is_hidden("#notes") and epage.is_visible("#pNotes .dkp-empty"), "메모가 없으면 빈 안내"
 
 
-# ---------------------------------------------------------------- 2단계: 도구 막대 · V 로 카드 옮기기 (4B · 6A)
+# ---------------------------------------------------------------- 오른쪽 패널 도크: 합치기·떼기·띄우기·크기·접기·닫기·저장
+def tab_box(pg, pid, where="#dock"):
+    return pg.locator(f'{where} .dk-tab[data-p="{pid}"]').bounding_box()
+
+
+def drag_to(pg, box, x, y):
+    pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    pg.mouse.down()
+    pg.mouse.move(box["x"] + box["width"] / 2 + 8, box["y"] + box["height"] / 2 + 8, steps=3)
+    pg.mouse.move(x, y, steps=8)
+    pg.mouse.up()
+    pg.wait_for_timeout(120)
+
+
+def dock_state(pg):
+    return pg.evaluate("JSON.parse(localStorage.getItem('hd-dock') || 'null')")
+
+
+def test_dock_merge_split_float_resize_collapse_persist(epage):
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+    sw = lambda: epage.evaluate("getComputedStyle(document.body).getPropertyValue('--dockw').trim()")
+    assert sw() == "300px" and epage.locator("#dock .dk-g").count() == 3, "기본: 세 묶음 · 너비 300"
+    right = epage.evaluate("document.getElementById('screens').getBoundingClientRect().right")
+    assert abs(right - epage.evaluate("document.getElementById('dock').getBoundingClientRect().left")) <= 1, "도크가 판을 밀어 좁힌다(겹치지 않음)"
+    # 합치기: 메모 탭 → 첫 묶음 탭 줄
+    t0 = epage.locator("#dock .dk-g").first.locator(".dk-tabs").bounding_box()
+    drag_to(epage, tab_box(epage, "notes"), t0["x"] + t0["width"] - 70, t0["y"] + t0["height"] / 2)
+    assert dock_state(epage)["groups"][0]["tabs"] == ["links", "notes"] and dock_state(epage)["groups"][0]["active"] == "notes"
+    assert epage.evaluate("!!document.getElementById('pNotes').closest('.dk-g[data-g=\"0\"]')"), "합친 묶음에 메모 패널"
+    # 띄우기: 메모 탭 → 판 위
+    drag_to(epage, tab_box(epage, "notes"), 500, 400)
+    st = dock_state(epage)
+    assert len(st["floats"]) == 1 and st["floats"][0]["tabs"] == ["notes"], st
+    assert epage.evaluate("!!document.getElementById('pNotes').closest('.dk-f')"), "떠 있는 창에 메모 패널"
+    f0 = epage.locator(".dk-f").bounding_box()
+    # 떠 있는 창 옮기기(탭 줄 빈 곳) · 크기(모서리)
+    g = epage.locator(".dk-f .dk-grip").bounding_box()
+    drag_to(epage, g, g["x"] + g["width"] / 2 - 100, g["y"] + g["height"] / 2 + 50)
+    f1 = epage.locator(".dk-f").bounding_box()
+    assert abs((f1["x"] - f0["x"]) + 100) <= 3 and abs((f1["y"] - f0["y"]) - 50) <= 3, (f0, f1)
+    rs = epage.locator(".dk-f .dk-rs").bounding_box()
+    drag_to(epage, rs, rs["x"] + 60, rs["y"] + 40)
+    f2 = epage.locator(".dk-f").bounding_box()
+    assert f2["width"] > f1["width"] + 40 and f2["height"] > f1["height"] + 25, (f1, f2)
+    # 도크 너비
+    e = epage.locator("#dock .dk-edge").bounding_box()
+    drag_to(epage, e, e["x"] - 80, e["y"] + 200)
+    assert 370 <= int(sw()[:-2]) <= 395, sw()
+    # 닫기 · 다시 열기
+    epage.hover('#dock .dk-tab[data-p="show"]')
+    epage.click('#dock .dk-tab[data-p="show"] .dk-x')
+    assert "show" in dock_state(epage)["closed"] and epage.locator('#dock .dk-tab[data-p="show"]').count() == 0
+    epage.click("#dock .dk-more")
+    epage.click('.dk-menu button[data-p="show"]')
+    assert "show" not in dock_state(epage)["closed"] and epage.is_visible("#lgDdb"), "다시 열면 보인다"
+    # 접기 → 아이콘 줄, 아이콘 누르면 펴짐
+    epage.click("#dock .dk-fold")
+    assert sw() == "44px" and epage.locator("#dock .dk-sb").count() >= 2
+    assert epage.is_visible(".dk-f"), "접어도 떠 있는 창은 남는다"
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    epage.screenshot(path=str(ESHOTS / "s1-dock-folded-float.png"))
+    epage.click('#dock .dk-sb[data-p="links"]')
+    assert not dock_state(epage)["collapsed"] and sw() != "44px"
+    # 새로고침 뒤에도 같은 배치
+    before = dock_state(epage)
+    reload(epage)
+    assert dock_state(epage) == before and epage.locator(".dk-f").count() == 1
+    epage.screenshot(path=str(ESHOTS / "s1-dock-after-reload.png"))
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+
 def visible_cover(pg, skip=()):
     p = pg.evaluate("""(skip) => { const r = document.getElementById('screens').getBoundingClientRect();
         for (const c of document.querySelectorAll('#rows .card .cover')) { const id = c.closest('.card').dataset.id; if (skip.includes(id)) continue;
@@ -1198,8 +1253,10 @@ def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
     dpage.keyboard.press("l")
     s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none' && n.dataset.to !== 'language');
         const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()""")
-    t = dpage.locator('.card[data-id="language"] .cover').bounding_box()
-    drag(dpage, s, t["x"] + t["width"] / 2 - s["x"], t["y"] + t["height"] / 2 - s["y"])
+    t, pr = dpage.locator('.card[data-id="language"] .cover').bounding_box(), dpage.locator("#screens").bounding_box()
+    tx = min(t["x"] + t["width"] / 2, pr["x"] + pr["width"] - 30)        # 판 오른쪽은 도크 — 보이는 부분에 놓는다
+    assert tx > t["x"] + 10, ("도착 카드가 판 안에 보여야", t, pr)
+    drag(dpage, s, tx - s["x"], t["y"] + t["height"] / 2 - s["y"])
     dpage.wait_for_timeout(250)
     cls = lk_to(dpage, "language")
     assert cls and not any("pd" in c for c in cls), ("기존 연결이 섞인 그룹의 선은 실선", cls)

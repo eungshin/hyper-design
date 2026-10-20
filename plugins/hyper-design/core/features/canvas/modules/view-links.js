@@ -253,7 +253,7 @@ function mount(ctx) {
     }
     dispatch({type: 'links', links: m});
   });
-  pane.addEventListener('mousemove', function (e) {
+  function onHover(e) {
     var lk = state.links;
     if (!lk || !curView || ctx.isDragging()) return;
     var el = e.target, k = null, vis = curView.visible, cl = function (s) { return el && el.closest ? el.closest(s) : null; };
@@ -272,7 +272,10 @@ function mount(ctx) {
     }
     if (k != null && !vis[k]) k = null;
     dispatch({type: 'hover', k: k});
-  });
+  }
+  pane.addEventListener('mousemove', onHover);
+  $('#legend').addEventListener('mousemove', onHover);          // 범례는 판 밖(오른쪽 도크)이라 따로
+  $('#legend').addEventListener('mouseleave', function () { if (state.links) dispatch({type: 'hover', k: null}); });
   /* 태그 이름 바꾸기(두 번 누르기): 이 이동이 무슨 맥락인지 — 버튼 글은 그대로. 비우면 버튼 글로 돌아간다 */
   $('#lkl').addEventListener('dblclick', function (e) {
     var n = e.target.closest && e.target.closest('.ltag');
@@ -335,10 +338,10 @@ function mount(ctx) {
     setTimeout(function () { if (el.classList.contains('is-closing')) { el.classList.remove('is-closing'); el.hidden = true; } }, cssMs('--dropdown-close-dur', 150));
   }
   function ddOpen() { return !dd.hidden && !dd.classList.contains('is-closing'); }
-  function openDropdown() {                          // 위로 열림(버튼 위 6px), 화면 고정 좌표
+  function openDropdown() {                          // 아래로 열림(버튼 아래 6px), 화면 고정 좌표
     closeMenu(sw); renderStyle();
     var r = ddb.getBoundingClientRect();
-    dd.style.left = Math.max(8, Math.min(innerWidth - 222, r.left)) + 'px'; dd.style.bottom = (innerHeight - r.top + 6) + 'px';
+    dd.style.left = Math.max(8, Math.min(innerWidth - 222, r.left)) + 'px'; dd.style.top = (r.bottom + 6) + 'px';   // 오른쪽 도크 위쪽에 있으니 아래로
     openMenu(dd); ddb.setAttribute('aria-expanded', 'true');
   }
   function closeDropdown() { closeMenu(dd); ddb.setAttribute('aria-expanded', 'false'); }

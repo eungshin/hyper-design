@@ -865,7 +865,7 @@ def test_v3_main_flow_dashed(gpage):
     shift_click(gpage, "pass")
     gpage.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
     assert gpage.evaluate("document.getElementById('lgFlow').checked")
-    assert gpage.text_content("#legend .lgflow").strip() == "주요 흐름 (회색 점선)"
+    assert gpage.text_content("#pShow .lgflow").strip() == "주요 흐름 (회색 점선)"
     gpage.locator("#lgFlow").uncheck()
     assert vis() == 0 and gpage.get_attribute("#arrows", "aria-pressed") == "false"
     assert gpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
@@ -1014,7 +1014,7 @@ def test_v3_line_style(gpage):
     V3SHOTS.mkdir(parents=True, exist_ok=True)
     gpage.screenshot(path=str(V3SHOTS / "p3-a-dropdown.png"))
     dd, bt = gpage.locator("#lgDd").bounding_box(), gpage.locator("#lgDdb").bounding_box()
-    assert dd["y"] + dd["height"] <= bt["y"], "위로 열림"
+    assert dd["y"] >= bt["y"] + bt["height"], "아래로 열림(도크 위쪽)"
     gpage.click('#lgDd button[data-preset="deep"]')
     gpage.wait_for_timeout(250)
     assert gpage.is_hidden("#lgDd")
@@ -1066,7 +1066,7 @@ def test_v3_line_style(gpage):
     r2 = [s for _, s, _, _ in gpage.evaluate(STROKES_JS)]
     assert r1 != r2 and gpage.is_visible("#lgDd")
     # 스타일 줄엔 설명 문장이 없다(요소마다 자기 글 40자 이하)
-    long = gpage.evaluate("""() => [...document.querySelectorAll('#lgStyle, #lgStyle *, #legend .lgflow, #legend .lgflow *, #lgDd *, #lgSw, #lgSw *')]
+    long = gpage.evaluate("""() => [...document.querySelectorAll('#lgStyle, #lgStyle *, #pShow .lgflow, #pShow .lgflow *, #lgDd *, #lgSw, #lgSw *')]
         .map(e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(' ')).filter(t => t.length > 40)""")
     assert not long, long
     gpage.evaluate("localStorage.removeItem('hd-canvas-prefs')")

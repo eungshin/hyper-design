@@ -17,12 +17,12 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
-var PANELS = ['links', 'style', 'notes', 'hidden'];
-var LABEL = {links: '연결', style: '색·선', notes: '메모', hidden: '숨긴 화면'};
+var PANELS = ['links', 'show', 'notes', 'hidden'];
+var LABEL = {links: '연결', show: '표시', notes: '메모', hidden: '숨긴 화면'};
 
 function defaults() {
   return {v: V, w: W0, collapsed: false, closed: [], floats: [],
-          groups: [{tabs: ['links', 'style'], active: 'links', h: 1}, {tabs: ['notes', 'hidden'], active: 'notes', h: 1}]};
+          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show'], active: 'show', h: 0.6}, {tabs: ['notes', 'hidden'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
 }
 function clampW(w) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : W0; }
 function okH(h) { return typeof h === 'number' && isFinite(h) && h > 0 ? h : 1; }

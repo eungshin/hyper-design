@@ -162,8 +162,7 @@ svg.lks path.lk.dim{opacity:.15}
 .lnum{position:absolute;left:10px;top:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ring);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
 .nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
 /* 범례(연결 보기 중에만): 쌍마다 켜고 끄기 · 색 · 굵기 */
-#legend{position:absolute;right:12px;bottom:10px;z-index:4;width:360px;max-height:calc(100% - 20px);overflow:auto;background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.14);padding:12px 14px;font-size:13px;cursor:default;touch-action:auto;-webkit-user-select:none;user-select:none}
-#legend[hidden],body.modal-open #legend{display:none}
+#legend[hidden]{display:none}
 #legend .lgt{margin:0 0 8px;font-size:13px;font-weight:700;color:#1c1c1c}
 #legend .lgrow{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;cursor:pointer}
 #legend .lgrow:hover,#legend .lgrow.em{background:#F4F5F3}
@@ -173,13 +172,13 @@ svg.lks path.lk.dim{opacity:.15}
 #legend .lgtx{flex:1;line-height:1.35;color:#333}
 #legend .lgtx i{font-style:normal;color:#777}
 #legend input[type=checkbox]{accent-color:#444;width:16px;height:16px}
-#legend .lgstyle{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#777}
-#legend .lgddw{display:flex;align-items:center;gap:6px}
-#legend .lgddb{display:flex;align-items:center;gap:6px;border:1.5px solid #e2e2de;border-radius:8px;background:#fff;padding:4px 8px;cursor:pointer;font-size:12px;color:#1c1c1c;white-space:nowrap}
+#pShow .lgstyle{display:flex;align-items:center;gap:8px;color:#777}
+#pShow .lgddw{display:flex;align-items:center;gap:6px}
+#pShow .lgddb{display:flex;align-items:center;gap:6px;border:1.5px solid #e2e2de;border-radius:8px;background:#fff;padding:4px 8px;cursor:pointer;font-size:12px;color:#1c1c1c;white-space:nowrap}
 .sw{display:inline-flex;gap:2px}.sw i{width:9px;height:9px;border-radius:50%}
-#legend .lgw{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
-#legend .lgw input{flex:1;min-width:0}
-#legend .lgw b{font-size:12px;color:#444;min-width:40px;font-variant-numeric:tabular-nums}
+#pShow .lgw{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+#pShow .lgw input{flex:1;min-width:0}
+#pShow .lgw b{font-size:12px;color:#444;min-width:40px;font-variant-numeric:tabular-nums}
 .lgdd{position:fixed;z-index:30;background:#fff;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:5px;width:214px;font-size:12px}
 .lgdd[hidden],.lgsw[hidden]{display:none}
 .lgdd button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;background:#fff;border-radius:7px;padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;text-align:left}
@@ -201,7 +200,7 @@ svg.lks path.lk.dim{opacity:.15}
 #tmenu .tplay{grid-column:2;grid-row:1 / span 3;min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:13px;font-weight:600;cursor:pointer}
 #tmenu .tplay:hover{background:#F5F5F2}
 #tmenu .toff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;padding:9px 4px 2px;cursor:pointer}
-#legend .lgflow{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#555;cursor:pointer}
+#pShow .lgflow{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;color:#555;cursor:pointer}
 
 /* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
 .pres{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
@@ -293,7 +292,49 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
 .cm .cmh.sub{font-size:11.5px;color:#999;padding-top:2px}
 #hidl .hrow{display:flex;align-items:center;gap:8px;padding:4px 4px 4px 8px}
 #hidl .hrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#hidl .hrow button{width:auto;flex:none;padding:5px 8px;border:1px solid #dcdcd7}
+#hidl .hrow button,#hidl > button{width:auto;flex:none;padding:5px 8px;border:1px solid #dcdcd7;border-radius:7px;background:#fff;font:600 12px system-ui,sans-serif;cursor:pointer}
+#hidl .cmh{padding:2px 4px 6px;font-size:12px;color:#777}#hidl hr{border:0;border-top:1px solid #eee;margin:6px 0}
+/* ---------- 오른쪽 패널 도크(modules/dock.js 배치 · modules/view-dock.js 그리기) — 판을 밀어 좁힌다 ---------- */
+body{--dockw:0px}
+#screens{right:var(--dockw)}
+#modal{right:var(--dockw)}
+#dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
+body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{display:none}
+#dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#dock.folded{width:44px;align-items:center;padding-top:4px;gap:4px}
+#dklayer{position:absolute;inset:0;right:var(--dockw);z-index:24;pointer-events:none}
+.dk-edge{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}
+.dk-edge:hover,.dk-edge.dk-act{background:linear-gradient(90deg,transparent 3px,#9a9a95 3px,#9a9a95 5px,transparent 5px)}
+.dk-g{display:flex;flex-direction:column;min-height:80px;overflow:hidden}
+.dk-split{flex:none;height:7px;background:#ECECE8;cursor:ns-resize;border-top:1px solid #e2e2de;border-bottom:1px solid #e2e2de}
+.dk-split:hover,.dk-split.dk-act{background:#dcdcd7}
+.dk-tabs{display:flex;align-items:flex-end;gap:2px;height:36px;padding:0 4px 0 6px;background:#F4F4F1;border-bottom:1px solid #e6e6e2;flex:none}
+.dk-grip{flex:1;align-self:stretch}
+.dk-f .dk-grip{cursor:move}
+.dk-tabs.dk-drop,#dock.dk-drop{box-shadow:inset 0 0 0 2px #8a8a85}.dk-tabs.dk-drop{background:#ECECE8}
+.dk-tab{display:flex;align-items:center;gap:5px;height:30px;padding:0 8px;border:0;border-radius:8px 8px 0 0;background:none;cursor:pointer;color:#6b6b66;font:600 13px system-ui,-apple-system,'Malgun Gothic',sans-serif;white-space:nowrap;touch-action:none}
+.dk-tab:hover{background:#ecece8}
+.dk-tab.on{background:#fff;color:#1c1c1c;box-shadow:0 -1px 0 #e6e6e2,1px 0 0 #e6e6e2,-1px 0 0 #e6e6e2;position:relative;top:1px}
+.dk-tl{display:none}.dk-tab.on .dk-tl{display:inline}
+.dk-x{width:16px;height:16px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:#999;font-size:13px;visibility:hidden}
+.dk-tab.on .dk-x,.dk-tab:hover .dk-x{visibility:visible}.dk-x:hover{background:#e2e2de;color:#333}
+.dk-cnt{min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:10px;font-weight:700;line-height:16px;text-align:center}
+.dk-ib{width:26px;height:26px;align-self:center;border:0;border-radius:6px;background:none;color:#666;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.dk-ib:hover{background:#e8e8e4}.dk-ib:disabled{opacity:.35;cursor:default;background:none}
+.dk-sb{position:relative;width:34px;height:34px;border:0;border-radius:8px;background:none;color:#444;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.dk-sb:hover{background:#F1F1EE}.dk-sb svg{width:20px;height:20px}.dk-sb .dk-cnt{position:absolute;right:-2px;top:-2px}
+.dk-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.dkp{padding:10px 12px;min-height:100%;display:flex;flex-direction:column}
+.dkp-empty{margin:4px 0;color:#999;font-size:12.5px}
+#legend:not([hidden]) ~ .dkp-empty,#notes:not([hidden]) ~ .dkp-empty,#hidl:not([hidden]) ~ .dkp-empty{display:none}
+#pNotes{padding:0}#pNotes .dkp-empty{padding:10px 12px}
+.dk-f{position:absolute;pointer-events:auto;background:#fff;border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.26);display:flex;flex-direction:column;overflow:hidden;font-size:13px;cursor:default}
+.dk-f .dk-tabs{border-radius:10px 10px 0 0}
+.dk-rs{position:absolute;right:2px;bottom:2px;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#bbb 50%,#bbb 58%,transparent 58%,transparent 70%,#bbb 70%,#bbb 78%,transparent 78%)}
+.dk-ghost{position:fixed;z-index:60;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:8px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);font:700 13px system-ui,sans-serif;pointer-events:none;opacity:.94}
+.dk-menu button{gap:8px}
+.lgi{display:flex;color:#666}.lgi svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+#pShow .lgw{margin-top:8px}
 
 /* ---------- 주석 달기 · 메모 ---------- */
 #mpins{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
@@ -312,15 +353,9 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
 #pop .seg button[aria-pressed="true"]{background:#fff;color:#1c1c1c;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .nbtn{min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
 .nbtn.pri{background:var(--ui-primary);border-color:var(--ui-primary);color:#fff}
-#notes{position:fixed;z-index:30;right:12px;top:72px;width:320px;max-height:min(60vh,calc(100vh - 96px));display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:14px}
+#notes{display:flex;flex-direction:column;flex:1;font-size:14px}
 #notes[hidden]{display:none}
-#notes h2{font-size:15px;margin:0;padding:12px 14px 6px}
-#notes h2 button{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
-#notes .ncaret{margin-left:auto;width:8px;height:8px;border-right:2px solid #888;border-bottom:2px solid #888;transform:translateY(2px) rotate(-135deg);transition:transform .15s}
-#notes.collapsed .ncaret{transform:translateY(-2px) rotate(45deg)}
-#notes.collapsed h2{padding-bottom:10px}
-#notes.collapsed ol,#notes.collapsed .nmsg{display:none}
-#notes ol{list-style:none;margin:0;padding:0 8px;overflow:auto;flex:1;min-height:0;overscroll-behavior:contain}
+#notes ol{list-style:none;margin:0;padding:0 8px}
 #notes li{padding:8px 6px;border-top:1px solid #eee}
 #notes li.sent{opacity:.55}
 #notes .nn{font-weight:700;color:var(--ui-badge);margin-right:4px}
@@ -329,7 +364,7 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
 #notes .nnote{margin:2px 0}
 #notes .nact{display:flex;gap:6px;margin-top:4px}
 #notes .nact .nbtn{min-height:30px;font-size:12px;padding:0 8px}
-#notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee}
+#notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
 #modal .mtitle{position:absolute;top:max(10px,env(safe-area-inset-top));left:16px;right:96px;color:#fff;font-size:15px;font-weight:600;min-height:44px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* hd-motion */
@@ -375,15 +410,39 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
       <button type="button" class="tb" id="thid" data-tip="숨긴 화면|눌러서 목록을 열고 다시 보이게 해요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
     </nav>
     <svg id="ghost" aria-hidden="true"></svg>
-    <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div>
-      <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw">색 <button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="bottom-left" hidden></span></span>
-        <label class="lgw">굵기 <input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5"><b id="lgWv">2.5px</b></label></div>
-      <label class="lgflow"><input type="checkbox" id="lgFlow" checked> 주요 흐름 (회색 점선)</label>
-      <div class="lgsw t-dropdown" id="lgSw" hidden><div class="g" id="lgSwG"></div><label class="x">직접 고르기 <input type="color" id="lgSwC"></label></div></div>
   </section>
   <section class="pane" id="foundation" hidden><iframe class="doc" title="Foundation — 색·글자·여백" data-src="foundation.html"></iframe></section>
   <section class="pane" id="components" hidden><iframe class="doc" title="Components — 이 앱이 쓴 부품" data-src="components.html"></iframe></section>
+  <aside id="dock" class="dk" aria-label="패널"></aside>
+  <div id="dklayer"></div>
 </main>
+<div id="dkhold" hidden>
+  <div class="dkp" id="pLinks" data-panel="links">
+    <div id="legend" hidden aria-label="연결 범례"><div class="lgt" id="lgTitle"></div><div id="lgRows"></div></div>
+    <p class="dkp-empty">Shift+클릭으로 한 화면의 연결을 봐요</p>
+  </div>
+  <div class="dkp" id="pShow" data-panel="show">
+    <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw"><span class="lgi" title="선 색"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></svg></span><button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false" aria-label="선 색"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="top-left" hidden></span></span></div>
+    <label class="lgw"><span class="lgi" title="선 굵기"><svg viewBox="0 0 24 24"><path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2.2"/><path d="M4 18h16" stroke-width="3.6"/></svg></span><input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5" aria-label="선 굵기"><b id="lgWv">2.5px</b></label>
+    <label class="lgflow"><input type="checkbox" id="lgFlow" checked> 주요 흐름 (회색 점선)</label>
+    <div class="lgsw t-dropdown" id="lgSw" hidden><div class="g" id="lgSwG"></div><label class="x">직접 고르기 <input type="color" id="lgSwC"></label></div>
+  </div>
+  <div class="dkp" id="pNotes" data-panel="notes">
+    <div id="notes" hidden aria-label="메모 목록">
+      <ol id="nlist"></ol>
+      <div class="nfoot">
+        <button class="nbtn pri" id="nsend">보내기</button>
+        <button class="nbtn" id="nclear" hidden>보낸 것 지우기</button>
+        <div class="nmsg" id="nmsg"></div>
+      </div>
+    </div>
+    <p class="dkp-empty">메모가 없어요</p>
+  </div>
+  <div class="dkp" id="pHidden" data-panel="hidden">
+    <div id="hidl" aria-label="숨긴 화면" hidden></div>
+    <p class="dkp-empty">숨긴 화면이 없어요</p>
+  </div>
+</div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="mtitle" id="mtitle"></div>
   <button class="close" id="mclose">닫기</button>
@@ -395,7 +454,6 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
 <div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="memo">메모</button><button type="button" data-act="hide">숨기기</button><button type="button" data-act="del">삭제</button></div>
 <div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소</div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
-<div id="hidl" class="cm t-dropdown" data-origin="top-left" role="dialog" aria-label="숨긴 화면" hidden></div>
 <div id="tmenu" class="t-dropdown" data-origin="top-right" hidden role="dialog" aria-label="전환"></div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
   <div class="ptitle" id="ptitle"></div>
@@ -407,15 +465,6 @@ svg.lks path.lk.cutting{stroke:var(--ui-danger)!important;opacity:1!important;st
     <button class="nbtn pri" id="padd" title="Ctrl+Enter">추가</button>
   </div>
 </div>
-<aside id="notes" hidden aria-label="메모 목록">
-  <h2><button type="button" id="ntoggle" aria-expanded="true" aria-controls="nlist" title="메모 목록 접기 · 펴기">메모 <span id="ncount"></span><span class="ncaret" aria-hidden="true"></span></button></h2>
-  <ol id="nlist"></ol>
-  <div class="nfoot">
-    <button class="nbtn pri" id="nsend">보내기</button>
-    <button class="nbtn" id="nclear" hidden>보낸 것 지우기</button>
-    <div class="nmsg" id="nmsg"></div>
-  </div>
-</aside>
 <noscript id="hd-links"></noscript>
 <script id="hd-data" type="application/json">{}</script>
 <!-- hd-modules -->
@@ -775,7 +824,7 @@ pane.addEventListener('click', function (e) {
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
   if ((e.ctrlKey || e.metaKey) && tool === 'move' && cl('.card') && !cl('.pres')) { e.preventDefault(); e.stopPropagation(); togglePick(cl('.card').dataset.id); return; }   // 이동 도구 Ctrl+클릭 = 여러 장 고르기(결정 2)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
-  if (cl('#legend') || cl('#tools')) return;       // 범례·도구 막대 안 조작은 연결 보기를 끄지 않는다
+  if (cl('#tools')) return;                        // 도구 막대 안 조작은 연결 보기를 끄지 않는다(범례는 도크라 판 밖)
   if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
   var mc = cl('.card');
   if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
@@ -864,7 +913,7 @@ modal.addEventListener('click', function (e) { if (e.target === modal || e.targe
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();
-  if (!cmenu.hidden || !hidl.hidden) { closeCmenu(); closeHidl(); return; }   // 떠 있는 메뉴가 먼저
+  if (!cmenu.hidden) { closeCmenu(); return; }   // 떠 있는 메뉴가 먼저
   if (pickT) { endPick(); return; }
   if (!tedit.hidden) { closeTedit(false); return; }
   if (!pop.hidden) { hidePop(); return; }
@@ -960,6 +1009,29 @@ var VM = HD.viewMotion.mount({VL: VL, pane: pane, rowsEl: rowsEl, CARD: CARD, $:
                               setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); },
                               openModal: function (file, title) { openModal(file, title); }, closeModal: function () { closeModal(); },
                               modalOpen: function () { return !modal.hidden; }, mframe: mframe});
+// 오른쪽 패널 도크 View(modules/view-dock.js · 배치 모델 modules/dock.js) — 범례·표시·메모·숨긴 화면 패널을 옮겨 붙인다(id 그대로)
+var DOCK_ICON = {
+  links: '<svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 6H13a3 3 0 013 3v6.5"/><path d="M13.5 13l2.5 2.5 2.5-2.5"/></svg>',
+  show: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="1.2"/><path d="M4 7h7" stroke-width="3"/><path d="M4 12h11" stroke-width="2.2"/><path d="M4 17h5" stroke-width="3.6"/></svg>',
+  notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
+  hidden: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg>'};
+var VD = null;
+VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), hidden: $('#pHidden')},
+                        title: function (id) { return {count: id === 'notes' ? (notes || []).length : id === 'hidden' ? Object.keys(hidden).length : 0}; },
+                        getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
+                        onLayout: function (st) {
+                          var w = st.collapsed || !st.groups.length ? 44 : st.w;
+                          if (document.body.style.getPropertyValue('--dockw') === w + 'px') return;
+                          document.body.style.setProperty('--dockw', w + 'px');
+                          if (typeof scheduleVisible === 'function') scheduleVisible();
+                        }});
+$('#legend').addEventListener('click', function (e) {   // 범례 줄 Ctrl+클릭 = 그 대상으로 카메라(범례가 판 밖이라 판의 클릭 처리 대신)
+  if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+if (window.MutationObserver) new MutationObserver(function () {   // 연결 보기가 범례를 채우면 연결 탭을 앞으로
+  if (!$('#legend').hidden && !VD.isShown('links')) VD.activate('links');
+}).observe($('#legend'), {attributes: true, attributeFilter: ['hidden']});
 window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycleNext, routeCurve: HD.route.routeCurve, plan: HD.route.plan,
                    deriveView: HD.focus.deriveView, LINK_COLORS: HD.focus.LINK_COLORS, camera: HD.camera, style: HD.lineStyle,
                    view: function () { return {z: z, tx: tx, ty: ty}; }};
@@ -988,7 +1060,8 @@ function renderHidden() {
   var n = Object.keys(hidden).length;
   $('#thid').hidden = !n; $('#thr').hidden = !n; $('#thidn').textContent = n || '';
   $('#thid').setAttribute('aria-label', '숨긴 화면 ' + n + '개');
-  if (!n) closeHidl(); else if (!hidl.hidden) fillHidl();
+  hidl.hidden = !n; if (n) fillHidl();             // 목록은 도크의 '숨긴 화면' 패널(없으면 빈 안내)
+  if (VD) VD.render();
 }
 function fillHidl() {
   var ids = Object.keys(hidden);
@@ -996,15 +1069,8 @@ function fillHidl() {
     return '<div class="hrow" data-id="' + esc(id) + '"><span>' + esc(titleOf(id)) + '</span><button type="button" data-act="show">보이기</button></div>';
   }).join('') + '<hr><button type="button" data-act="all">모두 보이기</button>';
 }
-function openHidl() {
-  closeCmenu(); fillHidl();
-  var r = $('#tools').getBoundingClientRect();
-  hidl.hidden = false; hidl.classList.add('is-open'); $('#thid').setAttribute('aria-expanded', 'true');
-  hidl.style.left = (r.right + 8) + 'px';
-  hidl.style.top = Math.max(8, Math.min(innerHeight - hidl.offsetHeight - 8, r.top)) + 'px';
-}
-function closeHidl() { if (hidl.hidden) return; hidl.hidden = true; hidl.classList.remove('is-open'); $('#thid').setAttribute('aria-expanded', 'false'); }
-$('#thid').addEventListener('click', function () { if (hidl.hidden) openHidl(); else closeHidl(); });
+function openHidl() { closeCmenu(); VD.activate('hidden'); }   // 도크의 숨긴 화면 패널을 앞으로
+$('#thid').addEventListener('click', openHidl);
 hidl.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;
   if (b.dataset.act === 'all') hide(Object.keys(hidden), false);
@@ -1012,7 +1078,7 @@ hidl.addEventListener('click', function (e) {
 });
 function closeCmenu() { if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
 function openCmenu(x, y, head, items) {            // items: [{label, key?, act()}] · '-' = 구분선 · {head} = 소제목
-  closeHidl(); cmenu.tok = null;
+  cmenu.tok = null;
   cmenu.innerHTML = (head ? '<div class="cmh">' + esc(head) + '</div>' : '') + items.map(function (it, i) {
     return it === '-' ? '<hr>' : it.head ? '<div class="cmh sub">' + esc(it.head) + '</div>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + '</button>';
   }).join('');
@@ -1035,12 +1101,11 @@ cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 
 document.addEventListener('pointerdown', function (e) {   // 밖을 누르면 닫기
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
   if (!cl('#cmenu')) closeCmenu();
-  if (!cl('#hidl') && !cl('#thid')) closeHidl();
 }, true);
-addEventListener('resize', function () { closeCmenu(); closeHidl(); });
+addEventListener('resize', function () { closeCmenu(); });
 pane.addEventListener('contextmenu', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
-  if (cl('#legend') || typing(e)) return;           // 범례·입력 칸은 브라우저 메뉴 그대로
+  if (typing(e)) return;                           // 입력 칸은 브라우저 메뉴 그대로
   e.preventDefault();
   if (cutJust) { cutJust = false; return; }         // 오른쪽 끌기(자르기) 끝 — 메뉴 없음
   if (cl('#tools')) return;
@@ -1328,7 +1393,7 @@ $('textarea', tedit).addEventListener('keydown', function (e) {
 $('textarea', tedit).addEventListener('blur', function () { closeTedit(true); });
 pane.addEventListener('dblclick', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
-  if (cl('#legend') || cl('#tools') || cl('#lkl') || typing(e)) return;
+  if (cl('#tools') || cl('#lkl') || typing(e)) return;
   var ft = cl('.ftitle'), fd = cl('.fdesc'), fp = cl('.pol li');
   if (fp) { e.preventDefault(); editPolicy(fp); return; }
   if (ft) { e.preventDefault(); editCardText(ft, 'title'); return; }
@@ -1541,7 +1606,7 @@ var pop = $('#pop'), notesEl = $('#notes');
 function idOf(file) { return decodeURIComponent(String(file || '').split(/[?#]/)[0].split('/').pop()).replace(/\.html?$/i, ''); }
 function hashStr(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);
-var notes = [];
+var notes = [], notesShown = Infinity;   // notesShown: 탭을 앞으로 올릴지 비교할 지난 메모 수(처음 그릴 땐 올리지 않음)
 try { notes = JSON.parse(localStorage.getItem(NKEY) || '[]') || []; } catch (e) { notes = []; }
 function tgts(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }   // 예전 한 요소 메모도 읽는다
 function popItem(dr, last) {
@@ -1639,7 +1704,8 @@ function drawPins() {
 }
 function renderNotes() {
   notesEl.hidden = !notes.length;
-  $('#ncount').textContent = notes.length ? notes.length + '건' : '';
+  if (VD) { if (notes.length > notesShown) VD.activate('notes'); else VD.render(); }   // 새 메모가 생기면 메모 탭을 앞으로(D3), 아니면 탭 숫자만
+  notesShown = notes.length;
   $('#nlist').innerHTML = notes.map(function (n, i) {
     return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div><span class="nn">' + circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
       ' · ' + esc(n.intent) + (tgts(n).length > 1 ? ' · ' + tgts(n).length + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span></div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
@@ -1736,15 +1802,6 @@ $('#nsend').addEventListener('click', function () {
     })
     .catch(function () { copySend(list, '도우미가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
 });
-// 메모 목록 접기 · 펴기 — 상태는 prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
-var NUI = 'hd-notes-ui';
-function setNotesOpen(open, save) {
-  notesEl.classList.toggle('collapsed', !open);
-  $('#ntoggle').setAttribute('aria-expanded', String(open));
-  if (save) { try { localStorage.setItem(NUI, open ? 'open' : 'closed'); } catch (e) {} }
-}
-(function () { var open = true; try { open = localStorage.getItem(NUI) !== 'closed'; } catch (e) {} setNotesOpen(open, false); })();
-$('#ntoggle').addEventListener('click', function () { setNotesOpen(notesEl.classList.contains('collapsed'), true); });
 $('#nclear').addEventListener('click', function () {
   notes = notes.filter(function (n) { return !n.sent; });
   $('#nmsg').textContent = '';

@@ -14,6 +14,7 @@ AREAS = {
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
     "motion": "카메라·전환 메뉴·움직임 끄기",
     "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
+    "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
 }
 
 BROWSER = {
@@ -26,7 +27,8 @@ BROWSER = {
     "test_typing_guard_blocks_shortcuts": ("input",),
     "test_notes_roundtrip_same_key": ("notes",),
     # test_canvas_edit.py — 편집 기능
-    "test_notes_dropdown_scrolls_and_collapses": ("notes",),
+    "test_notes_panel_in_dock_scrolls": ("notes", "dock"),
+    "test_dock_merge_split_float_resize_collapse_persist": ("dock",),
     "test_toolbar_default_hand_and_keys": ("tools", "input"),
     "test_move_tool_moves_card_and_persists": ("tools", "flow"),
     "test_fit_includes_moved_card_and_drops_stale": ("tools", "input"),
