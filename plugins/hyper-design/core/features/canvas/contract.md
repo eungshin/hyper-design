@@ -16,7 +16,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
-- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`) / View(`view-links`·`view-motion`·`view-dock`·`motion.css`)
+- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`motion.css`)
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pHidden`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
@@ -31,7 +31,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 기계 검사(`tests/test_canvas_modules.py`의 `gate`, unit 층에서 돈다):
 - **책임** — 모듈 머리 주석 첫 줄 = `/* 층 — 맡은 일 */`. 한 줄로 못 쓰면 모듈을 나눈다
 - **협력** — 의존은 아래 층으로만: Model 은 다른 층을 모르고, ViewModel 은 View 를 모른다. View 끼리는 `HD.viewX` 를 직접 부르지 않는다 — 셸이 `mount(ctx)` 로 함수를 건네거나 의도(`dispatch`)로 잇는다
-- **비대 방지** — 템플릿 셸 위쪽 `var`·`function` 수는 `SHELL_MAX` 를 넘지 않는다. 조각이 덩어리를 빼내면 숫자를 내려 고정한다(올리는 수정은 리뷰에서 이유를 적는다)
+- **비대 방지** — 템플릿 셸 위쪽 `var`·`function` 수는 `SHELL_MAX` 를 넘지 않는다(모듈을 붙이는 줄 `var X = HD.x.mount(…)` 은 세지 않는다). 조각이 덩어리를 빼내면 숫자를 내려 고정한다(올리는 수정은 리뷰에서 이유를 적는다)
 
 조각 보고(커밋 전, 사람이 본다):
 - **자율** — 새 상태마다 주인 모듈 하나와 저장 키 하나. 다른 모듈은 그 상태를 읽기만 하거나 의도를 보낸다
@@ -62,6 +62,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `modules/edits.js` | `unit or tools or notes` |
 | `modules/dock.js` · `view-dock.js` · 도크 CSS | `unit or dock or notes` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
+| `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |

@@ -1266,3 +1266,107 @@ def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
     assert "반영 대기" not in dpage.text_content('#lkl .ltag[data-to="language"]')
     dpage.keyboard.press("h")
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 실제 캔버스 피드백 E3·E4·E6 (rework §7-3)
+def sel_sock(pg):
+    return pg.evaluate("(() => { const s = document.querySelector('.sock.selsock'); if (!s) return null; const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()")
+
+
+def test_trigger_click_on_card_shows_its_links_like_shift_click(dpage):
+    """E3: 트리거 도구로 카드(요소)를 누르면 Shift+클릭처럼 그 화면의 연결 보기가 켜지고, 고른 요소와 소켓은 남는다."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 330)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("l")
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.click(x, y)
+    dpage.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
+    dpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
+    assert dpage.evaluate("document.querySelector('.card.focus').dataset.id") == "job"
+    dpage.wait_for_timeout(300)
+    assert sel_sock(dpage), "연결 보기가 그려진 뒤에도 고른 요소의 소켓은 남는다"
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")
+
+
+def test_cutting_a_pending_line_cancels_that_edit(dpage):
+    """E4: 아직 반영 안 된(점선) 연결을 오른쪽 끌기로 자르면 '연결 끊기' 메모가 아니라 그 편집이 취소된다. 되돌리기 = 점선이 돌아온다."""
+    focus_dayfine(dpage, "job")
+    dpage.keyboard.press("l")
+    s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none');
+        const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2, to: s.dataset.to}; })()""")
+    n0 = len(notes_of(dpage))
+    q = visible_cover(dpage, skip=["job", s["to"]])
+    drag(dpage, s, q["x"] - s["x"], q["y"] - s["y"])
+    wait_notes(dpage, n0 + 1)
+    dpage.wait_for_timeout(250)
+    lk = next(p for p in paths(dpage) if p["to"] == q["id"])
+    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
+    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
+        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
+    dpage.mouse.move(sx - 12, sy - 12)
+    dpage.mouse.down(button="right")
+    dpage.mouse.move(sx + 12, sy + 12, steps=6)
+    dpage.mouse.up(button="right")
+    wait_notes(dpage, n0)
+    dpage.wait_for_timeout(250)
+    assert lk_to(dpage, q["id"]) == [], "취소된 점선은 사라진다"
+    assert lk_to(dpage, s["to"]), "도착 바꾸기를 취소하면 파일에 있는 원래 선이 돌아온다"
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0 + 1)
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")
+
+
+def test_trigger_drag_can_reach_a_far_card_in_another_row(dpage):
+    """E6: 크게 확대해 둔 채 도착 없는 요소에서 끌기 시작 → 판 가장자리에 대면 판이 따라 움직이고, 끄는 중 Ctrl+휠로 줄여도
+    끄는 선은 그 요소에 붙어 있으며, 다른 줄의 먼 카드에 놓으면 이어진다."""
+    fit_view(dpage)
+    ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 330)
+    fr = frame_of(dpage, "job")
+    dpage.keyboard.press("l")
+    x, y = el_point(dpage, ph, fr, "h1")
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector(".sock.selsock", timeout=3000)
+    dpage.wait_for_timeout(300)
+    s = sel_sock(dpage)
+    n0 = len(notes_of(dpage))
+    pr = dpage.locator("#screens").bounding_box()
+    t0 = dpage.evaluate("document.getElementById('stage').style.transform")
+    dpage.mouse.move(s["x"], s["y"])
+    dpage.mouse.down()
+    dpage.mouse.move(s["x"] + 30, s["y"] + 10, steps=4)
+    dpage.mouse.move(pr["x"] + pr["width"] - 6, pr["y"] + pr["height"] / 2, steps=8)
+    dpage.wait_for_timeout(500)
+    assert dpage.evaluate("document.getElementById('stage').style.transform") != t0, "끄는 중 판 가장자리에 대면 판이 따라 움직인다"
+    mx, my = pr["x"] + pr["width"] / 2, pr["y"] + pr["height"] / 2
+    dpage.mouse.move(mx, my, steps=4)
+    for _ in range(12):
+        dpage.keyboard.down("Control"); dpage.mouse.wheel(0, 300); dpage.keyboard.up("Control")
+        dpage.wait_for_timeout(40)
+    dpage.wait_for_timeout(200)
+    start = dpage.evaluate("""(() => { const d = document.querySelector('#ghost path').getAttribute('d').match(/M([\d.-]+),([\d.-]+)/),
+        r = document.getElementById('screens').getBoundingClientRect(); return [r.left + +d[1], r.top + +d[2]]; })()""")
+    ss = sel_sock(dpage)
+    assert abs(start[0] - ss["x"]) < 8 and abs(start[1] - ss["y"]) < 8, ("줄여도 끄는 선은 고른 요소의 소켓에서 시작", start, ss)
+    far = dpage.evaluate("""(() => { const g = c => (c.closest('.flow') || {}).querySelector?.('.glabel')?.textContent || '';
+        const job = document.querySelector('.card[data-id="job"]'), r = document.getElementById('screens').getBoundingClientRect();
+        for (const c of document.querySelectorAll('#rows .card .cover')) { const card = c.closest('.card');
+          if (card.dataset.id === 'job' || g(card) === g(job) || card.classList.contains('hid')) continue;
+          const b = c.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+          if (x > r.left + 20 && x < r.right - 340 && y > r.top + 20 && y < r.bottom - 20 && document.elementFromPoint(x, y) === c) return {id: card.dataset.id, x, y}; }
+        return null; })()""")
+    assert far, "줄인 뒤 다른 줄 카드가 보여야 한다"
+    dpage.mouse.move(far["x"], far["y"], steps=6)
+    dpage.mouse.up()
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert n["screen"] == "job" and n["to"] == far["id"], n
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")

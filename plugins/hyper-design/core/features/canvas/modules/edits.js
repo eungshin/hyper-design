@@ -2,7 +2,7 @@
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, screen, targets:[{path,text,rect}], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index) · new-screen · cut-in · delete · copy
-   HD.edits = {note, pendingFor, directOf, tally, say} */
+   HD.edits = {note, pendingFor, pendingLink, directOf, tally, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -25,6 +25,13 @@ function pendingFor(notes, from) {
     else if (n.op === 'cut' || n.op === 'untrigger') pd.byPath[n.path] = {op: 'cut'};
   });
   return pd;
+}
+
+// 그 요소(from·path)를 to 로 잇는, 아직 보내지 않은 연결 편집 — 이 선을 자르면 끊기 메모 대신 이 편집을 취소한다(E4)
+function pendingLink(notes, from, path, to) {
+  return (notes || []).filter(function (n) {
+    return !n.sent && n.edit === 'link' && n.op === 'link' && n.screen === from && n.path === path && String(n.to) === String(to);
+  }).pop() || null;
 }
 
 // 도우미(helper.py)가 화면 파일에 바로 쓸 수 있는 편집
@@ -58,5 +65,5 @@ var say = {
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, directOf: directOf, tally: tally, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, pendingLink: pendingLink, directOf: directOf, tally: tally, say: say, FIELD: FIELD};
 })();

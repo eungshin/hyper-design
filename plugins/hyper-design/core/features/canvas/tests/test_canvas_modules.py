@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs"]
-ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "view-links", "view-motion", "view-dock"]
+ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "view-links", "view-motion", "view-dock", "view-edge-pan"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -469,6 +469,9 @@ out.direct = notes.map(E.directOf);
 out.tally = E.tally(notes);
 out.ids = new Set(notes.slice(0, 5).map(n => n.id)).size;
 out.field = E.say.field('policy', '새 정책', 1);
+const sentLink = Object.assign(E.note('s1', h, 'link', 'link', 's5'), {sent: true});
+out.pl = [E.pendingLink(notes, 's1', 'a.x', 's3') === notes[0], E.pendingLink(notes, 's1', 'a.x', 's2'), E.pendingLink(notes, 's1', 'b.y', 's2'),
+          E.pendingLink([sentLink], 's1', 'a.x', 's5')];
 console.log(JSON.stringify(out));
 """
 
@@ -491,6 +494,7 @@ def test_edits_model():
     assert out["direct"] == [True, True, True, False, True, False], "잇기·끊기·글자는 바로 쓰고, 삭제·메모는 터미널로"
     assert out["tally"] == {"s1": 3, "s2": 1, "s4": 1} and out["ids"] == 5
     assert out["field"] == "정책 2번째 줄을 \"새 정책\"(으)로 바꾸기 (screens.json의 policies[1])"
+    assert out["pl"] == [True, None, None, None], "자르면 취소할 편집 = 그 요소·도착의 보내지 않은 잇기만(끊기·보낸 것은 아님)"
 
 
 DOCK_JS = r"""
@@ -615,6 +619,7 @@ def shell_counts(tpl):
                 if ch == ";": break
             else:
                 cur += ch
+        parts = [p for p in parts if not re.match(r"\s*\w+\s*=\s*HD\.\w+\.mount\(", p)]   # 모듈을 붙이는 줄(var X = HD.x.mount(…))은 셸이 할 일 — 세지 않는다
         names += [n.group(1) for n in (re.match(r"\s*(\w+)", p) for p in parts) if n]
     return {"var": len(names), "function": len(re.findall(r"(?m)^function\s+\w+", s))}
 
@@ -636,7 +641,7 @@ def test_gate_role_and_direction(name):
 
 
 def test_gate_shell_only_shrinks():
-    """비대 방지: 템플릿 셸의 위쪽 var·function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로)."""
+    """비대 방지: 템플릿 셸의 위쪽 var·function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로). 모듈을 붙이는 줄은 세지 않는다."""
     got = shell_counts((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
     for k, mx in SHELL_MAX.items():
         assert got[k] <= mx, f"셸 위쪽 {k} {got[k]} > {mx} — 새 상태·함수는 modules/ 의 주인 모듈로"

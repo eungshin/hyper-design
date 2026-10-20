@@ -91,7 +91,7 @@ function mount(ctx) {
     var svg = $('#lks');
     $$('path.lk, marker.lkm', svg).forEach(function (n) { n.remove(); });
     $('#lkl').innerHTML = '';
-    $$('.lnum, .sock', rowsEl).forEach(function (n) { n.remove(); });
+    $$('.lnum, .sock:not(.selsock)', rowsEl).forEach(function (n) { n.remove(); });   // 고른 요소의 소켓은 셸이 가진다
   }
   function renderLegend(v) {
     var lg = $('#legend');

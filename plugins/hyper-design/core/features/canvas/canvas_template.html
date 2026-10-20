@@ -697,6 +697,7 @@ pane.addEventListener('wheel', function (e) {
   if (e.shiftKey && !dx) { dx = dy; dy = 0; }
   tx -= dx; ty -= dy; apply();
 }, {passive: false});
+pane.addEventListener('wheel', function (e) { if (drag && drag.trig && drag.moved) drawGhost(e.clientX, e.clientY); });   // 끄는 중 줄여도 선은 그 요소에서(E6)
 
 /* ---------- 도구(4B): 손 = 기본(지금처럼 끌면 화면 이동) · 이동(V) = 카드를 끌어 옮기기. 클릭 = 크게 보기는 두 도구 모두 ---------- */
 var tool = 'hand';
@@ -777,7 +778,7 @@ pane.addEventListener('pointermove', function (e) {
     try { pane.setPointerCapture(e.pointerId); } catch (err) {}
   }
   if (drag.moved && drag.cut) { drag.cut.push([e.clientX, e.clientY]); closeCmenu(); drawGhost(e.clientX, e.clientY); markCut(drag.cut); }
-  else if (drag.moved && drag.trig) drawGhost(e.clientX, e.clientY);
+  else if (drag.moved && drag.trig) { drawGhost(e.clientX, e.clientY); EP.track(e.clientX, e.clientY); }
   else if (drag.moved && drag.card) {            // 이동 도구: 카드만 움직이고(판은 그대로) 화살표는 한 프레임에 한 번
     drag.group.forEach(function (id) {
       var c = VL.cardEl(id), o = drag.origins[id]; if (!c) return;
@@ -810,7 +811,7 @@ function endPtr(e) {
   if (drag && drag.moved && !drag.mid && !drag.right) swallowClick();   // 가운데·오른쪽 버튼 끌기 뒤에는 click 이 오지 않는다
   if (drag && drag.card && drag.id === e.pointerId) endCardDrag();
   if (drag && drag.cut && drag.id === e.pointerId) { if (drag.moved) { if (drag.right) cutJust = true; finishCut(drag.cut); } drag.cut = null; clearGhost(); }
-  if (drag && drag.trig && drag.id === e.pointerId) { finishTrig(drag.trig, drag.moved, e.clientX, e.clientY); drag.trig = null; clearGhost(); swallowClick(); }
+  if (drag && drag.trig && drag.id === e.pointerId) { EP.stop(); finishTrig(drag.trig, drag.moved, e.clientX, e.clientY); drag.trig = null; clearGhost(); swallowClick(); }
   if (ptrs.size === 1) {                          // 핀치 끝 → 남은 손가락으로 이어서 이동
     pinch = null;
     var id = ptrs.keys().next().value, p = ptrs.get(id);
@@ -1016,6 +1017,7 @@ var DOCK_ICON = {
   notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
   hidden: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg>'};
 var VD = null;
+var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
                         panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), hidden: $('#pHidden')},
                         title: function (id) { return {count: id === 'notes' ? (notes || []).length : id === 'hidden' ? Object.keys(hidden).length : 0}; },
@@ -1194,16 +1196,18 @@ function logEdit(label, list) {                      // 변경 기록 — 메모
   log.push({at: new Date().toISOString(), label: label, items: list.map(function (n) { return n.screen + ' · ' + n.note; })});
   try { localStorage.setItem(ELKEY, JSON.stringify(log.slice(-200))); } catch (e) {}
 }
-function addEdits(label, list, msg) {
-  if (!list.length) return;
-  var cancels = [];
+function addEdits(label, list, msg, drops) {      // drops = 같이 취소할 보내지 않은 편집(E4) — 되돌리면 돌아온다
+  drops = drops || [];
+  if (!list.length && !drops.length) return;
+  var cancels = [], dids = drops.map(function (d) { return d.id; });
   var put = function () {
     var cids = cancels.map(function (c) { return c.id; });
-    notes = notes.filter(function (x) { return cids.indexOf(x.id) < 0 || x.sent; }); cancels = [];
+    notes = notes.filter(function (x) { return (cids.indexOf(x.id) < 0 || x.sent) && dids.indexOf(x.id) < 0; }); cancels = [];
     list.forEach(function (n) { if (!notes.some(function (x) { return x.id === n.id; })) { n.sent = false; notes.push(n); } });
     saveNotes();
   };
   var take = function () {
+    drops.forEach(function (d) { if (!notes.some(function (x) { return x.id === d.id; })) notes.push(d); });
     list.forEach(function (n) {
       var cur = notes.filter(function (x) { return x.id === n.id; })[0];
       if (cur && cur.sent) { var c = editNote(n.screen, n, '앞서 보낸 요청 취소: ' + n.note); cancels.push(c); notes.push(c); }
@@ -1211,8 +1215,8 @@ function addEdits(label, list, msg) {
     });
     saveNotes(); logEdit('되돌림: ' + label, list);
   };
-  put(); logEdit(label, list);
-  record({label: label, undo: take, redo: function () { put(); logEdit(label, list); }});
+  put(); logEdit(label, list.concat(drops));
+  record({label: label, undo: take, redo: function () { put(); logEdit(label, list.concat(drops)); }});
   toast(msg || label + ' — 반영 대기', true);
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
@@ -1225,8 +1229,13 @@ function linkTo(from, hits, to) {                    // 요소들 → 도착 화
 function cutText(to) { return HD.edits.say.cut(scr(to)); }
 function cutGroups(ks) {
   var list = [];
-  ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) { list.push(editNote(g.from, it, cutText(it.to), 'cut', it.to)); }); });
-  addEdits('선 자르기', list, list.length + '개 연결을 끊었어요');
+  var drops = [];                                    // 아직 반영 안 된 선(점선)을 자르면 끊기 메모가 아니라 그 편집 취소(E4)
+  ks.forEach(function (k) { var g = VL.group(k); if (g) g.items.forEach(function (it) {
+    var pn = HD.edits.pendingLink(notes, g.from, it.path, it.to);
+    if (pn) drops.push(pn); else list.push(editNote(g.from, it, cutText(it.to), 'cut', it.to));
+  }); });
+  addEdits(list.length ? '선 자르기' : '반영 대기 연결 취소', list,
+           (list.length ? list.length + '개 연결을 끊었어요' : '') + (list.length && drops.length ? ' · ' : '') + (drops.length ? '반영 대기 ' + drops.length + '개를 취소했어요' : ''), drops);
 }
 function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기
   var els = h.to ? [{label: '도착 바꾸기', act: function () { startPick(from, [h], x, y); }},
@@ -1237,7 +1246,8 @@ function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정
   openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
 }
 function startTrig(hits, card, e) {                  // hits 를 알면(소켓) 바로, 모르면 화면에 물어 본다
-  var tr = {from: card.dataset.id, x: e.clientX, y: e.clientY, hits: hits || undefined, fns: []};
+  var sr = stage.getBoundingClientRect();           // 출발점 = 판 좌표(끄는 중 판이 움직이거나 줄어도 그 요소에 붙어 있게, E6)
+  var tr = {from: card.dataset.id, x: e.clientX, y: e.clientY, bx: (e.clientX - sr.left) / z, by: (e.clientY - sr.top) / z, hits: hits || undefined, fns: []};
   tr.ready = function (fn) { if (tr.hits !== undefined) fn(tr.hits); else tr.fns.push(fn); };
   if (!hits) askHit(card, e.clientX, e.clientY, false, function (h) { tr.hits = h && !h.none ? [h] : h; tr.fns.forEach(function (fn) { fn(tr.hits); }); tr.fns = []; });
   drag.trig = tr;
@@ -1248,7 +1258,11 @@ function finishTrig(tr, moved, cx, cy) {
   tr.ready(function (hits) {
     if (!hits) return;                               // 화면이 답하지 않음 — 알림은 askHit 가 띄웠다
     if (hits.none) { toast('여기에는 누를 요소가 없어요'); return; }
-    if (!moved) { var tc = VL.cardEl(tr.from); if (tc) selectEl(tc, hits[0]); return; }   // 누르기 = 고르기만(테두리 + 소켓) — 메뉴는 우클릭, 소켓 끌기를 막지 않는다
+    if (!moved) {                                    // 누르기 = 고르기(테두리 + 소켓) + 그 화면 연결 보기(Shift+클릭과 같게, E3) — 메뉴는 우클릭
+      var tc = VL.cardEl(tr.from); if (tc) selectEl(tc, hits[0]);
+      if (VL.focusId() !== tr.from) VL.dispatch({type: 'focus', id: tr.from});
+      return;
+    }
     if (to && to !== tr.from) { linkTo(tr.from, hits, to); return; }
     if (to) return;                                  // 제 화면에 놓음 = 취소
     var items = [{label: '새 화면 만들고 잇기', act: function () {           // 빈 레이아웃 카드를 그 자리에 놓고, 끈 요소를 그 카드로 — 되돌리기 한 단계
@@ -1289,7 +1303,11 @@ function finishCut(pts) {                            // 그은 선(화면 좌표
 function drawGhost(cx, cy) {
   var r = pane.getBoundingClientRect(), d;
   if (drag && drag.cut) d = '<path class="cut" d="M' + drag.cut.map(function (p) { return (p[0] - r.left) + ',' + (p[1] - r.top); }).join(' L') + '"/>';
-  else { var a = drag && drag.trig ? drag.trig : pickT; if (!a) return; d = '<path d="M' + (a.x - r.left) + ',' + (a.y - r.top) + ' L' + (cx - r.left) + ',' + (cy - r.top) + '"/>'; }
+  else {
+    var a = drag && drag.trig ? drag.trig : pickT; if (!a) return;
+    var sr = stage.getBoundingClientRect(), ax = a.bx != null ? sr.left + a.bx * z : a.x, ay = a.by != null ? sr.top + a.by * z : a.y;
+    d = '<path d="M' + (ax - r.left) + ',' + (ay - r.top) + ' L' + (cx - r.left) + ',' + (cy - r.top) + '"/>';
+  }
   $('#ghost').innerHTML = d;
 }
 function clearGhost() { $('#ghost').innerHTML = ''; }
