@@ -99,11 +99,9 @@ def test_shift_click_focus(page):
     linked = set(page.evaluate("""(id) => [...document.querySelectorAll('#rows path.ln')]
         .filter(p => p.dataset.from === id || p.dataset.to === id).flatMap(p => [p.dataset.from, p.dataset.to])""", fid))
     box = page.locator(f'.card[data-id="{fid}"] .cover').bounding_box()
-    page.keyboard.down("Shift")
     page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    page.keyboard.up("Shift")
     page.wait_for_timeout(600)
-    assert page.evaluate("document.getElementById('modal').hidden"), "Shift+클릭은 크게 보기를 열지 않는다"
+    assert page.evaluate("document.getElementById('modal').hidden"), "누르기(연결 보기)는 크게 보기를 열지 않는다"
     # 화면 안 링크의 대상(색 고리)도 연결된 화면이다
     linked |= set(page.evaluate("[...document.querySelectorAll('#rows .card.lt')].map(c => c.dataset.id)"))
     state = page.evaluate("""() => [...document.querySelectorAll('#rows .card')].map(c =>
@@ -294,7 +292,7 @@ def test_gym_link_colors(gpage, gym_out):
     want = link_targets(gym_out, sid)
     zoom_to(gpage, sid, 380)
     gpage.evaluate("""(id) => document.querySelector('.card[data-id="' + id + '"] .cover')
-        .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, shiftKey: true}))""", sid)
+        .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))""", sid)
     gpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
     assert gpage.evaluate("document.getElementById('modal').hidden")
     # v3: 첫 Shift+클릭이 '전체' (v2 에서는 색 1 부터였다)
@@ -302,7 +300,7 @@ def test_gym_link_colors(gpage, gym_out):
         if "전체" in gpage.text_content("#lgTitle"):
             break
         gpage.evaluate("""(id) => document.querySelector('.card[data-id="' + id + '"] .cover')
-            .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, shiftKey: true}))""", sid)
+            .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))""", sid)
     assert "전체" in gpage.text_content("#lgTitle")
     gpage.wait_for_timeout(200)
     arrows = gpage.evaluate("[...document.querySelectorAll('#lks path.lk')].map(p => [p.dataset.to, p.getAttribute('stroke')])")
@@ -389,7 +387,7 @@ def test_gym_annotate_button(gpage):
 def test_gym_shortcut_hint(gpage):
     hint = gpage.locator("#khint")
     assert hint.is_visible()
-    assert hint.text_content().strip() == "Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 두 번 눌러 크게 보기"   # 재작업 S3
+    assert hint.text_content().strip() == "누르면 연결 · Shift+클릭 여러 장 · A 주요 흐름 · 0 전체 · 두 번 눌러 크게 보기"   # 재작업 S3
     hb, pr = hint.bounding_box(), gpage.locator("#screens").bounding_box()
     assert hb["x"] < pr["x"] + 40 and hb["y"] + hb["height"] > pr["y"] + pr["height"] - 40
     gpage.evaluate("document.querySelector('#rows .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))")
@@ -427,7 +425,7 @@ def test_v2_label_positions(gpage):
 
 def shift_click(pg, sid):
     pg.evaluate("""(id) => document.querySelector('.card[data-id="' + id + '"] .cover')
-        .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, shiftKey: true}))""", sid)
+        .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))""", sid)
 
 
 def lk_state(pg):

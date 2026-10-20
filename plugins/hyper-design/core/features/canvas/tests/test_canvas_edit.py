@@ -321,7 +321,7 @@ def dpage(ctx):
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-SHIFT_CLICK = """(id) => document.querySelector('.card[data-id="' + id + '"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, shiftKey: true}))"""
+SHIFT_CLICK = """(id) => document.querySelector('.card[data-id="' + id + '"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))"""
 
 
 def focus_dayfine(pg, sid):
@@ -1159,7 +1159,7 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.wait_for_timeout(150)
     assert picked(dpage) == [p["id"]] and selbar(dpage) == ["메모", "숨기기", "삭제"]
     dpage.keyboard.press("v")
-    dpage.keyboard.down("Control"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Control")
+    dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
     dpage.wait_for_timeout(150)
     assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage) == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
     n0 = len(notes_of(dpage))
@@ -1349,7 +1349,7 @@ def test_trigger_drag_can_reach_a_far_card_in_another_row(dpage):
         dpage.keyboard.down("Control"); dpage.mouse.wheel(0, 300); dpage.keyboard.up("Control")
         dpage.wait_for_timeout(40)
     dpage.wait_for_timeout(200)
-    start = dpage.evaluate("""(() => { const d = document.querySelector('#ghost path').getAttribute('d').match(/M([\d.-]+),([\d.-]+)/),
+    start = dpage.evaluate(r"""(() => { const d = document.querySelector('#ghost path').getAttribute('d').match(/M([\d.-]+),([\d.-]+)/),
         r = document.getElementById('screens').getBoundingClientRect(); return [r.left + +d[1], r.top + +d[2]]; })()""")
     ss = sel_sock(dpage)
     assert abs(start[0] - ss["x"]) < 8 and abs(start[1] - ss["y"]) < 8, ("줄여도 끄는 선은 고른 요소의 소켓에서 시작", start, ss)
@@ -1370,3 +1370,71 @@ def test_trigger_drag_can_reach_a_far_card_in_another_row(dpage):
     wait_notes(dpage, n0)
     dpage.keyboard.press("Escape")
     dpage.keyboard.press("h")
+
+
+# ---------------------------------------------------------------- 조각 2.5a 고르기 (E15·E11·E18, rework §8-3)
+CLICK = """(id) => document.querySelector('.card[data-id="' + id + '"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))"""
+
+
+def sel_state(pg):
+    return pg.evaluate("""({picked: [...document.querySelectorAll('#rows .card.picked')].map(c => c.dataset.id).sort(),
+        focus: (document.querySelector('#rows .card.focus') || {dataset: {}}).dataset.id || null,
+        focusing: document.getElementById('rows').classList.contains('focusing')})""")
+
+
+def test_click_selects_and_shows_links_shift_adds(dpage):
+    """E15: 카드 누르기 = 그 카드 고르기 + 그 화면 연결 강조(예전 Shift+클릭). Shift+클릭 = 여러 장 고르기. 빈 판 = 모두 풀기."""
+    fit_view(dpage)
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    dpage.mouse.click(p["x"], p["y"])
+    dpage.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
+    st = sel_state(dpage)
+    assert st["picked"] == [p["id"]] and st["focus"] == p["id"], st
+    assert not dpage.evaluate("document.getElementById('modal').hidden === false"), "한 번 누르기는 크게 보기를 열지 않는다"
+    dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
+    dpage.wait_for_timeout(150)
+    st = sel_state(dpage)
+    assert st["picked"] == sorted([p["id"], q["id"]]), ("Shift+클릭 = 고른 것에 더하기", st)
+    dpage.keyboard.down("Shift"); dpage.mouse.click(p["x"], p["y"]); dpage.keyboard.up("Shift")
+    dpage.wait_for_timeout(150)
+    st = sel_state(dpage)
+    assert st["picked"] == [q["id"]] and st["focus"] == q["id"], ("다시 Shift+클릭 = 빼기, 하나 남으면 그 화면 연결 강조", st)
+    from test_canvas_baseline import empty_point
+    e = empty_point(dpage)
+    dpage.mouse.click(e["x"], e["y"])
+    dpage.wait_for_timeout(150)
+    st = sel_state(dpage)
+    assert st["picked"] == [] and not st["focusing"], st
+    assert "Shift" in dpage.text_content("#khint") and "누르면 연결" in dpage.text_content("#khint")
+
+
+def test_trigger_drag_esc_cancels_and_deleted_card_refuses(dpage):
+    """E11: 트리거를 끄는 중 Esc = 취소(아무것도 남지 않음). E18: 삭제 대기 카드에 놓으면 잇지 않고 알린다."""
+    fit_view(dpage)
+    dpage.keyboard.press("l")
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    n0 = len(notes_of(dpage))
+    dpage.mouse.move(p["x"], p["y"]); dpage.mouse.down()
+    dpage.mouse.move((p["x"] + q["x"]) / 2, (p["y"] + q["y"]) / 2, steps=6)
+    dpage.keyboard.press("Escape")
+    assert dpage.evaluate("document.getElementById('ghost').innerHTML") == "", "Esc = 끄는 선 지움"
+    dpage.mouse.move(q["x"], q["y"], steps=4); dpage.mouse.up()
+    dpage.wait_for_timeout(400)
+    assert len(notes_of(dpage)) == n0, "Esc 뒤 놓아도 잇지 않는다"
+    assert visible_cover(dpage)["id"] == p["id"] and abs(visible_cover(dpage)["x"] - p["x"]) < 2, "Esc 뒤 놓을 때까지 판이 움직이지 않는다"
+    dpage.keyboard.press("h")
+    dpage.mouse.click(q["x"], q["y"])
+    dpage.wait_for_timeout(150)
+    dpage.keyboard.press("Delete")
+    wait_notes(dpage, n0 + 1)
+    dpage.keyboard.press("l")
+    drag(dpage, p, q["x"] - p["x"], q["y"] - p["y"])
+    dpage.wait_for_timeout(1600)
+    assert len(notes_of(dpage)) == n0 + 1, "삭제 대기 화면에는 잇지 않는다"
+    assert "삭제" in dpage.text_content("#toast")
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")

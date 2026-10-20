@@ -65,6 +65,8 @@ BROWSER = {
     "test_trigger_click_on_card_shows_its_links_like_shift_click": ("tools", "links"),
     "test_cutting_a_pending_line_cancels_that_edit": ("tools", "links"),
     "test_trigger_drag_can_reach_a_far_card_in_another_row": ("tools", "input"),
+    "test_click_selects_and_shows_links_shift_adds": ("input", "links"),
+    "test_trigger_drag_esc_cancels_and_deleted_card_refuses": ("tools",),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),

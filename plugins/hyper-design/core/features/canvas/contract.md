@@ -16,7 +16,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
-- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`motion.css`)
+- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`motion.css`)
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pHidden`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
@@ -63,6 +63,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `modules/dock.js` · `view-dock.js` · 도크 CSS | `unit or dock or notes` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
+| `modules/selection.js` · `view-select.js` (고른 카드: 누르기 = 고르기 + 연결 강조, Shift = 여러 장) | `unit or tools or input or links` |
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |

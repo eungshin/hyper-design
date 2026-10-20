@@ -128,10 +128,10 @@ def test_dblclick_opens_modal_and_esc_order(bpage):
     bpage.keyboard.press("Escape")
     bpage.wait_for_timeout(120)
     assert not modal_open(bpage), "Esc 한 번 = 크게 보기 닫기"
-    bpage.keyboard.down("Shift"); bpage.mouse.click(c["x"], c["y"]); bpage.keyboard.up("Shift")
+    bpage.mouse.click(c["x"], c["y"])
     bpage.wait_for_timeout(300)
-    assert bpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
-    assert not modal_open(bpage), "Shift+클릭은 크게 보기를 열지 않는다"
+    assert bpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "누르기 = 그 화면 연결 보기(E15)"
+    assert not modal_open(bpage), "누르기는 크게 보기를 열지 않는다"
     bpage.keyboard.press("Escape")
     bpage.wait_for_timeout(150)
     assert not bpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "다음 Esc = 연결 보기 끝"

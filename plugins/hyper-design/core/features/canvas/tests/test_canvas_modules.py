@@ -13,8 +13,8 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs"]
-ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "view-links", "view-motion", "view-dock", "view-edge-pan"]
+PURE = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection"]
+ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -589,11 +589,11 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
 LAYER = {"graph": "Model", "route": "Model", "labels": "Model", "style": "Model", "camera": "Model", "edits": "Model",
-         "tools": "ViewModel", "dock": "ViewModel", "focus": "ViewModel", "prefs": "ViewModel"}
+         "tools": "ViewModel", "dock": "ViewModel", "focus": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 # 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
-SHELL_MAX = {"var": 86, "function": 117}
+SHELL_MAX = {"var": 85, "function": 115}   # 2.5a: picked·setPicks·togglePick → selection.js·view-select.js
 
 
 def _layer(name):
@@ -645,3 +645,38 @@ def test_gate_shell_only_shrinks():
     got = shell_counts((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
     for k, mx in SHELL_MAX.items():
         assert got[k] <= mx, f"셸 위쪽 {k} {got[k]} > {mx} — 새 상태·함수는 modules/ 의 주인 모듈로"
+
+
+SEL_JS = r"""
+const fs = require('fs'), vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[2] + '/selection.js', 'utf8'), {filename: 'selection.js'});
+const S = globalThis.HD.selection, R = S.reduce, out = {};
+let s = S.initial(); const s0 = s;
+s = R(s, {type: 'only', id: 'a'}); out.only = s.ids; out.pure = s0.ids.length === 0;
+s = R(s, {type: 'toggle', id: 'b'}); out.add = s.ids; out.pr2 = S.primary(s);
+s = R(s, {type: 'toggle', id: 'a'}); out.sub = s.ids; out.pr1 = S.primary(s);
+out.set = R(s, {type: 'set', ids: ['x', 'y', 'x', 3]}).ids;
+out.drop = R({ids: ['a', 'b', 'c']}, {type: 'drop', ids: ['b']}).ids;
+out.clearSame = R(S.initial(), {type: 'clear'}).ids.length === 0;
+out.has = [S.has({ids: ['3']}, 3), S.has({ids: []}, 'a')];
+console.log(JSON.stringify(out));
+"""
+
+
+def test_selection_model():
+    """고르기(E15): 누르기 = 그 카드만 · Shift = 더하기/빼기 · 한 장일 때만 연결 강조 대상(primary) · 숨기거나 지운 카드 빼기."""
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-sel-js-"))
+    try:
+        (tmp / "s.js").write_text(SEL_JS, encoding="utf-8")
+        r = subprocess.run([NODE, str(tmp / "s.js"), str(MOD)], capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    assert out["only"] == ["a"] and out["pure"]
+    assert out["add"] == ["a", "b"] and out["pr2"] is None, "여러 장이면 연결 강조 대상 없음"
+    assert out["sub"] == ["b"] and out["pr1"] == "b"
+    assert out["set"] == ["x", "y", "3"] and out["drop"] == ["a", "c"] and out["clearSame"]
+    assert out["has"] == [True, False]

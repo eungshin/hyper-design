@@ -395,7 +395,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
       <div class="rows" id="rows"></div>
       <div class="foot" id="foot"></div>
     </div>
-    <div id="khint">Shift+클릭 연결 보기 · A 주요 흐름 · 0 전체 보기 · 두 번 눌러 크게 보기</div>
+    <div id="khint">누르면 연결 · Shift+클릭 여러 장 · A 주요 흐름 · 0 전체 · 두 번 눌러 크게 보기</div>
     <nav id="tools" aria-label="도구">
       <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
@@ -749,7 +749,7 @@ pane.addEventListener('pointerdown', function (e) {
     else if (sk) startTrig([VL.item(+sk.dataset.i)], sk.closest('.card'), e);
     else if (tc && !e.target.closest('.pres')) startTrig(null, tc, e);
     else if (cd && !e.target.closest('.pres')) {        // 고른 카드를 끌면 고른 카드 모두
-      var gids = picked[cd.dataset.id] && Object.keys(picked).length > 1 ? Object.keys(picked) : [cd.dataset.id];
+      var gids = SL.has(cd.dataset.id) && SL.ids().length > 1 ? SL.ids() : [cd.dataset.id];
       drag.card = cd; drag.group = gids; drag.origins = {};
       gids.forEach(function (id) { var cp = cardPos[id]; drag.origins[id] = {dx: cp ? cp.dx : 0, dy: cp ? cp.dy : 0, prev: cp ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null}; });
     }
@@ -771,7 +771,7 @@ pane.addEventListener('pointermove', function (e) {
     z = nz; tx = m.x - r.left - bx * z; ty = m.y - r.top - by * z; apply();
     return;
   }
-  if (!drag || drag.id !== e.pointerId) return;
+  if (!drag || drag.id !== e.pointerId || drag.off) return;
   var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (!drag.moved && Math.hypot(dx, dy) > drag.thr) {
     drag.moved = true; pane.classList.add('dragging');
@@ -823,7 +823,6 @@ pane.addEventListener('pointercancel', endPtr);
 pane.addEventListener('click', function (e) {
   if (justDragged) { justDragged = false; e.preventDefault(); e.stopPropagation(); return; }
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
-  if ((e.ctrlKey || e.metaKey) && tool === 'move' && cl('.card') && !cl('.pres')) { e.preventDefault(); e.stopPropagation(); togglePick(cl('.card').dataset.id); return; }   // 이동 도구 Ctrl+클릭 = 여러 장 고르기(결정 2)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#tools')) return;                        // 도구 막대 안 조작은 연결 보기를 끄지 않는다(범례는 도크라 판 밖)
   if (tool === 'layout' && !cl('.card') && !cl('.ltag') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
@@ -845,14 +844,24 @@ pane.addEventListener('click', function (e) {
   var focusId = VL.focusId();
   if (an) { e.preventDefault(); e.stopPropagation(); if (focusId) VL.dispatch({type: 'exitFocus'}); openModal(an.dataset.file, an.dataset.title); return; }   // ▶ 보기 = 실제로 눌러 보기
   var c = cl('.cover');
-  if (c && e.shiftKey) { e.preventDefault(); var id = c.closest('.card').dataset.id; VL.dispatch(focusId === id ? {type: 'cycle'} : {type: 'focus', id: id}); return; }
+  if (c && e.shiftKey) {                           // Shift+클릭 = 여러 장 고르기(더하기·빼기, E15) — 한 장 남으면 그 화면 연결 강조
+    e.preventDefault(); SL.dispatch({type: 'toggle', id: c.closest('.card').dataset.id});
+    var pr = SL.primary();
+    if (pr && pr !== focusId) VL.dispatch({type: 'focus', id: pr}); else if (!SL.ids().length && focusId) VL.dispatch({type: 'exitFocus'});
+    return;
+  }
   if (c) {                                         // 마우스 한 번 = 크게 보기 아님(판 위에서 고르고 고친다) · 두 번 · 키보드(Enter/Space, detail 0) = 크게 보기
-    if (e.detail === 1) { if (focusId) VL.dispatch({type: 'exitFocus'}); setPicks([c.closest('.card').dataset.id]); return; }   // 한 번 = 그 카드 고르기
+    if (e.detail === 1) {                          // 한 번 = 그 카드 고르기 + 그 화면 연결 강조(E15) · 이미 그 카드만 골랐으면 다시 누르기 = 연결 하나씩 보기
+      var cid = c.closest('.card').dataset.id;
+      if (focusId === cid && SL.primary() === cid) VL.dispatch({type: 'cycle'});
+      else { SL.dispatch({type: 'only', id: cid}); if (focusId !== cid) VL.dispatch({type: 'focus', id: cid}); }
+      return;
+    }
     if (focusId) VL.dispatch({type: 'exitFocus'});
     openModal(c.dataset.file, c.dataset.title);
     return;
   }
-  if (!e.shiftKey && !cl('.card, .ltag, path.lk')) { setPicks([]); if (focusId) VL.dispatch({type: 'exitFocus'}); }   // 빈 판을 그냥 누르면 고르기 풀기 · 연결 보기 끝
+  if (!e.shiftKey && !cl('.card, .ltag, path.lk')) { SL.dispatch({type: 'clear'}); if (focusId) VL.dispatch({type: 'exitFocus'}); }   // 빈 판을 그냥 누르면 고르기 풀기 · 연결 보기 끝
 }, true);
 
 /* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) ---------- */
@@ -915,13 +924,13 @@ addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();
   if (!cmenu.hidden) { closeCmenu(); return; }   // 떠 있는 메뉴가 먼저
+  if (drag && drag.trig) { drag.trig = null; drag.off = true; EP.stop(); clearGhost(); return; }   // 트리거 끄는 중 = 잇기 취소(E11) — 놓을 때까지 판도 움직이지 않는다
   if (pickT) { endPick(); return; }
   if (!tedit.hidden) { closeTedit(false); return; }
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
   if (selEl) { unselectEl(); return; }               // 판 위: 고른 요소 → 연결 보기 → 고른 카드 순으로 푼다
-  if (VL.focusId()) { VL.dispatch({type: 'exitFocus'}); return; }
-  if (Object.keys(picked).length) setPicks([]);
+  if (VL.focusId() || SL.ids().length) { SL.dispatch({type: 'clear'}); if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); }   // 누르기가 둘을 함께 켜니 함께 끈다
 });
 addEventListener('resize', function () { if (!modal.hidden) { sizeModal(); drawPins(); } });
 
@@ -1125,11 +1134,11 @@ pane.addEventListener('contextmenu', function (e) {
   if (card) {
     var id = card.dataset.id, cv = $('.cover', card);
     var open = function (pick) { if (VL.focusId()) VL.dispatch({type: 'exitFocus'}); openModal(cv.dataset.file, cv.dataset.title, pick); };
-    var multi = picked[id] && Object.keys(picked).length > 1, ids = multi ? Object.keys(picked) : [id], suf = multi ? ' (' + ids.length + ')' : '';
+    var multi = SL.has(id) && SL.ids().length > 1, ids = multi ? SL.ids() : [id], suf = multi ? ' (' + ids.length + ')' : '';
     var isDraft = card.classList.contains('draft');
     var cardItems = (isDraft ? [] : [
       {label: '크게 보기', key: '두 번', act: function () { open(false); }},
-      {label: '연결 보기', key: 'Shift+클릭', act: function () { if (VL.focusId() !== id) VL.dispatch({type: 'focus', id: id}); }},
+      {label: '연결 보기', key: '누르기', act: function () { if (VL.focusId() !== id) VL.dispatch({type: 'focus', id: id}); }},
       '-']).concat([
       {label: '이름', act: function () { var t = $('.ftitle', card); if (t) editCardText(t, 'title'); }},
       {label: '설명', act: function () { var d = $('.fdesc', card); if (d) editCardText(d, 'purpose'); else toast('설명 줄이 없는 화면이에요'); }},
@@ -1137,7 +1146,7 @@ pane.addEventListener('contextmenu', function (e) {
       {label: '복제', act: function () { duplicateCard(id); }},
       {label: '들어오는 연결 끊기' + suf, act: function () { cutIncoming(ids); }},
       '-',
-      {label: '숨기기' + suf, act: function () { hide(ids, true); setPicks([]); }},
+      {label: '숨기기' + suf, act: function () { hide(ids, true); SL.dispatch({type: 'clear'}); }},
       {label: '삭제' + suf, key: 'Del', act: function () { deleteCards(ids); }}]);
     openCmenu(x, y, titleOf(id), cardItems);
     var tok = cmenu.tok = {};                         // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
@@ -1255,6 +1264,7 @@ function startTrig(hits, card, e) {                  // hits 를 알면(소켓) 
 function finishTrig(tr, moved, cx, cy) {
   var under = document.elementFromPoint(cx, cy), c = under && under.closest ? under.closest('.card') : null;
   var to = c && !c.classList.contains('hid') ? c.dataset.id : null;
+  if (moved && c && c.classList.contains('del') && to !== tr.from) { toast('삭제 대기 화면에는 이을 수 없어요'); return; }   // E18
   tr.ready(function (hits) {
     if (!hits) return;                               // 화면이 답하지 않음 — 알림은 askHit 가 띄웠다
     if (hits.none) { toast('여기에는 누를 요소가 없어요'); return; }
@@ -1319,6 +1329,7 @@ function endPick() { if (!pickT) return; pickT = null; pane.classList.remove('t-
 function pickClick(e) {
   var c = e.target.closest ? e.target.closest('.card') : null, pt = pickT;
   e.preventDefault(); endPick(); swallowClick();
+  if (c && c.classList.contains('del')) { toast('삭제 대기 화면에는 이을 수 없어요'); return; }   // E18
   if (c && !c.classList.contains('hid') && c.dataset.id !== pt.from) linkTo(pt.from, pt.hits, c.dataset.id);
 }
 pane.addEventListener('pointermove', function (e) { if (pickT) drawGhost(e.clientX, e.clientY); });
@@ -1533,16 +1544,14 @@ function renameLayout(el, id) {
   ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
 }
 /* ---------- 카드 고르기(한 번 누르기 · 이동 도구 Ctrl+클릭) · 선택 막대 · 삭제·복제·들어오는 연결 끊기 ---------- */
-var picked = {}, deleted = {};
-function setPicks(ids) {
-  picked = {}; ids.forEach(function (id) { picked[id] = 1; });
-  $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('picked', !!picked[c.dataset.id]); });
+var deleted = {};
+var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
   placeSelbar();
-}
-function togglePick(id) { var ids = Object.keys(picked || {}); setPicks(picked[id] ? ids.filter(function (x) { return x !== id; }) : ids.concat([id])); }
+  if (!st.ids.length && prev.ids.length && VL.focusId()) VL.dispatch({type: 'exitFocus'});   // 누르기가 고르기·연결 강조를 함께 켜니, 고르기가 비면(지우기·숨기기·풀기) 강조도 끈다
+}});
 function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 한 장일 때만
-  var bar = $('#selbar'); if (!bar || !picked) return;
-  var ids = Object.keys(picked).filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
+  var bar = $('#selbar'); if (!bar || !SL) return;
+  var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
   if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden) { bar.hidden = true; return; }
   var x0 = 1e9, x1 = -1e9, y0 = 1e9;
   ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
@@ -1553,9 +1562,9 @@ function placeSelbar() {                             // 고른 카드들 위 가
 }
 $('#selbar').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;
-  var ids = Object.keys(picked);
+  var ids = SL.ids();
   if (b.dataset.act === 'memo') openCardMemo(ids[0]);
-  else if (b.dataset.act === 'hide') { hide(ids, true); setPicks([]); }
+  else if (b.dataset.act === 'hide') { hide(ids, true); SL.dispatch({type: 'clear'}); }
   else if (b.dataset.act === 'del') deleteCards(ids);
 });
 addEventListener('resize', placeSelbar);
@@ -1573,7 +1582,7 @@ function paintDeleted() {                            // 삭제 대기(메모 edi
 function deleteCards(ids) {                          // 진짜 화면 = 삭제 요청 메모 · 빈 레이아웃 = 그 메모(와 그리로 가는 잇기)를 지움 — 되돌리기 됨
   var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
   var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
-  setPicks([]);
+  SL.dispatch({type: 'clear'});
   if (real.length) addEdits('화면 삭제', real.map(function (id) {
     var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.remove(scr(id))); n.edit = 'delete'; return n;
   }), real.length + '개 화면을 지웠어요 — 반영 대기');
@@ -1598,7 +1607,7 @@ function cutIncoming(ids) {
 }
 addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
   if ((e.key !== 'Delete' && e.key !== 'Backspace') || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens') return;
-  var ids = Object.keys(picked); if (!ids.length) return;
+  var ids = SL.ids(); if (!ids.length) return;
   e.preventDefault(); deleteCards(ids);
 });
 function openCardMemo(id) {                          // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body)
