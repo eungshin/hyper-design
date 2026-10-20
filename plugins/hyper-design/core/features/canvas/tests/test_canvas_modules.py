@@ -581,3 +581,62 @@ def test_ui_chrome_colours_are_neutral_tokens():
         assert "var(--ui-" in rule, sel
     for hexv in ("#e5484d", "#F59E0B", "#7cc4ff"):
         assert hexv not in tpl, f"채도 높은 판 바깥 색이 남음: {hexv}"
+
+
+# ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
+LAYER = {"graph": "Model", "route": "Model", "labels": "Model", "style": "Model", "camera": "Model", "edits": "Model",
+         "tools": "ViewModel", "dock": "ViewModel", "focus": "ViewModel", "prefs": "ViewModel"}
+RANK = {"Model": 0, "ViewModel": 1, "View": 2}
+NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
+# 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
+SHELL_MAX = {"var": 86, "function": 117}
+
+
+def _layer(name):
+    return "View" if name.startswith("view-") else LAYER[name]
+
+
+def _hd_name(name):
+    if name.startswith("view-"):
+        return "view" + "".join(p.title() for p in name.split("-")[1:])
+    return {v: k for k, v in NS.items()}.get(name, name)
+
+
+def shell_counts(tpl):
+    s = tpl[tpl.index("// ── Canvas shell"):]
+    names = []
+    for m in re.finditer(r"(?m)^var\s+(.+)$", s):
+        depth, cur, parts = 0, "", []
+        for ch in m.group(1):
+            depth += ch in "([{"
+            depth -= ch in ")]}"
+            if ch in ",;" and depth == 0:
+                parts.append(cur); cur = ""
+                if ch == ";": break
+            else:
+                cur += ch
+        names += [n.group(1) for n in (re.match(r"\s*(\w+)", p) for p in parts) if n]
+    return {"var": len(names), "function": len(re.findall(r"(?m)^function\s+\w+", s))}
+
+
+@pytest.mark.parametrize("name", ALL_MODULES)
+def test_gate_role_and_direction(name):
+    """책임: 머리 주석 첫 줄이 층(Model/ViewModel/View)과 맡은 일 하나를 밝힌다.
+    협력: 의존은 아래 층으로만(Model → 다른 층 모름, ViewModel → View 모름), View 끼리는 서로 부르지 않는다(셸이 의도로 잇는다)."""
+    src = (MOD / f"{name}.js").read_text(encoding="utf-8")
+    me = _layer(name)
+    assert re.match(r"/\* (Model|ViewModel|View) — \S", src) and src[3:].startswith(me), f"{name}.js 첫 줄 = '/* {me} — 맡은 일'"
+    own = _hd_name(name)
+    for dep in sorted(set(re.findall(r"\bHD\.(\w+)", src)) - {own}):
+        mod = NS.get(dep, dep)
+        if dep.startswith("view"):
+            assert False, f"{name}.js → HD.{dep}: View 끼리 직접 부르지 않는다 — ctx 로 받은 함수·의도로"
+        assert mod in LAYER, f"{name}.js → HD.{dep}: 모르는 모듈"
+        assert RANK[LAYER[mod]] <= RANK[me] and not (me == "Model" and LAYER[mod] != "Model"), f"{name}.js({me}) → {mod}({LAYER[mod]}): 위 층에 기댐"
+
+
+def test_gate_shell_only_shrinks():
+    """비대 방지: 템플릿 셸의 위쪽 var·function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로)."""
+    got = shell_counts((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
+    for k, mx in SHELL_MAX.items():
+        assert got[k] <= mx, f"셸 위쪽 {k} {got[k]} > {mx} — 새 상태·함수는 modules/ 의 주인 모듈로"

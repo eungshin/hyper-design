@@ -27,6 +27,17 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `hd-pending {items:[{path, text}]}` → 화면이 그 요소 글을 잠시 바꿔 점선으로 보인다(반영 대기 미리보기, `items:[]`이면 되돌림)
 - 화면 파일을 바꾸는 편집(트리거 지정·해제, 잇기, 도착 바꾸기, 연결 끊기, 글자·카드 이름·설명 고치기)은 메모(`intent=change`, 메모 안 `edit` 종류)로 쌓여 같은 "보내기" 요청문으로 나간다. 카드 이름·설명은 `path=screens.json > screens[id=…] > title|purpose`. 보내지 않은 편집이 있으면 새로고침·닫기 전에 묻고, 변경 기록은 `hd-edit-log:` 키에 남는다
 
+## 책임 게이트 (조각마다 — god object 를 다시 만들지 않게)
+기계 검사(`tests/test_canvas_modules.py`의 `gate`, unit 층에서 돈다):
+- **책임** — 모듈 머리 주석 첫 줄 = `/* 층 — 맡은 일 */`. 한 줄로 못 쓰면 모듈을 나눈다
+- **협력** — 의존은 아래 층으로만: Model 은 다른 층을 모르고, ViewModel 은 View 를 모른다. View 끼리는 `HD.viewX` 를 직접 부르지 않는다 — 셸이 `mount(ctx)` 로 함수를 건네거나 의도(`dispatch`)로 잇는다
+- **비대 방지** — 템플릿 셸 위쪽 `var`·`function` 수는 `SHELL_MAX` 를 넘지 않는다. 조각이 덩어리를 빼내면 숫자를 내려 고정한다(올리는 수정은 리뷰에서 이유를 적는다)
+
+조각 보고(커밋 전, 사람이 본다):
+- **자율** — 새 상태마다 주인 모듈 하나와 저장 키 하나. 다른 모듈은 그 상태를 읽기만 하거나 의도를 보낸다
+- 새 모듈마다 한 줄: 맡은 일 · 가진 상태 · 받는 `ctx` · 내보내는 의도/함수
+- 셸 `var`/`function` 수 전 → 후
+
 ## 로컬 도우미 (`helper.py`, 선택)
 - 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고, 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 `build_canvas.py`로 다시 만든다(실패하면 되돌림)
 - 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
@@ -36,7 +47,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 
 | 층 | 파일 | 무엇을 | 시간 |
 |---|---|---|---|
-| unit | `tests/test_canvas_modules.py` | 순수 모듈(node): 그래프·길찾기·태그 자리·색·리듀서·설정·카메라 계획·순수성 | 약 1초 |
+| unit | `tests/test_canvas_modules.py` | 순수 모듈(node): 그래프·길찾기·태그 자리·색·리듀서·설정·카메라 계획·순수성·책임 게이트 | 약 1초 |
 | 브라우저 | `test_canvas_baseline.py`(지금 입력 규칙 고정) · `test_canvas_v2.py` · `test_canvas_edit.py`(편집 기능) | DOM 연결·실제 조작 | 테스트당 1~17초 |
 | 도우미 | `test_canvas_helper.py` | `helper.py` 편집·적용·서버(브라우저 1개) | 약 11초 |
 
