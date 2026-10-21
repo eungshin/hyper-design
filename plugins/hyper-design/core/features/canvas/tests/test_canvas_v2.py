@@ -97,7 +97,7 @@ def test_arrow_toggle_persists(page):
 
 
 def test_shift_click_focus(page):
-    page.click("#fit")
+    page.click("#zoom"); page.click("#fit")
     page.wait_for_timeout(200)
     fid = page.evaluate("document.querySelector('#rows path.ln').getAttribute('data-from')")
     linked = set(page.evaluate("""(id) => [...document.querySelectorAll('#rows path.ln')]
@@ -120,7 +120,7 @@ def test_shift_click_focus(page):
     page.keyboard.press("Escape")
     page.wait_for_timeout(100)
     assert page.evaluate("!document.getElementById('rows').classList.contains('focusing') && !document.querySelector('#rows .card.hl')")
-    page.click("#zoom")
+    page.click("#zoom"); page.click("#fit")
 
 
 def open_screen(pg, sid):
@@ -318,7 +318,7 @@ def test_gym_link_colors(gpage, gym_out):
 
 
 def test_gym_zoom_floor_and_fit(gpage):
-    gpage.click("#zoom")
+    gpage.click("#zoom"); gpage.click("#fit")
     gpage.wait_for_timeout(150)
     gpage.mouse.move(700, 500)
     for _ in range(20):
@@ -326,7 +326,7 @@ def test_gym_zoom_floor_and_fit(gpage):
         gpage.wait_for_timeout(30)
     z = float(gpage.get_attribute("#stage", "data-zoom"))
     assert z < 0.25, z
-    assert int(gpage.text_content("#zoom").rstrip("%")) < 25
+    assert int(gpage.text_content("#zoom").rstrip(" ▾%")) < 25
     gpage.keyboard.press("0")
     gpage.wait_for_timeout(200)
     pr = gpage.locator("#screens").bounding_box()
@@ -723,30 +723,13 @@ def test_v3_reduced_motion_jumps(gpage):
         gpage.keyboard.press("Escape")
 
 
-def test_v3_transition_menu(gpage):
-    """S6: T → 전환 메뉴(표의 전환마다 한 줄, 토큰 값) · ▶ 마다 페이지 오류 없음 · '애니메이션 끄기'는 새로고침 뒤에도, 카메라는 바로."""
+def test_v3_reduce_motion(gpage):
+    """G4: 전환 메뉴는 없앰 — '움직임 줄이기'는 표시 패널 체크 하나(#mvOff), 새로고침 뒤에도, 카메라는 바로."""
     errs = []
     gpage.on("pageerror", lambda e: errs.append(str(e)))
     gpage.keyboard.press("Escape")
-    gpage.mouse.click(5, 300)
-    gpage.keyboard.press("t")
-    gpage.wait_for_selector("#tmenu:not([hidden])")
-    names = gpage.evaluate("[...document.querySelectorAll('#tmenu .trow .tn')].map(n => n.textContent)")
-    assert names == ["포커스 진입 / 해제", "카드 펼치기 / 접기", "카메라 이동", "크게 보기 모달 열기/닫기", "연결 패널 표시", "드롭다운 / 팝오버", "태그·툴팁 등장"]
-    vals = gpage.evaluate("[...document.querySelectorAll('#tmenu .trow .tv')].map(n => n.textContent)")
-    assert all(re.match(r"^\d+ms · \S", v) for v in vals), vals
-    gpage.wait_for_timeout(300)
-    V3SHOTS.mkdir(parents=True, exist_ok=True)
-    gpage.screenshot(path=str(V3SHOTS / "p2-a-menu.png"))
-    for t in ["focus", "expand", "camera", "modal", "legend", "dropdown", "tooltip"]:
-        gpage.click(f'#tmenu button[data-play="{t}"]')
-        gpage.wait_for_timeout(1300)
-        assert not errs, (t, errs)
-    gpage.keyboard.press("Escape")
-    gpage.wait_for_timeout(300)
-    if gpage.is_hidden("#tmenu"):
-        gpage.keyboard.press("t")
-    gpage.check("#tmOff")
+    gpage.click('#dock .dk-tab[data-p="show"]')
+    gpage.check("#mvOff")
     assert gpage.evaluate("document.body.classList.contains('nomotion')")
     reload(gpage)
     assert gpage.evaluate("document.body.classList.contains('nomotion') && JSON.parse(localStorage.getItem('hd-canvas-prefs')).motion === false")
@@ -755,16 +738,13 @@ def test_v3_transition_menu(gpage):
     gpage.wait_for_function("window.__hdCam && window.__hdCam.to === 'renew'", timeout=3000)
     assert gpage.evaluate("window.__hdCam.keys.length") == 1 and centred(gpage, "renew")
     gpage.keyboard.press("Escape")
-    gpage.keyboard.press("t")
-    gpage.wait_for_selector("#tmenu:not([hidden])")
-    assert gpage.is_checked("#tmOff")
-    gpage.uncheck("#tmOff")
-    gpage.keyboard.press("Escape")
+    gpage.click('#dock .dk-tab[data-p="show"]')
+    assert gpage.is_checked("#mvOff")
+    gpage.uncheck("#mvOff")
     assert not gpage.evaluate("document.body.classList.contains('nomotion')")
     assert not errs, errs
 
 
-# ---------------------------------------------------------------- canvas-v3 (phase 3): 색 드롭다운 · 쌍 색 · 굵기
 STROKES_JS = """() => [...document.querySelectorAll('#rows path.ln:not(.plan)')].map(p => {
     const id = (p.getAttribute('marker-end') || '').match(/#([^)]+)/)[1];
     return [p.dataset.from + '>' + p.dataset.to, p.getAttribute('stroke').toLowerCase(), document.querySelector('#' + id + ' path').getAttribute('fill').toLowerCase(), parseFloat(getComputedStyle(p).strokeWidth)]; })"""

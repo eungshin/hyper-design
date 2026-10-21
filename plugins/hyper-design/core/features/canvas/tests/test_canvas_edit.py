@@ -170,7 +170,7 @@ def drag(pg, p, dx, dy):
 
 
 def test_toolbar_default_hand_and_keys(epage):
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     assert epage.locator("#tools").is_visible()
     assert tool(epage) == ["hand"], "기본 도구 = 손(지금처럼 끌면 화면 이동)"
     epage.keyboard.press("v")
@@ -191,7 +191,7 @@ def test_toolbar_default_hand_and_keys(epage):
 
 
 def test_move_tool_moves_card_and_persists(epage):
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     z = float(epage.get_attribute("#stage", "data-zoom"))
     p = visible_cover(epage)
@@ -202,7 +202,7 @@ def test_move_tool_moves_card_and_persists(epage):
     drag(epage, p, 80, 40)
     assert card_xy(epage, p["id"]) == [x0, y0]
     assert epage.evaluate("document.getElementById('stage').style.transform") != cam0
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     p = visible_cover(epage)
     x0, y0 = card_xy(epage, p["id"])
@@ -222,7 +222,7 @@ def test_move_tool_moves_card_and_persists(epage):
     reload(epage)
     assert card_xy(epage, p["id"]) == [x1, y1], "새로고침 뒤에도 옮긴 자리"
     # 이동 도구에서도 두 번 누르기 = 크게 보기(재작업 S3)
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     epage.keyboard.press("v")
     q = visible_cover(epage)
@@ -254,7 +254,7 @@ def test_fit_includes_moved_card_and_drops_stale(epage):
 
 
 def test_card_drag_has_no_long_tasks(epage):
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     epage.evaluate("""() => { window.__lt = 0; try { new PerformanceObserver(l => { window.__lt += l.getEntries().filter(e => e.duration > 50).length; })
         .observe({type: 'longtask', buffered: false}); } catch (e) { window.__lt = -1; } }""")
@@ -274,7 +274,7 @@ def test_card_drag_has_no_long_tasks(epage):
 
 
 def test_moved_card_paints_above_its_new_neighbours(epage):
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     epage.keyboard.press("v")
     p = visible_cover(epage)
@@ -436,7 +436,7 @@ def pick(pg, label):
 
 def test_context_menu_by_target(epage):
     from test_canvas_baseline import empty_point
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     p = empty_point(epage)
     epage.mouse.click(p["x"], p["y"], button="right")
@@ -444,7 +444,7 @@ def test_context_menu_by_target(epage):
     pick(epage, "100%")
     assert epage.get_attribute("#stage", "data-zoom") == "1.0000"
     assert epage.evaluate("document.getElementById('cmenu').hidden")
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     c = visible_cover(epage)
     title = epage.get_attribute(f'.card[data-id="{c["id"]}"] .cover', "data-title")
@@ -458,7 +458,7 @@ def test_context_menu_by_target(epage):
     epage.mouse.wheel(0, 100)                        # 휠(판 이동)은 메뉴를 닫는다
     epage.wait_for_timeout(80)
     assert epage.evaluate("document.getElementById('cmenu').hidden")
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     c = visible_cover(epage)
     epage.mouse.click(c["x"], c["y"], button="right")
@@ -478,7 +478,7 @@ def test_context_menu_by_target(epage):
 
 def test_hide_screen_and_hidden_list(epage):
     from test_canvas_baseline import empty_point
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     c = visible_cover(epage)
     sid = c["id"]
@@ -513,7 +513,7 @@ def test_hide_screen_and_hidden_list(epage):
 
 def test_undo_redo_card_moves_capped_at_50(epage):
     reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다
-    epage.click("#fit")
+    epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     assert epage.is_disabled("#undo") and epage.is_disabled("#redo")
     z = float(epage.get_attribute("#stage", "data-zoom"))
@@ -1640,3 +1640,82 @@ def test_memo_pending_history_panels(dpage):
 def test_file_mode_chip(epage):                                            # 2.2 E9 — 파일로 열면 바로 쓰기가 안 된다고 위쪽 줄에 늘 보인다
     assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨"
     assert "도우미" not in epage.text_content("header"), "화면 글에 '도우미' 말을 쓰지 않는다"
+
+
+# ---------------------------------------------------------------- 조각 3 보기·창 메뉴 (H1·H2·H4·H11·G4)
+def zoom_of(pg):
+    return round(float(pg.evaluate("document.getElementById('stage').dataset.zoom")), 3)
+
+
+def test_view_and_window_menus(dpage):
+    """H1·H2: 배율 칩 `72% ▾` = 보기 메뉴(전체 보기 0 · 100% 1 · 확대 · 축소 · 고른 화면에 맞추기) — 따로 있던 [전체 보기]·[전환] 버튼 없음.
+    H4·H11: [창 ▾] = 도구 막대·패널마다·판 아래 안내 켜고 끄기(체크) + 작업 영역 되돌리기, Tab = 패널 모두 숨기기.
+    G4: 전환 메뉴 없음 — T = 글자 도구(E 도 그대로), 움직임 줄이기는 표시 패널 체크 하나."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.keyboard.press("Escape")
+    assert dpage.locator("#tbtn, #tmenu").count() == 0, "전환 버튼·메뉴는 없앤다(G4)"
+    assert dpage.locator("header #fit").count() == 0, "[전체 보기]는 위쪽 줄 버튼이 아니다"
+    assert dpage.text_content("#zoom").strip().endswith("▾")
+    # 보기 메뉴
+    dpage.click("#zoom")
+    dpage.wait_for_selector("#vmenu:not([hidden])")
+    dpage.click("#fit")
+    dpage.wait_for_selector("#vmenu", state="hidden")
+    zf = zoom_of(dpage)
+    dpage.click("#zoom"); dpage.click('#vmenu [data-z="100"]')
+    assert zoom_of(dpage) == 1.0
+    dpage.click("#zoom"); dpage.click('#vmenu [data-z="out"]')
+    assert zoom_of(dpage) < 1.0
+    assert dpage.is_visible("#vmenu"), "확대·축소는 여러 번 누르게 메뉴를 열어 둔다"
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("1")
+    assert zoom_of(dpage) == 1.0, "1 = 100%"
+    dpage.keyboard.press("0")
+    assert zoom_of(dpage) == zf, "0 = 전체 보기"
+    focus_dayfine(dpage, "job")
+    dpage.click("#zoom"); dpage.click('#vmenu [data-z="pick"]')
+    box = dpage.evaluate("""() => { const c = document.querySelector('.card[data-id="job"]').getBoundingClientRect(),
+        p = document.getElementById('screens').getBoundingClientRect();
+        return c.left >= p.left && c.right <= p.right && c.top >= p.top && c.bottom <= p.bottom && c.height > p.height * 0.5; }""")
+    assert box, "고른 화면에 맞추기 = 그 카드가 판을 채운다"
+    # 창 메뉴
+    dpage.keyboard.press("Escape")
+    dpage.click("#wbtn")
+    dpage.wait_for_selector("#wmenu:not([hidden])")
+    rows = dpage.evaluate("[...document.querySelectorAll('#wmenu [data-w]')].map(r => [r.dataset.w, r.getAttribute('aria-checked'), r.textContent.trim()])")
+    keys = [r[0] for r in rows]
+    assert keys[:2] == ["tools", "hint"] and set(["links", "show", "notes", "pending", "history", "hidden"]) <= set(keys), rows
+    assert all(r[1] == "true" and r[2] for r in rows), "켜짐 체크 + 짧은 이름(H11)"
+    dpage.click('#wmenu [data-w="tools"]')
+    assert dpage.is_hidden("#tools")
+    dpage.click('#wmenu [data-w="history"]')
+    assert dpage.locator('#dock .dk-tab[data-p="history"]').count() == 0
+    assert dpage.get_attribute('#wmenu [data-w="history"]', "aria-checked") == "false"
+    dpage.click('#wmenu [data-w="history"]')
+    assert dpage.locator('#dock .dk-tab[data-p="history"]').count() == 1, "다시 켜면 그 패널이 열린다"
+    dpage.click('#wmenu [data-w="hint"]')
+    assert dpage.is_hidden("#khint")
+    dpage.click('#wmenu [data-act="reset"]')
+    assert dpage.is_visible("#tools") and dpage.is_visible("#khint"), "작업 영역 되돌리기"
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_selector("#wmenu", state="hidden")
+    # Tab = 패널 모두 숨기기 / 다시
+    dpage.mouse.click(5, 300)
+    dpage.keyboard.press("Tab")
+    assert dpage.is_hidden("#dock") and dpage.is_hidden("#tools")
+    dpage.keyboard.press("Tab")
+    assert dpage.is_visible("#dock") and dpage.is_visible("#tools")
+    # T = 글자 도구, E 도
+    dpage.keyboard.press("h"); dpage.keyboard.press("t")
+    assert dpage.get_attribute('#tools [data-tool="text"]', "aria-pressed") == "true"
+    dpage.keyboard.press("h"); dpage.keyboard.press("e")
+    assert dpage.get_attribute('#tools [data-tool="text"]', "aria-pressed") == "true"
+    dpage.keyboard.press("h")
+    # 움직임 줄이기 = 표시 패널 체크
+    dpage.click('#dock .dk-tab[data-p="show"]')
+    dpage.check("#mvOff")
+    assert dpage.evaluate("document.body.classList.contains('nomotion') && JSON.parse(localStorage.getItem('hd-canvas-prefs')).motion === false")
+    dpage.uncheck("#mvOff")
+    assert not dpage.evaluate("document.body.classList.contains('nomotion')")
+    assert not errs, errs

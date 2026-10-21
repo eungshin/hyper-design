@@ -12,7 +12,7 @@ var SPEC = {
   trigger:  {key: 'l', hit: 'click'},
   knife:    {key: 'c', hit: null},
   annotate: {key: 'p', hit: 'any'},
-  text:     {key: 'e', hit: 'leaf'},
+  text:     {key: 't', alt: 'e', hit: 'leaf'},   // T = 포토샵과 같게(G4), E 는 보조
   layout:   {key: 'n', hit: null},
   memo:     {key: 'm', hit: null}
 };
@@ -20,7 +20,7 @@ var ORDER = ['hand', 'move', 'trigger', 'knife', 'annotate', 'text', 'layout', '
 // 요소 종류(palette.js hd-hit 의 kind) → 테두리 이름표
 var LABEL = {text: '글자', button: '버튼', link: '링크', field: '입력칸', box: '영역'};
 
-function byKey(k) { for (var t in SPEC) if (SPEC[t].key === k) return t; return null; }
+function byKey(k) { for (var t in SPEC) if (SPEC[t].key === k || SPEC[t].alt === k) return t; return null; }
 function hitOf(tool) { return (SPEC[tool] || {}).hit || null; }
 
 HD.tools = {SPEC: SPEC, ORDER: ORDER, LABEL: LABEL, byKey: byKey, hitOf: hitOf};

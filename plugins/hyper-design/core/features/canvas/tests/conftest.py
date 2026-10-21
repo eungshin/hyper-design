@@ -15,8 +15,9 @@ AREAS = {
     "tools": "도구 막대·카드 옮기기·우클릭 메뉴·숨기기·되돌리기",
     "flow": "판에 늘 그리는 선(쌍마다 하나·줄 색·보이기/굵기/투명도)",
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
-    "motion": "카메라·전환 메뉴·움직임 끄기",
+    "motion": "카메라·움직임 줄이기",
     "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
+    "menu": "위쪽 보기 메뉴(배율 칩)·창 메뉴·Tab 패널 모두 숨기기",
     "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
 }
 
@@ -75,6 +76,7 @@ BROWSER = {
     "test_shift_select_keeps_every_picked_card_bright": ("links", "input", "tools"),
     "test_link_panel_trash_and_rename": ("links", "tools"),
     "test_memo_pending_history_panels": ("notes", "dock", "tools"),
+    "test_view_and_window_menus": ("menu", "dock", "tools", "motion"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),
@@ -110,7 +112,7 @@ BROWSER = {
     "test_v3_main_flow_dashed": ("flow",),
     "test_v3_ctrl_click_camera": ("motion",),
     "test_v3_reduced_motion_jumps": ("motion",),
-    "test_v3_transition_menu": ("motion",),
+    "test_v3_reduce_motion": ("motion", "dock"),
     "test_v3_line_style": ("links",),
 }
 

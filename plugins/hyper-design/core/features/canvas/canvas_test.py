@@ -81,7 +81,7 @@ def run(out: Path, shot=None):
                 add("drag_no_modal", not modal_open, modal_open)
             else:
                 add("drag_pans", False, detail="빈 곳을 찾지 못함")
-            page.click("#zoom")          # 처음 배율·위치로
+            page.click("#zoom"); page.click("#fit")          # 처음 배율·위치로
             page.wait_for_timeout(200)
 
             # (3) 카드 클릭 → 모달, Esc → 닫힘
@@ -117,14 +117,14 @@ def run(out: Path, shot=None):
             page.wait_for_timeout(150)
             z1 = zoom()
             add("ctrl_wheel_zooms", abs(z1 - z0) > 0.01, f"{z0} → {z1}")
-            page.click("#fit"); page.wait_for_timeout(150)
+            page.click("#zoom"); page.click("#fit"); page.wait_for_timeout(150)
             z2 = zoom()
             add("fit_changes_zoom", abs(z2 - z1) > 0.01 and 0 < z2 <= 1.5, f"{z1} → {z2}")
             page.mouse.move(700, 500)
             t1 = transform()
             page.mouse.wheel(0, 200); page.wait_for_timeout(150)
             add("wheel_pans_not_zooms", abs(zoom() - z2) < 1e-4 and transform() != t1, transform())
-            page.click("#zoom"); page.wait_for_timeout(300)
+            page.click("#zoom"); page.click("#fit"); page.wait_for_timeout(300)
 
             # (5) Foundation 색 칸 ≥ 20
             page.click(".tab[data-tab=foundation]")

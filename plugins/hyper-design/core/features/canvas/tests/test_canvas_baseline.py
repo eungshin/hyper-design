@@ -54,7 +54,7 @@ def cover_center(pg):
 
 
 def fit_view(pg):
-    pg.click("#fit")
+    pg.click("#zoom"); pg.click("#fit")
     pg.wait_for_timeout(120)
 
 
@@ -168,7 +168,6 @@ def test_typing_guard_blocks_shortcuts(bpage):
     bpage.wait_for_timeout(80)
     assert bpage.evaluate("[...document.querySelectorAll('#tools [aria-pressed=\"true\"]')].map(b => b.dataset.tool)") == tool0, "입력 중 L 은 도구를 바꾸지 않는다"
     assert not modal_open(bpage)
-    assert bpage.evaluate("document.querySelector('#tmenu:not([hidden])') === null")
     bpage.evaluate("document.getElementById('hd-test-input').remove()")
 
 
