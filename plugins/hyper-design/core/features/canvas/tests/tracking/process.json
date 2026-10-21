@@ -99,7 +99,7 @@
     },
     {
       "slice": "2.5b",
-      "commit": "(이번)",
+      "commit": "fe0783e",
       "numbered": false,
       "tests": {
         "full": 2,
@@ -134,6 +134,50 @@
         }
       ],
       "note": "첫 전체 실행이 진짜 버그 1개(transition)도 잡았다 — 전체를 아예 빼면 안 되고, 번호 조각 끝 1회는 남긴다"
+    },
+    {
+      "slice": "2.5d",
+      "commit": "(이번)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 12.5
+      },
+      "gate": {
+        "checks": 18,
+        "sec": 0.6,
+        "fired": [
+          {
+            "what": "셸 var 85 > 84(TITLES), function 116 > 114(선 자르기 맞춤)",
+            "real": true,
+            "fix": "titleOf 넘김 · 선 맞춤(hits)을 view-lines 로"
+          }
+        ]
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "E20·E21 실패 테스트 2개 빨강 확인 뒤 초록"
+        },
+        {
+          "by": "area",
+          "what": "점선 calc 에 단위가 없어 계산된 dasharray 가 숫자가 아님(2.5b 와 같은 종류) → px 단위"
+        }
+      ],
+      "waste": [
+        {
+          "what": "옛 테스트 고친 뒤 영역 1회에서 실패 7개 중 6개가 테스트 쪽(방향마다 태그·배율 따른 굵기·반대 방향 링크·이웃 선 촘촘함·이어진 실패)",
+          "minutes": 4,
+          "fix": "옛 테스트를 고칠 때 고정본 데이터(D.links 양방향)·화면 밖 좌표를 먼저 확인"
+        },
+        {
+          "what": "디버그용 임시 파일이 import * 로 테스트 전체를 끌어와 7분",
+          "minutes": 7,
+          "fix": "디버그는 필요한 픽스처만 import"
+        }
+      ],
+      "note": "선 체계 하나로 합치며 옛 연결 보기 테스트 6개 삭제(cycle·범례 체크·범례 마우스 강조·옆면 출발·차선 태그·틈 칸 태그), 나머지는 같은 선 기준으로 고침"
     }
   ]
 }

@@ -16,7 +16,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
-- `modules/` — 연결 보기·편집·도크. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
+- `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·연결 패널)만. Model(`graph`·`route`·`labels`·`camera`·`style`·`edits`) / ViewModel(`focus`·`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pHidden`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
@@ -52,7 +52,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | 도우미 | `test_canvas_helper.py` | `helper.py` 편집·적용·서버(브라우저 1개) | 약 11초 |
 
 브라우저 테스트는 영역 표시를 받는다(`tests/conftest.py`의 `BROWSER` 표 — 표에 없는 브라우저 테스트는 수집 단계에서 실패하니, 새 테스트는 표에 한 줄을 더한다):
-`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(연결 보기) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
+`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(고르기 강조·화면 안 연결) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
 
 **어디를 고치면 무엇을 돌리나**
 
@@ -67,7 +67,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `canvas_template.html` 메모·주석 부분 | `notes or modal` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
-| `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판에 늘 그리는 선: 쌍마다 하나·줄 색·보이기/굵기/투명도) | `unit or flow or links or tools` |
+| `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판의 선 하나뿐: 쌍마다 하나·줄 색·번호·태그·강조·자르기 맞춤·보이기/굵기/투명도/색) | `unit or flow or links or tools` |
 | `foundation/palette.js` | `links or modal or tools` |
 | `helper.py` | `helper` |
 | `build_canvas.py` | `unit or flow or links` |

@@ -321,87 +321,39 @@ def dpage(ctx):
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-SHIFT_CLICK = """(id) => document.querySelector('.card[data-id="' + id + '"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))"""
-
-
 def focus_dayfine(pg, sid):
+    """그 카드만 고른다(누르기) — 그 선이 진해지고, 화면 안 버튼 표시·소켓·연결 패널이 채워질 때까지."""
     from test_canvas_v2 import zoom_to
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(150)
     zoom_to(pg, sid, 330)
-    pg.evaluate(SHIFT_CLICK, sid)
-    pg.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
-    for _ in range(10):
-        if "전체" in (pg.text_content("#lgTitle") or ""):
-            break
-        pg.evaluate(SHIFT_CLICK, sid)
-        pg.wait_for_timeout(250)
+    pg.evaluate(CLICK, sid)
+    pg.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
     pg.wait_for_timeout(700)
 
 
-def paths(pg):
-    return pg.evaluate("""[...document.querySelectorAll('#lks path.lk')].map(p => ({k: +p.dataset.k, to: p.dataset.to, pts: JSON.parse(p.dataset.pts),
-        bk: p.classList.contains('bk'), op: +getComputedStyle(p).opacity}))""")
+def ln_mid(pg, a, b):
+    """판의 선(a—b 쌍)에서 판 안에 보이고(도크 앞) 이웃 선과 16px 넘게 떨어진 점 중 가운데에 가장 가까운 점 → 화면 좌표.
+    다른 줄로 가는 선은 왼쪽 통로로 돌아 가운데가 화면 밖이거나 이웃 선과 붙어 있을 수 있다."""
+    return pg.evaluate("""([a, b]) => { const p = [...document.querySelectorAll('#ar path.ln')].find(p => (p.dataset.from === a && p.dataset.to === b) || (p.dataset.from === b && p.dataset.to === a));
+        const L = p.getTotalLength(), m = p.getScreenCTM(), r = document.getElementById('screens').getBoundingClientRect(), d = document.getElementById('dock').getBoundingClientRect();
+        const scr = (o, t) => { const q = o.getPointAtLength(t), n = o.getScreenCTM(); return [q.x * n.a + q.y * n.c + n.e, q.x * n.b + q.y * n.d + n.f]; };
+        const others = [...document.querySelectorAll('#ar path.ln')].filter(o => o !== p && getComputedStyle(o).display !== 'none')
+          .flatMap(o => { const n = o.getTotalLength(), out = []; for (let t = 0; t <= n; t += 4) out.push(scr(o, t)); return out; });
+        let best = null;
+        for (let i = 1; i < 100; i++) { const [x, y] = scr(p, L * i / 100);
+          if (!(x > r.left + 30 && x < Math.min(r.right, d.left) - 30 && y > r.top + 30 && y < r.bottom - 30)) continue;
+          if (others.some(([u, v]) => Math.hypot(u - x, v - y) < 16)) continue;   // 자르는 획(±12px)이 이웃 선을 건드리지 않게
+          if (!best || Math.abs(i - 50) < best[2]) best = [x, y, Math.abs(i - 50)]; }
+        return best && best.slice(0, 2); }""", [a, b])
 
 
-def phone_boxes(pg):
-    return pg.evaluate("""[...document.querySelectorAll('#rows .card .phone')].map(p => { const r = p.getBoundingClientRect();
-        return [p.closest('.card').dataset.id, r.left, r.top, r.right, r.bottom]; })""")
+def right_cut(pg, x, y, d=12):
+    pg.mouse.move(x - d, y - d)
+    pg.mouse.down(button="right")
+    pg.mouse.move(x + d, y + d, steps=6)
+    pg.mouse.up(button="right")
 
-
-TAGS_JS = """[...document.querySelectorAll('#lkl .ltag')].map(n => { const r = n.getBoundingClientRect();
-    return {k: +n.dataset.k, float: n.classList.contains('float'), vis: getComputedStyle(n).visibility, box: [r.left, r.top, r.right, r.bottom]}; })"""
-
-
-def test_straight_neighbour_back_faint_and_under_cards(dpage):
-    focus_dayfine(dpage, "job")
-    ps = {p["to"]: p for p in paths(dpage)}
-    nxt = ps["language"]
-    lang_x = dpage.evaluate("""document.querySelector('.card[data-id="language"]').offsetLeft""")
-    pts = nxt["pts"]
-    assert len(pts) == 2 and abs(pts[0][1] - pts[1][1]) < 0.01 and abs(pts[1][0] - (lang_x - 10)) < 1, ("바로 옆 화면은 꺾임 없이 옆면 10px 앞까지", pts)
-    back = [p for p in ps.values() if p["bk"]]
-    assert back and all(p["to"] in ("login", "login--done") for p in back), list(ps)
-    assert all(p["op"] < 0.6 for p in back) and nxt["op"] == 1 and not nxt["bk"], "앞 화면으로 가는 연결은 흐리게"
-    assert dpage.evaluate("getComputedStyle(document.getElementById('lks')).zIndex") == "-1"
-    # 출발 카드 안을 지나는 선 구간은 카드에 가려진다(그 자리의 맨 위는 카드)
-    x0, y0 = pts[0]
-    hit = dpage.evaluate("""([x, y]) => { const s = document.getElementById('stage').getBoundingClientRect(), z = +document.getElementById('stage').dataset.zoom,
-        r = document.getElementById('rows'); const px = s.left + (r.offsetLeft + x - 6) * z, py = s.top + (r.offsetTop + y) * z;
-        const e = document.elementFromPoint(px, py); return e && e.closest('.card') ? e.closest('.card').dataset.id : (e && e.tagName); }""", [x0, y0])
-    assert hit == "job", hit
-    ESHOTS.mkdir(parents=True, exist_ok=True)
-    dpage.screenshot(path=str(ESHOTS / "3-after-job.png"))
-
-
-def test_tags_never_on_cards_gap_tag_ellipsis_then_full(dpage):
-    """곧은 선의 태그: 카드 사이 틈 칸 안, 선 바로 위 · 틈보다 길면 말줄임 · 마우스 올리면 전체 글자(맨 위) · 범례엔 늘."""
-    focus_dayfine(dpage, "job")
-    boxes = phone_boxes(dpage)
-    tags = dpage.evaluate(TAGS_JS)
-    assert dpage.evaluate("document.querySelectorAll('#lgRows .lgrow[data-k]').length") == len(tags), "범례엔 연결마다 한 줄"
-
-    def on_card(b):
-        return [i for i, l, t, r, bt in boxes if b[0] < r - 0.5 and l + 0.5 < b[2] and b[1] < bt and t < b[3]]
-    for t in tags:
-        if t["vis"] == "visible":
-            assert not on_card(t["box"]), ("보이는 태그는 카드 위에 놓이지 않는다", t, on_card(t["box"]))
-    k = [p for p in paths(dpage) if p["to"] == "language"][0]["k"]
-    t = [x for x in dpage.evaluate(TAGS_JS) if x["k"] == k][0]
-    job = [b for b in boxes if b[0] == "job"][0]
-    lang = [b for b in boxes if b[0] == "language"][0]
-    line_y = dpage.evaluate("""() => { const p = document.querySelector('#lks path.lk[data-to="language"]'); return p.getBoundingClientRect().top; }""")
-    assert t["vis"] == "visible" and not t["float"], t
-    assert job[3] <= t["box"][0] and t["box"][2] <= lang[1], ("틈 칸 안", t["box"], job, lang)
-    assert t["box"][3] <= line_y + 1 and line_y - t["box"][3] < 12, ("선 바로 위", t["box"], line_y)
-    clip = dpage.evaluate(f"""(() => {{ const n = document.querySelector('#lkl .ltag[data-k="{k}"]'); return [n.scrollWidth > n.clientWidth + 1, n.textContent]; }})()""")
-    assert clip[0], ("'다음으로'는 틈보다 길어 말줄임", clip)
-    dpage.locator(f'#lgRows .lgrow[data-k="{k}"]').hover()
-    dpage.wait_for_timeout(200)
-    full = dpage.evaluate(f"""(() => {{ const n = document.querySelector('#lkl .ltag[data-k="{k}"]'); return [n.scrollWidth <= n.clientWidth + 1, getComputedStyle(n).zIndex, getComputedStyle(n).visibility]; }})()""")
-    assert full[0] and full[2] == "visible", ("마우스 올리면 전체 글자", full)
-    dpage.screenshot(path=str(ESHOTS / "3-after-job-hover-tag.png"))
-    dpage.mouse.move(5, 300)
 
 def bring_into_view(pg, sel):
     """휠로 판을 옮겨 그 요소를 판 가운데로(Ctrl 없이 = 이동)."""
@@ -412,42 +364,53 @@ def bring_into_view(pg, sel):
     pg.wait_for_timeout(250)
 
 
+def tag_sel(frm, to):
+    return f'#rows .alabel[data-from="{frm}"][data-to="{to}"]'
+
+
+def tag_text(pg, frm, to):
+    """선 태그 글에서 번호(첫 글자)를 뺀 것."""
+    return pg.text_content(tag_sel(frm, to)).split(" ", 1)[-1]
+
+
 def test_tag_rename_keeps_button_text(dpage):
+    """E20: 선 태그(번호 + 이름)를 두 번 눌러 이름 바꾸기 — 버튼 글·연결 패널은 그대로, hd-link-names 별도 키, 새로고침 뒤에도."""
     focus_dayfine(dpage, "job")
-    on = dpage.evaluate("[...document.querySelectorAll('#lkl .ltag.on')].map(n => [+n.dataset.k, n.dataset.to, n.textContent])")
-    k, to, old = on[0]
-    legend0 = dpage.text_content(f'#lgRows .lgrow[data-k="{k}"]')
+    to = dpage.evaluate("[...document.querySelectorAll('#rows .alabel.on')].find(n => n.dataset.from === 'job').dataset.to")
+    sel, old = tag_sel("job", to), tag_text(dpage, "job", to)
+    num = dpage.text_content(sel).split(" ", 1)[0]
+    legend0 = dpage.text_content(f'#lgRows .lgrow[data-to="{to}"]')
     frame = dpage.frame_locator('.card[data-id="job"] .phone iframe')
     btn0 = frame.locator("body").inner_text()
-    bring_into_view(dpage, f'#lkl .ltag[data-k="{k}"]')
-    dpage.dblclick(f'#lkl .ltag[data-k="{k}"]')
-    inp = dpage.locator(f'#lkl .ltag[data-k="{k}"] input')
+    bring_into_view(dpage, sel)
+    dpage.dblclick(sel)
+    inp = dpage.locator(f"{sel} input")
     inp.fill("처음 화면으로")
     inp.press("Enter")
     dpage.wait_for_timeout(200)
-    assert dpage.text_content(f'#lkl .ltag[data-k="{k}"]') == "처음 화면으로"
-    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "이름 바꾸기가 연결 보기를 끄지 않는다"
-    assert dpage.text_content(f'#lgRows .lgrow[data-k="{k}"]') == legend0, "범례(버튼 글)는 그대로"
+    assert dpage.text_content(sel) == num + " 처음 화면으로", "번호는 그대로, 이름만"
+    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "이름 바꾸기가 고르기를 풀지 않는다"
+    assert dpage.text_content(f'#lgRows .lgrow[data-to="{to}"]') == legend0, "연결 패널(버튼 글)은 그대로"
     assert frame.locator("body").inner_text() == btn0, "화면 안 버튼 글은 그대로"
     keys = dpage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-link-names:'))")
     assert len(keys) == 1 and "처음 화면으로" in dpage.evaluate("(k) => localStorage.getItem(k)", keys[0])
     assert "처음 화면으로" not in (dpage.evaluate("localStorage.getItem('hd-canvas-prefs')") or "")
     reload(dpage)
     focus_dayfine(dpage, "job")
-    assert dpage.text_content(f'#lkl .ltag[data-to="{to}"]') == "처음 화면으로", "새로고침 뒤에도"
-    bring_into_view(dpage, f'#lkl .ltag[data-to="{to}"]')
-    # Esc = 취소(연결 보기는 그대로), 비우고 Enter = 버튼 글로 돌아감
-    dpage.dblclick(f'#lkl .ltag[data-to="{to}"]')
-    dpage.locator(f'#lkl .ltag[data-to="{to}"] input').fill("버릴 이름")
-    dpage.locator(f'#lkl .ltag[data-to="{to}"] input').press("Escape")
+    assert tag_text(dpage, "job", to) == "처음 화면으로", "새로고침 뒤에도"
+    bring_into_view(dpage, sel)
+    # Esc = 취소(고르기는 그대로), 비우고 Enter = 버튼 글로 돌아감
+    dpage.dblclick(sel)
+    dpage.locator(f"{sel} input").fill("버릴 이름")
+    dpage.locator(f"{sel} input").press("Escape")
     dpage.wait_for_timeout(150)
-    assert dpage.text_content(f'#lkl .ltag[data-to="{to}"]') == "처음 화면으로"
-    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "입력 중 Esc 는 연결 보기를 끄지 않는다"
-    dpage.dblclick(f'#lkl .ltag[data-to="{to}"]')
-    dpage.locator(f'#lkl .ltag[data-to="{to}"] input').fill("")
-    dpage.locator(f'#lkl .ltag[data-to="{to}"] input').press("Enter")
+    assert tag_text(dpage, "job", to) == "처음 화면으로"
+    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "입력 중 Esc 는 고르기를 풀지 않는다"
+    dpage.dblclick(sel)
+    dpage.locator(f"{sel} input").fill("")
+    dpage.locator(f"{sel} input").press("Enter")
     dpage.wait_for_timeout(150)
-    assert dpage.text_content(f'#lkl .ltag[data-to="{to}"]') == old
+    assert tag_text(dpage, "job", to) == old
     dpage.keyboard.press("Escape")
 
 
@@ -581,8 +544,8 @@ def test_undo_redo_card_moves_capped_at_50(epage):
 
 def test_link_menu_rename_undo_and_go(dpage):
     focus_dayfine(dpage, "job")
-    k, to, old = dpage.evaluate("[...document.querySelectorAll('#lkl .ltag.on')].map(n => [+n.dataset.k, n.dataset.to, n.textContent])")[0]
-    sel = f'#lkl .ltag[data-k="{k}"]'
+    to = dpage.evaluate("[...document.querySelectorAll('#rows .alabel.on')].find(n => n.dataset.from === 'job').dataset.to")
+    sel, old = tag_sel("job", to), tag_text(dpage, "job", to)
     bring_into_view(dpage, sel)
     dpage.click(sel, button="right")
     assert cmenu_items(dpage) == ["이름 고치기", "도착으로 가기", "도착 바꾸기", "끊기"]
@@ -593,17 +556,17 @@ def test_link_menu_rename_undo_and_go(dpage):
     inp.fill("맥락 이름")
     inp.press("Enter")
     dpage.wait_for_timeout(150)
-    assert dpage.text_content(sel) == "맥락 이름"
+    assert tag_text(dpage, "job", to) == "맥락 이름"
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(150)
-    assert dpage.text_content(sel) == old, "되돌리면 버튼 글로"
+    assert tag_text(dpage, "job", to) == old, "되돌리면 버튼 글로"
     assert "맥락 이름" not in (dpage.evaluate("localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-link-names:')))") or "")
     dpage.keyboard.press("Control+Shift+z")
     dpage.wait_for_timeout(150)
-    assert dpage.text_content(sel) == "맥락 이름"
+    assert tag_text(dpage, "job", to) == "맥락 이름"
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(150)
-    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "되돌리기는 연결 보기를 끄지 않는다"
+    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "되돌리기는 고르기를 풀지 않는다"
     bring_into_view(dpage, sel)
     dpage.click(sel, button="right")
     pick(dpage, "도착으로 가기")
@@ -660,19 +623,13 @@ def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
 
 
 def test_knife_right_drag_cuts_link_into_note(dpage):
+    """E20: 늘 보이는 선을 오른쪽 끌기로 가로지르면 그 쌍의 화면 안 링크 전부 끊기 메모(되돌리기 한 번에)."""
     focus_dayfine(dpage, "job")
     n0 = len(notes_of(dpage))
-    lk = paths(dpage)[0]
-    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
-    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
-        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
-    dpage.mouse.move(sx - 12, sy - 12)
-    dpage.mouse.down(button="right")
-    dpage.mouse.move(sx + 12, sy + 12, steps=6)
-    dpage.mouse.up(button="right")
-    wait_notes(dpage, n0 + 1)
-    n = notes_of(dpage)[-1]
-    assert n["screen"] == "job" and "연결 끊기" in n["note"] and lk["to"] in n["note"], n
+    right_cut(dpage, *ln_mid(dpage, "job", "language"))
+    dpage.wait_for_function("(n) => " + NOTES_JS + ".length > n", arg=n0, timeout=4000)
+    new = notes_of(dpage)[n0:]
+    assert all(n["op"] == "cut" and {n["screen"], n["to"]} == {"job", "language"} and "연결 끊기" in n["note"] for n in new), new
     assert dpage.evaluate("document.getElementById('cmenu').hidden"), "오른쪽 끌기 뒤에는 메뉴를 띄우지 않는다"
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
@@ -839,27 +796,26 @@ def test_element_menu_edit_text(dpage):
 
 
 # ---------------------------------------------------------------- 재작업 A: 연결 편집은 캔버스에 바로 보인다(원 세션 검증 10-20)
-def lk_to(pg, to):
-    return pg.evaluate("(to) => [...document.querySelectorAll('#lks path.lk')].filter(p => p.dataset.to === to).map(p => p.getAttribute('class'))", to)
+def lk_to(pg, to, frm="job"):
+    """판의 선(frm—to 쌍)의 class 목록 — 없으면 []."""
+    return pg.evaluate("""([a, b]) => [...document.querySelectorAll('#ar path.ln')].filter(p => (p.dataset.from === a && p.dataset.to === b) || (p.dataset.from === b && p.dataset.to === a))
+        .map(p => p.getAttribute('class'))""", [frm, to])
 
 
 def test_cut_hides_line_at_once_with_live_mark_and_toast_undo(dpage):
     focus_dayfine(dpage, "job")
-    lk = paths(dpage)[0]
-    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
-    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
-        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
+    sx, sy = ln_mid(dpage, "job", "language")
     dpage.mouse.move(sx - 14, sy - 14)
     dpage.mouse.down(button="right")
     dpage.mouse.move(sx + 14, sy + 14, steps=6)
-    assert any("cutting" in c for c in lk_to(dpage, lk["to"])), "끄는 동안 가로지른 선은 바로 빨갛게"
+    assert any("cutting" in c for c in lk_to(dpage, "language")), "끄는 동안 가로지른 선은 바로 빨갛게"
     dpage.mouse.up(button="right")
-    dpage.wait_for_timeout(250)
-    assert lk_to(dpage, lk["to"]) == [], "놓으면 그 선은 바로 사라진다"
+    dpage.wait_for_timeout(600)
+    assert lk_to(dpage, "language") == [], "놓으면 그 선은 바로 사라진다"
     assert "끊었어요" in dpage.text_content("#toast")
     dpage.click("#toast button")
     dpage.wait_for_timeout(250)
-    assert lk_to(dpage, lk["to"]), "토스트의 되돌리기 = 선이 돌아온다"
+    assert lk_to(dpage, "language"), "토스트의 되돌리기 = 선이 돌아온다"
     dpage.keyboard.press("Escape")
 
 
@@ -873,8 +829,8 @@ def test_socket_drag_draws_pending_line_at_once(dpage):
     dpage.wait_for_timeout(250)
     cls = lk_to(dpage, q["id"])
     assert cls and all("pd" in c for c in cls), ("새 도착으로 가는 선이 바로 반영 대기 모양(점선)으로", cls)
-    dash = dpage.evaluate("""(to) => { const p = [...document.querySelectorAll('#lks path.lk.pd')].find(p => p.dataset.to === to);
-        const z = +document.getElementById('stage').dataset.zoom, d = getComputedStyle(p).strokeDasharray.split(',').map(parseFloat);
+    dash = dpage.evaluate("""(to) => { const p = [...document.querySelectorAll('#ar path.ln.pd')].find(p => p.dataset.from === to || p.dataset.to === to);
+        const z = +document.getElementById('stage').dataset.zoom, d = getComputedStyle(p).strokeDasharray.split(/[ ,]+/).map(parseFloat);
         return [d[0] * z, p.hasAttribute('pathLength')]; }""", q["id"])
     assert dash[0] >= 4 and not dash[1], ("점선 한 칸이 화면에서 4px 이상(길이 비율이 아니라 화면 px) — 재검증 C2", dash)
     dpage.keyboard.press("Control+z")
@@ -1210,10 +1166,11 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2, button="right")
     pick(dpage, "들어오는 연결 끊기")
     focus_dayfine(dpage, "job")
-    assert lk_to(dpage, "language") == [], "그 화면으로 오는 선이 바로 사라진다"
+    into = lambda: [l for l in lines(dpage) if (l["from"], l["to"]) == ("job", "language") or ((l["from"], l["to"]) == ("language", "job") and l["both"])]
+    assert into() == [], "그 화면으로 오는 선이 바로 사라진다(반대 방향 language → job 은 남는다)"
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(250)
-    assert lk_to(dpage, "language"), "되돌리면 돌아온다"
+    assert into(), "되돌리면 돌아온다"
     dpage.keyboard.press("Escape")
 
 
@@ -1248,7 +1205,7 @@ def test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element(dpage):
 
 
 def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
-    """재검증 남은 한계: 기존 연결과 같은 도착으로 합쳐진 반영 대기는 선을 점선으로 만들지 않고 태그에 '반영 대기 n'."""
+    """기존 연결과 같은 도착으로 합쳐진 반영 대기는 선을 점선으로 만들지 않는다(점선 = 반영 대기로만 있는 쌍)."""
     focus_dayfine(dpage, "job")
     dpage.keyboard.press("l")
     s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none' && n.dataset.to !== 'language');
@@ -1259,11 +1216,9 @@ def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
     drag(dpage, s, tx - s["x"], t["y"] + t["height"] / 2 - s["y"])
     dpage.wait_for_timeout(250)
     cls = lk_to(dpage, "language")
-    assert cls and not any("pd" in c for c in cls), ("기존 연결이 섞인 그룹의 선은 실선", cls)
-    assert "반영 대기 1" in dpage.text_content('#lkl .ltag[data-to="language"]')
+    assert cls and not any("pd" in c for c in cls), ("기존 연결이 섞인 쌍의 선은 실선", cls)
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(250)
-    assert "반영 대기" not in dpage.text_content('#lkl .ltag[data-to="language"]')
     dpage.keyboard.press("h")
     dpage.keyboard.press("Escape")
 
@@ -1282,7 +1237,7 @@ def test_trigger_click_on_card_shows_its_links_like_shift_click(dpage):
     x, y = el_point(dpage, ph, fr, "h1")
     dpage.mouse.click(x, y)
     dpage.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
-    dpage.wait_for_function("document.querySelectorAll('#lks path.lk').length >= 1", timeout=5000)
+    dpage.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
     assert dpage.evaluate("document.querySelector('.card.focus').dataset.id") == "job"
     dpage.wait_for_timeout(300)
     assert sel_sock(dpage), "연결 보기가 그려진 뒤에도 고른 요소의 소켓은 남는다"
@@ -1292,7 +1247,7 @@ def test_trigger_click_on_card_shows_its_links_like_shift_click(dpage):
 
 
 def test_cutting_a_pending_line_cancels_that_edit(dpage):
-    """E4: 아직 반영 안 된(점선) 연결을 오른쪽 끌기로 자르면 '연결 끊기' 메모가 아니라 그 편집이 취소된다. 되돌리기 = 점선이 돌아온다."""
+    """E4: 아직 반영 안 된(점선) 연결을 자르면 '연결 끊기' 메모가 아니라 그 편집이 취소된다. 되돌리기 = 점선이 돌아온다."""
     focus_dayfine(dpage, "job")
     dpage.keyboard.press("l")
     s = dpage.evaluate("""(() => { const s = [...document.querySelectorAll('.sock')].find(n => getComputedStyle(n).display !== 'none');
@@ -1302,14 +1257,11 @@ def test_cutting_a_pending_line_cancels_that_edit(dpage):
     drag(dpage, s, q["x"] - s["x"], q["y"] - s["y"])
     wait_notes(dpage, n0 + 1)
     dpage.wait_for_timeout(250)
-    lk = next(p for p in paths(dpage) if p["to"] == q["id"])
-    (x0, y0), (x1, y1) = lk["pts"][0], lk["pts"][1]
-    sx, sy = dpage.evaluate("""([x, y]) => { const r = document.getElementById('lks').getBoundingClientRect(),
-        z = +document.getElementById('stage').dataset.zoom; return [r.left + x * z, r.top + y * z]; }""", [(x0 + x1) / 2, (y0 + y1) / 2])
-    dpage.mouse.move(sx - 12, sy - 12)
-    dpage.mouse.down(button="right")
-    dpage.mouse.move(sx + 12, sy + 12, steps=6)
-    dpage.mouse.up(button="right")
+    assert all("pd" in c for c in lk_to(dpage, q["id"])), "새 도착 선은 반영 대기(점선)"
+    sel = tag_sel("job", q["id"])                    # 왼쪽 통로는 선이 촘촘해 그어 자르기는 이웃 선도 건드린다 — 그 선의 태그 메뉴 '끊기'(같은 자르기 경로)
+    bring_into_view(dpage, sel)
+    dpage.click(sel, button="right")
+    pick(dpage, "끊기")
     wait_notes(dpage, n0)
     dpage.wait_for_timeout(250)
     assert lk_to(dpage, q["id"]) == [], "취소된 점선은 사라진다"
@@ -1453,7 +1405,7 @@ def lines(pg):
 
 def test_all_lines_visible_without_clicking(dpage):
     """E7·D6b: 아무것도 누르지 않아도 모든 화면 연결이 판에 보인다(출발 줄마다 한 색, 양방향은 선 하나, 점선 없음).
-    D9: [주요 흐름] 버튼·표시 패널 체크·A 키는 없다. 누르면(한 화면 연결 보기) 그 화면의 자세한 선이 대신한다."""
+    D9: [주요 흐름] 버튼·표시 패널 체크·A 키는 없다."""
     fit_view(dpage)
     assert not dpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
     ls = [l for l in lines(dpage) if not l["plan"]]
@@ -1475,7 +1427,7 @@ def test_all_lines_visible_without_clicking(dpage):
     assert len([l for l in lines(dpage) if l["shown"]]) == n, "A 키는 비워 둔다"
     # 화면 안 링크(palette.js hd-links)와 같은 연결이어야 한다
     focus_dayfine(dpage, "job")
-    want = {p["to"] for p in paths(dpage)}
+    want = set(dpage.evaluate("[...document.querySelectorAll('#lgRows .lgrow')].map(r => r.dataset.to)"))
     have = {l["to"] if l["from"] == "job" else l["from"] for l in ls if "job" in (l["from"], l["to"]) and (l["from"] == "job" or l["both"])}
     assert want <= have, (want, have)
     dpage.keyboard.press("Escape")
@@ -1530,3 +1482,63 @@ def test_trigger_link_draws_dashed_line_without_clicking(dpage):
     dpage.wait_for_timeout(200)
     assert not [l for l in lines(dpage) if l["pd"]], "되돌리면 점선이 사라진다"
     dpage.keyboard.press("h")
+
+
+# ---------------------------------------------------------------- 조각 2.5d 선 체계 하나 (E20·E21, rework §7-3)
+LN_OF_JS = """(id) => [...document.querySelectorAll('#ar path.ln')].filter(p => p.dataset.from === id || p.dataset.to === id)
+    .map(p => ({key: p.dataset.from + '>' + p.dataset.to, stroke: p.getAttribute('stroke'), d: p.getAttribute('d'),
+                on: p.classList.contains('on'), op: +getComputedStyle(p).opacity}))"""
+
+
+def test_click_keeps_the_same_lines_and_numbers_buttons(dpage):
+    """E20 A: 카드를 누르면 새 선을 그리지 않는다 — 그 카드의 늘 보이는 선이 같은 색·같은 길로 진해지고, 나머지는 흐려진다.
+    화면 안 출발 버튼은 그 선과 같은 색 테두리 + 번호, 선 태그에도 같은 번호."""
+    fit_view(dpage)
+    from test_canvas_v2 import zoom_to
+    zoom_to(dpage, "job", 330)
+    before = {l["key"]: l for l in dpage.evaluate(LN_OF_JS, "job")}
+    assert before, "job 에 늘 보이는 선이 있어야 한다"
+    d = dpage.locator("#dock").bounding_box()
+    dpage.mouse.move(d["x"] + d["width"] / 2, d["y"] + d["height"] - 20)   # 카드 위가 아니게(마우스를 올린 카드의 선은 따로 진해진다)
+    dpage.evaluate(CLICK, "job")
+    dpage.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
+    fr = frame_of(dpage, "job")
+    fr.wait_for_function("document.querySelectorAll('[data-hd-links]').length >= 1", timeout=5000)
+    dpage.wait_for_timeout(400)
+    assert dpage.locator("#lks path.lk").count() == 0, "연결 보기 전용 선은 그리지 않는다"
+    after = {l["key"]: l for l in dpage.evaluate(LN_OF_JS, "job")}
+    assert after.keys() == before.keys()
+    for k, l in after.items():
+        assert l["stroke"] == before[k]["stroke"] and l["d"] == before[k]["d"], ("같은 색·같은 길", k, before[k], l)
+        assert l["on"] and l["op"] > 0.9, ("그 카드의 선은 진하게", k, l)
+    others = [l for l in lines(dpage) if "job" not in (l["from"], l["to"]) and l["shown"]]
+    assert others and all(l["op"] < 0.3 for l in others), "나머지 선은 흐리게"
+    paint = fr.evaluate("""[...document.querySelectorAll('[data-hd-links]')].map(d => ({color: getComputedStyle(d).borderTopColor,
+        n: (d.querySelector('span') || {}).textContent || ''}))""")
+    assert all(p["n"] for p in paint), ("출발 버튼마다 번호", paint)
+    def rgb(hx):
+        return "rgb(%d, %d, %d)" % (int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16))
+    colors = {rgb(l["stroke"]) for l in after.values()}
+    assert {p["color"] for p in paint} <= colors, ("버튼 테두리 = 그 선의 색", paint, colors)
+    tags = dpage.evaluate("""[...document.querySelectorAll('#rows .alabel.on')].filter(n => n.dataset.from === 'job' && getComputedStyle(n).display !== 'none')
+        .map(n => n.textContent)""")
+    assert tags and {t[0] for t in tags} <= {p["n"] for p in paint}, ("선 태그에 같은 번호", tags, paint)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+
+
+def test_shift_select_keeps_every_picked_card_bright(dpage):
+    """E21: Shift 로 여러 장 고르면 고른 카드 모두 또렷하고 그 카드들의 선이 진하다(두 번째 카드가 흐려지지 않는다)."""
+    fit_view(dpage)
+    p = visible_cover(dpage)
+    q = visible_cover(dpage, skip=[p["id"]])
+    dpage.mouse.click(p["x"], p["y"])
+    dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
+    dpage.wait_for_timeout(400)
+    ops = dpage.evaluate("(ids) => ids.map(id => +getComputedStyle(document.querySelector('.card[data-id=\"' + id + '\"]')).opacity)", [p["id"], q["id"]])
+    assert all(o > 0.95 for o in ops), ("고른 카드 모두 또렷", ops)
+    for cid in (p["id"], q["id"]):
+        ls = dpage.evaluate(LN_OF_JS, cid)
+        assert all(l["on"] and l["op"] > 0.9 for l in ls), ("고른 카드의 선은 모두 진하게", cid, ls)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
