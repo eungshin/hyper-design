@@ -58,7 +58,7 @@ def test_notes_panel_in_dock_scrolls(epage):
     epage.wait_for_timeout(200)
     assert epage.evaluate(f"(() => {{ const l = {body}; return l.scrollTop + l.clientHeight >= l.scrollHeight - 2; }})()"), "휠로 목록 끝까지 내려간다"
     assert epage.evaluate("document.getElementById('stage').style.transform") == cam0, "목록 위 휠은 판을 움직이지 않는다"
-    assert epage.locator("#nsend").is_visible(), "보내기는 아래에 붙어 늘 보인다"
+    assert epage.locator("#nsend").is_visible() and epage.evaluate("!!document.getElementById('nsend').closest('header')"), "보내기는 위쪽 줄 한 자리(E16)"
     assert epage.text_content('#dock .dk-tab[data-p="notes"] .dk-cnt') == "18", "탭에 메모 수"
     ESHOTS.mkdir(parents=True, exist_ok=True)
     epage.screenshot(path=str(ESHOTS / "1-notes-open-scrolled.png"))
@@ -1613,7 +1613,8 @@ def test_memo_pending_history_panels(dpage):
     assert len([t for t in pend if "연결 끊기" in t]) == k and not any("패널 나누기 확인" in t for t in pend), pend
     assert dpage.text_content('#dock .dk-tab[data-p="notes"] .dk-cnt') == str(len(memos))
     assert dpage.text_content('#dock .dk-tab[data-p="pending"] .dk-cnt') == str(len(pend))
-    assert dpage.locator("#nsend").count() == 1 and dpage.locator("#pPending button.pri").count() == 0, "주 행동은 한 자리"
+    assert dpage.locator("#nsend").count() == 1 and dpage.evaluate("!!document.getElementById('nsend').closest('header')"), "주 행동은 위쪽 줄 한 자리"
+    assert dpage.text_content("#nsendc") == str(len([n for n in notes_of(dpage) if not n.get("sent")])), "보내기에 안 보낸 건수"
     dpage.click('#dock .dk-tab[data-p="history"]')
     h = dpage.evaluate(HIST_JS)
     cut = [r for r in h if r["label"] == "선 자르기"][-1]
@@ -1623,9 +1624,7 @@ def test_memo_pending_history_panels(dpage):
     assert [r for r in dpage.evaluate(HIST_JS) if r["i"] == cut["i"]][0]["undone"], "되돌린 줄은 흐리게 남는다(다시 하기)"
     dpage.click(f'#hlist li[data-i="{cut["i"]}"]')                    # 다시 그 단계로
     wait_notes(dpage, n0 + k + 1)
-    dpage.click('#dock .dk-tab[data-p="notes"]')                       # 보내기는 메모 탭 아래 한 자리
-    dpage.click("#nsend")
-    dpage.click('#dock .dk-tab[data-p="history"]')
+    dpage.click("#nsend")                                              # 기록 탭이 앞이어도 위쪽 줄에서 바로
     dpage.wait_for_timeout(300)
     h = dpage.evaluate(HIST_JS)
     assert [r for r in h if r["i"] == cut["i"]][0]["status"] == "AI에 보냄", h

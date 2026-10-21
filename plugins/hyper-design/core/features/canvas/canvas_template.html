@@ -29,6 +29,9 @@ button{font:inherit;color:inherit}
 .dot:hover{background:#F5F5F2}
 .view{display:flex;align-items:center;gap:4px}
 .vbtn{min-height:44px;min-width:44px;padding:0 14px;border:1px solid #dcdcd7;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.vbtn.tsend{background:var(--ui-primary);border-color:var(--ui-primary);color:#fff;display:inline-flex;align-items:center;gap:6px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
+.vbtn.tsend:disabled{background:#fff;border-color:#dcdcd7;color:#aaa;cursor:default}
+.tsend .scnt{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:11px;font-weight:700;line-height:18px}
 .vbtn:hover{background:#F5F5F2}
 .zoom{min-width:64px;font-variant-numeric:tabular-nums;color:#555}
 body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
@@ -388,6 +391,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
     <button class="vbtn" id="tbtn" aria-expanded="false" aria-controls="tmenu" title="캔버스 전환 보기 (T)">전환</button>
     <button class="vbtn" id="fit" title="모든 화면이 한 번에 들어오게 (0)">전체<span class="fit-long"> 보기</span></button>
     <button class="vbtn zoom" id="zoom" title="처음 배율로">72%</button>
+    <button class="vbtn tsend" id="nsend" disabled title="메모·반영 대기 보내기">보내기<span class="scnt" id="nsendc" hidden></span></button>
   </div>
 </header>
 <main class="panes">
@@ -433,7 +437,6 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
     <div id="notes" hidden aria-label="메모 목록">
       <ol id="nlist"></ol>
       <div class="nfoot">
-        <button class="nbtn pri" id="nsend">보내기</button>
         <button class="nbtn" id="nclear" hidden>보낸 것 지우기</button>
         <div class="nmsg" id="nmsg"></div>
       </div>
@@ -441,7 +444,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
     <p class="dkp-empty">메모가 없어요</p>
   </div>
   <div class="dkp" id="pPending" data-panel="pending">
-    <div id="pend" hidden aria-label="반영 대기 목록"><p class="phint">아직 화면 파일에 안 들어간 편집 — 보내기는 메모 탭 아래 한 곳</p><ol id="plist"></ol></div>
+    <div id="pend" hidden aria-label="반영 대기 목록"><p class="phint">아직 화면 파일에 안 들어간 편집 — 보내기는 위쪽 줄 [보내기]</p><ol id="plist"></ol></div>
     <p class="dkp-empty">반영 대기가 없어요</p>
   </div>
   <div class="dkp" id="pHistory" data-panel="history">
@@ -1710,7 +1713,7 @@ function copySend(list, msg) {
   copyText(t);
   list.forEach(function (n) { n.sent = true; });
   saveNotes(); HI.sent();
-  $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요';
+  $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요'; toast($('#nmsg').textContent);
 }
 // 로컬 도우미(helper.py, 7단계): http 로 열렸고 토큰이 있을 때만. 바로 쓰는 편집 → /api/apply, 나머지 → /api/forward(Paseo 또는 대기열 파일)
 var HELPER = !!window.__hdHelper && /^https?:$/.test(location.protocol), HTOKEN = new URLSearchParams(location.search).get('hd') || '';
@@ -1736,8 +1739,8 @@ $('#nsend').addEventListener('click', function () {
         saveNotes();
         if (left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
         window.__hdLastHelper = {apply: res, forward: fw};
-        $('#nmsg').textContent = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && left.length ? ' · ' : '') +
-          (left.length ? '터미널로 ' + left.length + '건(' + (fw && fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : '');
+        toast($('#nmsg').textContent = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && left.length ? ' · ' : '') +
+          (left.length ? '터미널로 ' + left.length + '건(' + (fw && fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : ''));
         if (done.length) setTimeout(function () { location.reload(); }, 700);   // 다시 빌드된 캔버스로
       };
       if (!left.length) { after(null); return; }

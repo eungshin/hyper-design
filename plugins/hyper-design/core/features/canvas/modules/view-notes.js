@@ -1,5 +1,5 @@
 /* View — 메모 패널(#nlist: AI 에 보내는 요청)과 반영 대기 패널(#plist: 기계적 편집, E5) 목록 · 카드 위 메모 배지·반영 대기 칩.
-   나누기는 HD.edits.split(Model). 보내기는 한 자리(#nsend, 메모 패널 아래 — 둘 다 보낸다, E16)라 여기엔 목록과 줄 버튼만.
+   나누기는 HD.edits.split(Model). 보내기는 한 자리(#nsend, 위쪽 줄 배율 오른쪽 — 둘 다 보낸다, E16): 여기선 그 버튼의 건수·켜짐만.
    HD.viewNotes.mount(ctx) → {render(notes) → {memos, pending}}
    ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id)} */
 (function () {
@@ -29,10 +29,12 @@ function mount(ctx) {
   function render(notes) {
     var sp = E.split(notes), memo = {}, pend = E.tally(notes);
     sp.memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; });
-    $('#notes').hidden = !notes.length; $('#pend').hidden = !sp.pending.length;   // 메모 패널은 반영 대기만 있어도 연다 — 보내기(#nsend)가 그 아래 한 자리
+    $('#notes').hidden = !sp.memos.length && !notes.some(function (n) { return n.sent; }); $('#pend').hidden = !sp.pending.length;   // 보낸 것이 있으면 '보낸 것 지우기' 때문에 연다
     $('#nlist').innerHTML = sp.memos.map(memoRow).join('');
     $('#plist').innerHTML = sp.pending.map(pendRow).join('');
     $('#nclear').hidden = !notes.some(function (n) { return n.sent; });
+    var unsent = notes.filter(function (n) { return !n.sent; }).length, sc = $('#nsendc');
+    $('#nsend').disabled = !notes.length; sc.hidden = !unsent; sc.textContent = String(unsent);   // 다 보냈으면 건수는 숨기고 다시 보내기는 그대로
     $$('.card', ctx.rowsEl).forEach(function (c) {
       var id = c.dataset.id;
       badge(c, 'nbadge', memo[id] || 0, String(memo[id] || 0), '메모 ' + (memo[id] || 0) + '건');
