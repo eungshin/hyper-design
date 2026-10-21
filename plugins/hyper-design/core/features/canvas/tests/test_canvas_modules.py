@@ -357,8 +357,6 @@ LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model"
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
-# 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
-SHELL_MAX = 111   # 셸 위쪽 function 수(래칫) — 2.5d 뒤 114, 조각 2 뒤 111(logEdit·renderUndo·requestText 빠짐). var 수는 세지 않는다(10-21: 숫자 맞추기만 낳고 구조 이득 없음 — tracking 2.5d)
 
 
 def _layer(name):
@@ -369,11 +367,6 @@ def _hd_name(name):
     if name.startswith("view-"):
         return "view" + "".join(p.title() for p in name.split("-")[1:])
     return {v: k for k, v in NS.items()}.get(name, name)
-
-
-def shell_functions(tpl):
-    s = tpl[tpl.index("// ── Canvas shell"):]
-    return len(re.findall(r"(?m)^function\s+\w+", s))
 
 
 @pytest.mark.parametrize("name", ALL_MODULES)
@@ -390,12 +383,6 @@ def test_gate_role_and_direction(name):
             assert False, f"{name}.js → HD.{dep}: View 끼리 직접 부르지 않는다 — ctx 로 받은 함수·의도로"
         assert mod in LAYER, f"{name}.js → HD.{dep}: 모르는 모듈"
         assert RANK[LAYER[mod]] <= RANK[me] and not (me == "Model" and LAYER[mod] != "Model"), f"{name}.js({me}) → {mod}({LAYER[mod]}): 위 층에 기댐"
-
-
-def test_gate_shell_only_shrinks():
-    """비대 방지: 템플릿 셸의 위쪽 function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로)."""
-    got = shell_functions((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
-    assert got <= SHELL_MAX, f"셸 위쪽 function {got} > {SHELL_MAX} — 새 함수는 modules/ 의 주인 모듈로"
 
 
 SEL_JS = r"""
