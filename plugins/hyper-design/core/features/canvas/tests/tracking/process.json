@@ -137,7 +137,7 @@
     },
     {
       "slice": "2.5d",
-      "commit": "(이번)",
+      "commit": "002be95",
       "numbered": false,
       "tests": {
         "full": 0,
@@ -149,9 +149,16 @@
         "sec": 0.6,
         "fired": [
           {
-            "what": "셸 var 85 > 84(TITLES), function 116 > 114(선 자르기 맞춤)",
-            "real": true,
-            "fix": "titleOf 넘김 · 선 맞춤(hits)을 view-lines 로"
+            "rule": "shell-ratchet",
+            "verdict": "real",
+            "minutes": 2,
+            "what": "function 116 > 114 — 선 자르기 맞춤(segX·lnPoints·cutHits)을 선 주인 view-lines.hits 로 옮김(맞는 자리)"
+          },
+          {
+            "rule": "shell-ratchet",
+            "verdict": "noise",
+            "minutes": 1,
+            "what": "var 85 > 84 — TITLES 를 titleOf 넘기기로 바꿈(숫자 맞추기, 구조 이득 없음)"
           }
         ]
       },
