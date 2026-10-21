@@ -2,7 +2,7 @@
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, screen, targets:[{path,text,rect}], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index) · new-screen · cut-in · delete · copy
-   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, tally, say} */
+   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, split, tally, request, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -52,6 +52,24 @@ function directOf(n) {
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 
+// 메모 패널 둘로(E5): pending = 기계적 편집(파일에 바로 쓸 수 있는 것) · memos = 나머지(AI 에 보내는 요청)
+function split(notes) {
+  var out = {memos: [], pending: []};
+  (notes || []).forEach(function (n) { (directOf(n) ? out.pending : out.memos).push(n); });
+  return out;
+}
+
+// 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 바꾸지 않는다). 여러 요소 메모는 요소마다 한 항목으로 펼친다
+function targetsOf(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
+function request(notes, out) {
+  var list = [];
+  (notes || []).forEach(function (n) { targetsOf(n).forEach(function (t) { list.push({screen: n.screen, path: t.path, text: t.text, intent: n.intent, note: n.note}); }); });
+  return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
+    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
+      '\n   요청: ' + String(n.note).replace(/\s*\n\s*/g, ' ');
+  }).join('\n');
+}
+
 // 화면마다 반영 대기 편집 수
 function tally(notes) {
   var c = {}; (notes || []).forEach(function (n) { if (n.edit) c[n.screen] = (c[n.screen] || 0) + 1; }); return c;
@@ -77,5 +95,5 @@ var say = {
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, tally: tally, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, split: split, tally: tally, request: request, say: say, FIELD: FIELD};
 })();

@@ -188,7 +188,7 @@
     },
     {
       "slice": "2.5c",
-      "commit": "(이번)",
+      "commit": "b7839a5",
       "numbered": true,
       "tests": {
         "full": 1,
@@ -214,6 +214,35 @@
         }
       ],
       "note": "번호 조각 2.5 끝 — 전체 1회(118개 중 115 pass, 3 테스트 쪽) → --lf·묶음 5 pass"
+    },
+    {
+      "slice": "2",
+      "commit": "(이번)",
+      "numbered": true,
+      "tests": {
+        "full": 1,
+        "area": 0,
+        "minutes": 10.0
+      },
+      "gate": {
+        "checks": 22,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "E5·E8 합격 테스트 빨강(끊기가 메모 목록에 섞임) → 초록"
+        }
+      ],
+      "waste": [
+        {
+          "what": "전체 1회 실패 2개 모두 테스트 쪽(잇기가 반영 대기 패널로 간 것 + 그 연쇄)",
+          "minutes": 1,
+          "fix": "큰 실행 전 grep 에 '#notes' 보이기 확인도 넣기"
+        }
+      ],
+      "note": "번호 조각이고 바뀐 영역이 전체와 거의 같아 영역 실행 없이 전체 1회만. 셸 function 114 → 111, SHELL_MAX 내림"
     }
   ]
 }

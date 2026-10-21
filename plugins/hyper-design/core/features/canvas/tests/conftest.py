@@ -74,6 +74,7 @@ BROWSER = {
     "test_click_keeps_the_same_lines_and_numbers_buttons": ("links", "flow"),
     "test_shift_select_keeps_every_picked_card_bright": ("links", "input", "tools"),
     "test_link_panel_trash_and_rename": ("links", "tools"),
+    "test_memo_pending_history_panels": ("notes", "dock", "tools"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),

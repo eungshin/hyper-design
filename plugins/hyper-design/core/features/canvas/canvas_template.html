@@ -316,7 +316,20 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
 .dk-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
 .dkp{padding:10px 12px;min-height:100%;display:flex;flex-direction:column}
 .dkp-empty{margin:4px 0;color:#999;font-size:12.5px}
-#legend:not([hidden]) ~ .dkp-empty,#notes:not([hidden]) ~ .dkp-empty,#hidl:not([hidden]) ~ .dkp-empty{display:none}
+#legend:not([hidden]) ~ .dkp-empty,#notes:not([hidden]) ~ .dkp-empty,#pend:not([hidden]) ~ .dkp-empty,#hidl:not([hidden]) ~ .dkp-empty{display:none}
+#plist{list-style:none;margin:0;padding:0}#plist li{padding:8px 0;border-top:1px solid #ECEDEA}#plist li.sent{opacity:.55}
+#pend .phint{margin:0 0 6px;color:#999;font-size:12px}
+#hlist{list-style:none;margin:0;padding:0;font-size:12.5px}
+#hlist li[data-i]{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:6px;cursor:pointer}
+#hlist li[data-i]:hover{background:#F4F5F3}
+#hlist li.now{background:#ECEDEA;font-weight:700}
+#hlist li.undone{opacity:.45}
+#hlist li.lock{cursor:default;color:#888}#hlist li.lock:hover{background:none}
+#hlist .hl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hlist .hs{flex:none;font-size:11px;color:#666;background:#F0F1EE;border-radius:999px;padding:1px 7px}
+#hlist .hs-sent,#hlist .hs-file{background:#E3E4E1;color:#333}
+#hlist .ht{flex:none;color:#aaa;font-size:11px}
+#hlist .hbound{margin:4px 0;padding:4px 6px;border-top:2px dashed #BDBFBA;color:#888;font-size:11.5px}
 #pNotes{padding:0}#pNotes .dkp-empty{padding:10px 12px}
 .dk-f{position:absolute;pointer-events:auto;background:#fff;border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.26);display:flex;flex-direction:column;overflow:hidden;font-size:13px;cursor:default}
 .dk-f .dk-tabs{border-radius:10px 10px 0 0}
@@ -426,6 +439,13 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
       </div>
     </div>
     <p class="dkp-empty">메모가 없어요</p>
+  </div>
+  <div class="dkp" id="pPending" data-panel="pending">
+    <div id="pend" hidden aria-label="반영 대기 목록"><p class="phint">아직 화면 파일에 안 들어간 편집 — 보내기는 메모 탭 아래 한 곳</p><ol id="plist"></ol></div>
+    <p class="dkp-empty">반영 대기가 없어요</p>
+  </div>
+  <div class="dkp" id="pHistory" data-panel="history">
+    <ol id="hlist" aria-label="기록"></ol>
   </div>
   <div class="dkp" id="pHidden" data-panel="hidden">
     <div id="hidl" aria-label="숨긴 화면" hidden></div>
@@ -586,19 +606,12 @@ function setCardPos(id, p) {                      // 되돌리기·다시 하기
   saveCardPos(); drawArrows();
 }
 
-/* ---------- 되돌리기 50단계 — 캔버스 안 변경만(카드 옮기기·숨기기·태그 이름·선 색·굵기). 화면 파일에 보낸 요청은 여기에 들어오지 않는다 ---------- */
-var past = [], future = [], HMAX = 50;
-function record(op) {                             // op = {label, undo(), redo()}
-  past.push(op); if (past.length > HMAX) past.shift();
-  future = []; renderUndo();
-}
-function undo() { var op = past.pop(); if (!op) return; op.undo(); future.push(op); renderUndo(); toast('되돌렸어요: ' + op.label); }
-function redo() { var op = future.pop(); if (!op) return; op.redo(); past.push(op); renderUndo(); toast('다시 했어요: ' + op.label); }
-function renderUndo() {
-  var u = $('#undo'), r = $('#redo'), lu = past[past.length - 1], lr = future[future.length - 1];
-  u.disabled = !lu; r.disabled = !lr;
-  u.title = '되돌리기' + (lu ? ': ' + lu.label : '') + ' (Ctrl+Z)'; r.title = '다시 하기' + (lr ? ': ' + lr.label : '') + ' (Ctrl+Shift+Z)';
-}
+/* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8) — 되돌리기 50단계 · 줄 누르기 · 보낸 자리 앞은 되돌리지 않음 ---------- */
+var HI = HD.viewHistory.mount({$: $, esc: esc, list: $('#hlist'), undoBtn: $('#undo'), redoBtn: $('#redo'), toast: function (m) { toast(m); }, key: 'hd-edit-log:' + hashStr(KEYPATH),
+                               getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }});
+function record(op) { HI.record(op); }             // op = {label, undo(), redo(), status?}
+function undo() { HI.undo(); }
+function redo() { HI.redo(); }
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redo);
 
@@ -966,12 +979,14 @@ var DOCK_ICON = {
   links: '<svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 6H13a3 3 0 013 3v6.5"/><path d="M13.5 13l2.5 2.5 2.5-2.5"/></svg>',
   show: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="1.2"/><path d="M4 7h7" stroke-width="3"/><path d="M4 12h11" stroke-width="2.2"/><path d="M4 17h5" stroke-width="3.6"/></svg>',
   notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
+  pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
+  history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
   hidden: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg>'};
 var VD = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), hidden: $('#pHidden')},
-                        title: function (id) { return {count: id === 'notes' ? (notes || []).length : id === 'hidden' ? Object.keys(hidden).length : 0}; },
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), hidden: $('#pHidden')},
+                        title: function (id) { var sp = HD.edits.split(notes || []); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : id === 'hidden' ? Object.keys(hidden).length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
                           var w = st.collapsed || !st.groups.length ? 44 : st.w;
@@ -1108,7 +1123,7 @@ addEventListener('keydown', function (e) {         // Ctrl+Z 되돌리기 · Ctr
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
 });
-renderHidden(); renderUndo();
+renderHidden();
 
 /* ---------- 트리거(L) · 소켓 끌기 · 자르기(C · 오른쪽 끌기) — 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓는다
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
@@ -1136,33 +1151,22 @@ addEventListener('message', function (e) {
 });
 function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
 function editNote(screen, h, text, op, to) { return HD.edits.note(screen, h, text, op, to); }   // op: link · cut · untrigger · trigger · new
-var ELKEY = 'hd-edit-log:' + hashStr(KEYPATH);
-function logEdit(label, list) {                      // 변경 기록 — 메모를 지워도 남는다(최근 200개). 다시 빌드해 화면이 바뀌어도 무엇을 요청했는지 확인용
-  var log = []; try { log = JSON.parse(localStorage.getItem(ELKEY) || '[]') || []; } catch (e) { log = []; }
-  log.push({at: new Date().toISOString(), label: label, items: list.map(function (n) { return n.screen + ' · ' + n.note; })});
-  try { localStorage.setItem(ELKEY, JSON.stringify(log.slice(-200))); } catch (e) {}
-}
 function addEdits(label, list, msg, drops) {      // drops = 같이 취소할 보내지 않은 편집(E4) — 되돌리면 돌아온다
   drops = drops || [];
   if (!list.length && !drops.length) return;
-  var cancels = [], dids = drops.map(function (d) { return d.id; });
+  var lids = list.map(function (n) { return n.id; }), dids = drops.map(function (d) { return d.id; });
   var put = function () {
-    var cids = cancels.map(function (c) { return c.id; });
-    notes = notes.filter(function (x) { return (cids.indexOf(x.id) < 0 || x.sent) && dids.indexOf(x.id) < 0; }); cancels = [];
+    notes = notes.filter(function (x) { return dids.indexOf(x.id) < 0; });
     list.forEach(function (n) { if (!notes.some(function (x) { return x.id === n.id; })) { n.sent = false; notes.push(n); } });
     saveNotes();
   };
   var take = function () {
+    notes = notes.filter(function (x) { return lids.indexOf(x.id) < 0; });
     drops.forEach(function (d) { if (!notes.some(function (x) { return x.id === d.id; })) notes.push(d); });
-    list.forEach(function (n) {
-      var cur = notes.filter(function (x) { return x.id === n.id; })[0];
-      if (cur && cur.sent) { var c = editNote(n.screen, n, '앞서 보낸 요청 취소: ' + n.note); cancels.push(c); notes.push(c); }
-      else notes = notes.filter(function (x) { return x.id !== n.id; });
-    });
-    saveNotes(); logEdit('되돌림: ' + label, list);
+    saveNotes();
   };
-  put(); logEdit(label, list.concat(drops));
-  record({label: label, undo: take, redo: function () { put(); logEdit(label, list.concat(drops)); }});
+  put();
+  record({label: label, status: 'pending', undo: take, redo: put});
   toast(msg || label + ' — 반영 대기', true);
 }
 function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
@@ -1575,7 +1579,7 @@ var pop = $('#pop'), notesEl = $('#notes');
 function idOf(file) { return decodeURIComponent(String(file || '').split(/[?#]/)[0].split('/').pop()).replace(/\.html?$/i, ''); }
 function hashStr(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);
-var notes = [], notesShown = Infinity;   // notesShown: 탭을 앞으로 올릴지 비교할 지난 메모 수(처음 그릴 땐 올리지 않음)
+var notes = [], notesShown = null;   // notesShown: 탭을 앞으로 올릴지 비교할 지난 {memos, pending} 수(처음 그릴 땐 올리지 않음)
 try { notes = JSON.parse(localStorage.getItem(NKEY) || '[]') || []; } catch (e) { notes = []; }
 function tgts(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }   // 예전 한 요소 메모도 읽는다
 function popItem(dr, last) {
@@ -1671,50 +1675,21 @@ function drawPins() {
   });
   layer.innerHTML = h;
 }
+var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5)
+                             del: function (id) { notes = notes.filter(function (x) { return x.id !== id; }); if (editing === id) hidePop(); saveNotes(); },
+                             edit: function (id) {
+                               var n = notes.filter(function (x) { return x.id === id; })[0]; if (!n) return;
+                               editing = id; draft = null;
+                               var ts = tgts(n);
+                               showPop({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
+                                        rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent);
+                             }});
 function renderNotes() {
-  notesEl.hidden = !notes.length;
-  if (VD) { if (notes.length > notesShown) VD.activate('notes'); else VD.render(); }   // 새 메모가 생기면 메모 탭을 앞으로(D3), 아니면 탭 숫자만
-  notesShown = notes.length;
-  $('#nlist').innerHTML = notes.map(function (n, i) {
-    return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div><span class="nn">' + circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
-      ' · ' + esc(n.intent) + (tgts(n).length > 1 ? ' · ' + tgts(n).length + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span></div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
-      '<div class="nact"><button class="nbtn" data-act="edit">고치기</button><button class="nbtn" data-act="del">지우기</button></div></li>';
-  }).join('');
-  $('#nclear').hidden = !notes.some(function (n) { return n.sent; });
-  var cnt = {};
-  notes.forEach(function (n) { cnt[n.screen] = (cnt[n.screen] || 0) + 1; });
-  $$('.card', rowsEl).forEach(function (c) {
-    var b = $('.nbadge', c), k = cnt[c.dataset.id] || 0;
-    if (!k) { if (b) b.remove(); return; }
-    if (!b) { b = document.createElement('span'); b.className = 'nbadge'; $('.phone', c).appendChild(b); }
-    b.textContent = k; b.title = '메모 ' + k + '건';
-  });
-  var pc = HD.edits.tally(notes);                  // 반영 대기 = 화면 파일을 바꾸는 편집 메모(보냈어도 '보낸 것 지우기' 전까지)
-  $$('.card', rowsEl).forEach(function (c) {
-    var b = $('.pchip', c), k = pc[c.dataset.id] || 0;
-    if (!k) { if (b) b.remove(); return; }
-    if (!b) { b = document.createElement('span'); b.className = 'pchip'; $('.phone', c).appendChild(b); }
-    b.textContent = '반영 대기 ' + k;
-  });
+  var c = VN.render(notes), was = notesShown;
+  notesShown = c;
+  if (VD) { if (was && c.memos > was.memos) VD.activate('notes'); else if (was && c.pending > was.pending) VD.activate('pending'); else VD.render(); }   // 새로 생긴 쪽 탭을 앞으로(D3), 아니면 탭 숫자만
   if (typeof paintCardText === 'function' && ORIG) { renderDrafts(); paintDeleted(); paintCardText(); sendAllPending(); }
   if (VL && VL.refresh) VL.refresh();
-}
-$('#nlist').addEventListener('click', function (e) {
-  var b = e.target.closest('button[data-act]'); if (!b) return;
-  var id = b.closest('li').dataset.id, n = notes.filter(function (x) { return x.id === id; })[0]; if (!n) return;
-  if (b.dataset.act === 'del') { notes = notes.filter(function (x) { return x.id !== id; }); if (editing === id) hidePop(); saveNotes(); return; }
-  editing = id; draft = null;
-  var ts = tgts(n);
-  showPop({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
-           rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent);
-});
-function requestText(notesList) {
-  var list = [];                                   // 여러 요소 메모는 요소마다 한 항목으로 펼친다(형식은 그대로)
-  notesList.forEach(function (n) { tgts(n).forEach(function (t) { list.push({screen: n.screen, path: t.path, text: t.text, intent: n.intent, note: n.note}); }); });
-  return '[hyper-design 수정 요청] out=' + outDir() + ' · ' + list.length + '건\n' + list.map(function (n, i) {
-    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
-      '\n   요청: ' + String(n.note).replace(/\s*\n\s*/g, ' ');
-  }).join('\n');
 }
 function copyText(t) {
   function fallback() {
@@ -1730,11 +1705,11 @@ function copyText(t) {
   } catch (e) { fallback(); }
 }
 function copySend(list, msg) {
-  var t = requestText(list);
+  var t = HD.edits.request(list, outDir());
   window.__hdLastSend = t;
   copyText(t);
   list.forEach(function (n) { n.sent = true; });
-  saveNotes();
+  saveNotes(); HI.sent();
   $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요';
 }
 // 로컬 도우미(helper.py, 7단계): http 로 열렸고 토큰이 있을 때만. 바로 쓰는 편집 → /api/apply, 나머지 → /api/forward(Paseo 또는 대기열 파일)
@@ -1756,17 +1731,17 @@ $('#nsend').addEventListener('click', function () {
       var ok = {}; (res.applied || []).forEach(function (id) { ok[id] = 1; });
       var done = direct.filter(function (n) { return ok[n.id]; }), left = rest.concat(direct.filter(function (n) { return !ok[n.id]; }));   // 못 쓴 편집도 요청문으로
       var after = function (fw) {
-        if (done.length) logEdit('바로 반영', done);
         notes = notes.filter(function (n) { return !ok[n.id]; });
         left.forEach(function (n) { n.sent = true; });
         saveNotes();
+        if (left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
         window.__hdLastHelper = {apply: res, forward: fw};
         $('#nmsg').textContent = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && left.length ? ' · ' : '') +
           (left.length ? '터미널로 ' + left.length + '건(' + (fw && fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : '');
         if (done.length) setTimeout(function () { location.reload(); }, 700);   // 다시 빌드된 캔버스로
       };
       if (!left.length) { after(null); return; }
-      var t = requestText(left); window.__hdLastSend = t;
+      var t = HD.edits.request(left, outDir()); window.__hdLastSend = t;
       return helperPost('/api/forward', {text: t}).then(after);
     })
     .catch(function () { copySend(list, '도우미가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });

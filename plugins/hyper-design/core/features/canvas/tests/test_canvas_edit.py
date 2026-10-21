@@ -614,7 +614,7 @@ def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
     assert n["screen"] == p["id"] and n["intent"] == "change" and q["id"] in n["note"], n
-    assert dpage.locator("#notes").is_visible()
+    assert dpage.locator("#pend").is_visible(), "잇기는 기계적 편집 — 반영 대기 패널이 앞으로(E5)"
     assert "트리거" in dpage.get_attribute("#undo", "title")
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
@@ -1582,3 +1582,57 @@ def test_link_panel_trash_and_rename(dpage):
     dpage.wait_for_timeout(200)
     assert tag_text(dpage, "job", "language") != "언어 고르기로"
     dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 조각 2 메모·반영 대기·기록 (E2·E5·E8·E16, rework §8-3)
+HIST_JS = """[...document.querySelectorAll('#hlist li[data-i]')].map(li => ({i: +li.dataset.i, label: (li.querySelector('.hl') || {}).textContent || '',
+    status: (li.querySelector('.hs') || {}).textContent || '', undone: li.classList.contains('undone'), lock: li.classList.contains('lock')}))"""
+
+
+def test_memo_pending_history_panels(dpage):
+    """E5: 기계적 편집(끊기)은 반영 대기 패널, AI 요청(메모)은 메모 패널 — 탭에 배지 수. E16: 보내기는 한 자리(#nsend).
+    E2·E8: 기록 패널 = 시간줄 하나 — 줄마다 상태, 줄을 누르면 그 단계로, 보낸 뒤는 경계선 아래로 되돌릴 수 없다."""
+    focus_dayfine(dpage, "job")
+    n0 = len(notes_of(dpage))
+    dpage.click('#lgRows .lgrow[data-from="job"][data-to="language"] button.lgcut')
+    dpage.wait_for_function("(n) => " + NOTES_JS + ".length > n", arg=n0, timeout=4000)
+    k = len(notes_of(dpage)) - n0
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("m")
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"])
+    dpage.wait_for_selector("#pop:not([hidden])")
+    dpage.fill("#pnote", "패널 나누기 확인")
+    dpage.click("#padd")
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")
+    wait_notes(dpage, n0 + k + 1)
+    memos = dpage.evaluate("[...document.querySelectorAll('#nlist li')].map(li => li.textContent)")
+    pend = dpage.evaluate("[...document.querySelectorAll('#plist li')].map(li => li.textContent)")
+    assert any("패널 나누기 확인" in t for t in memos) and not any("연결 끊기" in t for t in memos), memos
+    assert len([t for t in pend if "연결 끊기" in t]) == k and not any("패널 나누기 확인" in t for t in pend), pend
+    assert dpage.text_content('#dock .dk-tab[data-p="notes"] .dk-cnt') == str(len(memos))
+    assert dpage.text_content('#dock .dk-tab[data-p="pending"] .dk-cnt') == str(len(pend))
+    assert dpage.locator("#nsend").count() == 1 and dpage.locator("#pPending button.pri").count() == 0, "주 행동은 한 자리"
+    dpage.click('#dock .dk-tab[data-p="history"]')
+    h = dpage.evaluate(HIST_JS)
+    cut = [r for r in h if r["label"] == "선 자르기"][-1]
+    assert cut["status"] == "반영 대기" and not cut["undone"], h
+    dpage.click(f'#hlist li[data-i="{cut["i"] - 1}"]')                # 끊기 바로 앞 단계로
+    wait_notes(dpage, n0 + 1)
+    assert [r for r in dpage.evaluate(HIST_JS) if r["i"] == cut["i"]][0]["undone"], "되돌린 줄은 흐리게 남는다(다시 하기)"
+    dpage.click(f'#hlist li[data-i="{cut["i"]}"]')                    # 다시 그 단계로
+    wait_notes(dpage, n0 + k + 1)
+    dpage.click('#dock .dk-tab[data-p="notes"]')                       # 보내기는 메모 탭 아래 한 자리
+    dpage.click("#nsend")
+    dpage.click('#dock .dk-tab[data-p="history"]')
+    dpage.wait_for_timeout(300)
+    h = dpage.evaluate(HIST_JS)
+    assert [r for r in h if r["i"] == cut["i"]][0]["status"] == "AI에 보냄", h
+    assert dpage.locator("#hlist .hbound").count() == 1, "보낸 자리에 경계선"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(200)
+    assert len(notes_of(dpage)) == n0 + k + 1 and "되돌릴 수 없어요" in dpage.text_content("#toast"), "보낸 것은 되돌리지 않는다"
+    dpage.click('#dock .dk-tab[data-p="notes"]')
+    dpage.click("#nclear")
+    dpage.wait_for_timeout(150)

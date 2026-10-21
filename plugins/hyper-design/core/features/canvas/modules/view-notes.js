@@ -1,0 +1,54 @@
+/* View — 메모 패널(#nlist: AI 에 보내는 요청)과 반영 대기 패널(#plist: 기계적 편집, E5) 목록 · 카드 위 메모 배지·반영 대기 칩.
+   나누기는 HD.edits.split(Model). 보내기는 한 자리(#nsend, 메모 패널 아래 — 둘 다 보낸다, E16)라 여기엔 목록과 줄 버튼만.
+   HD.viewNotes.mount(ctx) → {render(notes) → {memos, pending}}
+   ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id)} */
+(function () {
+'use strict';
+var HD = globalThis.HD = globalThis.HD || {};
+
+function mount(ctx) {
+  var $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, E = HD.edits;
+
+  function targets(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
+  function memoRow(n, i) {
+    var k = targets(n).length;
+    return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div><span class="nn">' + ctx.circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
+      ' · ' + esc(n.intent) + (k > 1 ? ' · ' + k + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span></div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
+      '<div class="nact"><button class="nbtn" data-act="edit">고치기</button><button class="nbtn" data-act="del">지우기</button></div></li>';
+  }
+  function pendRow(n) {
+    return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div class="ns">' + esc(ctx.title(n.screen)) + (n.sent ? ' · 보냄' : '') + '</div>' +
+      '<div class="nnote">' + esc(n.note) + '</div><div class="nact"><button class="nbtn" data-act="del" title="이 편집 빼기">빼기</button></div></li>';
+  }
+  function badge(c, cls, k, text, title) {
+    var b = $('.' + cls, c);
+    if (!k) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('span'); b.className = cls; $('.phone', c).appendChild(b); }
+    b.textContent = text; if (title) b.title = title;
+  }
+  function render(notes) {
+    var sp = E.split(notes), memo = {}, pend = E.tally(notes);
+    sp.memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; });
+    $('#notes').hidden = !notes.length; $('#pend').hidden = !sp.pending.length;   // 메모 패널은 반영 대기만 있어도 연다 — 보내기(#nsend)가 그 아래 한 자리
+    $('#nlist').innerHTML = sp.memos.map(memoRow).join('');
+    $('#plist').innerHTML = sp.pending.map(pendRow).join('');
+    $('#nclear').hidden = !notes.some(function (n) { return n.sent; });
+    $$('.card', ctx.rowsEl).forEach(function (c) {
+      var id = c.dataset.id;
+      badge(c, 'nbadge', memo[id] || 0, String(memo[id] || 0), '메모 ' + (memo[id] || 0) + '건');
+      badge(c, 'pchip', pend[id] || 0, '반영 대기 ' + (pend[id] || 0));     // 반영 대기 = 화면 파일을 바꾸는 편집(보냈어도 '보낸 것 지우기' 전까지)
+    });
+    return {memos: sp.memos.length, pending: sp.pending.length};
+  }
+  ['#nlist', '#plist'].forEach(function (sel) {
+    $(sel).addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-act]'); if (!b) return;
+      var id = b.closest('li').dataset.id;
+      if (b.dataset.act === 'del') ctx.del(id); else ctx.edit(id);
+    });
+  });
+  return {render: render};
+}
+
+HD.viewNotes = {mount: mount};
+})();

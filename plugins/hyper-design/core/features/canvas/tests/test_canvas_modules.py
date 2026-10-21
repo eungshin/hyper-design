@@ -13,8 +13,8 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
+PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -265,6 +265,8 @@ const fs = require('fs'), vm = require('vm');
 vm.runInThisContext(fs.readFileSync(process.argv[2] + '/dock.js', 'utf8'), {filename: 'dock.js'});
 const K = globalThis.HD.dock, R = K.reduce, out = {};
 const tabs = s => s.groups.map(g => g.tabs.join('+') + ':' + g.active).join(' | ');
+out.allDefaults = tabs(K.defaults());
+K.PANELS.splice(K.PANELS.indexOf('pending'), 2);   // 아래 배치 동작 확인은 패널 넷으로(모델은 같은 배열을 쓴다)
 const base = K.normalize({v: 1, groups: [{tabs: ['links', 'show'], active: 'links'}, {tabs: ['notes', 'hidden'], active: 'notes'}]});
 let s = base;
 out.def = tabs(s); out.defaults = tabs(K.defaults());
@@ -310,6 +312,7 @@ def test_dock_model():
         out = json.loads(r.stdout)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    assert out["allDefaults"] == "links:links | show:show | notes+pending+history+hidden:notes", "기본: 메모·반영 대기·기록·숨긴 화면이 한 묶음"
     assert out["def"] == "links+show:links | notes+hidden:notes"
     assert out["merge"] == "links+show+notes:notes | hidden:hidden", "합치면 그 묶음 끝에 들어가 활성"
     assert out["pure"] == out["def"], "reduce 는 원래 상태를 바꾸지 않는다"
@@ -324,7 +327,6 @@ def test_dock_model():
     assert out["norm"] == "notes+show+hidden:notes", "모르는 패널·겹친 패널은 버리고 빠진 패널은 마지막 묶음에"
     assert out["normClosed"] == ["links"]
     assert out["round"] and out["bad"] == [out["defaults"]] * 3
-    assert out["defaults"] == "links:links | show:show | notes+hidden:notes", "기본: 범례 · 선 표시 · 메모 묶음"
     # 떠 있는 창(D1): 빼기 · 합치기 · 옮기기/크기(최소) · 도크로 되돌리기 · 혼자 뜬 창 옮기기 · 접어도 보임 · 맨 위로 · 닫기 · 복구 · 저장
     assert out["fOut"] == "links+show:links | hidden:hidden || notes:notes@100,50,280,320", "도크 묶음에서 빼면 판 위 떠 있는 창"
     assert out["fMerge"] == "links+show:links || notes+hidden:hidden@100,50,280,320", "떠 있는 창에 합치면 빈 도크 묶음은 없어진다"
@@ -352,11 +354,11 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
 LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model",
-         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel"}
+         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 # 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
-SHELL_MAX = 114   # 셸 위쪽 function 수(래칫) — 2.5d 뒤 114. var 수는 세지 않는다(10-21: 숫자 맞추기만 낳고 구조 이득 없음 — tracking 2.5d)
+SHELL_MAX = 111   # 셸 위쪽 function 수(래칫) — 2.5d 뒤 114, 조각 2 뒤 111(logEdit·renderUndo·requestText 빠짐). var 수는 세지 않는다(10-21: 숫자 맞추기만 낳고 구조 이득 없음 — tracking 2.5d)
 
 
 def _layer(name):
