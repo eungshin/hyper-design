@@ -83,6 +83,11 @@ BROWSER = {
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
+    "test_helper_delete_cuts_incoming_and_restore_is_byte_exact": ("helper",),
+    "test_helper_restore_refuses_when_files_changed_since": ("helper",),
+    "test_helper_server_delete_restore_data": ("helper",),
+    "test_helper_canvas_writes_delete_and_link_without_reload": ("helper", "tools"),
+    "test_file_mode_chip": ("helper",),
     "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),

@@ -48,11 +48,12 @@ PACK=<pack 절대경로>
 
 ### 4. 확인
 - 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/features/canvas/build_canvas.py <out>`.
+- 빌드 뒤 캔버스 열기는 go 의 '캔버스 열기'와 같다(`helper.py <out> --no-open` 백그라운드 · `<out>/.hd-helper.json` 의 주소가 응답하면 다시 띄우지 않는다).
 - selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다.
 
 ### 5. 마지막 메시지
 - 항목마다 한 줄: `<번호> · done` / `<번호> · answered` / `<번호> · not found (이유 한마디)`.
-- 안내 한 줄: "캔버스에서 '보낸 것 지우기'를 누르면 반영된 메모가 정리돼요."
+- 안내 한 줄: "캔버스에서 '보낸 것 지우기'를 누르면 반영된 메모가 정리돼요." + 여는 주소(`http://127.0.0.1…?hd=…`)
 - 마지막 줄: `[[DONE <out>/index.html]]` — 이 줄 없이 턴을 끝내면 미완성으로 처리된다.
 
 ## 참고

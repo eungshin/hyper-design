@@ -29,6 +29,8 @@ button{font:inherit;color:inherit}
 .dot:hover{background:#F5F5F2}
 .view{display:flex;align-items:center;gap:4px}
 .vbtn{min-height:44px;min-width:44px;padding:0 14px;border:1px solid #dcdcd7;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
+.mchip{align-self:center;padding:4px 10px;border-radius:999px;background:#F0F1EE;color:#777;font-size:12px;white-space:nowrap}   /* 모드 칩(E9): 파일에 바로 씀 / 파일로 열림 */
+.mchip.on{background:#E6F2EA;color:#2F6B45;font-weight:600}
 .vbtn.tsend{background:var(--ui-primary);border-color:var(--ui-primary);color:#fff;display:inline-flex;align-items:center;gap:6px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
 .vbtn.tsend:disabled{background:#fff;border-color:#dcdcd7;color:#aaa;cursor:default}
 .tsend .scnt{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:11px;font-weight:700;line-height:18px}
@@ -386,6 +388,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
   </div>
   <div class="pal" data-group="palette" aria-label="색 바꾸기"></div>
   <div class="view" data-group="view">
+    <span class="mchip" id="mode" role="status"></span>
     <button class="vbtn" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
     <button class="vbtn" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기">↷</button>
     <button class="vbtn" id="tbtn" aria-expanded="false" aria-controls="tmenu" title="캔버스 전환 보기 (T)">전환</button>
@@ -1154,9 +1157,13 @@ addEventListener('message', function (e) {
 });
 function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
 function editNote(screen, h, text, op, to) { return HD.edits.note(screen, h, text, op, to); }   // op: link · cut · untrigger · trigger · new
-function addEdits(label, list, msg, drops) {      // drops = 같이 취소할 보내지 않은 편집(E4) — 되돌리면 돌아온다
+function addEdits(label, list, msg, drops, keep) {   // drops = 같이 취소할 보내지 않은 편집(E4) — 되돌리면 돌아온다 · keep = 바로 쓰지 않고 반영 대기로
   drops = drops || [];
   if (!list.length && !drops.length) return;
+  if (VS && VS.on && !keep && !drops.length && list.every(HD.edits.instantOf)) {   // 잇기·끊기 = 화면 파일에 바로(조각 2.2)
+    VS.write(label, list).catch(function () { addEdits(label, list, msg, drops, true); });
+    return;
+  }
   var lids = list.map(function (n) { return n.id; }), dids = drops.map(function (d) { return d.id; });
   var put = function () {
     notes = notes.filter(function (x) { return dids.indexOf(x.id) < 0; });
@@ -1533,9 +1540,10 @@ function deleteCards(ids) {                          // 진짜 화면 = 삭제 �
   var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
   var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
   SL.dispatch({type: 'clear'});
-  if (real.length) addEdits('화면 삭제', real.map(function (id) {
+  var pend = function () { if (real.length) addEdits('화면 삭제', real.map(function (id) {
     var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.remove(scr(id))); n.edit = 'delete'; return n;
-  }), real.length + '개 화면을 지웠어요 — 반영 대기');
+  }), real.length + '개 화면을 지웠어요 — 반영 대기'); };
+  if (real.length && VS && VS.on) VS.del(real).catch(pend); else pend();   // 파일에 바로 지우고 오는 연결도 끊음(E1·E10)
   if (drafts.length) {
     var gone = notes.filter(function (n) { return drafts.indexOf(n.screen) >= 0 || (n.op === 'link' && drafts.indexOf(n.to) >= 0); });
     var drop = function () { notes = notes.filter(function (n) { return gone.indexOf(n) < 0; }); saveNotes(); };
@@ -1715,39 +1723,35 @@ function copySend(list, msg) {
   saveNotes(); HI.sent();
   $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요'; toast($('#nmsg').textContent);
 }
-// 로컬 도우미(helper.py, 7단계): http 로 열렸고 토큰이 있을 때만. 바로 쓰는 편집 → /api/apply, 나머지 → /api/forward(Paseo 또는 대기열 파일)
-var HELPER = !!window.__hdHelper && /^https?:$/.test(location.protocol), HTOKEN = new URLSearchParams(location.search).get('hd') || '';
-function helperPost(url, body) {
-  return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-HD-Token': HTOKEN}, body: JSON.stringify(body)})
-    .then(function (r) { if (!r.ok) throw new Error('helper ' + r.status); return r.json(); });
-}
-function directOf(n) { return HD.edits.directOf(n); }   // 도우미가 화면 파일에 바로 쓸 수 있는 편집(모델: edits.js)
+// 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
+var gone = {};                                       // 파일에서 지운 카드: 떼어 두었다가 되살리면 제자리로
+var VS = HD.viewSync.mount({chip: $('#mode'), on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
+  toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { addEdits(label, list, null, null, true); },
+  request: function (list) { return HD.edits.request(list, outDir()); },
+  data: function (nd, changed, v) {                  // 쓴 뒤 새 데이터: 선·이름은 새로, 바뀐 카드만 다시 싣는다(E17) — 보던 자리·배율·고른 것 그대로
+    D.links = nd.links; D.arrows = nd.arrows; G = HD.graph.fromData(D);
+    var live = {};
+    (nd.rows || []).forEach(function (r) { r.screens.forEach(function (sc) { live[sc.id] = sc; ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; }); });
+    $$('.card:not(.draft)', rowsEl).forEach(function (c) { var id = c.dataset.id; if (!live[id]) { gone[id] = {el: c, at: c.nextSibling, box: c.parentNode}; c.remove(); } });
+    Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
+    changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) { f.removeAttribute('src'); f.setAttribute('data-src', live[id].file + '?v=' + v); } });
+    paintCardText(); drawArrows(); scheduleVisible();
+  }});
 $('#nsend').addEventListener('click', function () {
   var list = notes.filter(function (n) { return !n.sent; });
   if (!list.length) list = notes.slice();
   if (!list.length) return;
-  if (!HELPER || !HTOKEN) { copySend(list); return; }
-  var direct = list.filter(directOf), rest = list.filter(function (n) { return !directOf(n); });
-  $('#nmsg').textContent = '도우미에게 보내는 중…';
-  helperPost('/api/apply', {edits: direct.map(function (n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value, index: n.index}; })})
-    .then(function (res) {
-      var ok = {}; (res.applied || []).forEach(function (id) { ok[id] = 1; });
-      var done = direct.filter(function (n) { return ok[n.id]; }), left = rest.concat(direct.filter(function (n) { return !ok[n.id]; }));   // 못 쓴 편집도 요청문으로
-      var after = function (fw) {
-        notes = notes.filter(function (n) { return !ok[n.id]; });
-        left.forEach(function (n) { n.sent = true; });
-        saveNotes();
-        if (left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
-        window.__hdLastHelper = {apply: res, forward: fw};
-        toast($('#nmsg').textContent = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && left.length ? ' · ' : '') +
-          (left.length ? '터미널로 ' + left.length + '건(' + (fw && fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : ''));
-        if (done.length) setTimeout(function () { location.reload(); }, 700);   // 다시 빌드된 캔버스로
-      };
-      if (!left.length) { after(null); return; }
-      var t = HD.edits.request(left, outDir()); window.__hdLastSend = t;
-      return helperPost('/api/forward', {text: t}).then(after);
-    })
-    .catch(function () { copySend(list, '도우미가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
+  if (!VS.on) { copySend(list); return; }
+  $('#nmsg').textContent = '보내는 중…';
+  VS.send(list).then(function (r) {
+    notes = notes.filter(function (n) { return !r.ok[n.id]; });
+    r.left.forEach(function (n) { n.sent = true; });
+    saveNotes();
+    if (r.left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
+    toast($('#nmsg').textContent = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && r.left.length ? ' · ' : '') +
+      (r.left.length ? '터미널로 ' + r.left.length + '건(' + (r.fw && r.fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : ''));
+    window.__hdLastHelper = {apply: r.res, forward: r.fw};
+  }).catch(function () { copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
 });
 $('#nclear').addEventListener('click', function () {
   notes = notes.filter(function (n) { return !n.sent; });

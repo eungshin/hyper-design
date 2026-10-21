@@ -28,8 +28,11 @@ description: hyper-design의 끝까지 버전 — 1차(모든 흐름의 처음�
 ## 3. 검증·수정 (3분)
 한 메시지에서 동시에(포그라운드): `build_canvas.py out` · `selfcheck.py out` · `audit.py out --shots out/.shots` + 사실 대조 서브에이전트 1개(`hyper-design:fact-checker`, `model` 인자 없이). 그 전에 `out/.images/status.json`이 `running`이면 끝날 때까지 기다린다(go 3단계와 같다). 비평 체크리스트는 `$SK/references/checklist.md`. 수정은 1회, 상태 화면 위주로 흐름별 병렬.
 
+빌드 뒤 캔버스 열기는 go 의 '캔버스 열기'와 같다(`helper.py out --no-open` 백그라운드 · 이미 떠 있으면 그 주소).
+
 ## 끝 — 마지막 메시지
 - 무엇을 더했는지 2줄(상태 화면 수, 대표적인 예외 순간 2~3개)
 - (1차부터 했다면) 1차 마지막 메시지의 내용(핵심 한 문장, 화면 수, 기본 색과 이유, 뺀 것은 캔버스 맨 위)도 함께
 - 남은 ❌ 항목(있으면)
+- 여는 주소 한 줄: `http://127.0.0.1…?hd=…`(띄우지 못했으면 `out/index.html`)
 - 마지막 줄: `[[DONE out/index.html]]`

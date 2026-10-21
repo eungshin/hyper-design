@@ -83,6 +83,70 @@ def test_helper_apply_backup_rebuild_and_refusals(out):
         assert q["via"] == "paseo" and "send abc123 --prompt-file" in args and "--no-wait" in args, (q, args)
 
 
+def _snapshot(out):                                  # out 안 화면 파일·screens.json 바이트(되살리기 비교용)
+    files = {p.relative_to(out).as_posix(): p.read_bytes() for p in (out / "screens").glob("*.html")}
+    files["screens.json"] = (out / "screens.json").read_bytes()
+    return files
+
+
+def _links_to(out, sid):
+    import build_canvas
+    m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
+    ids = {s["id"] for s in m["screens"]} | {sid}
+    return sorted(s["id"] for s in m["screens"]
+                  if any(l["to"] == sid for l in build_canvas.screen_links(out, {"id": s["id"], "file": s.get("file") or "screens/%s.html" % s["id"]}, ids)))
+
+
+def test_helper_delete_cuts_incoming_and_restore_is_byte_exact(out):   # 2.2 D3·D4 — 바로 삭제 · 오는 연결도 끊김 · 되살리기
+    before = _snapshot(out)
+    assert _links_to(out, "keys") == ["try-copy", "try-ocr", "try-search"]
+    res = helper.delete_screens(out, ["keys"], stamp="d1")
+    assert res["deleted"] == ["keys"] and res["stamp"] == "d1", res
+    assert {c["screen"] for c in res["cut"]} == {"try-copy", "try-ocr", "try-search"} and all(c["to"] == "keys" for c in res["cut"]), res
+    assert set(res["changed"]) >= {"keys", "try-copy", "try-ocr", "try-search"}, res
+    sj = json.loads((out / "screens.json").read_text(encoding="utf-8"))
+    assert "keys" not in {s["id"] for s in sj["screens"]}, "screens.json 에서 빠진다"
+    assert not any(b.get("to") == "keys" for s in sj["screens"] for b in (s.get("branches") or [])), "그리로 가는 branches 도"
+    assert not (out / "screens" / "keys.html").exists() and (out / ".hd-history" / "d1" / "screens" / "keys.html").read_bytes() == before["screens/keys.html"], "화면 파일은 기록으로 옮긴다"
+    assert _links_to(out, "keys") == [], "다른 화면에서 오는 링크를 끊는다(E10)"
+    assert '"keys"' not in (out / "index.html").read_text(encoding="utf-8").split('id="hd-data"')[1].split("</script>")[0], "다시 빌드한다"
+
+    r = helper.restore(out, "d1")
+    assert "error" not in r and set(r["changed"]) >= {"keys", "try-copy"}, r
+    assert _snapshot(out) == before, "되살리기 = 바이트 그대로"
+
+
+def test_helper_restore_refuses_when_files_changed_since(out):        # 2.2 D4 — 그 뒤에 바뀐 파일은 덮지 않는다
+    res = helper.apply_edits(out, [{"id": "c", "screen": "job", "edit": "link", "op": "link", "to": "usage",
+                                    "path": "div.btns:nth-of-type(1) > a.btn:nth-of-type(1)"}], stamp="a1")
+    assert res["applied"] == ["c"] and res["stamp"] == "a1" and res["changed"] == ["job"], res
+    job = out / "screens" / "job.html"
+    job.write_text(job.read_text(encoding="utf-8") + "<!-- 사람이 고침 -->", encoding="utf-8")
+    r = helper.restore(out, "a1")
+    assert r.get("reason") == "changed-since", r
+    assert "사람이 고침" in job.read_text(encoding="utf-8"), "거절하면 아무것도 바꾸지 않는다"
+    assert helper.restore(out, "nope").get("error"), "없는 기록"
+
+
+def test_helper_server_delete_restore_data(out):                      # 2.2 API — /api/delete · /api/restore(409) · /api/data
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = srv.url.split("/index.html")[0]
+    try:
+        assert _post(base + "/api/data", {})[0] == 403, "토큰 없으면 거절"
+        code, data = _post(base + "/api/data", {}, srv.token)
+        raw = (out / "index.html").read_text(encoding="utf-8").split('<script id="hd-data" type="application/json">')[1].split("</script>")[0]
+        assert code == 200 and data == json.loads(raw), "/api/data = index.html 의 hd-data"
+        code, res = _post(base + "/api/delete", {"screens": ["keys"]}, srv.token)
+        assert code == 200 and res["deleted"] == ["keys"] and len(res["cut"]) >= 3, res
+        code, data = _post(base + "/api/data", {}, srv.token)
+        assert "keys" not in {c["id"] for r in data["rows"] for c in r["screens"]}
+        (out / "screens" / "try-copy.html").write_text("<p>바뀜</p>", encoding="utf-8")
+        assert _post(base + "/api/restore", {"stamp": res["stamp"]}, srv.token)[0] == 409, "그 뒤에 바뀌었으면 409"
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
 def _post(url, body, token=None, host=None):
     req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST", headers={"Content-Type": "application/json"})
     if token:
@@ -121,6 +185,8 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
               {id: 'x2', screen: 'job', targets: [{path: 'h1', text: 'q'}], path: 'h1', text: 'q', note: '이건 무슨 뜻?', intent: 'question', sent: false}])); }""")
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined")
+        assert pg.text_content("#mode") == "파일에 바로 씀", "모드 칩(E9)"
+        pg.evaluate("window.__hdStay = 1")               # 새로고침하면 사라지는 표지
         pg.click("#nsend")
         pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
         last = pg.evaluate("window.__hdLastHelper")
@@ -128,18 +194,54 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         assert "바로 반영 1건" in pg.text_content("#nmsg") and "터미널로 1건" in pg.text_content("#nmsg")
         assert "도우미가 씀" in (out / "screens" / "job.html").read_text(encoding="utf-8")
         assert "이건 무슨 뜻?" in pathlib.Path(last["forward"]["path"]).read_text(encoding="utf-8")
-        pg.wait_for_function("window.__hdLastHelper === undefined", timeout=10000)   # 다시 빌드된 캔버스로 새로고침
-        pg.wait_for_function("window.__hdReady !== undefined")
+        assert pg.evaluate("window.__hdStay") == 1, "쓴 뒤 페이지 전체를 새로고침하지 않는다(E17)"
+        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "바뀐 카드만 다시 싣는다"
         left = pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')")
         assert [n["id"] for n in left] == ["x2"] and left[0]["sent"], "바로 쓴 편집은 메모에서 빠지고, 터미널로 보낸 것은 보냄"
         srv.shutdown(); srv.server_close()                  # 도우미가 꺼지면 지금처럼 복사
         pg.click("#nsend")
-        pg.wait_for_function("document.getElementById('nmsg').textContent.indexOf('도우미가 꺼져 있어 복사했어요') === 0", timeout=10000)
+        pg.wait_for_function("document.getElementById('nmsg').textContent.indexOf('파일에 바로 쓰기가 꺼져 있어 복사했어요') === 0", timeout=10000)
         assert "이건 무슨 뜻?" in pg.evaluate("window.__hdLastSend")
     finally:
         try:
             srv.shutdown(); srv.server_close()
         except Exception:
             pass
+    assert not errors, errors
+    pg.close()
+
+
+def test_helper_canvas_writes_delete_and_link_without_reload(ctx, out):   # 2.2 — 바로 삭제·오는 연결 끊김·되돌리기 = 되살리기 · 잇기 바로 씀 · 새로고침 없음
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    keys = (out / "screens" / "keys.html").read_bytes()
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.evaluate("window.__hdStay = 1")
+        from test_canvas_edit import fit_view
+        fit_view(pg)
+        pick = lambda sid: pg.evaluate("(id) => { const r = document.querySelector('.card[data-id=\"' + id + '\"] .cover').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }", sid)
+        pg.mouse.click(*pick("keys")); pg.wait_for_timeout(150)
+        pg.keyboard.press("Delete")                                  # 고른 카드 삭제 = 파일에서 바로(E1)
+        pg.wait_for_function("!document.querySelector('.card[data-id=\"keys\"]')", timeout=20000)
+        assert "오는 연결 3개도 끊김" in pg.text_content("#toast"), pg.text_content("#toast")
+        assert not (out / "screens" / "keys.html").exists() and _links_to(out, "keys") == []
+        assert pg.locator("#hlist li.now .hs").text_content() == "파일에 씀", "기록 한 줄 · 파일에 씀"
+        pg.click("#undo")
+        pg.wait_for_function("!!document.querySelector('.card[data-id=\"keys\"]')", timeout=20000)
+        assert (out / "screens" / "keys.html").read_bytes() == keys and _links_to(out, "keys") == ["try-copy", "try-ocr", "try-search"], "되돌리기 = 되살리기"
+        assert _links_to(out, "language") == ["job", "usage"]
+        pg.mouse.click(*pick("job")); pg.wait_for_timeout(150)       # 연결 패널 휴지통 = 그 방향 연결 끊기 → 파일에 바로
+        pg.locator('#legend .lgrow[data-from="job"][data-to="language"] .lgcut').click()
+        pg.wait_for_function("document.querySelector('#hlist li.now .hs') && document.querySelector('#hlist li.now .hs').textContent === '파일에 씀' && document.querySelector('#hlist li.now .hl').textContent === '선 자르기'", timeout=20000)
+        assert _links_to(out, "language") == ["usage"], "끊기는 파일에 바로"
+        assert pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]').length") == 0, "반영 대기로 남지 않는다"
+        assert pg.evaluate("window.__hdStay") == 1, "새로고침 없음(E17)"
+    finally:
+        srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()

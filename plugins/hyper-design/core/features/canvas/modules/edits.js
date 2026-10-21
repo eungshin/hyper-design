@@ -2,7 +2,7 @@
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, screen, targets:[{path,text,rect}], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index) · new-screen · cut-in · delete · copy
-   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, split, tally, request, say} */
+   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, split, tally, request, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -52,6 +52,11 @@ function directOf(n) {
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 
+// 누르는 즉시 파일에 쓰는 편집(조각 2.2 D1): 잇기·끊기·트리거 해제 — 도착이 빈 레이아웃(new-…)이면 아직 파일이 없어 반영 대기로
+function instantOf(n) {
+  return n.edit === 'link' && (n.op === 'cut' || n.op === 'untrigger' || (n.op === 'link' && !!n.to && !/^new-/.test(n.to)));
+}
+
 // 메모 패널 둘로(E5): pending = 기계적 편집(파일에 바로 쓸 수 있는 것) · memos = 나머지(AI 에 보내는 요청)
 function split(notes) {
   var out = {memos: [], pending: []};
@@ -95,5 +100,5 @@ var say = {
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, split: split, tally: tally, request: request, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, split: split, tally: tally, request: request, say: say, FIELD: FIELD};
 })();

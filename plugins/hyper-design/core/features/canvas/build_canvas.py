@@ -29,7 +29,7 @@ from html.parser import HTMLParser
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes"]   # 순서 고정: Model → ViewModel → View
+MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync"]   # 순서 고정: Model → ViewModel → View
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
@@ -128,7 +128,8 @@ def screen_links(out, card, ids):
     return res
 
 
-def build_index(out, m):
+def index_data(out, m):
+    """screens.json(m) → 캔버스 hd-data 객체(index.html 에 끼우는 것 · 도우미 /api/data 도 같은 것)."""
     screens = m["screens"]
     groups = list(m.get("groups") or [])
     for s in screens:
@@ -185,6 +186,12 @@ def build_index(out, m):
             "story": m.get("story") or None, "people": [{"name": p.get("name", ""), "why": p.get("why", ""), "win": p.get("win", ""), "core": bool(p.get("core")),
                                                      "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows, "links": links,
             "palettes": pal, "credits": credits if isinstance(credits, list) else []}
+    return data
+
+
+def build_index(out, m):
+    data = index_data(out, m)
+    data_rows = data["rows"]
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
     tpl = TEMPLATE.read_text(encoding="utf-8")
     marker = '<script id="hd-data" type="application/json">{}</script>'
@@ -195,7 +202,7 @@ def build_index(out, m):
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
     tpl = inline_modules(tpl)
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
-    return len(screens), len(arrows), len(data_rows)
+    return len(m["screens"]), len(data["arrows"]), len(data_rows)
 
 
 # ---------------------------------------------------------------- foundation.html
