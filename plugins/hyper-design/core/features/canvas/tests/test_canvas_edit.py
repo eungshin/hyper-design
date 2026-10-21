@@ -499,15 +499,16 @@ def test_hide_screen_and_hidden_list(epage):
     epage.mouse.click(p["x"], p["y"], button="right")
     assert cmenu_items(epage)[-1] == "숨긴 화면 1개"
     pick(epage, "숨긴 화면 1개")
-    assert epage.locator("#hidl").is_visible()
+    assert epage.locator("#pLayers").is_visible() and epage.get_attribute('#lyF [data-f="hidden"]', "aria-pressed") == "true", "숨긴 것은 레이어 패널 '숨긴 것만'(H7)"
     title = epage.get_attribute(f'.card[data-id="{sid}"] .cover', "data-title")
-    assert title in epage.text_content("#hidl")
+    assert title in epage.text_content("#lyTree")
     ESHOTS.mkdir(parents=True, exist_ok=True)
     epage.screenshot(path=str(ESHOTS / "4-hidden-list.png"))
-    epage.locator(f'#hidl .hrow[data-id="{sid}"] button').click()
+    epage.locator(f'#lyTree [data-ly="{sid}"] .ly-eye').click()
     epage.wait_for_timeout(150)
     assert epage.locator(f'.card[data-id="{sid}"]').is_visible()
-    assert not epage.locator("#thid").is_visible() and not epage.locator("#hidl").is_visible()
+    assert not epage.locator("#thid").is_visible() and epage.locator(f'#lyTree [data-ly="{sid}"]').count() == 0, "다 보이면 '숨긴 것만' 목록도 빈다"
+    epage.click('#lyF [data-f="hidden"]')
     assert epage.evaluate("(k) => localStorage.getItem(k)", keys[0]) == "[]"
 
 
@@ -1685,7 +1686,7 @@ def test_view_and_window_menus(dpage):
     dpage.wait_for_selector("#wmenu:not([hidden])")
     rows = dpage.evaluate("[...document.querySelectorAll('#wmenu [data-w]')].map(r => [r.dataset.w, r.getAttribute('aria-checked'), r.textContent.trim()])")
     keys = [r[0] for r in rows]
-    assert keys[:2] == ["tools", "hint"] and set(["links", "show", "notes", "pending", "history", "hidden"]) <= set(keys), rows
+    assert keys[:2] == ["tools", "hint"] and set(["links", "show", "notes", "pending", "history", "layers"]) <= set(keys), rows
     assert all(r[1] == "true" and r[2] for r in rows), "켜짐 체크 + 짧은 이름(H11)"
     dpage.click('#wmenu [data-w="tools"]')
     assert dpage.is_hidden("#tools")
@@ -1718,4 +1719,95 @@ def test_view_and_window_menus(dpage):
     assert dpage.evaluate("document.body.classList.contains('nomotion') && JSON.parse(localStorage.getItem('hd-canvas-prefs')).motion === false")
     dpage.uncheck("#mvOff")
     assert not dpage.evaluate("document.body.classList.contains('nomotion')")
+    assert not errs, errs
+
+
+# ---------------------------------------------------------------- 조각 4 레이어 (H6·H7)
+LAYERS_JS = """() => [...document.querySelectorAll('#lyTree [data-ly]')].filter(r => r.offsetParent).map(r => ({
+    id: r.dataset.ly, kind: r.dataset.kind, name: (r.querySelector('.ly-name') || {}).textContent || '',
+    hid: r.classList.contains('hid'), lock: r.classList.contains('locked'), memo: (r.querySelector('.ly-cnt') || {}).textContent || ''}))"""
+
+
+def layers(pg):
+    return pg.evaluate(LAYERS_JS)
+
+
+def card_spot(pg, sid):
+    return pg.evaluate("(id) => { const c = document.querySelector('.card[data-id=\"' + id + '\"]'); return [c.offsetLeft, c.offsetTop, c.style.transform]; }", sid)
+
+
+def test_layers_panel_tree_hide_lock_search(dpage):
+    """H6: 레이어 패널 = 줄(묶음, 접기) 아래 화면 — 줄마다 눈(숨김)·이름·잠금·메모 수, 위 검색(화면·줄 이름) + 거르기 아이콘,
+    누르면 그 카드로, 아래 막대(빈 레이아웃·숨기기·잠그기·삭제). H7: 숨긴 화면 패널은 없애고 판 글(소개·끝 글)도 레이어 —
+    왼쪽 [숨긴 화면]은 레이어를 '숨긴 것만'으로 연다. 잠금 = 옮기기·삭제·글자 고치기를 막는다(되돌리기 됨)."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.keyboard.press("Escape")
+    assert dpage.locator("#pHidden, #hidl").count() == 0 and dpage.locator('#dock .dk-tab[data-p="hidden"]').count() == 0
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    ls = layers(dpage)
+    groups = dpage.evaluate("[...document.querySelectorAll('#rows .flow .glabel')].map(g => g.textContent)")
+    cards = dpage.evaluate("[...document.querySelectorAll('#rows .card:not(.del)')].map(c => c.dataset.id)")
+    assert [l["name"] for l in ls if l["kind"] == "row" and l["id"] != "@drafts"] == groups, ls
+    assert [l["id"] for l in ls if l["kind"] == "screen"] == cards
+    assert {"@intro", "@foot"} <= {l["id"] for l in ls if l["kind"] == "text"}, "판 글도 레이어(H7)"
+    sid = "job"
+    title = dpage.get_attribute(f'.card[data-id="{sid}"] .cover', "data-title")
+    # 검색: 화면 이름
+    dpage.fill("#lyQ", title)
+    assert [l["id"] for l in layers(dpage) if l["kind"] == "screen"] == [sid]
+    dpage.fill("#lyQ", "")
+    # 누르면 그 카드로 + 고르기
+    dpage.click(f'#lyTree [data-ly="{sid}"] .ly-name')
+    assert dpage.evaluate("(id) => { const c = document.querySelector('.card[data-id=\"' + id + '\"]').getBoundingClientRect(), p = document.getElementById('screens').getBoundingClientRect();"
+                          " return document.querySelector('.card[data-id=\"' + id + '\"]').classList.contains('picked') && c.left >= p.left && c.right <= p.right && c.top >= p.top && c.bottom <= p.bottom; }", sid)
+    # 눈 = 숨김, 왼쪽 [숨긴 화면] = 숨긴 것만
+    dpage.click(f'#lyTree [data-ly="{sid}"] .ly-eye')
+    assert not dpage.locator(f'.card[data-id="{sid}"]').is_visible()
+    assert dpage.is_visible("#thid")
+    dpage.click('#dock .dk-tab[data-p="links"]')
+    dpage.click("#thid")
+    assert dpage.get_attribute('#lyF [data-f="hidden"]', "aria-pressed") == "true"
+    assert [l["id"] for l in layers(dpage) if l["kind"] != "row"] == [sid], layers(dpage)
+    dpage.click(f'#lyTree [data-ly="{sid}"] .ly-eye')
+    assert dpage.locator(f'.card[data-id="{sid}"]').is_visible()
+    dpage.click('#lyF [data-f="hidden"]')
+    # 판 글 숨기기
+    dpage.click('#lyTree [data-ly="@intro"] .ly-eye')
+    assert dpage.is_hidden("#intro")
+    dpage.click('#lyTree [data-ly="@intro"] .ly-eye')
+    assert dpage.is_visible("#intro")
+    # 줄 접기
+    row0 = [l for l in layers(dpage) if l["kind"] == "row"][0]["id"]
+    n0 = len(layers(dpage))
+    dpage.click(f'#lyTree [data-ly="{row0}"] .ly-fold')
+    assert len(layers(dpage)) < n0
+    dpage.click(f'#lyTree [data-ly="{row0}"] .ly-fold')
+    # 잠금: 옮기기·삭제 막음, 되돌리기
+    dpage.click(f'#lyTree [data-ly="{sid}"] .ly-lock')
+    assert [l for l in layers(dpage) if l["id"] == sid][0]["lock"]
+    assert dpage.evaluate("Object.keys(localStorage).some(k => k.startsWith('hd-locked:'))")
+    focus_dayfine(dpage, sid)
+    before = card_spot(dpage, sid)
+    dpage.keyboard.press("v")
+    b = dpage.locator(f'.card[data-id="{sid}"] .cover').bounding_box()
+    dpage.mouse.move(b["x"] + b["width"] / 2, b["y"] + 60); dpage.mouse.down()
+    dpage.mouse.move(b["x"] + b["width"] / 2 + 120, b["y"] + 140, steps=6); dpage.mouse.up()
+    assert card_spot(dpage, sid) == before, "잠긴 카드는 옮겨지지 않는다"
+    assert "잠긴" in (dpage.text_content("#toast") or "")
+    dpage.keyboard.press("h")
+    n_notes = len(notes_of(dpage))
+    dpage.evaluate("(id) => document.querySelector('.card[data-id=\"' + id + '\"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1}))", sid)
+    dpage.keyboard.press("Delete")
+    dpage.wait_for_timeout(200)
+    assert dpage.locator(f'.card[data-id="{sid}"]').is_visible() and len(notes_of(dpage)) == n_notes, "잠긴 카드는 지워지지 않는다"
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Control+z")
+    assert not [l for l in layers(dpage) if l["id"] == sid][0]["lock"], "잠금도 되돌리기"
+    # 아래 막대: 고른 화면 숨기기
+    dpage.click(f'#lyTree [data-ly="{sid}"] .ly-name')
+    dpage.click('#lyBar [data-act="hide"]')
+    assert not dpage.locator(f'.card[data-id="{sid}"]').is_visible()
+    dpage.keyboard.press("Control+z")
+    assert dpage.locator(f'.card[data-id="{sid}"]').is_visible()
     assert not errs, errs

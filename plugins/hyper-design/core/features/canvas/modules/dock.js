@@ -20,12 +20,12 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
-var PANELS = ['links', 'show', 'notes', 'pending', 'history', 'hidden'];
-var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', hidden: '숨긴 화면'};
+var PANELS = ['links', 'show', 'notes', 'pending', 'history', 'layers'];
+var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어'};
 
 function defaults() {
   return {v: V, w: W0, collapsed: false, closed: [], floats: [], tools: true, hint: true, bare: false,
-          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'hidden'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
+          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
 }
 function clampW(w) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : W0; }
 function okH(h) { return typeof h === 'number' && isFinite(h) && h > 0 ? h : 1; }
@@ -52,17 +52,18 @@ function normalize(o) {
   var seen = {}, s = {v: V, w: clampW(o.w), collapsed: o.collapsed === true, groups: [], floats: [], closed: [],
                       tools: o.tools !== false, hint: o.hint !== false, bare: false};
   var take = function (p) { if (PANELS.indexOf(p) < 0 || seen[p]) return false; seen[p] = 1; return true; };
+  var old = function (t) { return t.map(function (p) { return p === 'hidden' ? 'layers' : p; }); };   // 조각 4: 숨긴 화면 패널 → 레이어(H7)
   o.groups.forEach(function (g) {
     if (!g || !Array.isArray(g.tabs)) return;
-    var tabs = g.tabs.filter(take);
-    if (tabs.length) s.groups.push({tabs: tabs, active: g.active, h: okH(g.h)});
+    var tabs = old(g.tabs).filter(take);
+    if (tabs.length) s.groups.push({tabs: tabs, active: g.active === 'hidden' ? 'layers' : g.active, h: okH(g.h)});
   });
   (Array.isArray(o.floats) ? o.floats : []).forEach(function (g) {
     if (!g || !Array.isArray(g.tabs)) return;
-    var tabs = g.tabs.filter(take);
+    var tabs = old(g.tabs).filter(take);
     if (tabs.length) s.floats.push(fbox({tabs: tabs, active: g.active, x: g.x, y: g.y, w: g.w, h: g.h}));
   });
-  (Array.isArray(o.closed) ? o.closed : []).forEach(function (p) { if (take(p)) s.closed.push(p); });
+  old(Array.isArray(o.closed) ? o.closed : []).forEach(function (p) { if (take(p)) s.closed.push(p); });
   var miss = PANELS.filter(function (p) { return !seen[p]; });
   if (miss.length) {
     if (!s.groups.length) s.groups.push({tabs: [], active: null, h: 1});

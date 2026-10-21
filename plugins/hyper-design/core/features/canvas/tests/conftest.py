@@ -17,6 +17,7 @@ AREAS = {
     "links": "연결 보기(Shift+클릭): 길·태그·색·범례·태그 이름",
     "motion": "카메라·움직임 줄이기",
     "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
+    "layers": "레이어 패널: 줄·화면·판 글 나무, 숨김(눈)·잠금·검색·거르기·아래 막대",
     "menu": "위쪽 보기 메뉴(배율 칩)·창 메뉴·Tab 패널 모두 숨기기",
     "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
 }
@@ -77,6 +78,7 @@ BROWSER = {
     "test_link_panel_trash_and_rename": ("links", "tools"),
     "test_memo_pending_history_panels": ("notes", "dock", "tools"),
     "test_view_and_window_menus": ("menu", "dock", "tools", "motion"),
+    "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),

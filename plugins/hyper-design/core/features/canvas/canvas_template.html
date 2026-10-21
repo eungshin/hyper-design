@@ -183,6 +183,26 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 .lgsw .g button{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #ddd;cursor:pointer;padding:0}
 .lgsw .x{display:flex;align-items:center;justify-content:space-between;margin-top:7px;font-size:11px;color:#777}
 .lgsw input[type=color]{width:34px;height:22px;border:0;padding:0;background:none}
+/* 레이어 패널(view-layers.js, H6·H7) — 판 바깥이라 무채색(H13) */
+#pLayers{display:flex;flex-direction:column;gap:6px;min-height:0}
+.ly-top{display:flex;gap:4px;align-items:center}
+#lyQ{flex:1;min-width:0;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;padding:0 8px;font:13px system-ui,sans-serif}
+#lyF,#lyBar{display:flex;gap:2px}
+#lyF button,#lyBar button,.ly-r button{width:26px;height:26px;border:0;border-radius:6px;background:none;display:grid;place-items:center;cursor:pointer;color:#666;padding:0;flex:none}
+#lyF button:hover,#lyBar button:hover,.ly-r button:hover{background:#EEEEEB}
+#lyF button[aria-pressed="true"]{background:#E4E4E0;color:#2b2b29}
+#pLayers svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#lyTree{flex:1;overflow:auto;min-height:0}
+.ly-r{display:flex;align-items:center;gap:2px;min-height:28px;border-radius:6px;font-size:13px;cursor:default}
+.ly-r.screen,.ly-r.text{padding-left:22px;cursor:pointer}
+.ly-r.screen:hover,.ly-r.text:hover{background:#F4F4F1}
+.ly-r.row{font-weight:700;color:#444}
+.ly-r.on{background:#E9E9E5}
+.ly-r.hid .ly-name{color:#aaa}
+.ly-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+.ly-cnt{font-size:11px;color:#666;background:#EEEEEB;border-radius:999px;padding:0 6px}
+.ly-r .ly-lock{opacity:0}.ly-r:hover .ly-lock,.ly-r.locked .ly-lock{opacity:1}.ly-r.locked .ly-lock{color:#2b2b29}
+#lyBar{border-top:1px solid #eee;padding-top:4px;justify-content:flex-end}
 /* 위쪽 줄 메뉴(view-menu.js): 보기 = 아이콘 줄, 창 = 체크 목록 — 판 바깥이라 무채색(H13) */
 .vm,.wm{position:fixed;z-index:26;background:#fff;border:1px solid var(--ui-line,#e3e3df);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px}
 .vm[hidden],.wm[hidden]{display:none}
@@ -279,7 +299,7 @@ body.modal-open #tools{display:none}
 #tools .tb .cnt{position:absolute;right:1px;top:1px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:10px;font-weight:700;line-height:15px;text-align:center}
 #tools .tb[hidden],#tools hr[hidden]{display:none}
 .vbtn:disabled{opacity:.35;cursor:default;background:#fff}
-/* 우클릭 메뉴 · 숨긴 화면 목록: 화면 고정 좌표의 작은 판 */
+/* 우클릭 메뉴: 화면 고정 좌표의 작은 판 */
 .cm{position:fixed;z-index:35;min-width:190px;max-width:300px;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.2);padding:5px;font-size:13px}
 .cm[hidden]{display:none}
 .cm .cmh{padding:5px 8px 4px;font-size:12px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -288,10 +308,6 @@ body.modal-open #tools{display:none}
 .cm button kbd{margin-left:auto;font:600 11px system-ui,sans-serif;color:#888}
 .cm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
 .cm .cmh.sub{font-size:11.5px;color:#999;padding-top:2px}
-#hidl .hrow{display:flex;align-items:center;gap:8px;padding:4px 4px 4px 8px}
-#hidl .hrow span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#hidl .hrow button,#hidl > button{width:auto;flex:none;padding:5px 8px;border:1px solid #dcdcd7;border-radius:7px;background:#fff;font:600 12px system-ui,sans-serif;cursor:pointer}
-#hidl .cmh{padding:2px 4px 6px;font-size:12px;color:#777}#hidl hr{border:0;border-top:1px solid #eee;margin:6px 0}
 /* ---------- 오른쪽 패널 도크(modules/dock.js 배치 · modules/view-dock.js 그리기) — 판을 밀어 좁힌다 ---------- */
 body{--dockw:0px}
 #screens{right:var(--dockw)}
@@ -324,7 +340,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
 .dk-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
 .dkp{padding:10px 12px;min-height:100%;display:flex;flex-direction:column}
 .dkp-empty{margin:4px 0;color:#999;font-size:12.5px}
-#legend:not([hidden]) ~ .dkp-empty,#notes:not([hidden]) ~ .dkp-empty,#pend:not([hidden]) ~ .dkp-empty,#hidl:not([hidden]) ~ .dkp-empty{display:none}
+#legend:not([hidden]) ~ .dkp-empty,#notes:not([hidden]) ~ .dkp-empty,#pend:not([hidden]) ~ .dkp-empty{display:none}
 #plist{list-style:none;margin:0;padding:0}#plist li{padding:8px 0;border-top:1px solid #ECEDEA}#plist li.sent{opacity:.55}
 #pend .phint{margin:0 0 6px;color:#999;font-size:12px}
 #hlist{list-style:none;margin:0;padding:0;font-size:12.5px}
@@ -418,7 +434,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
       <button type="button" class="tb" data-tool="layout" data-key="N" data-tip="빈 레이아웃|빈 곳을 누르면 흰 카드를 놓아요 · 메모를 남기고 보내면 채워져요" aria-pressed="false" aria-label="빈 레이아웃 (N)"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg></button>
       <button type="button" class="tb" data-tool="memo" data-key="M" data-tip="화면 전체 메모|화면을 누르면 그 화면 전체에 메모를 남겨요 · 요소 하나는 주석(P)" aria-pressed="false" aria-label="화면 전체 메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button>
       <hr id="thr" hidden>
-      <button type="button" class="tb" id="thid" data-tip="숨긴 화면|눌러서 목록을 열고 다시 보이게 해요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
+      <button type="button" class="tb" id="thid" data-tip="숨긴 것|레이어 패널을 숨긴 것만으로 열어요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
     </nav>
     <svg id="ghost" aria-hidden="true"></svg>
   </section>
@@ -456,10 +472,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
   <div class="dkp" id="pHistory" data-panel="history">
     <ol id="hlist" aria-label="기록"></ol>
   </div>
-  <div class="dkp" id="pHidden" data-panel="hidden">
-    <div id="hidl" aria-label="숨긴 화면" hidden></div>
-    <p class="dkp-empty">숨긴 화면이 없어요</p>
-  </div>
+  <div class="dkp" id="pLayers" data-panel="layers"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="mtitle" id="mtitle"></div>
@@ -729,8 +742,9 @@ pane.addEventListener('pointerdown', function (e) {
     else if (tc && !e.target.closest('.pres')) startTrig(null, tc, e);
     else if (cd && !e.target.closest('.pres')) {        // 고른 카드를 끌면 고른 카드 모두
       var gids = SL.has(cd.dataset.id) && SL.ids().length > 1 ? SL.ids() : [cd.dataset.id];
-      drag.card = cd; drag.group = gids; drag.origins = {};
-      gids.forEach(function (id) { var cp = cardPos[id]; drag.origins[id] = {dx: cp ? cp.dx : 0, dy: cp ? cp.dy : 0, prev: cp ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null}; });
+      if (lockGuard(gids)) gids = [];                 // 잠긴 카드가 끼면 옮기지 않는다(판도 그대로)
+      if (gids.length) { drag.card = cd; drag.group = gids; drag.origins = {}; }
+      if (gids.length) gids.forEach(function (id) { var cp = cardPos[id]; drag.origins[id] = {dx: cp ? cp.dx : 0, dy: cp ? cp.dy : 0, prev: cp ? {dx: cp.dx, dy: cp.dy, g: cp.g} : null}; });
     }
   } else if (ptrs.size === 2) {
     if (drag && drag.card) endCardDrag();
@@ -954,9 +968,18 @@ var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
 (function () {
   var raw = []; try { raw = JSON.parse(localStorage.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
   var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
+  live['@intro'] = live['@foot'] = 1;                // 판 글도 레이어(H7)
   (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
   $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
+  $('#intro').hidden = !!hidden['@intro']; $('#foot').hidden = !!hidden['@foot'];
 })();
+// 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
+var LOCKKEY = 'hd-locked:' + hashStr(KEYPATH), locked = {};
+try { (JSON.parse(localStorage.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; }
+function lockGuard(ids) {                          // 잠긴 화면이 있으면 알리고 true
+  var hit = ids.filter(function (id) { return locked[id]; }); if (!hit.length) return false;
+  toast('잠긴 화면이에요 — 레이어 패널에서 풀어요'); return true;
+}
 function setName(from, to, v) {
   if (v) linkNames[from + '>' + to] = v; else delete linkNames[from + '>' + to];
   try { localStorage.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {}
@@ -989,12 +1012,12 @@ var DOCK_ICON = {
   notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
   pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
-  hidden: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg>'};
+  layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>'};
 var VD = null, VMN = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), hidden: $('#pHidden')},
-                        title: function (id) { var sp = HD.edits.split(notes || []); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : id === 'hidden' ? Object.keys(hidden).length : 0}; },
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers')},
+                        title: function (id) { var sp = HD.edits.split(notes || []); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
                           if (VMN) VMN.sync(st);
@@ -1010,15 +1033,32 @@ VMN = HD.viewMenu.mount({$: $, esc: esc, icons: DOCK_ICON, typing: typing, modal
          zin: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z * 1.25); },
          zout: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z / 1.25); },
          canPick: function () { return SL.ids().length > 0; },
-         pick: function () {                       // 고른 카드 범위가 판에 꽉 차게(여백 32)
-           var cs = SL.ids().map(function (id) { return rowsEl.querySelector('.card[data-id="' + id + '"]'); }).filter(Boolean);
-           if (!cs.length) return;
-           var ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-           cs.forEach(function (c) { x0 = Math.min(x0, ox + c.offsetLeft); y0 = Math.min(y0, oy + c.offsetTop); x1 = Math.max(x1, ox + c.offsetLeft + c.offsetWidth); y1 = Math.max(y1, oy + c.offsetTop + c.offsetHeight); });
-           var pw = pane.clientWidth, ph = pane.clientHeight;
-           z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0)));
-           tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
-         }}});
+         pick: function () { fitCards(SL.ids()); }}});
+function fitCards(ids) {                           // 그 카드들 범위가 판에 꽉 차게(여백 32) — 보기 메뉴 '고른 화면에 맞추기' · 레이어 누르기
+  var cs = ids.map(function (id) { return VL.cardEl(id); }).filter(function (c) { return c && !c.classList.contains('hid'); });
+  if (!cs.length) return;
+  var ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  cs.forEach(function (c) { var r = c.getBoundingClientRect(), p = pane.getBoundingClientRect(), l = (r.left - p.left - tx) / z, t = (r.top - p.top - ty) / z;
+    x0 = Math.min(x0, l); y0 = Math.min(y0, t); x1 = Math.max(x1, l + r.width / z); y1 = Math.max(y1, t + r.height / z); });
+  var pw = pane.clientWidth, ph = pane.clientHeight;
+  z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0)));
+  tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
+}
+// 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
+var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
+  tree: function () {
+    var groups = $$('#rows .flow').map(function (f, i) {
+      return {id: 'g' + i, name: $('.glabel', f).textContent, screens: $$('.card:not(.del)', f).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; })};
+    });
+    var drafts = $$('.card.draft', rowsEl).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; });
+    if (drafts.length) groups.push({id: '@drafts', name: '빈 레이아웃', screens: drafts});
+    return {groups: groups, texts: [{id: '@intro', name: '판 글 · 소개'}, {id: '@foot', name: '판 글 · 끝'}]};
+  },
+  state: function () { var memo = {}; HD.edits.split(notes || []).memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; }); return {hidden: hidden, locked: locked, memo: memo}; },
+  picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
+  hide: hide, lock: lockCards, del: deleteCards,
+  reveal: function (id) { SL.dispatch({type: 'only', id: id}); fitCards([id]); },
+  addLayout: function () { var r = pane.getBoundingClientRect(); addLayout(r.left + r.width / 2, r.top + r.height / 2); }});
 $('#legend').addEventListener('click', function (e) {   // 범례 줄 Ctrl+클릭 = 그 대상으로 카메라(범례가 판 밖이라 판의 클릭 처리 대신)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); }
 }, true);
@@ -1030,11 +1070,15 @@ window.HDCanvas = {routeCurve: HD.route.routeCurve, camera: HD.camera, style: HD
 
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
 // 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
-var cmenu = $('#cmenu'), hidl = $('#hidl');
+var cmenu = $('#cmenu');
 function titleOf(id) { var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
 function saveHidden() { try { localStorage.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
 function setHidden(ids, on) {
-  ids.forEach(function (id) { if (on) hidden[id] = 1; else delete hidden[id]; var c = VL.cardEl(id); if (c) c.classList.toggle('hid', on); });
+  ids.forEach(function (id) {
+    if (on) hidden[id] = 1; else delete hidden[id];
+    if (id.charAt(0) === '@') { var t = $('#' + id.slice(1)); if (t) t.hidden = on; return; }   // 판 글
+    var c = VL.cardEl(id); if (c) c.classList.toggle('hid', on);
+  });
   saveHidden(); renderHidden();
   if (on) SL.dispatch({type: 'drop', ids: ids});      // 숨긴 화면은 고르기에서 뺀다
   drawArrows(); scheduleVisible();
@@ -1048,22 +1092,20 @@ function renderHidden() {
   var n = Object.keys(hidden).length;
   $('#thid').hidden = !n; $('#thr').hidden = !n; $('#thidn').textContent = n || '';
   $('#thid').setAttribute('aria-label', '숨긴 화면 ' + n + '개');
-  hidl.hidden = !n; if (n) fillHidl();             // 목록은 도크의 '숨긴 화면' 패널(없으면 빈 안내)
-  if (VD) VD.render();
+  if (LY) LY.render();
 }
-function fillHidl() {
-  var ids = Object.keys(hidden);
-  hidl.innerHTML = '<div class="cmh">숨긴 화면 ' + ids.length + '개</div>' + ids.map(function (id) {
-    return '<div class="hrow" data-id="' + esc(id) + '"><span>' + esc(titleOf(id)) + '</span><button type="button" data-act="show">보이기</button></div>';
-  }).join('') + '<hr><button type="button" data-act="all">모두 보이기</button>';
+function openHidl() { closeCmenu(); VD.activate('layers'); LY.only('hidden'); }   // 레이어 패널을 '숨긴 것만'으로(H7)
+function setLocked(ids, on) {
+  ids.forEach(function (id) { if (on) locked[id] = 1; else delete locked[id]; });
+  try { localStorage.setItem(LOCKKEY, JSON.stringify(Object.keys(locked))); } catch (e) {}
+  if (LY) LY.render();
 }
-function openHidl() { closeCmenu(); VD.activate('hidden'); }   // 도크의 숨긴 화면 패널을 앞으로
+function lockCards(ids, on) {
+  ids = ids.filter(function (id) { return !!locked[id] !== on; }); if (!ids.length) return;
+  setLocked(ids, on);
+  record({label: on ? '화면 잠그기' : '잠금 풀기', undo: function () { setLocked(ids, !on); }, redo: function () { setLocked(ids, on); }});
+}
 $('#thid').addEventListener('click', openHidl);
-hidl.addEventListener('click', function (e) {
-  var b = e.target.closest('button[data-act]'); if (!b) return;
-  if (b.dataset.act === 'all') hide(Object.keys(hidden), false);
-  else hide([b.closest('.hrow').dataset.id], false);
-});
 function closeCmenu() { if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
 function openCmenu(x, y, head, items) {            // items: [{label, key?, act()}] · '-' = 구분선 · {head} = 소제목
   cmenu.tok = null;
@@ -1340,6 +1382,7 @@ function editCardText(el, field) {
   if ($('input, textarea', el)) return;
   closeCmenu();
   var id = el.closest('.card').dataset.id;
+  if (lockGuard([id])) return;
   if (!ORIG[id]) { if (field === 'title') renameLayout(el, id); return; }
   var p = pendingOf(id, field), cur = p != null ? p : ORIG[id][field], multi = field === 'purpose';
   var inp = document.createElement(multi ? 'textarea' : 'input'), keep = $('.state', el);
@@ -1367,6 +1410,7 @@ function editCardText(el, field) {
 var tedCtx = null;
 function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소 자리에 고치기 칸(판 위 카드 또는 크게 보기)
   closeCmenu(); endPick();
+  if (lockGuard([id])) return;
   var c = inModal ? null : VL.cardEl(id), ph = inModal ? mbox : c ? $('.phone', c) : null; if (!ph) return;
   var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / CARD.w, q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
@@ -1522,6 +1566,7 @@ function renameLayout(el, id) {
 /* ---------- 카드 고르기(한 번 누르기 · 이동 도구 Ctrl+클릭) · 선택 막대 · 삭제·복제·들어오는 연결 끊기 ---------- */
 var deleted = {};
 var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
+  if (LY) LY.render();
   placeSelbar();
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
 }});
@@ -1556,6 +1601,7 @@ function paintDeleted() {                            // 삭제 대기(메모 edi
   if (changed) { drawArrows(); scheduleVisible(); }
 }
 function deleteCards(ids) {                          // 진짜 화면 = 삭제 요청 메모 · 빈 레이아웃 = 그 메모(와 그리로 가는 잇기)를 지움 — 되돌리기 됨
+  if (lockGuard(ids)) { ids = ids.filter(function (id) { return !locked[id]; }); if (!ids.length) return; }
   var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
   var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
   SL.dispatch({type: 'clear'});
@@ -1616,7 +1662,7 @@ function popItem(dr, last) {
   var n = dr.targets.length;
   return {text: n > 1 ? n + '개 요소 · ' + (last.text || '') : last.text, path: dr.targets.map(function (t) { return t.path; }).join('\n'), rect: last.rect};
 }
-function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); scheduleArrows(); }   // 편집이 바뀌면 늘 그리는 선도
+function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); scheduleArrows(); if (LY) LY.render(); }   // 편집이 바뀌면 늘 그리는 선도
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
 function outDir() {
   if (window.__hdOut) return window.__hdOut;
