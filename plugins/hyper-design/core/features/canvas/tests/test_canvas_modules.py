@@ -356,7 +356,7 @@ LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model"
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 # 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
-SHELL_MAX = {"var": 84, "function": 114}   # 2.5a: picked·setPicks·togglePick → selection.js·view-select.js · 2.5b: arrowsOn·setArrows 지움, drawArrows 본체 → view-lines.js
+SHELL_MAX = 114   # 셸 위쪽 function 수(래칫) — 2.5d 뒤 114. var 수는 세지 않는다(10-21: 숫자 맞추기만 낳고 구조 이득 없음 — tracking 2.5d)
 
 
 def _layer(name):
@@ -369,22 +369,9 @@ def _hd_name(name):
     return {v: k for k, v in NS.items()}.get(name, name)
 
 
-def shell_counts(tpl):
+def shell_functions(tpl):
     s = tpl[tpl.index("// ── Canvas shell"):]
-    names = []
-    for m in re.finditer(r"(?m)^var\s+(.+)$", s):
-        depth, cur, parts = 0, "", []
-        for ch in m.group(1):
-            depth += ch in "([{"
-            depth -= ch in ")]}"
-            if ch in ",;" and depth == 0:
-                parts.append(cur); cur = ""
-                if ch == ";": break
-            else:
-                cur += ch
-        parts = [p for p in parts if not re.match(r"\s*\w+\s*=\s*HD\.\w+\.mount\(", p)]   # 모듈을 붙이는 줄(var X = HD.x.mount(…))은 셸이 할 일 — 세지 않는다
-        names += [n.group(1) for n in (re.match(r"\s*(\w+)", p) for p in parts) if n]
-    return {"var": len(names), "function": len(re.findall(r"(?m)^function\s+\w+", s))}
+    return len(re.findall(r"(?m)^function\s+\w+", s))
 
 
 @pytest.mark.parametrize("name", ALL_MODULES)
@@ -404,10 +391,9 @@ def test_gate_role_and_direction(name):
 
 
 def test_gate_shell_only_shrinks():
-    """비대 방지: 템플릿 셸의 위쪽 var·function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로). 모듈을 붙이는 줄은 세지 않는다."""
-    got = shell_counts((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
-    for k, mx in SHELL_MAX.items():
-        assert got[k] <= mx, f"셸 위쪽 {k} {got[k]} > {mx} — 새 상태·함수는 modules/ 의 주인 모듈로"
+    """비대 방지: 템플릿 셸의 위쪽 function 수는 SHELL_MAX 를 넘지 않는다(새 기능은 모듈로)."""
+    got = shell_functions((SCRIPTS / "canvas_template.html").read_text(encoding="utf-8"))
+    assert got <= SHELL_MAX, f"셸 위쪽 function {got} > {SHELL_MAX} — 새 함수는 modules/ 의 주인 모듈로"
 
 
 SEL_JS = r"""
