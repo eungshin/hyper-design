@@ -1,8 +1,8 @@
 /* View — 화면 안 연결: 고른 카드마다 그 화면의 링크(palette.js hd-links)를 받아 출발 버튼에 그 선과 같은 색 테두리 + 번호(hd-links-paint),
-   소켓, 연결 패널(#legend) 줄, 긴 화면 펼치기. 선·선 태그·강조는 view-lines 하나가 그린다(E20 A) — 색·번호는 ctx.mark(from, to).
+   소켓, 연결 패널 줄 목록(ctx.rows → 셸 → view-link-panel), 긴 화면 펼치기. 선·선 태그·강조는 view-lines 하나가 그린다(E20 A) — 색·번호는 ctx.mark(from, to).
    HD.viewLinks.mount(ctx) → {set(ids), paint(), refresh(), cardEl(id), item(from, i), linksOf(id, cb(items|null)), model(id), demoExpand(id)}
    소켓(.sock): 연결 출발 요소마다 출발 카드 위 점 — 보이기는 CSS(트리거 도구), 끌기는 캔버스가 받는다
-   ctx = {rowsEl, CARD, $, $$, esc, circled(n), title(id), mark(from, to) → {n, color}|null, tagScale(),
+   ctx = {rowsEl, CARD, $, $$, title(id), mark(from, to) → {n, color}|null, tagScale(), rows(rows, title),
           isHidden?(id) — 숨긴·삭제 대기 화면은 연결 대상에서 뺀다,
           pending?(from) → {byPath:{path:{op:'link'|'cut', to}}, adds:[{to,path,text,rect}], cutIn:{id:1}} — 아직 파일에 안 들어간 연결 편집을 바로 겹친다} */
 (function () {
@@ -11,7 +11,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 var GREY = '#8A8D86', WAIT = 1500;                 // 1.5초 안에 답이 없으면(palette.js 없음 등) 그 화면은 버튼 표시 없음
 
 function mount(ctx) {
-  var rowsEl = ctx.rowsEl, CARD = ctx.CARD, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, title = ctx.title;
+  var rowsEl = ctx.rowsEl, CARD = ctx.CARD, $ = ctx.$, $$ = ctx.$$, title = ctx.title;
   var ids = [], models = {}, lastD = {}, deadline = {}, waiters = {}, xpId = null;
 
   function cssMs(name, dflt) { return HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue(name), dflt); }
@@ -67,23 +67,16 @@ function mount(ctx) {
     postTo(id, {type: 'hd-links-paint', items: items});
   }
   function paint() { ids.forEach(paintOne); renderLegend(); }
-  // 연결 패널: 고른 화면의 연결을 도착마다 한 줄(선과 같은 색·번호)
+  // 연결 패널 줄: 고른 화면의 연결을 도착마다 하나(선과 같은 색·번호) → 셸이 패널(view-link-panel)에 넘긴다
   function renderLegend() {
-    var lg = $('#legend'), rows = [];
+    var rows = [];
     ids.forEach(function (id) {
       var m = models[id]; if (!m) return;
       var by = {}, order = [];
       m.items.forEach(function (it) { if (!by[it.to]) { by[it.to] = []; order.push(it.to); } if (by[it.to].indexOf(it.text) < 0) by[it.to].push(it.text || '(링크)'); });
       order.forEach(function (to) { rows.push({from: id, to: to, texts: by[to], mk: ctx.mark(id, to)}); });
     });
-    if (!rows.length) { lg.hidden = true; return; }
-    $('#lgTitle').textContent = (ids.length === 1 ? title(ids[0]) : '고른 화면 ' + ids.length + '개') + ' · 연결 ' + rows.length + '개';
-    $('#lgRows').innerHTML = rows.map(function (r) {
-      var color = r.mk ? r.mk.color : GREY;
-      return '<div class="lgrow" data-from="' + esc(r.from) + '" data-to="' + esc(r.to) + '"><span class="lgdot" style="background:' + color + '">' + (r.mk ? esc(ctx.circled(r.mk.n)) : '') + '</span>' +
-        '<span class="lgtx">' + esc(title(r.from)) + ' › <b>[' + esc(r.texts.join(' · ')) + ']</b><br><i>→ ' + esc(title(r.to)) + '</i></span></div>';
-    }).join('');
-    lg.hidden = false;
+    ctx.rows(rows, (ids.length === 1 ? title(ids[0]) : '고른 화면 ' + ids.length + '개') + ' · 연결 ' + rows.length + '개');
   }
   // 펼치기(겹쳐서): 화면 전체 높이까지(카드 2.5배 한도), 다른 카드 자리는 그대로
   function expand(id, h, done) {

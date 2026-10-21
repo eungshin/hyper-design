@@ -155,6 +155,13 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #legend .lgdot{min-width:20px;height:20px;border-radius:999px;flex:none;color:#fff;font:700 13px/20px sans-serif;text-align:center}
 #legend .lgtx{flex:1;line-height:1.35;color:#333}
 #legend .lgtx i{font-style:normal;color:#777}
+#legend .lgnm{color:#1c1c1c}
+#legend .lgbtn{flex:none;width:28px;height:28px;border:0;border-radius:6px;background:none;color:#777;cursor:pointer;padding:5px;display:flex;align-items:center;justify-content:center;opacity:.55}
+#legend .lgrow:hover .lgbtn,#legend .lgbtn:focus-visible{opacity:1}
+#legend .lgbtn:hover{background:#E9EAE7;color:#1c1c1c}
+#legend .lgcut:hover{color:var(--ui-danger)}
+#legend .lgbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#legend .lgname-in{display:block;width:100%;box-sizing:border-box;font:inherit;font-weight:700;border:2px solid var(--ui-mark);border-radius:6px;padding:1px 6px;margin-bottom:2px}
 #pShow .lgstyle{display:flex;align-items:center;gap:8px;color:#777}
 #pShow .lgddw{display:flex;align-items:center;gap:6px}
 #pShow .lgddb{display:flex;align-items:center;gap:6px;border:1.5px solid #e2e2de;border-radius:8px;background:#fff;padding:4px 8px;cursor:pointer;font-size:12px;color:#1c1c1c;white-space:nowrap}
@@ -943,7 +950,10 @@ function pendingFor(from) { return HD.edits.pendingFor(notes, from); }   // 아�
 var LN = HD.viewLines.mount({rowsEl: rowsEl, svg: $('#ar'), $: $, $$: $$, esc: esc, circled: circled, CARD: CARD, LEFT: LEFT, prefs: prefs, savePrefs: savePrefs, record: record,
                              names: names, redraw: function () { drawArrows(); },
                              graph: function () { return G; }, pending: function () { return HD.edits.overviewPending(notes); }});   // 판의 선 — 체계 하나(E7·E20)
-var VL = HD.viewLinks.mount({rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, circled: circled, title: function (id) { return titleOf(id); }, pending: pendingFor, tagScale: tagScale,
+var LP = HD.viewLinkPanel.mount({$: $, esc: esc, circled: circled, title: function (id) { return titleOf(id); }, names: names,   // 연결 패널: 줄마다 이름 · 휴지통(E13)
+                                 cut: function (from, to) { cutPairs([[from, to]], true); },
+                                 rename: function (from, to, v) { names.set(from, to, v); drawArrows(); }});
+var VL = HD.viewLinks.mount({rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, title: function (id) { return titleOf(id); }, pending: pendingFor, tagScale: tagScale, rows: LP.render,
                              mark: LN.mark, isHidden: function (id) { return !!hidden[id] || !!deleted[id]; }});   // 고른 화면 안: 버튼 테두리·번호·소켓·연결 패널
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, LN: LN, select: function (id) { if (id) SL.dispatch({type: 'only', id: id}); else SL.dispatch({type: 'clear'}); }, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,

@@ -332,20 +332,28 @@ def focus_dayfine(pg, sid):
     pg.wait_for_timeout(700)
 
 
+LN_PT_JS = """([a, b]) => { const p = [...document.querySelectorAll('#ar path.ln')].find(p => (p.dataset.from === a && p.dataset.to === b) || (p.dataset.from === b && p.dataset.to === a));
+    const scr = (o, t) => { const q = o.getPointAtLength(t), n = o.getScreenCTM(); return [q.x * n.a + q.y * n.c + n.e, q.x * n.b + q.y * n.d + n.f]; };
+    const L = p.getTotalLength(), others = [...document.querySelectorAll('#ar path.ln')].filter(o => o !== p && getComputedStyle(o).display !== 'none')
+      .flatMap(o => { const n = o.getTotalLength(), out = []; for (let t = 0; t <= n; t += 4) out.push(scr(o, t)); return out; });
+    for (const gap of [16, 8, 0]) {                      // 이웃 선과 떨어진 점부터(자르는 획 ±12px 이 이웃 선을 건드리지 않게), 없으면 점점 가까운 점
+      let best = null;
+      for (let i = 5; i < 96; i++) { const [x, y] = scr(p, L * i / 100);
+        if (gap && others.some(([u, v]) => Math.hypot(u - x, v - y) < gap)) continue;
+        if (!best || Math.abs(i - 50) < best[2]) best = [x, y, Math.abs(i - 50)]; }
+      if (best) return best.slice(0, 2); }
+    return null; }"""
+
+
 def ln_mid(pg, a, b):
-    """판의 선(a—b 쌍)에서 판 안에 보이고(도크 앞) 이웃 선과 16px 넘게 떨어진 점 중 가운데에 가장 가까운 점 → 화면 좌표.
-    다른 줄로 가는 선은 왼쪽 통로로 돌아 가운데가 화면 밖이거나 이웃 선과 붙어 있을 수 있다."""
-    return pg.evaluate("""([a, b]) => { const p = [...document.querySelectorAll('#ar path.ln')].find(p => (p.dataset.from === a && p.dataset.to === b) || (p.dataset.from === b && p.dataset.to === a));
-        const L = p.getTotalLength(), m = p.getScreenCTM(), r = document.getElementById('screens').getBoundingClientRect(), d = document.getElementById('dock').getBoundingClientRect();
-        const scr = (o, t) => { const q = o.getPointAtLength(t), n = o.getScreenCTM(); return [q.x * n.a + q.y * n.c + n.e, q.x * n.b + q.y * n.d + n.f]; };
-        const others = [...document.querySelectorAll('#ar path.ln')].filter(o => o !== p && getComputedStyle(o).display !== 'none')
-          .flatMap(o => { const n = o.getTotalLength(), out = []; for (let t = 0; t <= n; t += 4) out.push(scr(o, t)); return out; });
-        let best = null;
-        for (let i = 1; i < 100; i++) { const [x, y] = scr(p, L * i / 100);
-          if (!(x > r.left + 30 && x < Math.min(r.right, d.left) - 30 && y > r.top + 30 && y < r.bottom - 30)) continue;
-          if (others.some(([u, v]) => Math.hypot(u - x, v - y) < 16)) continue;   // 자르는 획(±12px)이 이웃 선을 건드리지 않게
-          if (!best || Math.abs(i - 50) < best[2]) best = [x, y, Math.abs(i - 50)]; }
-        return best && best.slice(0, 2); }""", [a, b])
+    """판의 선(a—b 쌍)에서 이웃 선과 가장 떨어진(16 → 8 → 0px) 점 중 가운데에 가까운 점 — 판을 휠로 밀어 그 점을 판 가운데로 가져온 뒤 화면 좌표."""
+    x, y = pg.evaluate(LN_PT_JS, [a, b])
+    pr = pg.locator("#screens").bounding_box()
+    cx, cy = pr["x"] + (pr["width"] - 360) / 2, pr["y"] + pr["height"] / 2      # 오른쪽 360px 은 도크
+    pg.mouse.move(cx, cy)
+    pg.mouse.wheel(x - cx, y - cy)
+    pg.wait_for_timeout(250)
+    return pg.evaluate(LN_PT_JS, [a, b])
 
 
 def right_cut(pg, x, y, d=12):
@@ -379,7 +387,8 @@ def test_tag_rename_keeps_button_text(dpage):
     to = dpage.evaluate("[...document.querySelectorAll('#rows .alabel.on')].find(n => n.dataset.from === 'job').dataset.to")
     sel, old = tag_sel("job", to), tag_text(dpage, "job", to)
     num = dpage.text_content(sel).split(" ", 1)[0]
-    legend0 = dpage.text_content(f'#lgRows .lgrow[data-to="{to}"]')
+    btns = f'#lgRows .lgrow[data-to="{to}"] .lgtx > b:not(.lgnm)'
+    legend0 = dpage.text_content(btns)
     frame = dpage.frame_locator('.card[data-id="job"] .phone iframe')
     btn0 = frame.locator("body").inner_text()
     bring_into_view(dpage, sel)
@@ -390,7 +399,7 @@ def test_tag_rename_keeps_button_text(dpage):
     dpage.wait_for_timeout(200)
     assert dpage.text_content(sel) == num + " 처음 화면으로", "번호는 그대로, 이름만"
     assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "이름 바꾸기가 고르기를 풀지 않는다"
-    assert dpage.text_content(f'#lgRows .lgrow[data-to="{to}"]') == legend0, "연결 패널(버튼 글)은 그대로"
+    assert dpage.text_content(btns) == legend0, "연결 패널의 버튼 글은 그대로(이름은 그 위에 따로)"
     assert frame.locator("body").inner_text() == btn0, "화면 안 버튼 글은 그대로"
     keys = dpage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-link-names:'))")
     assert len(keys) == 1 and "처음 화면으로" in dpage.evaluate("(k) => localStorage.getItem(k)", keys[0])
@@ -1541,4 +1550,35 @@ def test_shift_select_keeps_every_picked_card_bright(dpage):
         ls = dpage.evaluate(LN_OF_JS, cid)
         assert all(l["on"] and l["op"] > 0.9 for l in ls), ("고른 카드의 선은 모두 진하게", cid, ls)
     dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+
+
+# ---------------------------------------------------------------- 조각 2.5c 연결 패널 (E13, rework §8-3)
+def test_link_panel_trash_and_rename(dpage):
+    """E13: 연결 패널 = 고른 화면의 연결(선과 같은 번호). 줄마다 휴지통 = 그 연결 하나 끊기(되돌리기), 이름 = 선 태그 이름(hd-link-names)."""
+    focus_dayfine(dpage, "job")
+    row = '#lgRows .lgrow[data-from="job"][data-to="language"]'
+    assert dpage.text_content(f"{row} .lgdot") == dpage.text_content(tag_sel("job", "language")).split(" ", 1)[0], "패널 번호 = 선 태그 번호"
+    n0 = len(notes_of(dpage))
+    dpage.click(f"{row} button.lgcut")
+    dpage.wait_for_function("(n) => " + NOTES_JS + ".length > n", arg=n0, timeout=4000)
+    new = notes_of(dpage)[n0:]
+    assert new and all(n["op"] == "cut" and n["screen"] == "job" and n["to"] == "language" for n in new), new
+    assert "끊었어요" in dpage.text_content("#toast")
+    dpage.wait_for_timeout(250)
+    assert dpage.locator(tag_sel("job", "language")).count() == 0 and dpage.locator(row).count() == 0, "끊은 연결은 선 태그·패널에서 바로 빠진다"
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
+    dpage.wait_for_timeout(250)
+    assert dpage.locator(row).count() == 1, "되돌리면 돌아온다"
+    dpage.click(f"{row} button.lgname")
+    inp = dpage.locator(f"{row} input")
+    inp.fill("언어 고르기로")
+    inp.press("Enter")
+    dpage.wait_for_timeout(200)
+    assert tag_text(dpage, "job", "language") == "언어 고르기로", "패널에서 바꾼 이름 = 선 태그 이름"
+    assert "언어 고르기로" in dpage.text_content(row)
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(200)
+    assert tag_text(dpage, "job", "language") != "언어 고르기로"
     dpage.keyboard.press("Escape")

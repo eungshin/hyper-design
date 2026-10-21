@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
