@@ -530,7 +530,7 @@ $('#foot').innerHTML = foot;
 $('#foot').style.marginLeft = LEFT + 'px';
 
 /* ======================================================================
-   연결 보기 — Model(modules/graph.js · route.js · labels.js) / ViewModel(modules/focus.js · prefs.js) / View(modules/view-links.js).
+   판의 선·고른 화면 안 연결 — Model(modules/graph.js · route.js) / ViewModel(modules/prefs.js) / View(modules/view-links.js).
    build_canvas.py 가 hd-modules 표시 자리(이 스크립트 앞)에 그 모듈들을 끼워 넣는다(globalThis.HD).
    ====================================================================== */
 // ── 회색 갈래 화살표(그래프의 kind:'flow' 간선) — 그리기는 이 셸에서
@@ -975,8 +975,7 @@ $('#legend').addEventListener('click', function (e) {   // 범례 줄 Ctrl+클�
 if (window.MutationObserver) new MutationObserver(function () {   // 연결 보기가 범례를 채우면 연결 탭을 앞으로
   if (!$('#legend').hidden && !VD.isShown('links')) VD.activate('links');
 }).observe($('#legend'), {attributes: true, attributeFilter: ['hidden']});
-window.HDCanvas = {assignColors: HD.focus.assignColors, cycleNext: HD.focus.cycleNext, routeCurve: HD.route.routeCurve, plan: HD.route.plan,
-                   deriveView: HD.focus.deriveView, LINK_COLORS: HD.focus.LINK_COLORS, camera: HD.camera, style: HD.lineStyle,
+window.HDCanvas = {routeCurve: HD.route.routeCurve, camera: HD.camera, style: HD.lineStyle,
                    view: function () { return {z: z, tx: tx, ty: ty}; }};
 
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */

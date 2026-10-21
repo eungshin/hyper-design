@@ -29,7 +29,7 @@ from html.parser import HTMLParser
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]   # 순서 고정: Model → ViewModel → View
+MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]   # 순서 고정: Model → ViewModel → View
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"

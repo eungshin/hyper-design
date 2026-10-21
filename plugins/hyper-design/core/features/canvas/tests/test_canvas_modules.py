@@ -1,6 +1,6 @@
 """캔버스 모듈(modules/*.js) — Model·ViewModel 순수 함수 단위 테스트(node). 브라우저 없음.
 
-graph.js · route.js · labels.js · style.js · camera.js · focus.js · prefs.js 를 순서대로 node 에서 읽어 확인한다.
+graph.js · route.js · style.js · camera.js · prefs.js 를 순서대로 node 에서 읽어 확인한다.
 D 는 runs/gym-v2/out 임시 복사본을 build_canvas.py 로 만든 index.html 의 hd-data 에서 꺼낸다.
 """
 import colorsys, json, os, re, shutil, subprocess, sys, tempfile
@@ -13,15 +13,15 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection"]
-ALL_MODULES = ["graph", "route", "labels", "style", "camera", "edits", "tools", "dock", "focus", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
+PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "view-links", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
 const fs = require('fs'), vm = require('vm');
 const [dir, names, inPath] = [process.argv[2], process.argv[3].split(','), process.argv[4]];
 for (const n of names) vm.runInThisContext(fs.readFileSync(dir + '/' + n + '.js', 'utf8'), {filename: n + '.js'});
-const HD = globalThis.HD, F = HD.focus, out = {};
+const HD = globalThis.HD, out = {};
 const input = JSON.parse(fs.readFileSync(inPath, 'utf8'));
 
 // 1. graph.fromData
@@ -45,112 +45,6 @@ out.linkPathsA = la.map(e => e.via.path);
 out.linkCountZ = HD.graph.edgesFrom(g2, 'z', 'link').length;
 out.flowAfter = HD.graph.edgesFrom(g2, null, 'flow').length;
 out.groups = HD.graph.groupByTarget(la).map(x => [x.to, x.k, x.edges.map(e => e.via.path)]);
-
-// 3. focus.reduce 와 cycleNext
-out.cycle = {};
-for (const n of [1, 3, 5]) {
-  const links = []; for (let i = 0; i < n; i++) links.push({to: 't' + i, path: 'p' + i, text: 'x' + i, rect: {x: 0, y: i, w: 1, h: 1}});
-  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src';
-  let s = F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m});
-  const got = [F.deriveView(m, s).stage], want = [F.deriveView(m, s).stage];
-  let w = want[0];
-  for (let i = 0; i < 2 * n + 3; i++) {
-    s = F.reduce(s, {type: 'cycle'}); got.push(F.deriveView(m, s).stage);
-    w = F.cycleNext(w, n); want.push(w);
-  }
-  out.cycle[n] = {got, want};
-}
-{
-  const links = [0, 1, 2].map(i => ({to: 't' + i, path: 'p' + i, text: 'x' + i, rect: {x: 0, y: i, w: 1, h: 1}}));
-  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src';
-  let s = F.reduce(F.reduce(F.initial({preset: 'deep'}), {type: 'focus', id: 'src'}), {type: 'links', links: m});
-  s = F.reduce(s, {type: 'cycle'});                       // 전체 → 그룹 1
-  const t = F.reduce(s, {type: 'toggle', k: 0});
-  out.toggle = {on: t.on, visible: F.deriveView(m, t).visible, before: F.deriveView(m, s).visible, hover: t.hover};
-  const t2 = F.reduce(t, {type: 'cycle'});
-  out.cycleClearsManual = t2.on === null;
-  const h = F.reduce(t, {type: 'hover', k: 1});
-  out.hoverSame = F.reduce(h, {type: 'hover', k: 1}) === h;
-  const x = F.reduce(h, {type: 'exitFocus'});
-  out.exit = {focusId: x.focusId, links: x.links, stage: x.stage, on: x.on, hover: x.hover, colors: x.colors, pair: x.pair};
-  const i0 = F.initial(); out.cycleNoLinksSame = F.reduce(i0, {type: 'cycle'}) === i0;
-  out.styleIntent = F.reduce(i0, {type: 'style', colors: {preset: 'vivid'}}).colors;
-  // Ctrl+클릭(연결 보기 밖): pair → 링크 답이 오면 그 그룹 하나만
-  const pr = F.reduce(F.reduce(F.initial(), {type: 'pair', id: 'src', to: 't1'}), {type: 'links', links: m});
-  out.pair = {focusId: pr.focusId, on: pr.on, visible: F.deriveView(m, pr).visible};
-}
-
-// 3b. 순환(전체 먼저) · 모두 표시 · 범례 제목 · 같은 대상 합치기
-{
-  const links = [{to: 'a', path: 'p0', text: '뒤로', rect: {x: 8, y: 10, w: 40, h: 40}},
-                 {to: 'b', path: 'p1', text: '일시정지 신청', rect: {x: 20, y: 300, w: 335, h: 48}},
-                 {to: 'c', path: 'p2', text: '연장하기', rect: {x: 20, y: 500, w: 335, h: 48}},
-                 {to: 'b', path: 'p3', text: '정지 문의', rect: {x: 20, y: 700, w: 335, h: 48}}];
-  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src'; m.titles = {src: '회원권'};
-  let s = F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m});
-  const seq = [];
-  const snap = st => { const v = F.deriveView(m, st); return {stage: v.stage, vis: v.visible, title: v.legend.title, all: v.legend.all, rows: v.legend.rows.length}; };
-  seq.push(snap(s));
-  for (let i = 0; i < 5; i++) { s = F.reduce(s, {type: 'cycle'}); seq.push(snap(s)); }
-  out.cycle3 = seq;
-  out.groups4 = F.groupsOf(m).map(g => [g.to, g.items, g.text, g.tag]);
-  const dup = F.assignColors(['반품 신청', '수리 신청', '수리 신청'].map((x, i) => ({to: 'r', path: 'q' + i, text: x, rect: {x: 0, y: i * 60, w: 300, h: 48}})), '', F.LINK_COLORS);
-  out.dupTag = F.groupsOf(dup)[0].tag;
-  let t = F.reduce(s, {type: 'toggle', k: 2});          // s = 단계 1(그룹 a 만) → c 도 켬
-  out.manual = snap(t);
-  out.allOff = snap(F.reduce(t, {type: 'all', on: false}));
-  out.allOn = snap(F.reduce(t, {type: 'all', on: true}));
-  out.manualThenCycle = snap(F.reduce(t, {type: 'cycle'}));
-}
-// 3c. 옆면 규칙 · 경로 계획 · 태그 자리
-out.side = [0.25, 0.5, 0.8].map(f => [HD.route.sideOf(f * 375, 375, 'R'), HD.route.sideOf(f * 375, 375, 'L')]);
-{
-  const S = {x: 1000, y: 1000, w: 375, h: 812}, cap = {top: 855, bottom: 896};
-  const T = (x, row, rowTop) => ({x, y: rowTop, w: 375, h: 812, rowTop, cap: {top: rowTop - 145, bottom: rowTop - 104}, row});
-  const groups = [
-    {k: 0, to: 'back', target: T(541, 1, 1000), sameRow: true, members: [{x: 1008, y: 1010, w: 40, h: 40}]},
-    {k: 1, to: 'far', target: T(1918, 1, 1000), sameRow: true, members: [{x: 1020, y: 1300, w: 335, h: 48}, {x: 1020, y: 1700, w: 335, h: 48}]},
-    {k: 2, to: 'near', target: T(1459, 1, 1000), sameRow: true, members: [{x: 1020, y: 1500, w: 335, h: 48}]},
-    {k: 3, to: 'bell', target: T(82, 1, 1000), sameRow: true, members: [{x: 1330, y: 1010, w: 40, h: 40}]},
-    {k: 4, to: 'up', target: T(1459, 0, 0), sameRow: false, members: [{x: 1030, y: 1100, w: 300, h: 40}]}];
-  const pl = HD.route.plan({src: S, rowTop: 1000, cap, left: 300, groups});
-  out.plan = pl.map(p => ({k: p.k, side: p.side, rev: p.rev, gx: p.gx, lane: p.lane, ly: p.ly, pts: p.pts, d: p.d, segs: p.laneSegs, laneX: p.laneX}));
-  const verts = [];
-  pl.forEach(p => p.verticals.forEach(v => verts.push({k: p.k, x: v.x, y0: v.y0, y1: v.y1})));
-  out.verts = verts;
-  out.tags = HD.labels.placeTags(pl.map(p => ({k: p.k, segs: p.laneSegs, w: 90, h: 27})), verts);
-  out.tagFallback = HD.labels.placeTags([{k: 0, segs: [{a: 0, b: 40, y: 0}], w: 90, h: 27}], []);
-}
-// 3d. 직선 우선(canvas-edit 3단계): 카드 목록을 주면 같은 줄 · 사이에 카드 없는 이웃은 요소 높이 그대로 곧게 옆면으로
-{
-  const S = {x: 1000, y: 1000, w: 375, h: 812}, cap = {top: 855, bottom: 896};
-  const T = (x, row, rowTop) => ({x, y: rowTop, w: 375, h: 812, rowTop, cap: {top: rowTop - 145, bottom: rowTop - 104}, row});
-  const card = x => ({x, y: 1000, w: 375, h: 812});
-  const groups = [
-    {k: 0, to: 'back', target: T(541, 1, 1000), sameRow: true, members: [{x: 1008, y: 1010, w: 40, h: 40}]},
-    {k: 1, to: 'far', target: T(1918, 1, 1000), sameRow: true, members: [{x: 1020, y: 1300, w: 335, h: 48}, {x: 1020, y: 1700, w: 335, h: 48}]},
-    {k: 2, to: 'near', target: T(1459, 1, 1000), sameRow: true, members: [{x: 1020, y: 1500, w: 335, h: 48}, {x: 1020, y: 1560, w: 335, h: 48}]},
-    {k: 3, to: 'bell', target: T(82, 1, 1000), sameRow: true, members: [{x: 1330, y: 1010, w: 40, h: 40}]},
-    {k: 4, to: 'up', target: T(1459, 0, 0), sameRow: false, members: [{x: 1030, y: 1100, w: 300, h: 40}]}];
-  const cards = [card(82), card(541), card(1000), card(1459), card(1918), {x: 1459, y: 0, w: 375, h: 812}];
-  const pl = HD.route.plan({src: S, rowTop: 1000, cap, left: 300, groups, cards});
-  out.planStraight = pl.map(p => ({k: p.k, straight: !!p.straight, side: p.side, pts: p.pts, segs: p.laneSegs, verts: p.verticals, floatAt: p.floatAt || null}));
-  const verts = [];
-  pl.forEach(p => p.verticals.forEach(v => verts.push({k: p.k, x: v.x, y0: v.y0, y1: v.y1})));
-  out.tagsStraight = HD.labels.placeTags(pl.map(p => ({k: p.k, segs: p.laneSegs, w: 90, h: 27})), verts);
-  // 되돌아가는 연결(흐름 순서상 앞 화면으로) 표시 · 태그 자리가 없으면 줄 위 빈자리(floatAt)에 떠서 마우스 올릴 때만
-  const links = [{to: 'prev', path: 'p0', text: '이전', rect: {x: 8, y: 10, w: 40, h: 40}}, {to: 'next', path: 'p1', text: '다음으로 가기 버튼', rect: {x: 20, y: 700, w: 335, h: 48}}];
-  const m = F.assignColors(links, '', F.LINK_COLORS); m.from = 'src'; m.seq = ['prev', 'src', 'next'];
-  m.geom = {src: {x: 1000, y: 1000, w: 375, h: 812, sc: 1}, rowTop: 1000, cap, left: 300, srcRow: 1,
-            targets: {prev: T(541, 1, 1000), next: T(1459, 1, 1000)}, cards: [card(541), card(1000), card(1459)], tags: {0: {w: 60, h: 27}, 1: {w: 160, h: 27}}};
-  const v = F.deriveView(m, F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m}));
-  out.viewStraight = v.groups.map(g => ({to: g.to, back: !!g.back, straight: g.pts[0].length === 2, tag: g.tag, lineY: g.pts[0][0][1]}));
-  // 틈이 TAG_MIN 보다 좁은 이웃(카드 사이 30px) → 줄 위 빈자리로 뜬다
-  const m2 = F.assignColors([links[1]], '', F.LINK_COLORS); m2.from = 'src'; m2.seq = ['src', 'next'];
-  m2.geom = {src: {x: 1000, y: 1000, w: 375, h: 812, sc: 1}, rowTop: 1000, cap, left: 300, srcRow: 1,
-             targets: {next: T(1405, 1, 1000)}, cards: [card(1000), card(1405)], tags: {0: {w: 160, h: 27}}};
-  out.narrowGap = F.deriveView(m2, F.reduce(F.reduce(F.initial(), {type: 'focus', id: 'src'}), {type: 'links', links: m2})).groups[0].tag;
-}
 
 // 4. prefs (v2: 색 프리셋 · 랜덤 · 쌍 색 · 굵기 · 움직임, v1 sat 는 버림)
 const mk = o => k => (k in o ? o[k] : null);
@@ -248,20 +142,6 @@ def test_add_links_replaces_and_groups(res):
     assert res["groups"] == [["c", 0, ["q1", "q3"]], ["b", 1, ["q2"]]]
 
 
-def test_focus_reducer(res):
-    for n in ("1", "3", "5"):
-        assert res["cycle"][n]["got"] == res["cycle"][n]["want"], n
-    assert res["cycle"]["3"]["got"][:6] == [0, 1, 2, 3, 0, 1]          # v3: Shift+클릭 = 전체 먼저, 다시 누르면 하나씩 → 전체
-    assert res["cycle"]["1"]["got"] == [0] * len(res["cycle"]["1"]["got"])
-    t = res["toggle"]
-    assert t["before"] == [True, False, False]
-    assert t["on"] == {"0": False, "1": False, "2": False} and t["visible"] == [False, False, False] and t["hover"] is None
-    assert res["cycleClearsManual"] and res["hoverSame"] and res["cycleNoLinksSame"]
-    assert res["exit"] == {"focusId": None, "links": None, "stage": 0, "on": None, "hover": None, "colors": {"preset": "deep"}, "pair": None}
-    assert res["styleIntent"] == {"preset": "vivid"}
-    assert res["pair"] == {"focusId": "src", "on": {"0": False, "1": True, "2": False}, "visible": [False, True, False]}   # Ctrl+클릭 쌍 하나만
-
-
 DEF = {"v": 3, "lines": True, "op": 0.55, "preset": "calm", "rand": None, "custom": {}, "width": 2.5, "motion": True}
 
 
@@ -338,125 +218,6 @@ def test_single_file_output(res):
     assert order == sorted(order) and order[-1] < html.index("// ── Canvas shell")
     assert "/* hd-motion */" not in html and "--duration-fast: 250ms" in html and html.index("--camera-glide-dur") < html.index("</style>")   # motion.css 인라인
     assert not re.search(r"<script[^>]+\bsrc=", html), "외부 스크립트 참조 없음"
-
-
-def test_cycle_all_first_and_legend(res):
-    """S1: 첫 Shift+클릭 = 전체(그룹 n개), 다시 = 1 … n → 전체. 제목 · 모두 표시 체크 상태."""
-    seq = res["cycle3"]
-    assert [x["stage"] for x in seq] == [0, 1, 2, 3, 0, 1]
-    assert seq[0]["title"] == "회원권 · 전체 3개" and seq[0]["all"] == "on" and seq[0]["vis"] == [True, True, True]
-    assert seq[1]["title"] == "회원권 · 1/3 뒤로" and seq[1]["vis"] == [True, False, False] and seq[1]["all"] == "mixed"
-    assert seq[2]["title"] == "회원권 · 2/3 일시정지 신청 · 정지 문의"
-    assert seq[3]["title"] == "회원권 · 3/3 연장하기"
-    assert all(x["rows"] == 3 for x in seq)                          # 범례 줄 = 대상 그룹 하나에 한 줄
-    assert res["manual"]["title"] == "회원권 · 직접 선택 2/3" and res["manual"]["vis"] == [True, False, True] and res["manual"]["all"] == "mixed"
-    assert res["allOff"]["vis"] == [False] * 3 and res["allOff"]["all"] == "off" and res["allOff"]["title"] == "회원권 · 직접 선택 0/3"
-    assert res["allOn"]["vis"] == [True] * 3 and res["allOn"]["all"] == "on"
-    assert res["manualThenCycle"]["title"] == "회원권 · 2/3 일시정지 신청 · 정지 문의"   # 수동 선택은 다음 Shift+클릭까지만
-
-
-def test_same_target_merge(res):
-    g = res["groups4"]
-    assert [x[0] for x in g] == ["a", "b", "c"] and g[1][1] == [1, 3]
-    assert g[1][2] == "일시정지 신청 · 정지 문의 (2)" and g[1][3] == "일시정지 신청 · 정지 문의 (2)"
-    assert g[0][2] == "뒤로"
-    assert res["dupTag"] == "반품 신청 · 수리 신청 (3)"   # 같은 글 버튼 여럿 → 글은 한 번, 개수는 (n)
-
-
-def test_side_rule(res):
-    assert res["side"] == [["L", "L"], ["R", "L"], ["R", "R"]]       # 25% → 왼쪽 · 50% → 대상 쪽 · 80% → 오른쪽
-
-
-def segs_of(pts):
-    return [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
-
-
-def collinear_overlap(s1, s2):
-    (a, b), (c, d) = s1, s2
-    if a[1] == b[1] == c[1] == d[1]:
-        lo, hi = max(min(a[0], b[0]), min(c[0], d[0])), min(max(a[0], b[0]), max(c[0], d[0]))
-        return max(0, hi - lo)
-    if a[0] == b[0] == c[0] == d[0]:
-        lo, hi = max(min(a[1], b[1]), min(c[1], d[1])), min(max(a[1], b[1]), max(c[1], d[1]))
-        return max(0, hi - lo)
-    return 0
-
-
-def test_plan_routes(res):
-    P = {p["k"]: p for p in res["plan"]}
-    back, far, near, bell, up = P[0], P[1], P[2], P[3], P[4]
-    assert back["side"] == "L" and back["pts"][0][0][0] == 1008 and back["pts"][0][1][0] < 1000   # 왼쪽 위 뒤로: 왼쪽 옆면으로 나감
-    assert near["side"] == far["side"] == "R" and not near["rev"]
-    assert near["gx"] == 1375 + 38 and far["gx"] == 1375 + 26                      # 가까운 대상 = 바깥 통로
-    assert bell["side"] == "R" and bell["rev"] and bell["gx"] == 1375 + 14          # 반대 방향 = 가장 안쪽
-    assert near["lane"] == 0 and far["lane"] == 1
-    assert bell["lane"] > max(P[k]["lane"] for k in (0, 1, 2))                      # 반대 방향 = 겹치는 것들 위
-    assert up["laneX"] < min(p["gx"] for p in res["plan"]) and len(up["segs"]) == 2
-    for p in res["plan"]:
-        for pts in p["pts"]:
-            for (a, b) in segs_of(pts):
-                assert a[0] == b[0] or a[1] == b[1], ("가로·세로만", p["k"], pts)
-            corners = len(pts) - 2
-            assert corners <= (5 if p["k"] == 4 else 3), (p["k"], pts)
-        for d in p["d"]:
-            assert set(re.findall(r"[A-Z]", d)) <= {"M", "L", "Q"}
-    for p in res["plan"]:                                                          # 서로 다른 그룹은 20px 넘게 겹치지 않는다
-        for q in res["plan"]:
-            if p["k"] >= q["k"]:
-                continue
-            for s1 in (s for pts in p["pts"] for s in segs_of(pts)):
-                for s2 in (s for pts in q["pts"] for s in segs_of(pts)):
-                    assert collinear_overlap(s1, s2) <= 20, (p["k"], q["k"], s1, s2)
-
-
-def test_plan_straight_neighbours(res):
-    """3단계 직선 우선: 카드 목록이 있으면 같은 줄 · 사이에 카드 없는 이웃은 곧은 가로선 한 줄(옆면으로), 나머지는 지금 차선 길."""
-    P = {p["k"]: p for p in res["planStraight"]}
-    near, back = P[2], P[0]
-    for g, edge in ((near, 1459 - 10), (back, 541 + 375 + 10)):
-        assert g["straight"] and g["verts"] == [], g
-        for pts in g["pts"]:
-            assert len(pts) == 2 and pts[0][1] == pts[1][1] and pts[1][0] == edge, pts     # 꺾임 0 · 옆면 10px 앞(위로 들어갈 때와 같은 틈 — 색 고리가 화살촉을 덮지 않게)
-    assert [p[0][1] for p in near["pts"]] == [1524, 1584], near["pts"]                   # 요소 높이 그대로(멤버마다)
-    assert back["pts"][0][0][0] == 1008 and back["pts"][0][1][0] < 1000                   # 왼쪽 요소는 왼쪽으로
-    for k in (1, 3, 4):                                                                    # 사이에 카드(far · bell) · 다른 줄(up) = 차선 길
-        assert not P[k]["straight"] and P[k]["verts"], P[k]
-    assert near["segs"][0]["a"] == 1375 and near["segs"][0]["b"] == 1459 - 10             # 태그 후보 = 카드 사이 틈 중 선이 지나는 곳
-    assert near["floatAt"] and near["floatAt"]["y"] < 1000                                 # 자리 없으면 줄 위 빈자리
-    for pts in P[1]["pts"] + P[3]["pts"]:                                                  # 차선 길은 곧은 선과 20px 넘게 겹치지 않는다
-        for s1 in segs_of(pts):
-            for s2 in (s for q in near["pts"] + back["pts"] for s in segs_of(q)):
-                assert collinear_overlap(s1, s2) <= 20, (s1, s2)
-    v = {g["to"]: g for g in res["viewStraight"]}
-    assert v["prev"]["back"] and not v["next"]["back"], v                                  # 흐름 순서상 앞 화면 = 되돌아가는 연결
-    # 곧은 선의 태그 = 카드 사이 틈 칸 안, 선 바로 위(틈 폭에 맞게 줄임 — 말줄임은 화면이) · 멀리 띄우기는 틈이 TAG_MIN 보다 좁을 때만
-    for to, lo, hi in (("next", 1375, 1459), ("prev", 916, 1000)):
-        t, line_y = v[to]["tag"], v[to]["lineY"]
-        assert t["gap"] and not t.get("float"), (to, t)
-        assert lo < t["x"] - t["maxW"] / 2 and t["x"] + t["maxW"] / 2 < hi and abs(t["x"] - (lo + hi) / 2) < 0.5, (to, t)   # 틈 가운데, 카드 침범 없음
-        above = t["y"] + t["h"] / 2 <= line_y - 2 and line_y - (t["y"] + t["h"] / 2) <= 6
-        below = t["y"] - t["h"] / 2 >= line_y + 2 and (t["y"] - t["h"] / 2) - line_y <= 6
-        assert (above if to == "next" else below), (to, t, line_y)                     # 선 바로 위 — 카드 맨 위 버튼이라 위에 자리가 없으면 바로 아래
-        assert 1000 < t["y"] - t["h"] / 2 and t["y"] + t["h"] / 2 < 1812, (to, t)         # 카드 높이 안(줄 제목·설명 줄 침범 없음)
-    assert res["narrowGap"]["float"] and not res["narrowGap"].get("gap"), res["narrowGap"]   # 틈 칸조차 없으면 줄 위 빈자리로
-
-
-def test_place_tags(res):
-    tags, P = res["tags"], {p["k"]: p for p in res["plan"]}
-    W, H = 90 + 8, 27 + 8
-    for t in tags:
-        assert not t["fallback"], t
-        seg = [s for s in P[t["k"]]["segs"] if abs(s["y"] - t["y"]) < 0.01][0]
-        assert seg["a"] + 10 + 45 <= t["x"] + 1e-6 and t["x"] + 45 <= seg["b"] - 10 + 1e-6, (t, seg)
-        for v in res["verts"]:
-            if v["k"] == t["k"]:
-                continue
-            assert not (v["x"] - 3 < t["x"] + W / 2 and t["x"] - W / 2 < v["x"] + 3 and min(v["y0"], v["y1"]) < t["y"] + H / 2 and t["y"] - H / 2 < max(v["y0"], v["y1"])), (t, v)
-    for i, a in enumerate(tags):
-        for b in tags[i + 1:]:
-            assert not (abs(a["x"] - b["x"]) < W and abs(a["y"] - b["y"]) < H), (a, b)
-    fb = res["tagFallback"][0]
-    assert fb["fallback"] and fb["x"] == 20                                         # 자리가 없으면 50%
 
 
 EDITS_JS = r"""
@@ -590,8 +351,8 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "labels": "Model", "style": "Model", "camera": "Model", "edits": "Model",
-         "tools": "ViewModel", "dock": "ViewModel", "focus": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel"}
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model",
+         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 # 템플릿(셸) 위쪽 선언 수 — 조각마다 줄기만 한다. 늘리려면 이 숫자를 고치는 것이 리뷰에 드러난다.
