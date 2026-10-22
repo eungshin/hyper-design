@@ -472,6 +472,61 @@
         "note": "한 테스트가 전체의 41% — 50단계 제한(순수 리듀서 로직)을 실제 끌기 51번 + Ctrl+Z 60번으로 확인. S3 대상"
       },
       "note": "--durations=20 첫 측정(S2). 점검 스크립트 canvas_test.py 의 낡은 확인 2개(위쪽 팔레트 묶음·누르면 크게 보기)도 고침 — audit.py 가 실제 실행에서 부름."
+    },
+    {
+      "slice": "Q2b·Q3",
+      "commit": "(이번)",
+      "numbered": true,
+      "tests": {
+        "full": 1,
+        "area": 6,
+        "minutes": 14
+      },
+      "gate": {
+        "checks": 33,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "-n 4 영역 실행에서 옛 테스트의 순서 의존이 드러남(v2 page 메모 묶음·epage 옮긴 카드) — 새 테스트 2개로 일꾼 나눔이 바뀌어서. page·epage 를 xdist_group 으로 한 일꾼에, test_undo_redo_card_moves 는 시작할 때 옮긴 자리 키를 비움"
+        }
+      ],
+      "waste": [
+        {
+          "what": "영역 실행을 '어디가 깨지나' 찾기에 4번 씀 — 순서 의존은 같은 영역을 -n 없이 한 번 돌려 비교하면 바로 보였다",
+          "minutes": 6,
+          "fix": "-n 실패가 혼자 돌리면 통과하면 먼저 순서 의존(공유 모듈 페이지)을 의심"
+        }
+      ],
+      "profile": {
+        "total_sec": 118,
+        "top": [
+          [
+            "test_card_drag_has_no_long_tasks",
+            12.7
+          ],
+          [
+            "test_fit_includes_moved_card_and_drops_stale",
+            11.4
+          ],
+          [
+            "test_undo_redo_card_moves",
+            11.3
+          ],
+          [
+            "test_tag_rename_keeps_button_text",
+            11.2
+          ],
+          [
+            "test_helper_canvas_busy_overlay_lifts_on_file_change",
+            9.2
+          ]
+        ],
+        "note": "-n 4 전체 165개"
+      },
+      "note": "Q2b 덮개(busy·view-busy)·Q3 선 끝 손잡이(line-ends·view-line-ends)를 셸에 붙임. gpage 는 묶지 않음 — 묶으면 -m 일부 실행에서 test_v3_main_flow_dashed 가 카메라 자리를 이어받아 깨짐(test_canvas_v2.py 는 이번 소유 밖)"
     }
   ]
 }

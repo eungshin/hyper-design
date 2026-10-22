@@ -95,6 +95,13 @@ body:not([data-tab="screens"]):not(.modal-open) .view #wbtn{visibility:visible} 
 .phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
 .cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:var(--card-r,28px);cursor:pointer}
 .cover:hover,.cover:focus-visible{outline:4px solid var(--ui-mark);outline-offset:0}
+/* AI 수정 중 덮개(Q2b, modules/view-busy.js): 카드 화면을 옅은 회색으로 덮는다 — 누르기는 아래 카드로(걷기 버튼만 받는다) */
+.busy{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(8px * var(--ts,1));background:rgba(241,241,238,.82);color:#2b2b29;font:600 calc(13px * var(--ts,1))/1.4 system-ui,sans-serif;pointer-events:none;border-radius:inherit}
+.busy-spin{width:calc(18px * var(--ts,1));height:calc(18px * var(--ts,1));border:calc(2px * var(--ts,1)) solid #c9c9c4;border-top-color:#2b2b29;border-radius:50%;animation:hd-busy-spin .9s linear infinite}
+@keyframes hd-busy-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.busy-spin{animation:none}}
+.busy [data-act=lift]{pointer-events:auto;font:inherit;font-weight:600;color:#2b2b29;background:#fff;border:1px solid #6b6b66;border-radius:999px;padding:calc(2px * var(--ts,1)) calc(12px * var(--ts,1));cursor:pointer}
+.busy [data-act=lift]:hover{background:#F1F1EE}
 .ftitle{font-size:22px;font-weight:700;margin-top:16px;line-height:1.35}
 .state{display:inline-block;font-size:15px;font-weight:700;color:#8a5a00;background:#fff3cf;border-radius:8px;padding:2px 8px;margin-right:8px;vertical-align:2px}
 .fdesc{font-size:18px;color:#555;margin-top:4px;line-height:1.45}
@@ -114,6 +121,11 @@ svg.ar path.ln.plan{stroke-width:calc(var(--lw,2) * .5px * var(--lnk,1))}       
 .alabel{position:absolute;display:none;background:#fff;border:2px solid #8a8d86;color:#4a4c47;font-size:17px;font-weight:700;padding:3px 12px;border-radius:999px;white-space:nowrap;pointer-events:auto;cursor:default;box-shadow:0 1px 4px rgba(0,0,0,.10)}
 .alabel.editing{display:block}
 .ltag-in{font:inherit;color:#1c1c1c;border:0;outline:0;background:none;padding:0;text-align:center;min-width:4em}
+/* 선 끝 손잡이(Q3, modules/view-line-ends.js): 진짜 연결선은 획만 누르기를 받는다(카드·빈 판·기획 갈래는 그대로) · 손잡이·끄는 선은 화면에서 읽히는 크기(--ts) */
+svg.ar path.ln:not(.plan){pointer-events:visibleStroke;cursor:pointer}
+svg.ar circle.ln-end{r:calc(7px * var(--ts,1));fill:#fff;stroke:#2b2b29;stroke-width:calc(2px * var(--ts,1));cursor:grab;pointer-events:auto}
+svg.ar path.ln-ghost{fill:none;stroke:#6b6b66;stroke-width:calc(2px * var(--ts,1));stroke-dasharray:calc(6px * var(--ts,1)) calc(4px * var(--ts,1));pointer-events:none}
+#rows.nolines circle.ln-end{display:none}
 svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;stroke-width:calc(var(--lw,2) * 1.6px * var(--lnk,1))}
 .foot{padding:20px 0 120px;font-size:17px;color:#777;max-width:1500px}
 .foot p{margin:0 0 6px}
@@ -608,6 +620,7 @@ var contentLeft = LEFT;
 function drawArrows() {                            // 판의 선(modules/view-lines.js) → 고른 화면의 버튼 표시(같은 색·번호) 다시
   contentLeft = Math.max(0, LN.render() - 24);
   VL.paint();
+  var ls = LE && LE.selected(); if (ls) LE.select(ls.from, ls.to);   // 선을 새로 그렸으면 손잡이도 새 선에(없어졌으면 풀림)
 }
 
 /* ---------- 카드 옮긴 자리(6A): 줄 배치는 그대로, 카드마다 옮긴 거리만 별도 키에 ---------- */
@@ -835,6 +848,7 @@ pane.addEventListener('click', function (e) {
   var tg = e.target, cl = function (q) { return tg && tg.closest ? tg.closest(q) : null; };
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#tools')) return;                        // 도구 막대 안 조작은 고르기를 풀지 않는다(연결 패널은 도크라 판 밖)
+  if (cl('.busy')) return;                         // 덮개의 [걷기]는 그 버튼만(Q2b) — 도구가 카드를 열지 않게
   if (tool === 'layout' && !cl('.card') && !cl('.alabel') && !e.shiftKey) { e.preventDefault(); addLayout(e.clientX, e.clientY); setTool('move'); return; }
   var mc = cl('.card');
   if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
@@ -1006,6 +1020,26 @@ var LP = HD.viewLinkPanel.mount({$: $, esc: esc, circled: circled, title: functi
                                  rename: function (from, to, v) { names.set(from, to, v); drawArrows(); }});
 var VL = HD.viewLinks.mount({rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, title: function (id) { return titleOf(id); }, pending: pendingFor, tagScale: tagScale, rows: LP.render,
                              mark: LN.mark, isHidden: function (id) { return !!hidden[id] || !!deleted[id]; }});   // 고른 화면 안: 버튼 테두리·번호·소켓·연결 패널
+// 선 끝 손잡이 View(modules/view-line-ends.js · 기하 modules/line-ends.js, Q3) — 선 누르기 = 그 쌍 강조 + 도착 끝 손잡이, 끌어 놓기 = 도착 바꾸기(메뉴와 같은 편집)
+var LE = HD.viewLineEnds.mount({svg: $('#ar'), rowsEl: rowsEl,
+  toStage: function (cx, cy) { var r = $('#ar').getBoundingClientRect(); return [(cx - r.left) / z, (cy - r.top) / z]; },
+  cardBoxes: function () {
+    var r = $('#ar').getBoundingClientRect();
+    return $$('.card', rowsEl).map(function (c) { var b = c.getBoundingClientRect();
+      return {id: c.dataset.id, x: (b.left - r.left) / z, y: (b.top - r.top) / z, w: b.width / z, h: b.height / z, hid: c.classList.contains('hid'), del: c.classList.contains('del')}; });
+  },
+  emphasise: function (from, to) { LN.pair(from, to); }, unemphasise: function () { LN.pair(null); },
+  retarget: function (from, oldTo, newTo, pending) {   // 반영 대기 선 = 그 잇기 편집을 새 도착으로 바꿔 끼움(되돌리기 한 단계) · 아니면 화면 안 링크를 묻고 도착 바꾸기
+    var pend = pending ? notes.filter(function (n) { return !n.sent && n.edit === 'link' && n.op === 'link' && n.screen === from && String(n.to) === String(oldTo); }) : [];
+    if (!pend.length) { linksTo(from, oldTo, function (its) { if (its.length) linkTo(from, its, newTo); else toast('옮길 연결을 찾지 못했어요'); }); return; }
+    var list = pend.filter(function (n) { return String(n.was || '') !== String(newTo); }).map(function (n) {
+      var m = editNote(from, {path: n.path, text: n.text, rect: n.rect}, n.was ? HD.edits.say.retarget(scr(n.was), scr(newTo)) : HD.edits.say.link(scr(newTo)), 'link', newTo);
+      if (n.was) m.was = n.was;
+      return m;
+    });
+    addEdits('트리거 도착 바꾸기', list, titleOf(newTo) + '(으)로 이었어요 — 반영 대기', pend);
+  },
+  toast: function (m) { toast(m); }});
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
 var VM = HD.viewMotion.mount({VL: VL, LN: LN, select: function (id) { if (id) SL.dispatch({type: 'only', id: id}); else SL.dispatch({type: 'clear'}); }, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
                               getView: function () { return {z: z, tx: tx, ty: ty}; },
@@ -1588,6 +1622,7 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (LY) LY.render();
   placeSelbar();
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
+  if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
 }});
 function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 한 장일 때만
   var bar = $('#selbar'); if (!bar || !SL) return;
@@ -1827,7 +1862,21 @@ var VS = HD.viewSync.mount({chip: $('#mode'), on: !!window.__hdHelper && /^https
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
     changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) { f.removeAttribute('src'); f.setAttribute('data-src', live[id].file + '?v=' + v); } });
     paintCardText(); drawArrows(); scheduleVisible();
+    if (VB) VB.render();
   }});
+// AI 수정 중 덮개 View(modules/view-busy.js · 상태 modules/busy.js, Q2b) — 터미널로 넘긴 화면에 덮개, 그 화면 파일이 바뀌면 걷고 그 카드만 다시(도우미로 열었을 때만)
+var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id); },
+  watch: function (files) {
+    return fetch('/api/watch', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-HD-Token': new URLSearchParams(location.search).get('hd') || ''}, body: JSON.stringify({files: files})})
+      .then(function (r) { if (!r.ok) throw new Error('watch ' + r.status); return r.json(); });
+  },
+  reload: function (ids) {
+    var v = 'w' + Date.now();
+    ids.forEach(function (id) { var c = VL.cardEl(id), f = c && $('.phone iframe', c), b = c && $('.cover', c); if (f && b) { f.removeAttribute('src'); f.setAttribute('data-src', b.dataset.file + '?v=' + v); } });
+    scheduleVisible();
+  },
+  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
+  key: 'hd-busy:' + hashStr(KEYPATH), toast: function (m) { toast(m); }}) : null;
 $('#nsend').addEventListener('click', function () {
   var list = notes.filter(function (n) { return !n.sent; });
   if (!list.length) list = notes.slice();
@@ -1842,6 +1891,11 @@ $('#nsend').addEventListener('click', function () {
     toast($('#nmsg').textContent = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && r.left.length ? ' · ' : '') +
       (r.left.length ? '터미널로 ' + r.left.length + '건(' + (r.fw && r.fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : ''));
     window.__hdLastHelper = {apply: r.res, forward: r.fw};
+    if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
+      var seen = {}, scs = [];
+      r.left.forEach(function (n) { var c = VL.cardEl(n.screen), b = c && $('.cover', c); if (b && !seen[n.screen]) { seen[n.screen] = 1; scs.push({id: n.screen, file: b.dataset.file}); } });
+      VB.mark(scs, r.fw && r.fw.via === 'paseo' ? 'paseo' : 'queue');
+    }
   }).catch(function () { copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
 });
 $('#nclear').addEventListener('click', function () {

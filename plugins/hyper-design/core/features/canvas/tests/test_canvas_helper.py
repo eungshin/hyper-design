@@ -245,3 +245,47 @@ def test_helper_canvas_writes_delete_and_link_without_reload(ctx, out):   # 2.2 
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def test_helper_canvas_busy_overlay_lifts_on_file_change(ctx, out):   # Q2b — 터미널로 넘긴 화면에 덮개 · 새로고침해도 남음 · 파일이 바뀌면 걷힘 · [걷기]
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.on("dialog", lambda d: d.accept())
+    busy = '.card[data-id="job"] .busy'
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.evaluate("""() => { const k = 'hd-notes:' + (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(window.__hdKeyPath);
+            localStorage.setItem(k, JSON.stringify([{id: 'm1', screen: 'job', targets: [{path: 'h1', text: 'q'}], path: 'h1', text: 'q', note: '제목을 더 짧게', intent: 'change', sent: false}])); }""")
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        assert pg.locator(busy).count() == 0
+        pg.click("#nsend")
+        pg.wait_for_selector(busy)
+        assert pg.get_attribute(busy, "data-via") == "queue" and pg.get_attribute(busy, "role") == "status"
+        assert pg.text_content(busy + " .busy-txt") == "대기열에 있음" and pg.locator(busy + " [data-act=lift]").text_content() == "걷기"
+        assert pg.locator(".busy").count() == 1, "넘긴 화면에만"
+        from test_canvas_v2 import zoom_to
+        zoom_to(pg, "job", 420)
+        from test_canvas_edit import ESHOTS
+        ESHOTS.mkdir(parents=True, exist_ok=True)
+        pg.screenshot(path=str(ESHOTS / "q2b-busy.png"))
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_selector(busy + '[data-via="queue"]')       # 새로고침해도 남는다
+        pg.wait_for_function("Object.keys(localStorage).some(k => k.startsWith('hd-busy:') && /\"mtime\":[0-9]/.test(localStorage.getItem(k)))", timeout=5000)
+        f = out / "screens" / "job.html"
+        f.write_text(f.read_text(encoding="utf-8") + "\n<!-- AI 가 고침 -->\n", encoding="utf-8")
+        pg.wait_for_selector(busy, state="detached", timeout=6000)  # 화면 파일이 바뀌면 걷힌다
+        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "그 카드만 다시 싣는다"
+        pg.click("#nsend")                                       # 다시 넘김 → [걷기] = 손으로 바로 걷기
+        pg.wait_for_selector(busy)
+        pg.locator(busy + " [data-act=lift]").click()
+        assert pg.locator(busy).count() == 0
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

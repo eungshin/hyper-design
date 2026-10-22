@@ -37,6 +37,7 @@ BROWSER = {
     "test_dock_merge_split_float_resize_collapse_persist": ("dock",),
     "test_toolbar_default_hand_and_keys": ("tools", "input"),
     "test_move_tool_moves_card_and_persists": ("tools", "flow"),
+    "test_line_click_shows_end_handles_and_drag_retargets": ("flow", "tools"),
     "test_fit_includes_moved_card_and_drops_stale": ("tools", "input"),
     "test_card_drag_has_no_long_tasks": ("tools",),
     "test_moved_card_paints_above_its_new_neighbours": ("tools",),
@@ -98,6 +99,7 @@ BROWSER = {
     "test_helper_canvas_writes_delete_and_link_without_reload": ("helper", "tools"),
     "test_file_mode_chip": ("helper",),
     "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),
+    "test_helper_canvas_busy_overlay_lifts_on_file_change": ("helper", "notes"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),
@@ -124,12 +126,23 @@ BROWSER = {
 }
 
 
+# 모듈 하나를 차례로 이어 쓰는 페이지(앞 테스트가 남긴 메모·펼침·옮긴 카드를 뒤 테스트가 전제) — -n 에서도 한 일꾼에서 차례대로.
+# dpage(편집 테스트 대부분)·gpage 는 나눠 돌린다 — gpage 를 묶으면 -m 으로 고른 일부만 차례로 돌 때 test_v3_main_flow_dashed 가 앞 테스트의 카메라 자리를 이어받아 깨진다
+SHARED = ("page", "epage")
+
+
+@pytest.hookimpl(tryfirst=True)                     # xdist 가 나눌 방식을 정하기 전에
 def pytest_configure(config):
+    if getattr(config, "workerinput", None) is not None:   # 일꾼은 인자를 다시 읽어 묶음 방식을 모른다 — 묶음 이름을 테스트 id 에 붙이게
+        config.option.loadgroup = True
+    elif getattr(config.option, "dist", "no") == "load":   # -n 4: 묶음(xdist_group)만 한 일꾼으로, 나머지는 지금처럼 나눠 돌린다
+        config.option.dist = "loadgroup"
     config.addinivalue_line("markers", "unit: 순수 함수(node) — 늘 같이 돌린다")
     for name, what in AREAS.items():
         config.addinivalue_line("markers", f"{name}: {what}")
 
 
+@pytest.hookimpl(tryfirst=True)                     # xdist 가 묶음 이름(xdist_group)을 읽기 전에 표시를 단다
 def pytest_collection_modifyitems(config, items):
     missing = []
     for it in items:
@@ -144,6 +157,9 @@ def pytest_collection_modifyitems(config, items):
             continue
         for a in areas:
             it.add_marker(getattr(pytest.mark, a))
+        shared = [f for f in SHARED if f in getattr(it, "fixturenames", ())]
+        if shared:
+            it.add_marker(pytest.mark.xdist_group(it.fspath.purebasename + ":" + shared[0]))
     if missing:
         raise pytest.UsageError("영역 표(tests/conftest.py BROWSER)에 없는 브라우저 테스트: " + ", ".join(missing))
 

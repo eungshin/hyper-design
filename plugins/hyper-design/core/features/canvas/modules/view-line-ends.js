@@ -27,6 +27,7 @@ function mount(ctx) {
     for (var i = 0; i < hs.length; i++) hs[i].remove();
   }
   function select(from, to) {
+    if (drag) cancel();                               // 끄는 중 선을 새로 그리면(셸이 다시 고름) 끌기는 취소 — 떨어진 손잡이를 붙잡고 있지 않게
     var p = lineEl(from, to);
     if (!p) { clear(); return; }
     wipe();
@@ -111,7 +112,7 @@ function mount(ctx) {
   addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (drag) { e.preventDefault(); e.stopPropagation(); cancel(); return; }
-    if (sel) clear();
+    if (sel && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) { e.preventDefault(); e.stopPropagation(); clear(); }   // 끌기 취소 > 선 고르기 풀기 > 셸의 Esc — 한 번에 하나
   }, true);
 
   return {select: select, clear: clear, selected: function () { return sel ? {from: sel.from, to: sel.to} : null; }};

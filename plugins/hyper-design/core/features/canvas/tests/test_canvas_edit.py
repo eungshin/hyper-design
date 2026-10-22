@@ -519,6 +519,7 @@ def test_hide_screen_and_hidden_list(epage):
 
 
 def test_undo_redo_card_moves(epage):
+    epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")   # 앞 테스트가 옮겨 둔 카드 없이(-n 에서 순서가 바뀌어도)
     reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다(50단계 상한은 unit: test_history_model_caps_undo_at_50)
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
@@ -2019,3 +2020,46 @@ def test_theme_panel_switch_copy_edit_contrast_delete(dpage):
     dpage.click(f'#thList [data-th="{rows[0]["id"]}"] .th-name')
     dpage.click('.tab[data-tab="screens"]')
     assert not errs, errs
+
+
+# ---------------------------------------------------------------- Q3: 선 누르기 = 그 쌍 강조 + 도착 끝 손잡이 · 끌어 놓기 = 도착 바꾸기(되돌리기 한 단계) · Esc
+def ln_ends(pg):
+    return pg.evaluate("""[...document.querySelectorAll('#ar circle.ln-end')].map(c => { const r = c.getBoundingClientRect();
+        return {from: c.dataset.from, to: c.dataset.to, x: r.left + r.width / 2, y: r.top + r.height / 2}; })""")
+
+
+def test_line_click_shows_end_handles_and_drag_retargets(dpage):
+    fit_view(dpage)
+    dpage.keyboard.press("h")
+    pairs = dpage.evaluate("""[...document.querySelectorAll('#ar path.ln:not(.plan):not(.pd)')].filter(p => p.dataset.both === '0').map(p => [p.dataset.from, p.dataset.to])""")
+    assert pairs, "한쪽으로만 가는 진짜 연결선이 있어야 한다"
+    frm, to = pairs[0]
+    x, y = ln_mid(dpage, frm, to)
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector("#ar circle.ln-end")
+    ends = ln_ends(dpage)
+    assert [(e["from"], e["to"]) for e in ends] == [(frm, to)], ("한쪽 선 = 도착 끝 손잡이 하나", ends)
+    assert lk_to(dpage, to, frm) and "on" in lk_to(dpage, to, frm)[0].split(), "누른 선은 진하게(쌍 강조)"
+    assert dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "나머지는 흐리게"
+    hx, hy = ends[0]["x"], ends[0]["y"]
+    dpage.mouse.move(hx, hy)
+    for dy in (-300, 300):                                # 가까이 당겨 찍고 같은 만큼 되돌린다
+        dpage.keyboard.down("Control"); dpage.mouse.wheel(0, dy); dpage.keyboard.up("Control")
+        dpage.wait_for_timeout(200)
+        if dy < 0:
+            ESHOTS.mkdir(parents=True, exist_ok=True)
+            dpage.screenshot(path=str(ESHOTS / "q3-line-handle.png"))
+    q = visible_cover(dpage, skip=[frm, to])
+    h = ln_ends(dpage)[0]
+    drag(dpage, h, q["x"] - h["x"], q["y"] - h["y"])
+    dpage.wait_for_function("([a, b]) => [...document.querySelectorAll('#ar path.ln.pd')].some(p => p.dataset.from === a && p.dataset.to === b)", arg=[frm, q["id"]], timeout=5000)
+    assert lk_to(dpage, to, frm) == [], "옛 도착으로 가던 선은 사라진다"
+    assert not ln_ends(dpage), "도착을 바꾸면 고른 선은 풀린다"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_function("([a, b]) => ![...document.querySelectorAll('#ar path.ln')].some(p => p.dataset.from === a && p.dataset.to === b)", arg=[frm, q["id"]], timeout=4000)
+    assert lk_to(dpage, to, frm) and "pd" not in lk_to(dpage, to, frm)[0].split(), "되돌리면 옛 선이 그대로"
+    x, y = ln_mid(dpage, frm, to)
+    dpage.mouse.click(x, y)
+    dpage.wait_for_selector("#ar circle.ln-end")
+    dpage.keyboard.press("Escape")
+    assert not ln_ends(dpage) and not dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "Esc = 손잡이·강조 풀기"
