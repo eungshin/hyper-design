@@ -1,6 +1,7 @@
 /* View — 오른쪽 패널 도크(포토샵 오른쪽 창처럼). 배치 상태는 modules/dock.js(리듀서)가 갖고, 여기는 그리기와 끌기만.
-   HD.viewDock.mount(ctx) → {state, dispatch, activate, isShown}
+   HD.viewDock.mount(ctx) → {state, dispatch, width, render, activate, isShown}
    ctx = {$, $$, root: #dock(도크 자리), layer: 떠 있는 창을 놓을 판 위 층, panels: {id: 패널 요소}, icons: {id: svg},
+          hold: 안 보이는 패널 보관함(#dkhold), narrow: 좁은 화면이면 접힌 채로 시작,
           title(id) → 탭에 붙일 수(숫자) · 이름, getItem/setItem(저장소), onLayout(state)(배치가 바뀐 뒤 — 판 너비 다시 재기 등)}
    패널 요소는 옮겨 붙이기만 한다(id·이벤트 그대로 — 기존 기능이 그대로 동작). 안 보이는 패널은 숨김 보관함(ctx.hold)으로. */
 (function () {

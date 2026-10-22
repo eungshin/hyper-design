@@ -29,7 +29,7 @@ from html.parser import HTMLParser
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "align", "folders", "view-viewport", "view-busy", "view-line-ends", "view-caption", "view-align"]   # 순서 고정: Model → ViewModel → View
+MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "align", "folders", "view-viewport", "view-busy", "view-line-ends", "view-caption", "view-align"]   # 끼워 넣는 순서(셸이 늦게 mount 하므로 층 순서가 아니어도 된다 — 모듈은 정의만 하고 서로를 mount 때 찾는다). 새 모듈은 여기 한 곳에만 더한다(테스트가 이 목록을 읽는다)
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"

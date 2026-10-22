@@ -13,8 +13,13 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "busy", "line-ends", "align", "folders"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "align", "folders", "view-viewport", "view-busy", "view-line-ends", "view-caption", "view-align"]
+sys.path.insert(0, str(SCRIPTS))
+from build_canvas import MODULES as ALL_MODULES   # 빌드가 끼워 넣는 순서 그대로 — 따로 적어 두면 어긋난다
+sys.path.pop(0)
+# 층 표(책임 게이트) — view-* 가 아닌 모듈은 모두 여기 있어야 한다. 순수성 검사는 이 표의 Model·ViewModel 전부
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model",
+         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
+PURE = [n for n in ALL_MODULES if n in LAYER]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -210,6 +215,15 @@ def test_purity(name):
     assert not hits, f"{name}.js: {hits}"
 
 
+def test_purity_covers_every_model():
+    """Model·ViewModel 파일은 빠짐없이 순수성 검사를 받는다 — view-* 가 아닌 모듈이 층 표에 없으면 실패."""
+    on_disk = sorted(p.stem for p in MOD.glob("*.js"))
+    assert sorted(ALL_MODULES) == on_disk, "modules/*.js 와 build_canvas.MODULES 가 다르다"
+    missing = [n for n in ALL_MODULES if not n.startswith("view-") and n not in LAYER]
+    assert not missing, f"층 표(LAYER)에 없는 Model/ViewModel: {missing}"
+    assert set(PURE) == set(LAYER)
+
+
 def test_single_file_output(res):
     html = res["_html"]
     for n in ALL_MODULES:
@@ -361,8 +375,6 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model",
-         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style", "lineEnds": "line-ends"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
 

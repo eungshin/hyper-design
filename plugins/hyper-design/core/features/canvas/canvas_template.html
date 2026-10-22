@@ -565,7 +565,7 @@ body.split-lr #khint{display:none}
 <script>
 (function () {
 'use strict';
-// ── Canvas shell: data, board content, zoom/pan, modal, tabs, palette, notes (legacy, untouched). 연결 보기는 modules/*.js(HD.*)
+// ── Canvas shell: data, board content, zoom/pan, modal, tabs, palette, notes·send(아직 셸에 있음 — 다음 추출 대상). 기능 대부분은 modules/*.js(HD.*), 셸은 그것들을 mount(ctx) 로 잇는다
 var D = JSON.parse(document.getElementById('hd-data').textContent || '{}');
 var Z0 = D.scale || 0.72, ZMIN = 0.02, ZMAX = 1.5;
 var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.modal || {}).h || 844;
@@ -645,7 +645,7 @@ $('#foot').style.marginLeft = LEFT + 'px';
    판의 선·고른 화면 안 연결 — Model(modules/graph.js · route.js) / ViewModel(modules/prefs.js) / View(modules/view-links.js).
    build_canvas.py 가 hd-modules 표시 자리(이 스크립트 앞)에 그 모듈들을 끼워 넣는다(globalThis.HD).
    ====================================================================== */
-// ── 회색 갈래 화살표(그래프의 kind:'flow' 간선) — 그리기는 이 셸에서
+// ── 판의 선(그래프의 flow·link 간선) — 그리기는 modules/view-lines.js, 셸은 언제 다시 그릴지만 정한다
 var G = HD.graph.fromData(D);
 var RADIUS = HD.route.RADIUS, routeCurve = HD.route.routeCurve;
 var contentLeft = LEFT;
@@ -1111,13 +1111,13 @@ var LE = HD.viewLineEnds.mount({svg: $('#ar'), rowsEl: rowsEl,
     addEdits('트리거 도착 바꾸기', list, titleOf(newTo) + '(으)로 이었어요 — 반영 대기', pend);
   },
   toast: function (m) { toast(m); }});
-// 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 전환 메뉴(T) · 애니메이션 끄기
+// 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 움직임 줄이기(#mvOff) — 전환 메뉴는 G4 로 없앴고 T 는 글자 도구
 var VM = HD.viewMotion.mount({VL: VL, LN: LN, select: function (id) { if (id) SL.dispatch({type: 'only', id: id}); else SL.dispatch({type: 'clear'}); }, pane: pane, rowsEl: rowsEl, CARD: CARD, $: $, $$: $$, esc: esc, prefs: prefs, savePrefs: savePrefs, typing: typing,
                               getView: function () { return {z: z, tx: tx, ty: ty}; },
                               setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); },
                               openModal: function (file, title) { openModal(file, title); }, closeModal: function () { closeModal(); },
                               modalOpen: function () { return !modal.hidden; }, mframe: mframe});
-// 오른쪽 패널 도크 View(modules/view-dock.js · 배치 모델 modules/dock.js) — 범례·표시·메모·숨긴 화면 패널을 옮겨 붙인다(id 그대로)
+// 오른쪽 패널 도크 View(modules/view-dock.js · 배치 모델 modules/dock.js) — 연결·표시·메모·반영 대기·기록·레이어·정렬·테마 패널(아래 panels)을 옮겨 붙인다(id 그대로)
 var DOCK_ICON = {
   links: '<svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 6H13a3 3 0 013 3v6.5"/><path d="M13.5 13l2.5 2.5 2.5-2.5"/></svg>',
   show: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="1.2"/><path d="M4 7h7" stroke-width="3"/><path d="M4 12h11" stroke-width="2.2"/><path d="M4 17h5" stroke-width="3.6"/></svg>',
