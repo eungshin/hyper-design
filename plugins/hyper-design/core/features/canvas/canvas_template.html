@@ -318,13 +318,22 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 #screens.t-text .cover,#screens.t-text .ftitle,#screens.t-text .fdesc,#screens.t-text .pol li{cursor:text}
 #screens.t-text .ftitle:hover,#screens.t-text .fdesc:hover,#screens.t-text .pol li:hover{outline:2px dashed var(--ui-mark);outline-offset:3px;border-radius:4px}
 .pol li.pend{background:#FFF4D6;border-radius:4px}
-.pol li input.cedit{font:inherit;width:100%;box-sizing:border-box;border:2px solid var(--ui-mark);border-radius:6px;padding:1px 6px}
 #toast button{pointer-events:auto;margin-left:12px;border:0;background:none;color:#fff;text-decoration:underline;font:inherit;font-weight:700;cursor:pointer;padding:0}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:42;background:#1c1c1c;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);pointer-events:none}
 #toast[hidden]{display:none}
 .ftitle.pend,.fdesc.pend{background:#FFF4D6;border-radius:6px;box-shadow:0 0 0 3px #FFF4D6;white-space:pre-line}
-.ftitle input.cedit,.fdesc textarea.cedit{font:inherit;color:inherit;width:100%;box-sizing:border-box;border:2px solid var(--ui-mark);border-radius:6px;padding:2px 6px;background:#fff}
-.fdesc textarea.cedit{min-height:4.5em;resize:vertical}
+.ftitle input.cedit{font:inherit;color:inherit;width:100%;box-sizing:border-box;border:2px solid var(--ui-mark);border-radius:6px;padding:2px 6px;background:#fff}
+/* 카드 아래 글 한 상자(H16, modules/view-caption.js) — 여는 동안 그 카드의 제목·설명·정책 줄은 숨긴다 */
+.card.capopen>.ftitle,.card.capopen>.fdesc,.card.capopen>.pol,.card.capopen>.more{display:none}
+.capbox{margin-top:16px;border:1.5px solid #2b2b29;border-radius:8px;background:#fff;padding:12px 14px 6px;box-shadow:0 2px 10px rgba(0,0,0,.08);cursor:text}
+.capbox [contenteditable="true"]{outline:none}
+.capttl{display:flex;align-items:baseline;border-bottom:1px solid #eee;padding-bottom:6px}
+.capttl .state{flex:none}
+.capt{flex:1;min-width:0;font-size:22px;font-weight:700;line-height:1.35}
+.capd{font-size:18px;color:#555;margin-top:4px;line-height:1.45;min-height:1.45em}
+.capp{margin:8px 0 0;padding-left:22px;font-size:17px;line-height:1.5;color:#444}
+.capp li{min-height:1.5em}
+.capfoot{border-top:1px solid #eee;margin-top:8px;padding-top:6px;font-size:11.5px;color:#8a8a85}
 .pchip{position:absolute;left:8px;top:8px;z-index:3;background:var(--ui-pending);color:#fff;border-radius:999px;padding:2px 9px;font-size:13px;font-weight:700;pointer-events:none}
 #tedit{position:fixed;z-index:36;background:#fff;border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.22);padding:0 0 4px}
 #tedit[hidden]{display:none}
@@ -874,7 +883,7 @@ pane.addEventListener('click', function (e) {
   if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
     e.preventDefault(); e.stopPropagation();
     var tf = cl('.ftitle'), td = cl('.fdesc'), tp = cl('.pol li');
-    if (tool === 'text' && (tf || td || tp)) { if (tp) editPolicy(tp); else editCardText(tf || td, tf ? 'title' : 'purpose'); return; }
+    if (tool === 'text' && (tf || td || tp)) { openCaption(tp || tf || td, {field: tp ? 'policy' : tf ? 'title' : 'purpose'}); return; }
     if (!cl('.phone')) return;
     var mid = mc.dataset.id, mx = e.clientX, my = e.clientY;
     askHit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
@@ -1232,8 +1241,8 @@ pane.addEventListener('contextmenu', function (e) {
       {label: '크게 보기', key: '두 번', act: function () { open(false); }},
       {label: '연결 보기', key: '누르기', act: function () { SL.dispatch({type: 'only', id: id}); }},
       '-']).concat([
-      {label: '이름', act: function () { var t = $('.ftitle', card); if (t) editCardText(t, 'title'); }},
-      {label: '설명', act: function () { var d = $('.fdesc', card); if (d) editCardText(d, 'purpose'); else toast('설명 줄이 없는 화면이에요'); }},
+      {label: '이름', act: function () { var t = $('.ftitle', card); if (t) openCaption(t, {field: 'title'}); }},
+      {label: '설명', act: function () { var d = $('.fdesc', card); if (d) openCaption(d, {field: 'purpose'}); else toast('설명 줄이 없는 화면이에요'); }},
       {label: '메모', act: function () { openCardMemo(id); }},
       {label: '복제', act: function () { duplicateCard(id); }},
       {label: '들어오는 연결 끊기' + suf, act: function () { cutIncoming(ids); }},
@@ -1451,34 +1460,37 @@ function paintCardText() {
     });
   });
 }
-function editCardText(el, field) {
-  if ($('input, textarea', el)) return;
+// 카드 아래 글 한 상자(H16) — 제목·설명·정책 줄을 한 상자에서. 그리기·글쇠 = modules/view-caption.js, 비교 = modules/caption.js
+// 바뀐 칸마다 편집 메모 하나(title·purpose·policy[i]) → 한 번의 addEdits = 되돌리기 한 번. 정책 줄 더하기·지우기는 helper 가 못 써서 막는다(allowAdd:false)
+var CAP = HD.viewCaption.mount({
+  values: function (id) {
+    var o = ORIG[id]; if (!o) return null;
+    var t = pendingOf(id, 'title'), d = pendingOf(id, 'purpose');
+    return {title: t != null ? t : o.title, purpose: d != null ? d : o.purpose,
+            policies: o.policies.map(function (x, i) { var v = pendingOf(id, 'policy', i); return v != null ? v : x; })};
+  },
+  badge: function (c) { return $('.ftitle .state', c); },
+  commit: function (id, changes) {
+    var list = changes.map(function (ch) {
+      var pol = ch.field === 'policy', path = 'screens.json > screens[id=' + id + '] > ' + (pol ? 'policies[' + ch.index + ']' : ch.field);
+      var n = editNote(id, {path: path, text: ch.old, rect: null}, pol ? HD.edits.say.field('policy', ch.value, ch.index) : HD.edits.say.field(ch.field, ch.value));
+      n.edit = ch.field; n.value = ch.value; if (pol) n.index = ch.index;
+      return n;
+    });
+    addEdits('카드 글', list);
+  },
+  allowAdd: false,
+  onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(); }
+});
+function openCaption(el, focus) {                   // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
   closeCmenu();
-  var id = el.closest('.card').dataset.id;
+  var c = el && el.closest('.card'); if (!c) return;
+  var id = c.dataset.id;
   if (lockGuard([id])) return;
-  if (!ORIG[id]) { if (field === 'title') renameLayout(el, id); return; }
-  var p = pendingOf(id, field), cur = p != null ? p : ORIG[id][field], multi = field === 'purpose';
-  var inp = document.createElement(multi ? 'textarea' : 'input'), keep = $('.state', el);
-  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', FIELD[field]);
-  el.textContent = ''; if (keep) el.appendChild(keep); el.appendChild(inp); inp.focus(); inp.select();
-  var done = false, finish = function (save) {
-    if (done) return; done = true;
-    var v = multi ? inp.value.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim() : inp.value.replace(/\s+/g, ' ').trim();
-    inp.remove();
-    if (save && v && v !== cur) {
-      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > ' + field, text: cur, rect: null}, HD.edits.say.field(field, v));
-      n.edit = field; n.value = v;
-      addEdits(FIELD[field], [n]);
-    }
-    paintCardText();
-  };
-  inp.addEventListener('keydown', function (ev) {
-    ev.stopPropagation();                           // 캔버스 단축키·Esc 사슬을 막는다
-    if (ev.key === 'Enter' && !(multi && ev.shiftKey)) { ev.preventDefault(); finish(true); }
-    else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
-  });
-  inp.addEventListener('blur', function () { finish(true); });
-  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+  if (!ORIG[id]) { var t = $('.ftitle', c); if (focus.field === 'title' && t && !$('input', t)) renameLayout(t, id); return; }   // 빈 레이아웃 = 이름만
+  if (focus.field === 'policy') focus = {field: 'policy', index: $$('.pol li', c).indexOf(el)};
+  c.classList.add('capopen');
+  CAP.open(c, focus);
 }
 var tedCtx = null;
 function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소 자리에 고치기 칸(판 위 카드 또는 크게 보기)
@@ -1518,9 +1530,9 @@ pane.addEventListener('dblclick', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
   if (cl('#tools') || cl('.alabel') || typing(e)) return;
   var ft = cl('.ftitle'), fd = cl('.fdesc'), fp = cl('.pol li');
-  if (fp) { e.preventDefault(); editPolicy(fp); return; }
-  if (ft) { e.preventDefault(); editCardText(ft, 'title'); return; }
-  if (fd) { e.preventDefault(); editCardText(fd, 'purpose'); return; }
+  if (fp) { e.preventDefault(); openCaption(fp, {field: 'policy'}); return; }
+  if (ft) { e.preventDefault(); openCaption(ft, {field: 'title'}); return; }
+  if (fd) { e.preventDefault(); openCaption(fd, {field: 'purpose'}); return; }
 });
 /* ---------- 요소 테두리(요소 도구 — modules/tools.js 의 hit 가 있는 도구): 마우스를 올린 카드 안 요소를 화면에 물어(hd-hit-at) 종류별 테두리 ---------- */
 var hov = {busy: false, next: null, card: null};
@@ -1591,28 +1603,6 @@ function renderDrafts() {                            // 메모의 빈 레이아�
     if (!$('input', $('.ftitle', c))) $('.ftitle', c).textContent = n.value;
     placeCard(c);
   });
-}
-function editPolicy(li) {                           // 카드 아래 정책 줄 한 줄 — screens.json policies[i]
-  if ($('input', li)) return;
-  closeCmenu();
-  var c = li.closest('.card'), id = c.dataset.id, i = $$('.pol li', c).indexOf(li); if (!ORIG[id] || i < 0) return;
-  var p = pendingOf(id, 'policy', i), cur = p != null ? p : (ORIG[id].policies[i] || li.textContent), inp = document.createElement('input');
-  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', '정책 ' + (i + 1) + '번째 줄');
-  var det = li.closest('details'); if (det) det.open = true;
-  li.textContent = ''; li.appendChild(inp); inp.focus(); inp.select();
-  var done = false, finish = function (save) {
-    if (done) return; done = true;
-    var v = inp.value.replace(/\s+/g, ' ').trim(); inp.remove();
-    if (save && v && v !== cur) {
-      var n = editNote(id, {path: 'screens.json > screens[id=' + id + '] > policies[' + i + ']', text: cur, rect: null}, HD.edits.say.field('policy', v, i));
-      n.edit = 'policy'; n.index = i; n.value = v;
-      addEdits('정책 줄', [n]);
-    }
-    paintCardText();
-  };
-  inp.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } });
-  inp.addEventListener('blur', function () { finish(true); });
-  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
 }
 function openElemMemo(id, h, x, y) {                 // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이)
   editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect}]};

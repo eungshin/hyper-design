@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "busy", "line-ends"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "view-viewport", "view-busy", "view-line-ends"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "view-viewport", "view-busy", "view-line-ends", "view-caption"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -355,7 +355,7 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model",
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model",
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style", "lineEnds": "line-ends"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)

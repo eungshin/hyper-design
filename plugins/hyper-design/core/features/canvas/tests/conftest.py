@@ -66,6 +66,7 @@ BROWSER = {
     "test_pres_button_and_modal_dblclick_edits_text": ("modal", "notes"),
     "test_annotate_tool_notes_an_element_on_the_board": ("tools", "notes"),
     "test_text_tool_edits_policy_line": ("tools", "notes"),
+    "test_caption_one_box_edits_all_fields": ("tools", "notes"),
     "test_trigger_tool_click_selects_element_with_its_socket": ("tools",),
     "test_trigger_click_on_card_shows_its_links_like_shift_click": ("tools", "links"),
     "test_cutting_a_pending_line_cancels_that_edit": ("tools", "links"),
