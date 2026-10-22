@@ -242,9 +242,12 @@ def _sha(p):                                         # 파일 sha256 | None(없�
     return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
 
 
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: 자식 프로세스가 콘솔 창을 띄웠다 닫지 않게(창 없이 뜬 도우미에서 편집마다 깜빡임)
+
+
 def _build(out):
     return subprocess.run([sys.executable, str(BUILD), str(out)], capture_output=True, text=True, encoding="utf-8",
-                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=NO_WINDOW)
 
 
 def _screen_files(data):
@@ -458,7 +461,7 @@ def forward(out, text, agent=None, paseo=None):
             if cmd.lower().endswith((".cmd", ".bat")):
                 args = ["cmd", "/c"] + args
             try:
-                r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60)
+                r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
                 if r.returncode == 0:
                     return {"via": "paseo", "agent": agent, "path": str(p)}
             except (OSError, subprocess.TimeoutExpired):
