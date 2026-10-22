@@ -234,7 +234,13 @@ def test_move_tool_moves_card_and_persists(epage):
 
 
 def test_fit_includes_moved_card_and_drops_stale(epage):
+    epage.click("#zoom"); epage.click("#fit")          # 옮긴 자리 키를 이 테스트가 직접 만든다(앞 테스트에 기대지 않게)
+    epage.wait_for_timeout(150)
+    epage.keyboard.press("v")
+    drag(epage, visible_cover(epage), 20, 0)
+    epage.keyboard.press("h")
     key = epage.evaluate("Object.keys(localStorage).find(k => k.startsWith('hd-card-pos:'))")
+    assert key, "이동 도구 끌기가 옮긴 자리 키를 만든다"
     cid = epage.evaluate("document.querySelector('#rows .card').dataset.id")
     epage.evaluate("""([k, id]) => { const o = JSON.parse(localStorage.getItem(k) || '{}');
         o[id] = Object.assign({}, o[id] || {}, {dx: 2600, dy: 900}); o['gone-screen'] = {dx: 10, dy: 10};
@@ -512,8 +518,8 @@ def test_hide_screen_and_hidden_list(epage):
     assert epage.evaluate("(k) => localStorage.getItem(k)", keys[0]) == "[]"
 
 
-def test_undo_redo_card_moves_capped_at_50(epage):
-    reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다
+def test_undo_redo_card_moves(epage):
+    reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다(50단계 상한은 unit: test_history_model_caps_undo_at_50)
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     assert epage.is_disabled("#undo") and epage.is_disabled("#redo")
@@ -521,30 +527,33 @@ def test_undo_redo_card_moves_capped_at_50(epage):
     epage.keyboard.press("v")
     p = visible_cover(epage)
     x0, _ = card_xy(epage, p["id"])
-    for i in range(51):                              # 오른쪽·왼쪽 번갈아 51번 → 홀수 번째 뒤 = x0 + 30/z, 짝수 번째 뒤 = x0
+    for i in range(2):                               # 오른쪽 → 왼쪽: 첫 번째 뒤 = x0 + 30/z, 두 번째 뒤 = x0
         sx = p["x"] + (30 if i % 2 else 0)
         epage.mouse.move(sx, p["y"])
         epage.mouse.down()
         epage.mouse.move(sx + (-30 if i % 2 else 30), p["y"], steps=3)
         epage.mouse.up()
     epage.wait_for_timeout(150)
-    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3
-    assert not epage.is_disabled("#undo")
+    assert abs(card_xy(epage, p["id"])[0] - x0) < 3
     assert "카드 옮기기" in epage.get_attribute("#undo", "title")
-    for _ in range(60):
-        epage.keyboard.press("Control+z")
-    epage.wait_for_timeout(150)
-    assert epage.is_disabled("#undo") and not epage.is_disabled("#redo"), "50단계까지만 기억한다"
-    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3, "가장 오래된 1단계는 버려져 첫 번째 옮김 뒤 자리에서 멈춘다"
-    epage.keyboard.press("Control+Shift+z")
+    epage.keyboard.press("Control+z")
+    epage.wait_for_timeout(100)
+    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3, "Ctrl+Z = 한 단계 뒤로"
+    epage.keyboard.press("Control+z")
     epage.wait_for_timeout(100)
     assert abs(card_xy(epage, p["id"])[0] - x0) < 3
-    epage.keyboard.press("Control+y")
+    assert epage.is_disabled("#undo") and not epage.is_disabled("#redo")
+    epage.keyboard.press("Control+Shift+z")
     epage.wait_for_timeout(100)
     assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3
+    epage.keyboard.press("Control+y")
+    epage.wait_for_timeout(100)
+    assert abs(card_xy(epage, p["id"])[0] - x0) < 3
     epage.click("#undo")
     epage.wait_for_timeout(100)
-    assert abs(card_xy(epage, p["id"])[0] - x0) < 3, "위쪽 막대 ↶ 버튼도 같다"
+    assert abs(card_xy(epage, p["id"])[0] - (x0 + 30 / z)) < 3, "위쪽 막대 ↶ 버튼도 같다"
+    epage.click("#undo")
+    epage.wait_for_timeout(100)
     stored = epage.evaluate("Object.values(JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-card-pos:'))) || '{}'))")
     assert all(abs(s["dx"]) < 3 for s in stored), "되돌린 자리가 저장된다"
     epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")

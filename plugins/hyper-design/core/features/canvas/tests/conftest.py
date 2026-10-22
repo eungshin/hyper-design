@@ -43,7 +43,7 @@ BROWSER = {
     "test_tag_rename_keeps_button_text": ("links",),
     "test_context_menu_by_target": ("input", "tools"),
     "test_hide_screen_and_hidden_list": ("tools", "flow"),
-    "test_undo_redo_card_moves_capped_at_50": ("tools",),
+    "test_undo_redo_card_moves": ("tools",),
     "test_link_menu_rename_undo_and_go": ("links", "motion"),
     "test_trigger_drag_to_card_adds_link_note_and_undo": ("tools", "notes"),
     "test_knife_right_drag_cuts_link_into_note": ("tools", "links", "notes"),

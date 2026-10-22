@@ -468,3 +468,42 @@ def test_overview_lines_model():
     assert out["cutIn"] == ["a,b,true,false,false,false", "c,d,true,false,false,true"], "삭제한 a 로 오는 선(b→a·c→a)은 빠지고 a→b 만"
     pal = out["pal"]
     assert out["rows"] == [pal[0], pal[3], pal[6], pal[5], pal[0], pal[3]], "3칸씩 건너뛰어 이웃 줄이 갈리고, 8줄 뒤에 다시 돈다"
+
+
+HISTORY_MODEL_JS = r"""
+const fs = require('fs'), vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[2] + '/history.js', 'utf8'), {filename: 'history.js'});
+const H = globalThis.HD.history, out = {};
+let s = H.initial([]);
+for (let i = 0; i < 51; i++) s = H.reduce(s, {type: 'record', row: {label: 'move ' + i, status: 'canvas'}});
+out.after51 = {at: s.at, lock: s.lock, canUndo: H.canUndo(s), canRedo: H.canRedo(s)};
+let u = s; while (H.canUndo(u)) u = H.reduce(u, {type: 'go', to: u.at - 1});
+out.undone = {at: u.at, steps: s.at - u.at, canUndo: H.canUndo(u), canRedo: H.canRedo(u)};
+const r = H.reduce(u, {type: 'go', to: u.at + 1});
+out.redo = {at: r.at, label: r.rows[r.at - 1].label};
+const n = H.reduce(u, {type: 'record', row: {label: 'new', status: 'canvas'}});
+out.branch = {len: n.rows.length, last: n.rows[n.rows.length - 1].label, canRedo: H.canRedo(n)};
+let k = H.initial([]); for (let i = 0; i < H.KEEP + 5; i++) k = H.reduce(k, {type: 'record', row: {label: 'r' + i, status: 'canvas'}});
+out.keep = {len: k.rows.length, first: k.rows[0].label};
+console.log(JSON.stringify(out));
+"""
+
+
+def test_history_model_caps_undo_at_50():
+    """되돌리기 50단계 제한(브라우저에서 끌기 51번으로 확인하던 것을 순수 리듀서로): 51번 기록 → 50번까지만 되돌림,
+    가장 오래된 1단계는 잠김, 다시 하기·새 기록이면 되돌린 줄은 버림, 기록은 KEEP 줄까지만."""
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-hist-js-"))
+    try:
+        (tmp / "h.js").write_text(HISTORY_MODEL_JS, encoding="utf-8")
+        r = subprocess.run([NODE, str(tmp / "h.js"), str(MOD)], capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    assert out["after51"] == {"at": 51, "lock": 1, "canUndo": True, "canRedo": False}
+    assert out["undone"] == {"at": 1, "steps": 50, "canUndo": False, "canRedo": True}, "50단계까지만"
+    assert out["redo"] == {"at": 2, "label": "move 1"}
+    assert out["branch"] == {"len": 2, "last": "new", "canRedo": False}, "되돌린 뒤 새 일 = 되돌린 줄은 버림"
+    assert out["keep"]["len"] == 200 and out["keep"]["first"] == "r5"
