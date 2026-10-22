@@ -533,10 +533,14 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             super().end_headers()
 
         def do_POST(self):
+            try:                                            # 본문은 거절하기 전에도 먼저 다 읽는다 — 안 읽은 채 닫으면 Windows 가 RST 로 끊어
+                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))   # 상대가 403 대신 ConnectionAbortedError 를 받는다
+            except ValueError:
+                raw = b""
             if not self._host_ok() or self.headers.get("X-HD-Token") != token:
                 return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
             try:
-                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                body = json.loads(raw or b"{}")
             except ValueError:
                 return self._json(400, {"error": "JSON 이 아니에요"})
             if self.path == "/api/data":

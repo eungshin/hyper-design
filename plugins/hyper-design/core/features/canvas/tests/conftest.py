@@ -101,6 +101,7 @@ BROWSER = {
     "test_helper_delete_cuts_incoming_and_restore_is_byte_exact": ("helper",),
     "test_helper_restore_refuses_when_files_changed_since": ("helper",),
     "test_helper_server_delete_restore_data": ("helper",),
+    "test_helper_server_reads_the_body_before_refusing": ("helper",),
     "test_helper_canvas_writes_delete_and_link_without_reload": ("helper", "tools"),
     "test_file_mode_chip": ("helper",),
     "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),

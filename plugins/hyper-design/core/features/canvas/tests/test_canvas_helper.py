@@ -160,6 +160,41 @@ def _post(url, body, token=None, host=None):
         return e.code, None
 
 
+def test_helper_server_reads_the_body_before_refusing(out):
+    """거절(403)도 요청 본문을 다 읽은 뒤에 답한다 — 안 읽고 닫으면 Windows 가 연결을 RST 로 끊어
+    클라이언트가 403 대신 ConnectionAbortedError(10053)를 받는다(-n 4 에서 가끔 보이던 흔들림의 원인)."""
+    import socket
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    body = json.dumps({"edits": []}).encode()
+    try:
+        for token in (None, "wrong"):
+            s = socket.create_connection(("127.0.0.1", port), timeout=5)
+            lines = ["POST /api/apply HTTP/1.1", "Host: 127.0.0.1:%d" % port, "Content-Type: application/json", "Content-Length: %d" % len(body)]
+            if token:
+                lines.append("X-HD-Token: " + token)
+            s.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())          # 머리만 먼저 — 본문은 답이 오는지 본 뒤에
+            s.settimeout(0.4)
+            try:
+                early = s.recv(4096)
+            except socket.timeout:
+                early = b""
+            assert early == b"", "본문이 오기 전에 답하고 닫으면 안 된다(본문이 닫힌 소켓에 닿아 RST)"
+            s.settimeout(5)
+            s.sendall(body)
+            got = b""
+            while not got.endswith(b"}"):
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                got += chunk
+            assert got.startswith(b"HTTP/1.0 403") or got.startswith(b"HTTP/1.1 403"), got[:60]
+            s.close()
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
 def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
     srv = helper.make_server(out, 0)
     th = threading.Thread(target=srv.serve_forever, daemon=True)
