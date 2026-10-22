@@ -160,6 +160,8 @@ function mount(ctx) {
     if (id !== hov) { hov = id; mark(); }
   });
   rowsEl.addEventListener('mouseleave', function () { if (hov) { hov = null; mark(); } });
+  // 올린 카드가 마우스 밑에서 없어지면(빈 카드 되돌리기 등) mouseleave 가 오지 않는다 — 판 밖에 올라서면 강조를 끈다
+  document.addEventListener('mouseover', function (e) { if (hov && !rowsEl.contains(e.target)) { hov = null; mark(); } });
 
   /* 태그 이름 바꾸기(두 번 누르기): 이 이동이 무슨 맥락인지 — 버튼 글은 그대로, 비우면 버튼 글로 돌아간다(hd-link-names) */
   rowsEl.addEventListener('dblclick', function (e) {
