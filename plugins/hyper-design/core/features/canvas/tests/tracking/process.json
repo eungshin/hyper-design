@@ -387,7 +387,7 @@
     },
     {
       "slice": "7a",
-      "commit": "(이번)",
+      "commit": "d63cc85",
       "numbered": true,
       "budget_minutes": 12,
       "tests": {
@@ -417,6 +417,61 @@
         "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 실행에서 '바뀐 카드만 다시 싣는다' 실패, --lf 에서 통과(이번 변경과 무관한 곳)"
       ],
       "note": "예산 12분 안. 영역 실행 없이 전체 1회 + --lf."
+    },
+    {
+      "slice": "5",
+      "commit": "(이번)",
+      "numbered": true,
+      "tests": {
+        "full": 1,
+        "area": 0,
+        "minutes": 11
+      },
+      "gate": {
+        "checks": 27,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "합격 테스트가 제품 버그 2개를 잡음: HEX 칸 초점이 빠질 때 목록을 다시 그려 누르던 연필 클릭이 사라짐, Foundation 탭에서 테마를 못 바꾸는 회귀(위쪽 팔레트 삭제의 부작용)"
+        }
+      ],
+      "waste": [
+        {
+          "what": "도크 PANELS 에 theme 를 더하고도 그 목록을 쓰는 창 메뉴 테스트를 큰 실행 전에 돌리지 않음 — 전체 실행에서 1개 실패(R54 의 grep 단계를 건너뜀)",
+          "minutes": 0.5,
+          "fix": "R54: 바꾼 이름(PANELS·data-w)을 grep → -k 먼저"
+        }
+      ],
+      "profile": {
+        "total_sec": 521,
+        "top": [
+          [
+            "test_undo_redo_card_moves_capped_at_50",
+            213.5
+          ],
+          [
+            "test_context_menu_by_target",
+            18.7
+          ],
+          [
+            "test_hide_screen_and_hidden_list",
+            17.0
+          ],
+          [
+            "test_card_drag_has_no_long_tasks",
+            10.3
+          ],
+          [
+            "test_fit_includes_moved_card_and_drops_stale",
+            9.9
+          ]
+        ],
+        "note": "한 테스트가 전체의 41% — 50단계 제한(순수 리듀서 로직)을 실제 끌기 51번 + Ctrl+Z 60번으로 확인. S3 대상"
+      },
+      "note": "--durations=20 첫 측정(S2). 점검 스크립트 canvas_test.py 의 낡은 확인 2개(위쪽 팔레트 묶음·누르면 크게 보기)도 고침 — audit.py 가 실제 실행에서 부름."
     }
   ]
 }

@@ -20,13 +20,6 @@ button{font:inherit;color:inherit}
 .tabs{display:flex;gap:2px;background:#EFEFEB;border-radius:12px;padding:3px}
 .tab{min-height:44px;min-width:44px;padding:0 16px;border:0;border-radius:9px;background:transparent;font-size:15px;font-weight:600;color:#5a5a55;cursor:pointer}
 .tab[aria-selected="true"]{background:#fff;color:#1c1c1c;box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.pal{display:flex;align-items:center;gap:2px;margin-left:auto}
-.pal-label{font-size:13px;color:#777;margin-right:4px}
-.dot{display:inline-flex;align-items:center;gap:8px;min-height:44px;min-width:44px;padding:0 10px;border:0;border-radius:999px;background:transparent;font-size:14px;color:#444;cursor:pointer}
-.dot i{flex:none;width:22px;height:22px;border-radius:999px;background:var(--dot);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-.dot[aria-pressed="true"]{background:#F1F1ED;color:#1c1c1c;font-weight:700}
-.dot[aria-pressed="true"] i{box-shadow:0 0 0 2px #fff,0 0 0 4px #1c1c1c}
-.dot:hover{background:#F5F5F2}
 .view{display:flex;align-items:center;gap:4px}
 .vbtn{min-height:44px;min-width:44px;padding:0 14px;border:1px solid #dcdcd7;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
 .mchip{align-self:center;padding:4px 10px;border-radius:999px;background:#F0F1EE;color:#777;font-size:12px;white-space:nowrap}   /* 모드 칩(E9): 파일에 바로 씀 / 파일로 열림 */
@@ -37,17 +30,14 @@ button{font:inherit;color:inherit}
 .vbtn:hover{background:#F5F5F2}
 .zoom{min-width:64px;font-variant-numeric:tabular-nums;color:#555}
 body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
+body:not([data-tab="screens"]):not(.modal-open) .view #wbtn{visibility:visible}   /* 창 메뉴(테마 패널 켜기)는 어느 탭에서든 */
 @media (max-width:760px){
   .hd{padding:6px 10px;gap:4px 8px}
   .hd h1{flex:1 1 0;font-size:16px;order:1;max-width:none}
-  .pal{order:2;margin-left:0}
   .tabs{order:3}
   .view{order:4;margin-left:auto}
   .tab{padding:0 7px;font-size:13px}
   .zoom{min-width:52px}
-  .dot{padding:0}
-  .dot{justify-content:center}
-  .dot b,.pal-label{display:none}
   .vbtn{padding:0 10px}
 }
 
@@ -199,6 +189,23 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 .ly-cnt{font-size:11px;color:#666;background:#EEEEEB;border-radius:999px;padding:0 6px}
 .ly-r .ly-lock{opacity:0}.ly-r:hover .ly-lock,.ly-r.locked .ly-lock{opacity:1}.ly-r.locked .ly-lock{color:#2b2b29}
 #lyBar{border-top:1px solid #eee;padding-top:4px;justify-content:flex-end}
+/* 테마 패널(view-theme.js, H10·H12·H14) — 판 바깥이라 무채색, 색은 테마 점·색 칸에만(H13) */
+#pTheme{display:flex;flex-direction:column;gap:6px}
+.th-r{display:flex;align-items:center;gap:6px;min-height:30px;padding:0 4px 0 6px;border-radius:6px;font-size:13px;cursor:pointer}
+.th-r:hover{background:#F4F4F1}.th-r.on{background:#E9E9E5;font-weight:700}
+.th-dot{flex:none;width:14px;height:14px;border-radius:50%;background:var(--d);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.th-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th-lock,.th-acts button{display:grid;place-items:center;color:#888}
+.th-acts{display:flex;gap:1px;opacity:0}.th-r:hover .th-acts,.th-r:focus-within .th-acts{opacity:1}
+.th-acts button{width:24px;height:24px;border:0;border-radius:5px;background:none;cursor:pointer;padding:0}.th-acts button:hover{background:#E4E4E0;color:#2b2b29}
+#pTheme svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.th-in{flex:1;min-width:0;font:inherit;border:1px solid var(--ui-line,#ccc);border-radius:5px;padding:1px 5px}
+.th-new{align-self:flex-start;border:0;background:none;color:#555;font:600 12.5px system-ui,sans-serif;padding:4px 6px;border-radius:6px;cursor:pointer}.th-new:hover{background:#EEEEEB}
+#thEdit{border-top:1px solid #eee;padding-top:6px;display:grid;gap:4px}
+.th-c{display:grid;grid-template-columns:44px 30px 1fr;align-items:center;gap:6px;font-size:12.5px;color:#555}
+.th-col{width:30px;height:24px;border:0;padding:0;background:none;cursor:pointer}
+.th-hex{font:12px ui-monospace,Menlo,monospace;border:1px solid var(--ui-line,#ddd);border-radius:5px;padding:2px 6px;width:84px}
+#thWarn{margin:2px 0 0;font-size:12px;color:#B42318}#thWarn:empty{display:none}
 /* 위쪽 줄 메뉴(view-menu.js): 보기 = 아이콘 줄, 창 = 체크 목록 — 판 바깥이라 무채색(H13) */
 .vm,.wm{position:fixed;z-index:26;background:#fff;border:1px solid var(--ui-line,#e3e3df);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px}
 .vm[hidden],.wm[hidden]{display:none}
@@ -312,7 +319,7 @@ body{--dockw:0px}
 #screens{right:var(--dockw)}
 #modal{right:var(--dockw);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
 #dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
-body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{display:none}
+.pane{right:var(--dockw)}                          /* 모든 탭에서 도크 자리를 비킨다 — 테마 패널은 Foundation 에서도 쓴다(조각 5) */
 #dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #dock.folded{width:44px;align-items:center;padding-top:4px;gap:4px}
 #dklayer{position:absolute;inset:0;right:var(--dockw);z-index:24;pointer-events:none}
@@ -393,7 +400,7 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
 .hd .mtitle,.hd .mx{display:none}
-body.modal-open .hd h1,body.modal-open .hd .tabs,body.modal-open .hd .pal{visibility:hidden}
+body.modal-open .hd h1,body.modal-open .hd .tabs{visibility:hidden}
 body.modal-open .hd .mtitle{display:flex;align-items:center;position:absolute;left:16px;right:72px;top:0;bottom:0;font-size:15px;font-weight:700;color:#2b2b29;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
 body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:12px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:8px;background:none;color:#555;cursor:pointer}
 .hd .mx:hover{background:#F0F0ED}.hd .mx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
@@ -408,7 +415,6 @@ body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:
     <button class="tab" role="tab" data-tab="foundation" aria-selected="false">Foundation</button>
     <button class="tab" role="tab" data-tab="components" aria-selected="false">Components</button>
   </div>
-  <div class="pal" data-group="palette" aria-label="색 바꾸기"></div>
   <div class="mtitle" id="mtitle"></div>
   <button type="button" class="mx" id="mclose" aria-label="닫기" title="닫기 (Esc · 바깥 누르기)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div class="view" data-group="view">
@@ -478,6 +484,7 @@ body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:
     <ol id="hlist" aria-label="기록"></ol>
   </div>
   <div class="dkp" id="pLayers" data-panel="layers"></div>
+  <div class="dkp" id="pTheme" data-panel="theme"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
@@ -936,29 +943,17 @@ function showTab(name) {
 $$('.tab').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.tab); }); });
 
 /* ---------- 팔레트: #tokens 교체 + 모든 iframe 에 postMessage + localStorage ---------- */
-var KEY = 'hd-palette', cur = null;
-function sendTo(f) { if (!cur) return; try { f.contentWindow.postMessage({type: 'hd-palette', slug: cur}, '*'); } catch (e) {} }
+var KEY = 'hd-palette', cur = null, curVars = {};
+function sendTo(f) {                               // 바탕 토큰 파일 + 내 테마 색 덮어쓰기(없으면 지움)
+  if (!cur) return;
+  try { f.contentWindow.postMessage({type: 'hd-palette', slug: cur}, '*'); f.contentWindow.postMessage({type: 'hd-theme-vars', vars: curVars}, '*'); } catch (e) {}
+}
 function setPalette(slug) {
   cur = slug;
   var l = $('#tokens'), base = l.getAttribute('data-base') || l.getAttribute('href');
   l.setAttribute('data-base', base);
   l.setAttribute('href', base.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));
   $$('iframe').forEach(sendTo);
-  $$('.dot').forEach(function (d) { d.setAttribute('aria-pressed', String(d.dataset.slug === slug)); });
-}
-if (P && P.options && P.options.length) {
-  var pal = $('.pal');
-  pal.innerHTML = '<span class="pal-label">색</span>' + P.options.slice(0, 3).map(function (o) {
-    return '<button class="dot" data-slug="' + esc(o.slug) + '" style="--dot:' + esc(o.brand) + '" aria-pressed="false" title="' +
-      esc(o.name) + ' 색으로 보기' + (o.source ? ' — ' + esc(o.source) : '') + '" aria-label="' + esc(o.name) + ' 색으로 보기"><i></i><b>' + esc(o.name) + '</b></button>';
-  }).join('');
-  $$('.dot').forEach(function (d) {
-    d.addEventListener('click', function () { setPalette(d.dataset.slug); try { localStorage.setItem(KEY, cur); } catch (e) {} });
-  });
-  var start = new URLSearchParams(location.search).get('p');
-  try { start = start || localStorage.getItem(KEY); } catch (e) {}
-  if (!start || !P.options.some(function (o) { return o.slug === start; })) start = P.default || P.options[0].slug;
-  setPalette(start);
 }
 
 // ── 판의 선(modules/view-lines.js) · 고른 화면 안 연결(modules/view-links.js) · 설정(modules/prefs.js)
@@ -1017,11 +1012,12 @@ var DOCK_ICON = {
   notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
   pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
-  layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>'};
+  layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+  theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>'};
 var VD = null, VMN = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers')},
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme')},
                         title: function (id) { var sp = HD.edits.split(notes || []); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
@@ -1049,6 +1045,12 @@ function fitCards(ids) {                           // 그 카드들 범위가 �
   z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0)));
   tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
 }
+// 테마 패널 View(modules/view-theme.js · 규칙 modules/theme.js, 조각 5) — 위쪽 팔레트 대신(H10), 기본은 닫힘(창 메뉴로)
+var VT = HD.viewTheme.mount({$: $, esc: esc, root: $('#pTheme'), bases: (P && P.options) || [], record: record,
+  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
+  readColors: function () { var cs = getComputedStyle(document.documentElement), o = {};
+    Object.keys(HD.theme.ROLES).forEach(function (r) { o[r] = HD.theme.hex(cs.getPropertyValue(HD.theme.ROLES[r])) || '#000000'; }); return o; },
+  apply: function (slug, vars) { if (!slug) return; curVars = vars || {}; setPalette(slug); try { localStorage.setItem(KEY, slug); } catch (e) {} }});
 // 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
 var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
   tree: function () {

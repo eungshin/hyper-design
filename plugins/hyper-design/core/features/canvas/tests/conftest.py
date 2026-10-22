@@ -18,6 +18,7 @@ AREAS = {
     "motion": "카메라·움직임 줄이기",
     "helper": "로컬 도우미(helper.py): 바로 반영·out 안만·원본 남김·토큰·대기열",
     "layers": "레이어 패널: 줄·화면·판 글 나무, 숨김(눈)·잠금·검색·거르기·아래 막대",
+    "theme": "테마 패널: 테마 고르기·복제·색 네 칸·대비 경고·이름/삭제(hd-themes)",
     "menu": "위쪽 보기 메뉴(배율 칩)·창 메뉴·Tab 패널 모두 숨기기",
     "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
 }
@@ -81,6 +82,7 @@ BROWSER = {
     "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
     "test_modal_header_has_no_gap_and_no_text_close": ("modal",),
     "test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons": ("modal", "tools"),
+    "test_theme_panel_switch_copy_edit_contrast_delete": ("theme", "dock", "menu"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),

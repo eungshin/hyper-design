@@ -64,7 +64,7 @@ def run(out: Path, shot=None):
             groups = page.eval_on_selector_all("header [data-group]", "els => els.map(e => e.dataset.group)")
             modes = page.evaluate("""(words) => [...document.querySelectorAll('header button, header [role=switch], header input')]
                 .filter(b => b.hasAttribute('data-mode') || words.some(w => (b.textContent || '').includes(w))).map(b => b.textContent.trim())""", list(MODE_WORDS))
-            add("header_groups", sorted(groups) == ["palette", "tabs", "view"], groups)
+            add("header_groups", sorted(groups) == ["tabs", "view"], groups)   # 색 팔레트는 테마 패널로(조각 5)
             add("no_mode_toggle", not modes, len(modes), ", ".join(modes))
 
             # (2) 빈 곳 200px 드래그 → transform 변경
@@ -97,7 +97,7 @@ def run(out: Path, shot=None):
                 page.mouse.move(700, 500); page.mouse.wheel(0, 300); page.wait_for_timeout(150)
                 box = page.evaluate(find_card)
             if box:
-                page.mouse.click(box["x"], box["y"])
+                page.mouse.dblclick(box["x"], box["y"])   # 누르기 = 고르기, 두 번 누르기 = 크게 보기(재작업 2.5a)
                 page.wait_for_timeout(250)
                 opened = page.evaluate("!document.getElementById('modal').hidden && !!document.getElementById('mframe').getAttribute('src')")
                 size = page.evaluate("(() => { const f = document.getElementById('mframe'); return [f.offsetWidth, f.offsetHeight] })()")
@@ -137,8 +137,9 @@ def run(out: Path, shot=None):
             page.wait_for_timeout(300)
             v0 = brand.text_content() if brand.count() else ""
 
-            # (7) 팔레트 점 → 브랜드 칸 값 변경
-            dots = page.locator("header .dot[aria-pressed=false]")
+            # (7) 테마 패널(창 메뉴로 켬)에서 다른 테마 → 브랜드 칸 값 변경
+            page.click("#wbtn"); page.click('#wmenu [data-w="theme"]'); page.keyboard.press("Escape")
+            dots = page.locator("#thList .th-r:not(.on) .th-name")
             if dots.count() and v0:
                 dots.first.click()
                 v1 = v0

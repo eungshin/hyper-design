@@ -1687,7 +1687,8 @@ def test_view_and_window_menus(dpage):
     rows = dpage.evaluate("[...document.querySelectorAll('#wmenu [data-w]')].map(r => [r.dataset.w, r.getAttribute('aria-checked'), r.textContent.trim()])")
     keys = [r[0] for r in rows]
     assert keys[:2] == ["tools", "hint"] and set(["links", "show", "notes", "pending", "history", "layers"]) <= set(keys), rows
-    assert all(r[1] == "true" and r[2] for r in rows), "켜짐 체크 + 짧은 이름(H11)"
+    assert all(r[2] for r in rows), "줄마다 짧은 이름(H11)"
+    assert all(r[1] == ("false" if r[0] == "theme" else "true") for r in rows), "체크 = 실제로 켜져 있는지(테마 패널은 처음엔 꺼짐)"
     dpage.click('#wmenu [data-w="tools"]')
     assert dpage.is_hidden("#tools")
     dpage.click('#wmenu [data-w="history"]')
@@ -1875,3 +1876,78 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     dpage.wait_for_function("document.getElementById('modal').hidden")
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
     assert t["hand"][0] == "true" and all(d != "true" for p, d in t.values()), "닫으면 판의 도구(손)로, 모두 다시 쓸 수 있게"
+
+
+# ---------------------------------------------------------------- 조각 5 테마 패널 (H10·H12·H14)
+THEME_JS = """() => [...document.querySelectorAll('#thList [data-th]')].map(r => ({id: r.dataset.th, name: (r.querySelector('.th-name') || {}).textContent || '',
+    on: r.classList.contains('on'), lock: !!r.querySelector('.th-lock'), del: !!r.querySelector('[data-act="del"]')}))"""
+
+
+def theme_rows(pg):
+    return pg.evaluate(THEME_JS)
+
+
+def frame_text_color(pg, want="#EEEEEE"):
+    """불러온 화면 iframe 하나의 --c-text-1(file:// 라 부모에서 못 읽음 — 그 frame 안에서) · 바뀔 때까지 잠깐 기다린다."""
+    fr = [f for f in pg.frames if "/screens/" in f.url]
+    assert fr, "불러온 화면 iframe 이 없다"
+    v = None
+    for _ in range(20):
+        v = fr[0].evaluate("getComputedStyle(document.documentElement).getPropertyValue('--c-text-1').trim().toUpperCase()")
+        if v == want:
+            break
+        pg.wait_for_timeout(50)
+    return v
+
+
+def test_theme_panel_switch_copy_edit_contrast_delete(dpage):
+    """H10: 위쪽 색 팔레트는 없애고 테마 패널(창 메뉴로 켬, 기본은 닫힘). H12: '+ 새 테마' = 지금 테마 복제 → 색 네 칸(주 색·글자·바탕·강조)
+    고치면 판의 화면에 바로, 글자 대비 4.5:1 미만이면 경고. 기본 테마는 자물쇠(복제해서 고침). H14: 이름 바꾸기·복제·삭제(기본은 복제만, 삭제는 되돌리기)."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.keyboard.press("Escape")
+    assert dpage.locator("header .dot").count() == 0, "위쪽 줄 색 팔레트는 없다(H10)"
+    assert dpage.locator('#dock .dk-tab[data-p="theme"]').count() == 0, "테마 패널은 기본으로 닫힘"
+    dpage.click("#wbtn"); dpage.click('#wmenu [data-w="theme"]'); dpage.keyboard.press("Escape")
+    dpage.click('#dock .dk-tab[data-p="theme"]')
+    rows = theme_rows(dpage)
+    assert len(rows) >= 2 and all(r["lock"] and not r["del"] for r in rows), rows
+    second = rows[1]["id"]
+    dpage.click(f'#thList [data-th="{second}"] .th-name')
+    assert dpage.evaluate("document.getElementById('tokens').getAttribute('href')").endswith(f"tokens-{second}.css")
+    assert [r["id"] for r in theme_rows(dpage) if r["on"]] == [second]
+    # 새 테마 = 지금 테마 복제 → 고치기
+    dpage.click("#thNew")
+    rows = theme_rows(dpage)
+    mine = [r for r in rows if not r["lock"]]
+    assert len(mine) == 1 and mine[0]["on"] and mine[0]["del"], rows
+    assert dpage.is_visible("#thEdit") and dpage.locator('#thEdit [data-role]').count() == 4
+    dpage.fill('#thEdit [data-role="text"] .th-hex', "#EEEEEE"); dpage.keyboard.press("Enter")
+    assert "4.5" in (dpage.text_content("#thWarn") or ""), "글자 대비 미달 경고"
+    assert frame_text_color(dpage) == "#EEEEEE", "판의 화면에 바로(화면 iframe 의 --c-text-1)"
+    dpage.fill('#thEdit [data-role="text"] .th-hex', "#111111"); dpage.keyboard.press("Enter")
+    assert not (dpage.text_content("#thWarn") or "").strip()
+    # 이름 바꾸기 · 저장 · 삭제 + 되돌리기
+    mid = mine[0]["id"]
+    dpage.hover(f'#thList [data-th="{mid}"]')
+    dpage.click(f'#thList [data-th="{mid}"] [data-act="ren"]')
+    dpage.fill("#thList .th-in", "내 새벽"); dpage.keyboard.press("Enter")
+    assert [r["name"] for r in theme_rows(dpage) if r["id"] == mid] == ["내 새벽"]
+    assert "내 새벽" in (dpage.evaluate("localStorage.getItem('hd-themes')") or ""), "모든 캔버스 공용 키에 저장"
+    dpage.hover(f'#thList [data-th="{mid}"]')
+    dpage.click(f'#thList [data-th="{mid}"] [data-act="del"]')
+    assert mid not in [r["id"] for r in theme_rows(dpage)]
+    dpage.keyboard.press("Control+z")
+    assert mid in [r["id"] for r in theme_rows(dpage)], "테마 삭제도 되돌리기"
+    dpage.hover(f'#thList [data-th="{mid}"]'); dpage.click(f'#thList [data-th="{mid}"] [data-act="del"]')
+    dpage.click(f'#thList [data-th="{rows[0]["id"]}"] .th-name')
+    # Foundation 탭에서도 테마를 바꿀 수 있다(예전 위쪽 팔레트처럼 — 색 견본을 보며 비교하는 곳)
+    dpage.click('.tab[data-tab="foundation"]')
+    assert dpage.is_visible("#wbtn") and dpage.is_visible("#thList"), "Foundation 탭에서도 창 메뉴·테마 패널"
+    fb = dpage.locator("#foundation").bounding_box(); dk = dpage.locator("#dock").bounding_box()
+    assert fb["x"] + fb["width"] <= dk["x"] + 1, "Foundation 판은 도크에 가리지 않는다"
+    dpage.click(f'#thList [data-th="{second}"] .th-name')
+    assert dpage.evaluate("document.getElementById('tokens').getAttribute('href')").endswith(f"tokens-{second}.css")
+    dpage.click(f'#thList [data-th="{rows[0]["id"]}"] .th-name')
+    dpage.click('.tab[data-tab="screens"]')
+    assert not errs, errs

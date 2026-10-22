@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -319,14 +319,14 @@ def test_dock_model():
     assert out["pure"] == out["def"], "reduce 는 원래 상태를 바꾸지 않는다"
     assert out["split"] == "links+notes:notes | show:show | layers:layers", "떼면 그 자리에 새 묶음"
     assert out["lone"], "혼자 있는 탭은 떼어도 그대로"
-    assert out["closeHidden"] == "links+notes:notes | show:show / layers", "빈 묶음은 없어진다"
+    assert out["closeHidden"] == "links+notes:notes | show:show / theme,layers", "빈 묶음은 없어진다"
     assert out["closeStyle"] == "links+notes:notes"
-    assert out["reopen"] == "links+notes+show:show / layers / false", "닫힌 패널을 부르면 마지막 묶음에 다시 열고 편다"
+    assert out["reopen"] == "links+notes+show:show / theme,layers / false", "닫힌 패널을 부르면 마지막 묶음에 다시 열고 편다"
     assert out["w"] == [560, 220, 333]
     assert out["hs"] == [2, 0.5] and out["hsBad"]
     assert out["vis"] == [["show"], []]
     assert out["norm"] == "notes+show+layers:notes", "모르는 패널·겹친 패널은 버리고 빠진 패널은 마지막 묶음에"
-    assert out["normClosed"] == ["links"]
+    assert out["normClosed"] == ["links", "theme"]          # 테마는 처음엔 닫힌 패널(조각 5)
     assert out["round"] and out["bad"] == [out["defaults"]] * 3
     # 떠 있는 창(D1): 빼기 · 합치기 · 옮기기/크기(최소) · 도크로 되돌리기 · 혼자 뜬 창 옮기기 · 접어도 보임 · 맨 위로 · 닫기 · 복구 · 저장
     assert out["fOut"] == "links+show:links | layers:layers || notes:notes@100,50,280,320", "도크 묶음에서 빼면 판 위 떠 있는 창"
@@ -336,7 +336,7 @@ def test_dock_model():
     assert out["fLoneMove"].endswith("layers:layers@5,6,200,9000"), "혼자 뜬 창을 다시 빼면 그 창이 옮겨질 뿐"
     assert out["fVis"] == ["layers", "show"] and out["fCol"], "도크를 접어도 떠 있는 창은 보인다"
     assert out["fTop"] == ["show", "layers"] and out["fCol2"], "누른 떠 있는 창이 맨 위로, 도크는 접힌 채"
-    assert out["fClose"] == "links:links | notes:notes || layers:layers@5,6,200,9000 / show"
+    assert out["fClose"] == "links:links | notes:notes || layers:layers@5,6,200,9000 / theme,show"
     assert out["oldHidden"].startswith("links+layers+show+notes") and out["oldHidden"].endswith(":layers"), "예전 숨긴 화면 탭은 그 자리의 레이어 탭으로"
     assert out["fNorm"] == "links+show+layers:links || notes:notes@40,40,200,320", "이미 쓴 패널·모르는 패널 버림, 틀린 좌표는 기본값"
     assert out["fRound"]
@@ -355,7 +355,7 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model",
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model",
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)

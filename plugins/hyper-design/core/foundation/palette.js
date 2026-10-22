@@ -1,5 +1,6 @@
 /* 원클릭 팔레트 교체 — 화면은 <link id="tokens" href="tokens.css"> 하나만 바꾼다.
    캔버스가 postMessage({type:'hd-palette', slug})를 보내거나, 마지막 선택(localStorage)·?p= 를 따른다.
+   {type:'hd-theme-vars', vars:{'--c-brand': '#RRGGBB', …}} 는 캔버스 '내 테마' 색 네 칸 덮어쓰기({} 이면 지움).
    요소 고르기(캔버스 크게 보기): {type:'hd-pick', on} 을 받으면 마우스 올린 요소에 테두리를 그리고
    {type:'hd-hover', rect} / 클릭 시 {type:'hd-picked', screen, path, text, rect, add} 를 부모에게 보낸다(add = Shift 로 여러 개 고르기).
    연결 보기: {type:'hd-links', on:true} 를 받으면 다른 화면으로 가는 링크 목록을
@@ -21,6 +22,12 @@
     var l = document.getElementById('tokens'); if (!l || !slug) return;
     var base = l.getAttribute('data-base') || l.getAttribute('href'); l.setAttribute('data-base', base);
     l.setAttribute('href', base.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));
+  }
+  var setVars = [];                                   // 캔버스 내 테마: 색 네 칸을 :root 변수로 덮어쓴다({} 이면 지움)
+  function themeVars(v) {
+    var st = document.documentElement.style;
+    setVars.forEach(function (k) { st.removeProperty(k); }); setVars = [];
+    Object.keys(v).forEach(function (k) { if (/^--c-[a-z0-9-]+$/.test(k) && /^#[0-9a-f]{6}$/i.test(v[k])) { st.setProperty(k, v[k]); setVars.push(k); } });
   }
   var s = new URLSearchParams(location.search).get('p');
   try { s = s || localStorage.getItem(KEY); } catch (e) {}
@@ -210,6 +217,7 @@
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);
+    else if (d.type === 'hd-theme-vars') themeVars(d.vars || {});
     else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));

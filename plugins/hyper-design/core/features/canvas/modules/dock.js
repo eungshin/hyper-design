@@ -20,11 +20,12 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
-var PANELS = ['links', 'show', 'notes', 'pending', 'history', 'layers'];
-var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어'};
+var PANELS = ['links', 'show', 'notes', 'pending', 'history', 'layers', 'theme'];
+var CLOSED0 = ['theme'];                          // 처음엔 닫힌 패널(창 메뉴로 켬)
+var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마'};
 
 function defaults() {
-  return {v: V, w: W0, collapsed: false, closed: [], floats: [], tools: true, hint: true, bare: false,
+  return {v: V, w: W0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, hint: true, bare: false,
           groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
 }
 function clampW(w) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : W0; }
@@ -64,6 +65,7 @@ function normalize(o) {
     if (tabs.length) s.floats.push(fbox({tabs: tabs, active: g.active, x: g.x, y: g.y, w: g.w, h: g.h}));
   });
   old(Array.isArray(o.closed) ? o.closed : []).forEach(function (p) { if (take(p)) s.closed.push(p); });
+  CLOSED0.forEach(function (p) { if (!seen[p]) { seen[p] = 1; s.closed.push(p); } });   // 새로 생긴 기본 닫힘 패널은 닫힌 채로
   var miss = PANELS.filter(function (p) { return !seen[p]; });
   if (miss.length) {
     if (!s.groups.length) s.groups.push({tabs: [], active: null, h: 1});
