@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 from build_canvas import MODULES as ALL_MODULES   # 빌드가 끼워 넣는 순서 그대로 — 따로 적어 두면 어긋난다
 sys.path.pop(0)
 # 층 표(책임 게이트) — view-* 가 아닌 모듈은 모두 여기 있어야 한다. 순수성 검사는 이 표의 Model·ViewModel 전부
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model",
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "notes": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model",
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 PURE = [n for n in ALL_MODULES if n in LAYER]
 NODE = shutil.which("node")

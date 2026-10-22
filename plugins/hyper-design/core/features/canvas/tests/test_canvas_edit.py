@@ -1183,10 +1183,21 @@ def test_caption_one_box_edits_all_fields(dpage):
     ESHOTS.mkdir(parents=True, exist_ok=True)
     dpage.screenshot(path=str(ESHOTS / "h16-caption-box.png"))
     assert len(notes_of(dpage)) == n0, "상자를 닫기 전에는 편집이 아니다"
+    dpage.evaluate("""() => {                        // 저장이 다른 카드를 다시 그리지 않는지(P3): 다른 카드 글·배지 변화를 센다
+        const w = window.__otherCards = {muts: 0};
+        document.querySelectorAll('#rows .card:not(.draft):not([data-id="job"])').forEach(c =>
+          new MutationObserver(l => { w.muts += l.length; }).observe(c, {childList: true, characterData: true, subtree: true})); }""")
+    others = [f.content_frame() for f in dpage.query_selector_all('#rows .card:not(.draft):not([data-id="job"]) .phone iframe[src]')]
+    others = [f for f in others if f]
+    for f in others:                                 # 그 화면들에 보낸 반영 대기 미리보기(hd-pending)
+        f.evaluate("window.__pend = 0; addEventListener('message', e => { if (e.data && e.data.type === 'hd-pending') window.__pend++; })")
     e = empty_point(dpage)
     dpage.mouse.click(e["x"], e["y"])                # 밖을 누르면 저장
     wait_notes(dpage, n0 + 2)
     assert not box.count()
+    dpage.wait_for_timeout(100)
+    assert others, "다른 카드 화면이 실려 있어야 hd-pending 을 셀 수 있다"
+    assert {"muts": dpage.evaluate("window.__otherCards.muts"), "pend": sum(f.evaluate("window.__pend") for f in others)} == {"muts": 0, "pend": 0}, "저장은 고친 카드만 다시 그린다"
     ns = notes_of(dpage)[-2:]
     assert sorted((n["edit"], n.get("index")) for n in ns) == [("policy", 0), ("title", None)], ns
     assert all(n["screen"] == "job" and "screens.json" in n["path"] for n in ns), ns

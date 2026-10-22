@@ -24,6 +24,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pLayers`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
+- `notes`(Model) — 메모 목록 저장소(키 `hd-notes:`, 읽기·쓰기는 셸): 목록 하나(`list`·`add`·`remove`·`find`·`unsent`)와 `commit()` = 지난 저장 뒤 메모가 바뀐(더함·뺌·제자리 고침) 화면 id. 셸 `saveNotes` 는 그 카드만 다시 그린다(배지·삭제 대기·카드 글·`hd-pending`), 판의 선은 `linesKey`(잇기·끊기·삭제·빈 레이아웃 메모)가 바뀔 때만 다시
 - Model·ViewModel 파일은 DOM·저장소·메시지를 쓰지 않는다(`tests/test_canvas_modules.py`의 순수성 검사 — 층 표 `LAYER` 의 Model·ViewModel 전부. 모듈 목록은 `build_canvas.MODULES` 하나뿐이고 테스트가 그것을 읽으며, view-* 가 아닌 모듈이 `LAYER` 에 없으면 실패)
 - 화면 ↔ 캔버스 메시지(`hd-pick`·`hd-links`·`hd-link-go` 등)와 "보내기" 요청문 형식은 `/hyper-design:fix`가 읽으므로 바꾸지 않는다
 - 추가된 메시지(기존 것은 그대로): `hd-hit-at {x, y}` → 화면이 `hd-hit {screen, path, text, rect, to}`로 답한다(그 자리 요소, 없으면 `path:null`). 1.5초 안에 답이 없으면(palette.js 없음) 캔버스는 "이 화면은 편집할 수 없어요"를 띄운다
@@ -75,7 +76,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
 | `modules/selection.js` · `view-select.js` (고른 카드: 누르기 = 고르기 + 연결 강조, Shift = 여러 장) | `unit or tools or input or links` |
-| `canvas_template.html` 메모·주석 부분 | `notes or modal` |
+| `modules/notes.js`(메모 목록 저장소·닿은 화면) · `canvas_template.html` 메모·주석 부분(`saveNotes`·`renderNotes`·보내기) | `unit or notes or modal or tools` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
 | `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판의 선 하나뿐: 쌍마다 하나·줄 색·번호·태그·강조·자르기 맞춤·보이기/굵기/투명도/색) | `unit or flow or links or tools` |

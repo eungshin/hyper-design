@@ -7,7 +7,7 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
-  var H = HD.history, esc = ctx.esc, list = ctx.list, st;
+  var H = HD.history, esc = ctx.esc, list = ctx.list, st, scrollRaf = 0;
   try { st = H.initial(JSON.parse(ctx.getItem(ctx.key) || '[]')); } catch (e) { st = H.initial([]); }
 
   function time() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
@@ -29,7 +29,10 @@ function mount(ctx) {
       if (i === st.lock && st.lock > 0) h += '<li class="hbound" aria-label="되돌릴 수 없는 경계">↑ 보냈거나 지난 일 — 되돌릴 수 없어요</li>';
     });
     list.innerHTML = h;
-    var now = list.querySelector('li.now'); if (now && now.scrollIntoView) now.scrollIntoView({block: 'nearest'});
+    if (!scrollRaf) scrollRaf = (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : setTimeout)(function () {   // 다음 그림 때 한 번 — 저장 직후 배치를 강제로 읽지 않는다(P3)
+      scrollRaf = 0;
+      var now = list.querySelector('li.now'); if (now && now.scrollIntoView && list.getClientRects().length) now.scrollIntoView({block: 'nearest'});   // 기록 패널이 보일 때만
+    });
   }
   function go(to) {
     var s = H.steps(st, to);
