@@ -193,6 +193,9 @@ def test_clear_sent(page):
 
 def test_multi_select_note(page):
     """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 요소마다 한 항목(형식 그대로)."""
+    # 메모 없이 시작 — 영역(-m)으로 골라 돌리면 앞 테스트(test_pick_note_pin_persists)의 메모를 지우는 test_clear_sent 가 빠진다
+    page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes:')).forEach(k => localStorage.removeItem(k))")
+    reload(page)
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
     page.click('#tools [data-tool="annotate"]')

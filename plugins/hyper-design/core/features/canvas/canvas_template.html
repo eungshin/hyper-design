@@ -14,31 +14,45 @@ html,body{height:100%;margin:0;overflow:hidden}
 body{display:flex;flex-direction:column;background:#ECECE8;color:#1c1c1c;font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;word-break:keep-all;-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit}
 
-/* ---------- 헤더: 제목 · 탭 · 팔레트 · 보기 (조작 그룹 3개) ---------- */
-.hd{flex:none;display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:8px 16px;background:#fff;border-bottom:1px solid #dcdcd7;position:relative;z-index:5}
-.hd h1{font-size:17px;font-weight:700;margin:0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
-.tabs{display:flex;gap:2px;background:#EFEFEB;border-radius:12px;padding:3px}
-.tab{min-height:44px;min-width:44px;padding:0 16px;border:0;border-radius:9px;background:transparent;font-size:15px;font-weight:600;color:#5a5a55;cursor:pointer}
-.tab[aria-selected="true"]{background:#fff;color:#1c1c1c;box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.view{display:flex;align-items:center;gap:4px}
+/* ---------- 위쪽 줄(H15): 32px 한 줄 — 앱 표시·문서 이름 · 밑줄 탭 · 모드 · 되돌리기 · 창·배율 · 보내기. 크게 보기를 열어도 바뀌지 않는다 ---------- */
+.hd{flex:none;display:flex;align-items:center;gap:2px;height:32px;padding:0 6px 0 8px;background:#F4F4F1;border-bottom:1px solid #d6d6d1;position:relative;z-index:5;font-size:12px}
+.hd .hdname{display:flex;align-items:center;min-width:0;flex:0 1 auto}
+.hd .app{flex:none;width:18px;height:18px;border-radius:4px;background:#2b2b29;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700;margin-right:6px}
+.hd h1{font-size:12px;font-weight:600;color:#3a3a37;margin:0;padding-right:8px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.hd .sep{flex:none;width:1px;height:16px;background:#d6d6d1;margin:0 6px}
+.tabs{display:flex;align-self:stretch}
+.tab{height:32px;padding:0 10px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;font-size:12px;font-weight:400;color:#6b6b66;cursor:pointer}
+.tab:hover{color:#2b2b29}
+.tab[aria-selected="true"]{color:#2b2b29;font-weight:600;border-bottom-color:#2b2b29}
+.view{display:flex;align-items:center;gap:2px;margin-left:auto}
 .vbtn{min-height:44px;min-width:44px;padding:0 14px;border:1px solid #dcdcd7;border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
-.mchip{align-self:center;padding:4px 10px;border-radius:999px;background:#F0F1EE;color:#777;font-size:12px;white-space:nowrap}   /* 모드 칩(E9): 파일에 바로 씀 / 파일로 열림 */
-.mchip.on{background:#E6F2EA;color:#2F6B45;font-weight:600}
-.vbtn.tsend{background:var(--ui-primary);border-color:var(--ui-primary);color:#fff;display:inline-flex;align-items:center;gap:6px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
-.vbtn.tsend:disabled{background:#fff;border-color:#dcdcd7;color:#aaa;cursor:default}
-.tsend .scnt{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:11px;font-weight:700;line-height:18px}
+.hd .vbtn{min-height:0;min-width:0;height:24px;padding:0 7px;border:0;border-radius:5px;background:none;font-size:12px;font-weight:400;color:#3a3a37;display:inline-flex;align-items:center;gap:4px}
+.hd .vbtn:hover{background:#E6E6E1}
+.hd .vbtn.ib{width:26px;padding:0;justify-content:center;color:#55554f}
+.hd .vbtn.ib svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.hd .vbtn:disabled{opacity:1;color:#b5b5b0;background:none;cursor:default}
+.mchip{display:flex;align-items:center;gap:5px;padding:0 8px;color:#6b6b66;font-size:11.5px;white-space:nowrap}   /* 모드 상태(E9): 파일에 바로 씀 / 파일로 열림 */
+.mchip::before{content:'';flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}
+.mchip.on::before{background:#7a9a7a}
+.mchip:empty{display:none}
+.hd .vbtn.tsend{background:var(--ui-primary);color:#fff;padding:0 12px;font-weight:600;margin-left:4px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
+.hd .vbtn.tsend:disabled{background:#E1E1DC;color:#9a9a95}
+.tsend .scnt{min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:10.5px;font-weight:700;line-height:16px}
 .vbtn:hover{background:#F5F5F2}
 .zoom{min-width:64px;font-variant-numeric:tabular-nums;color:#555}
-body:not([data-tab="screens"]) .view,body.modal-open .view{visibility:hidden}
-body:not([data-tab="screens"]):not(.modal-open) .view #wbtn{visibility:visible}   /* 창 메뉴(테마 패널 켜기)는 어느 탭에서든 */
+.hd .zoom{min-width:52px;justify-content:center;color:#3a3a37}
+body:not([data-tab="screens"]) .view{visibility:hidden}
+body:not([data-tab="screens"]) .view #wbtn{visibility:visible}   /* 창 메뉴(테마 패널 켜기)는 어느 탭에서든 */
 @media (max-width:760px){
-  .hd{padding:6px 10px;gap:4px 8px}
-  .hd h1{flex:1 1 0;font-size:16px;order:1;max-width:none}
+  .hd{height:auto;min-height:32px;flex-wrap:wrap;padding:4px 8px;gap:4px}
+  .hd .hdname{flex:1 1 0;order:1}
+  .hd h1{max-width:none}
+  .hd .sep{display:none}
   .tabs{order:3}
   .view{order:4;margin-left:auto}
-  .tab{padding:0 7px;font-size:13px}
-  .zoom{min-width:52px}
-  .vbtn{padding:0 10px}
+  .tab{height:44px;padding:0 7px}
+  .hd .vbtn{height:44px;min-width:44px}
+  .hd .zoom{min-width:52px}
 }
 
 /* ---------- 판 ---------- */
@@ -135,7 +149,14 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 /* ---------- 크게 보기 ---------- */
 #modal{position:fixed;inset:0;z-index:20;background:rgba(20,20,20,.62);display:flex;flex-direction:column;align-items:center;justify-content:center}
 #modal[hidden]{display:none}
-#modal .box{position:relative;border-radius:var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+#modal .box{position:relative;border-radius:8px 8px var(--modal-r,30px) var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}   /* 창 = 제목 막대 + 화면 */
+#mbox{position:relative;overflow:hidden;background:#fff}
+/* 크게 보기 제목 막대(H15): 위쪽 줄은 그대로, 화면 제목·닫기는 그 창 위 26px 막대 */
+#modal .mbar{height:26px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;background:#3a3a37;color:#f1f1ee;font-size:12px;cursor:default}
+#mtitle{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#mclose{flex:none;width:22px;height:20px;border:0;border-radius:4px;background:none;color:#e6e6e1;display:grid;place-items:center;padding:0;cursor:pointer}
+#mclose:hover,#mclose:focus-visible{background:#55554f;outline:0}
+#mclose svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 #modal iframe{display:block;width:var(--modal-w,390px);height:var(--modal-h,844px);border:0;transform-origin:0 0;background:#fff}
 
 /* ---------- 강조: 고른 카드 전부(E21) — 그 선·태그·이어진 카드 또렷, 나머지 흐리게 ---------- */
@@ -419,28 +440,24 @@ body.split-lr #khint{display:none}
 #notes .nact .nbtn{min-height:30px;font-size:12px;padding:0 8px}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
-.hd .mtitle,.hd .mx{display:none}
-body.modal-open .hd h1,body.modal-open .hd .tabs{visibility:hidden}
-body.modal-open .hd .mtitle{display:flex;align-items:center;position:absolute;left:16px;right:72px;top:0;bottom:0;font-size:15px;font-weight:700;color:#2b2b29;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
-body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:12px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:8px;background:none;color:#555;cursor:pointer}
-.hd .mx:hover{background:#F0F0ED}.hd .mx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 /* hd-motion */
 </style>
 </head>
 <body data-tab="screens">
 <header class="hd">
-  <h1 id="title">전체 화면 한눈에 보기</h1>
+  <div class="hdname"><span class="app" aria-hidden="true">hd</span><h1 id="title">전체 화면 한눈에 보기</h1></div>
+  <span class="sep" aria-hidden="true"></span>
   <div class="tabs" role="tablist" data-group="tabs">
     <button class="tab" role="tab" data-tab="screens" aria-selected="true">Screens</button>
     <button class="tab" role="tab" data-tab="foundation" aria-selected="false">Foundation</button>
     <button class="tab" role="tab" data-tab="components" aria-selected="false">Components</button>
   </div>
-  <div class="mtitle" id="mtitle"></div>
-  <button type="button" class="mx" id="mclose" aria-label="닫기" title="닫기 (Esc · 바깥 누르기)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div class="view" data-group="view">
     <span class="mchip" id="mode" role="status"></span>
-    <button class="vbtn" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
-    <button class="vbtn" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기">↷</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="vbtn ib" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+    <button class="vbtn ib" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
+    <span class="sep" aria-hidden="true"></span>
     <button class="vbtn wbtn" id="wbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="wmenu" title="창 — 도구 막대·패널 보이기">창 ▾</button>
     <button class="vbtn zoom" id="zoom" aria-haspopup="menu" aria-expanded="false" aria-controls="vmenu" title="보기 — 배율">72% ▾</button>
     <button class="vbtn tsend" id="nsend" disabled title="메모·반영 대기 보내기">보내기<span class="scnt" id="nsendc" hidden></span></button>
@@ -507,7 +524,10 @@ body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:
   <div class="dkp" id="pTheme" data-panel="theme"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
-  <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
+  <div class="box" id="mwin">
+    <div class="mbar"><div class="mtitle" id="mtitle"></div><button type="button" class="mx" id="mclose" aria-label="닫기" title="닫기 (Esc · 바깥 누르기)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
+  </div>
 </div>
 <div id="ttip" hidden></div>
 <div id="toast" role="status" hidden></div>
@@ -896,7 +916,7 @@ addEventListener('resize', scheduleVisible);
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
 function sizeModal() {
   var top = $('.hd').offsetHeight, dw = parseFloat(document.body.style.getPropertyValue('--dockw')) || 0;   // 덮개 = 위쪽 줄 아래 · 도크 왼쪽
-  var s = Math.min(1, (innerHeight - top - 128) / MH, (innerWidth - dw - 16) / MW);   // 위 주석 달기 버튼 56 + 여유
+  var s = Math.min(1, (innerHeight - top - 128 - 26) / MH, (innerWidth - dw - 16) / MW);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 26
   mscale = s;
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
   mbox.style.width = Math.floor(MW * s) + 'px'; mbox.style.height = Math.floor(MH * s) + 'px';

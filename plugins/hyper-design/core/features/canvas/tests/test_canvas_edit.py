@@ -1883,10 +1883,10 @@ def test_layers_panel_tree_hide_lock_search(dpage):
     assert not errs, errs
 
 
-# ---------------------------------------------------------------- 크게 보기 위쪽 줄 (G7 · 사용자 10-22)
+# ---------------------------------------------------------------- 크게 보기 위쪽 줄 (G7 · 사용자 10-22 → H15 사용자 10-23)
 def test_modal_header_has_no_gap_and_no_text_close(dpage):
-    """크게 보기: 덮개는 위쪽 줄 아래부터 — 도크 위에 빈 칸이 남지 않고, 위쪽 줄은 화면 제목 + 닫기 아이콘(×)만(탭·색 숨김).
-    글자 [닫기] 버튼은 없고, 바깥(덮개)을 누르거나 × · Esc 로 닫힌다."""
+    """크게 보기: 덮개는 위쪽 줄 아래부터 — 도크 위에 빈 칸이 남지 않는다. 위쪽 줄은 그대로(탭 보임, H15),
+    화면 제목과 닫기 아이콘(×)은 그 창 위 제목 막대. 글자 [닫기] 버튼은 없고, 바깥(덮개)을 누르거나 × · Esc 로 닫힌다."""
     dpage.keyboard.press("Escape")
     dpage.click("#zoom"); dpage.click("#fit")
     c = visible_cover(dpage)
@@ -1894,13 +1894,13 @@ def test_modal_header_has_no_gap_and_no_text_close(dpage):
     dpage.wait_for_function("!document.getElementById('modal').hidden")
     g = dpage.evaluate("""() => { const hd = document.querySelector('.hd').getBoundingClientRect(), m = document.getElementById('modal').getBoundingClientRect(),
         dk = document.getElementById('dock').getBoundingClientRect(), t = document.getElementById('mtitle').getBoundingClientRect(),
-        tabs = document.querySelector('.hd .tabs'), x = document.getElementById('mclose');
-      return {modalTop: m.top, hdBottom: hd.bottom, dockTop: dk.top, titleInHeader: t.top >= hd.top && t.bottom <= hd.bottom && t.width > 0,
-              tabsHidden: getComputedStyle(tabs).visibility === 'hidden', closeText: x.textContent.trim(), closeLabel: x.getAttribute('aria-label'),
-              closeInHeader: x.getBoundingClientRect().bottom <= hd.bottom}; }""")
+        tabs = document.querySelector('.hd .tabs'), x = document.getElementById('mclose'), f = document.getElementById('mframe').getBoundingClientRect();
+      return {modalTop: m.top, hdBottom: hd.bottom, dockTop: dk.top, titleInModal: t.top >= hd.bottom && t.bottom <= f.top + 1 && t.width > 0,
+              tabsVisible: getComputedStyle(tabs).visibility === 'visible', closeText: x.textContent.trim(), closeLabel: x.getAttribute('aria-label'),
+              closeInModal: !!x.closest('#modal') && x.getBoundingClientRect().top >= hd.bottom}; }""")
     assert abs(g["modalTop"] - g["hdBottom"]) < 1 and abs(g["dockTop"] - g["hdBottom"]) < 1, g
-    assert g["titleInHeader"] and g["tabsHidden"], g
-    assert g["closeText"] != "닫기" and g["closeLabel"] == "닫기" and g["closeInHeader"], g
+    assert g["titleInModal"] and g["tabsVisible"], g
+    assert g["closeText"] != "닫기" and g["closeLabel"] == "닫기" and g["closeInModal"], g
     assert dpage.is_hidden("#selbar"), "크게 보기 위에 선택 막대가 뜨지 않는다(두 번 누르기의 첫 누르기가 고른 카드)"
     m = dpage.locator("#modal").bounding_box()
     assert dpage.evaluate("([x, y]) => document.elementFromPoint(x, y).id", [m["x"] + 12, m["y"] + m["height"] - 12]) == "modal"
@@ -1911,6 +1911,39 @@ def test_modal_header_has_no_gap_and_no_text_close(dpage):
     dpage.click("#mclose")
     dpage.wait_for_function("document.getElementById('modal').hidden")
     assert dpage.evaluate("getComputedStyle(document.querySelector('.hd .tabs')).visibility") == "visible"
+
+
+HEADER_JS = """() => { const hd = document.querySelector('.hd'), r = hd.getBoundingClientRect();
+  const kids = [...hd.querySelectorAll('*')].filter(e => e.getClientRects().length && getComputedStyle(e).visibility === 'visible')
+    .map(e => { const b = e.getBoundingClientRect(); return [e.id || e.className.baseVal || e.className || e.tagName, Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)].join(' '); });
+  return {box: [r.left, r.top, r.width, r.height], kids}; }"""
+
+
+def test_header_compact_and_stable_on_modal(dpage):
+    """H15: 위쪽 줄은 32px 한 줄(포토샵·블렌더식). 카드를 크게 봐도 위쪽 줄은 그대로 — 크기·보이는 것 모두 같다.
+    화면 제목은 크게 보기 창 위 제목 막대(#mtitle, 화면 위), × 를 누르면 닫힌다."""
+    dpage.keyboard.press("Escape")
+    dpage.click("#zoom"); dpage.click("#fit")
+    dpage.keyboard.press("Escape")
+    h0 = dpage.evaluate(HEADER_JS)
+    assert h0["box"][3] <= 34, h0["box"]
+    c = visible_cover(dpage)
+    title = dpage.evaluate("(id) => document.querySelector('.card[data-id=\"' + id + '\"] .ftitle').textContent.trim()", c["id"])
+    dpage.mouse.dblclick(c["x"], c["y"])
+    dpage.wait_for_function("!document.getElementById('modal').hidden")
+    dpage.wait_for_timeout(300)                                          # 여는 움직임이 끝난 뒤
+    h1 = dpage.evaluate(HEADER_JS)
+    assert h1 == h0, (h0, h1)
+    t = dpage.evaluate("""() => { const t = document.getElementById('mtitle'), f = document.getElementById('mframe');
+      return {text: t.textContent.trim(), inModal: !!t.closest('#modal'), above: t.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 1,
+              h: t.closest('.mbar').getBoundingClientRect().height}; }""")
+    assert t["text"] and t["text"] in title or title in t["text"], (t, title)
+    assert t["inModal"] and t["above"] and abs(t["h"] - 26) < 1, t
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    dpage.screenshot(path=str(ESHOTS / "h15-header-modal.png"))
+    dpage.click("#mclose")
+    dpage.wait_for_function("document.getElementById('modal').hidden")
+    assert dpage.evaluate(HEADER_JS) == h0
 
 
 # ---------------------------------------------------------------- 조각 7a 크게 보기 = 모드 · 선택 막대 아이콘 (G5·G6·G8)

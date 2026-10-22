@@ -83,6 +83,7 @@ BROWSER = {
     "test_split_view_left_right_and_sync": ("menu", "input"),
     "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
     "test_modal_header_has_no_gap_and_no_text_close": ("modal",),
+    "test_header_compact_and_stable_on_modal": ("menu", "modal"),
     "test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons": ("modal", "tools"),
     "test_theme_panel_switch_copy_edit_contrast_delete": ("theme", "dock", "menu"),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
