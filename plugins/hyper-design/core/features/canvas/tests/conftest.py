@@ -168,8 +168,8 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    if "t0" not in _RUN or getattr(session.config.option, "collectonly", False):
-        return
+    if "t0" not in _RUN or getattr(session.config.option, "collectonly", False) or hasattr(session.config, "workerinput"):
+        return                                     # xdist(-n): 일꾼마다 쓰지 않고 결과를 모두 받는 주 프로세스만 한 줄
     o = session.config.option
     sel = {"m": o.markexpr or "", "k": o.keyword or "", "lf": bool(getattr(o, "lf", False)),
            "files": sorted({Path(str(a)).name for a in session.config.args if str(a).endswith(".py")})}
