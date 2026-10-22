@@ -139,6 +139,29 @@ def test_dock_merge_split_float_resize_collapse_persist(epage):
     epage.evaluate("localStorage.removeItem('hd-dock')")
     reload(epage)
 
+
+TABS_FIT_JS = """() => [...document.querySelectorAll('#dock .dk-tabs')].map(t => {
+  const r = t.getBoundingClientRect();
+  return [...t.querySelectorAll('.dk-tab, .dk-ib')].map(b => { const q = b.getBoundingClientRect();
+    return {p: b.dataset.p || b.className, on: b.classList.contains('on'), left: q.left, right: q.right, lo: r.left, hi: r.right}; });
+})"""
+
+
+def test_dock_tabs_fit_when_many(epage):
+    """탭이 많아도(테마까지 켜서 한 묶음에 5개) 탭 줄 밖으로 잘리지 않는다 — 고른 탭과 ＋·» 단추도 다 보인다."""
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+    epage.click("#wbtn"); epage.click('#wmenu [data-w="theme"]'); epage.keyboard.press("Escape")
+    epage.click('#dock .dk-tab[data-p="theme"]')
+    rows = epage.evaluate(TABS_FIT_JS)
+    assert max(len(g) for g in rows) >= 5, rows
+    out = [b for g in rows for b in g if b["left"] < b["lo"] - 1 or b["right"] > b["hi"] + 1]
+    assert not out, out
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    epage.screenshot(path=str(ESHOTS / "dock-tabs-many.png"))
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+
 def visible_cover(pg, skip=()):
     p = pg.evaluate("""(skip) => { const r = document.getElementById('screens').getBoundingClientRect();
         for (const c of document.querySelectorAll('#rows .card .cover')) { const id = c.closest('.card').dataset.id; if (skip.includes(id)) continue;

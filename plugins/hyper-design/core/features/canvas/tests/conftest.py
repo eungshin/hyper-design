@@ -35,6 +35,7 @@ BROWSER = {
     # test_canvas_edit.py — 편집 기능
     "test_notes_panel_in_dock_scrolls": ("notes", "dock"),
     "test_dock_merge_split_float_resize_collapse_persist": ("dock",),
+    "test_dock_tabs_fit_when_many": ("dock",),
     "test_toolbar_default_hand_and_keys": ("tools", "input"),
     "test_move_tool_moves_card_and_persists": ("tools", "flow"),
     "test_line_click_shows_end_handles_and_drag_retargets": ("flow", "tools"),
