@@ -38,6 +38,7 @@ BROWSER = {
     "test_dock_tabs_fit_when_many": ("dock",),
     "test_toolbar_default_hand_and_keys": ("tools", "input"),
     "test_move_tool_moves_card_and_persists": ("tools", "flow"),
+    "test_drag_redraws_only_the_lines": ("flow", "tools", "links"),
     "test_line_click_shows_end_handles_and_drag_retargets": ("flow", "tools"),
     "test_fit_includes_moved_card_and_drops_stale": ("tools", "input"),
     "test_card_drag_has_no_long_tasks": ("tools",),

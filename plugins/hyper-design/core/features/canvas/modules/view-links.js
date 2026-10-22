@@ -53,7 +53,7 @@ function mount(ctx) {
   // 출발 버튼 테두리·번호 = 그 선의 색·번호(view-lines) · 소켓 = 출발 요소 오른쪽 가운데
   function paintOne(id) {
     var m = models[id], c = cardEl(id); if (!m || !c) return;
-    clear(id);
+    $$('.sock:not(.selsock)', c).forEach(function (n) { n.remove(); });   // 화면 안 표시는 아래 한 번의 hd-links-paint 가 통째로 바꾼다(지우기 메시지를 따로 보내지 않음)
     var ph = $('.phone', c), sc = ph.offsetWidth / CARD.w, ts = ctx.tagScale ? ctx.tagScale() : 1, sk = 16 * ts, items = [];
     m.items.forEach(function (it, i) {
       var mk = ctx.mark(id, it.to), color = mk ? mk.color : GREY, q = it.rect, b = document.createElement('span');

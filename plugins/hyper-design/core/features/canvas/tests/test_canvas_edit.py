@@ -1628,6 +1628,33 @@ def test_click_keeps_the_same_lines_and_numbers_buttons(dpage):
     dpage.keyboard.press("Escape")
 
 
+def test_drag_redraws_only_the_lines(dpage):
+    """P1: 고른 카드를 끄는 동안 선만 따라온다 — 화면 안 버튼 표시(hd-links-paint)는 놓을 때 한 번만 다시 보낸다."""
+    focus_dayfine(dpage, "job")
+    fr = frame_of(dpage, "job")
+    fr.evaluate("window.__lp = 0; addEventListener('message', e => { if (e.data && e.data.type === 'hd-links-paint') window.__lp++; })")
+    dpage.keyboard.press("v")
+    b = dpage.locator('.card[data-id="job"] .cover').bounding_box()
+    x, y = b["x"] + b["width"] / 2, b["y"] + min(b["height"] / 2, 80)
+    d0 = ln_d(dpage, "job")
+    dpage.mouse.move(x, y)
+    dpage.mouse.down()
+    for i in range(1, 31):
+        dpage.mouse.move(x + i * 3, y + i * 2)
+        dpage.wait_for_timeout(16)
+    dpage.mouse.up()
+    dpage.wait_for_timeout(300)
+    assert ln_d(dpage, "job") != d0, "끄는 동안·놓은 뒤 선은 카드를 따라온다"
+    n = fr.evaluate("window.__lp")
+    assert n <= 1, ("끄는 동안 화면 안 버튼 표시를 매 프레임 다시 보내지 않는다", n)
+    assert fr.evaluate("document.querySelectorAll('[data-hd-links]').length") >= 1, "놓은 뒤에도 버튼 표시는 그대로"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_timeout(150)
+    dpage.keyboard.press("h")
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+
+
 def test_shift_select_keeps_every_picked_card_bright(dpage):
     """E21: Shift 로 여러 장 고르면 고른 카드 모두 또렷하고 그 카드들의 선이 진하다(두 번째 카드가 흐려지지 않는다)."""
     fit_view(dpage)

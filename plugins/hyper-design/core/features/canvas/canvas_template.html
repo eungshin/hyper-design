@@ -650,10 +650,13 @@ var G = HD.graph.fromData(D);
 var RADIUS = HD.route.RADIUS, routeCurve = HD.route.routeCurve;
 var contentLeft = LEFT;
 // 갈래(branches) 화살표: 같은 줄은 줄 위 통로, 다른 줄은 왼쪽 통로. 이름표는 출발 카드 오른쪽(평소 숨김).
-function drawArrows() {                            // 판의 선(modules/view-lines.js) → 고른 화면의 버튼 표시(같은 색·번호) 다시
+function drawLines() {                             // 판의 선만(카드를 끄는 프레임마다) — 고른 선의 손잡이도 새 선에
   contentLeft = Math.max(0, LN.render() - 24);
-  VL.paint();
   var ls = LE && LE.selected(); if (ls) LE.select(ls.from, ls.to);   // 선을 새로 그렸으면 손잡이도 새 선에(없어졌으면 풀림)
+}
+function drawArrows() {                            // 판의 선(modules/view-lines.js) → 고른 화면의 버튼 표시(같은 색·번호)·소켓 다시 — 카드 끌기 중에는 놓을 때 한 번
+  drawLines();
+  VL.paint();
 }
 
 /* ---------- 카드 옮긴 자리(6A): 줄 배치는 그대로, 카드마다 옮긴 거리만 별도 키에 ---------- */
@@ -739,8 +742,12 @@ function redo() { HI.redo(); }
 $('#undo').addEventListener('click', undo);
 $('#redo').addEventListener('click', redo);
 
-var arrowRaf = 0;
-function scheduleArrows() { if (arrowRaf) return; arrowRaf = requestAnimationFrame(function () { arrowRaf = 0; drawArrows(); }); }
+var arrowRaf = 0, arrowFull = false;
+function scheduleArrows(linesOnly) {               // 한 프레임에 한 번 · linesOnly(카드 끌기) = 선만 — 같은 프레임에 다른 요청이 하나라도 오면 전부
+  if (!linesOnly) arrowFull = true;
+  if (arrowRaf) return;
+  arrowRaf = requestAnimationFrame(function () { arrowRaf = 0; var full = arrowFull; arrowFull = false; if (full) drawArrows(); else drawLines(); });
+}
 
 /* ---------- 이동·확대 ---------- */
 var z = Z0, tx = 0, ty = 0, lastCam = {z: Z0, tx: 0, ty: 0};
@@ -880,14 +887,14 @@ pane.addEventListener('pointermove', function (e) {
       cardPos[id] = {dx: Math.round(o.dx + dx / z), dy: Math.round(o.dy + dy / z), g: groupOf(c)};
       placeCard(c);
     });
-    scheduleArrows(); $('#selbar').hidden = true;
+    scheduleArrows(true); $('#selbar').hidden = true;
   } else if (drag.moved) { tx = drag.tx + dx; ty = drag.ty + dy; apply(); }
 });
 function endCardDrag() {
   var ids = drag.group || [drag.card.dataset.id]; drag.card = null;
   ids.forEach(function (id) { var c = VL.cardEl(id); if (c) c.classList.remove('moving'); });
   if (drag.moved) {
-    saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; drawArrows();
+    saveCardPos(); cancelAnimationFrame(arrowRaf); arrowRaf = 0; arrowFull = false; drawArrows();
     var before = {}, after = {};
     ids.forEach(function (id) { var p = cardPos[id]; before[id] = drag.origins[id].prev; after[id] = p ? {dx: p.dx, dy: p.dy, g: p.g} : null; });
     record({label: ids.length > 1 ? '카드 ' + ids.length + '장 옮기기' : '카드 옮기기',
