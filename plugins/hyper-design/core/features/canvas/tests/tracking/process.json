@@ -527,6 +527,62 @@
         "note": "-n 4 전체 165개"
       },
       "note": "Q2b 덮개(busy·view-busy)·Q3 선 끝 손잡이(line-ends·view-line-ends)를 셸에 붙임. gpage 는 묶지 않음 — 묶으면 -m 일부 실행에서 test_v3_main_flow_dashed 가 카메라 자리를 이어받아 깨짐(test_canvas_v2.py 는 이번 소유 밖)"
+    },
+    {
+      "slice": "task7 폴더·정렬 (H17·H18)",
+      "commit": "(이번)",
+      "numbered": true,
+      "tests": {
+        "full": 1,
+        "area": 1,
+        "minutes": 4
+      },
+      "gate": {
+        "checks": 37,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "폴더 끌어 넣기 테스트: Playwright 마우스 끌기가 긴 레이어 나무 스크롤 때문에 다른 줄(login--done)을 잡음 → 같은 HTML5 끌기 이벤트를 직접 보냄"
+        },
+        {
+          "by": "unit",
+          "what": "도크 정렬 패널 자리 규칙(예전 저장 상태 → 표시 옆)을 일부러 깨서 빨강 확인"
+        }
+      ],
+      "waste": [],
+      "flaky": [
+        "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 -n 4 에서 ConnectionAbortedError(소켓), 혼자 통과. 7a·10-22 전체·10-23 02:00 실행(이번 변경 전)에서도 같은 테스트가 흔들림(이번 변경과 무관)"
+      ],
+      "profile": {
+        "total_sec": 119,
+        "top": [
+          [
+            "test_card_drag_has_no_long_tasks",
+            11.7
+          ],
+          [
+            "test_helper_canvas_busy_overlay_lifts_on_file_change",
+            10.8
+          ],
+          [
+            "test_fit_includes_moved_card_and_drops_stale",
+            10.3
+          ],
+          [
+            "test_v3_main_flow_dashed",
+            10.2
+          ],
+          [
+            "test_undo_redo_card_moves",
+            9.5
+          ]
+        ],
+        "note": "-n 4 전체 200개"
+      },
+      "note": "4단계 연결(셸 boxesOf·moveCards·arrangeCards, 폴더 상태, 정렬 패널 도크). 새 브라우저 테스트 2개, 옛 레이어 테스트의 숨긴 것만 확인을 폴더 줄 빼고로 다짐"
     }
   ]
 }

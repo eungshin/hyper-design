@@ -13,8 +13,8 @@ SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
-PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "busy", "line-ends"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "view-viewport", "view-busy", "view-line-ends", "view-caption"]
+PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "busy", "line-ends", "align", "folders"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "align", "folders", "view-viewport", "view-busy", "view-line-ends", "view-caption", "view-align"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -266,7 +266,11 @@ vm.runInThisContext(fs.readFileSync(process.argv[2] + '/dock.js', 'utf8'), {file
 const K = globalThis.HD.dock, R = K.reduce, out = {};
 const tabs = s => s.groups.map(g => g.tabs.join('+') + ':' + g.active).join(' | ');
 out.allDefaults = tabs(K.defaults());
+const pre = {v: 1, groups: [{tabs: ['links'], active: 'links'}, {tabs: ['show'], active: 'show'}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes'}], closed: ['theme']};
+out.oldSaved = tabs(K.normalize(pre));                                        // 정렬 패널 전 저장 상태 → 표시 옆에
+out.oldNoShow = tabs(K.normalize(Object.assign({}, pre, {groups: pre.groups.slice(2), closed: ['theme', 'links', 'show']})));   // 표시가 닫혀 있으면 마지막 묶음에
 K.PANELS.splice(K.PANELS.indexOf('pending'), 2);   // 아래 배치 동작 확인은 패널 넷으로(모델은 같은 배열을 쓴다)
+K.PANELS.splice(K.PANELS.indexOf('align'), 1);
 const base = K.normalize({v: 1, groups: [{tabs: ['links', 'show'], active: 'links'}, {tabs: ['notes', 'layers'], active: 'notes'}]});
 let s = base;
 out.def = tabs(s); out.defaults = tabs(K.defaults());
@@ -313,7 +317,9 @@ def test_dock_model():
         out = json.loads(r.stdout)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    assert out["allDefaults"] == "links:links | show:show | notes+pending+history+layers:notes", "기본: 메모·반영 대기·기록·레이어이 한 묶음"
+    assert out["allDefaults"] == "links:links | show+align:show | notes+pending+history+layers:notes", "기본: 표시 옆에 정렬, 메모·반영 대기·기록·레이어이 한 묶음"
+    assert out["oldSaved"] == "links:links | show+align:show | notes+pending+history+layers:notes", "정렬 패널 전 저장 상태도 그대로 열리고 정렬은 표시 옆에"
+    assert out["oldNoShow"] == "notes+pending+history+layers+align:notes", "표시가 닫혀 있으면 정렬은 마지막 묶음에"
     assert out["def"] == "links+show:links | notes+layers:notes"
     assert out["merge"] == "links+show+notes:notes | layers:layers", "합치면 그 묶음 끝에 들어가 활성"
     assert out["pure"] == out["def"], "reduce 는 원래 상태를 바꾸지 않는다"
@@ -355,7 +361,7 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model",
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model",
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style", "lineEnds": "line-ends"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)

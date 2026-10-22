@@ -534,6 +534,7 @@ body.split-lr #khint{display:none}
   </div>
   <div class="dkp" id="pLayers" data-panel="layers"></div>
   <div class="dkp" id="pTheme" data-panel="theme"></div>
+  <div class="dkp" id="pAlign" data-panel="align"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="box" id="mwin">
@@ -689,6 +690,44 @@ function setCardPos(id, p) {                      // 되돌리기·다시 하기
   if (p) cardPos[id] = {dx: p.dx, dy: p.dy, g: p.g}; else delete cardPos[id];
   $$('.card', rowsEl).forEach(function (c) { if (c.dataset.id === id) placeCard(c); });
   saveCardPos(); drawArrows();
+}
+/* ---------- 정렬·늘어놓기(task 7, H17·H18): 계산은 modules/align.js, 여기는 카드 상자 재기와 옮기기(카드 옮긴 자리 그대로 · 되돌리기 한 단계) ---------- */
+function boxesOf(ids) {                           // 옮길 수 있는 카드의 판 좌표 상자(배율 뺀 값) · 잠긴 카드는 세기만, 숨김·삭제 대기는 뺀다
+  var rr = rowsEl.getBoundingClientRect(), out = {boxes: [], locked: 0};
+  ids.forEach(function (id) {
+    var c = VL.cardEl(id); if (!c || c.classList.contains('hid') || c.classList.contains('del') || !c.offsetWidth) return;
+    if (locked[id]) { out.locked++; return; }
+    var r = c.getBoundingClientRect();
+    out.boxes.push({id: id, x: (r.left - rr.left) / z, y: (r.top - rr.top) / z, w: r.width / z, h: r.height / z});
+  });
+  return out;
+}
+function moveCards(moves, label) {                 // moves = {id: [mx, my]} → 옮긴 거리에 더하고 저장 · 기록 한 단계(끌어 옮기기와 같은 저장·되돌리기)
+  var before = {}, after = {}, ids = Object.keys(moves).filter(function (id) { return VL.cardEl(id); });
+  if (!ids.length) return false;
+  ids.forEach(function (id) {
+    var p = cardPos[id], m = moves[id];
+    before[id] = p ? {dx: p.dx, dy: p.dy, g: p.g} : null;
+    after[id] = {dx: (p ? p.dx : 0) + m[0], dy: (p ? p.dy : 0) + m[1], g: groupOf(VL.cardEl(id))};
+  });
+  var put = function (to) {
+    ids.forEach(function (id) { if (to[id]) cardPos[id] = to[id]; else delete cardPos[id]; var c = VL.cardEl(id); if (c) placeCard(c); });
+    saveCardPos(); drawArrows(); placeSelbar();
+  };
+  put(after);
+  record({label: label, undo: function () { put(before); }, redo: function () { put(after); }});
+  return true;
+}
+var AL_NAME = {left: '왼쪽', hcenter: '가로 가운데', right: '오른쪽', top: '위', vcenter: '세로 가운데', bottom: '아래'};
+function arrangeCards(ids, op) {                  // op = 정렬 패널 의도 {op:'align'|'distribute'|'stack', …} — 고른 카드든 폴더 카드든
+  var b = boxesOf(ids), A = HD.align, mv = {}, label = '', g;
+  if (op.op === 'align') { mv = A.align(b.boxes, op.how); label = '정렬: ' + (AL_NAME[op.how] || op.how); }
+  else if (op.op === 'distribute') { mv = A.distribute(b.boxes, op.axis); label = '간격 같게'; }
+  else if (op.op === 'stack') { g = Number(op.gap); mv = A.stack(b.boxes, op.axis, g); label = '늘어놓기 (' + (isFinite(g) ? g : 80) + 'px)'; }
+  var moved = moveCards(mv, label);
+  if (b.locked) toast('잠긴 화면 ' + b.locked + '개는 그대로 뒀어요');
+  else if (!moved && b.boxes.length >= 2) toast('이미 그렇게 놓여 있어요');
+  return moved;
 }
 
 /* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8) — 되돌리기 50단계 · 줄 누르기 · 보낸 자리 앞은 되돌리지 않음 ---------- */
@@ -1086,11 +1125,12 @@ var DOCK_ICON = {
   pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
   layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+  align: '<svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/></svg>',
   theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>'};
 var VD = null, VMN = null, VP = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme')},
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign')},
                         title: function (id) { var sp = HD.edits.split(notes || []); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
@@ -1129,8 +1169,23 @@ var VT = HD.viewTheme.mount({$: $, esc: esc, root: $('#pTheme'), bases: (P && P.
   readColors: function () { var cs = getComputedStyle(document.documentElement), o = {};
     Object.keys(HD.theme.ROLES).forEach(function (r) { o[r] = HD.theme.hex(cs.getPropertyValue(HD.theme.ROLES[r])) || '#000000'; }); return o; },
   apply: function (slug, vars) { if (!slug) return; curVars = vars || {}; setPalette(slug); try { localStorage.setItem(KEY, slug); } catch (e) {} }});
+// 레이어 폴더(modules/folders.js, H17) — 패널에서만 묶는다(판 카드는 안 움직임, 화면 파일에 안 씀). 키 hd-folders:, 없는 화면 id 는 시작·데이터 새로 받을 때 버린다
+(function () { var st = document.createElement('style'); st.id = 'hd-view-css'; st.textContent = HD.viewLayers.CSS + HD.viewAlign.CSS; document.head.appendChild(st); })();   // 폴더·정렬 패널 모양(모듈이 가진 CSS 한 번만)
+var FKEY = 'hd-folders:' + hashStr(KEYPATH), folders = HD.folders.load(function (k) { return localStorage.getItem(k); }, FKEY);
+function setFolders(n) { if (n === folders) return; folders = n; HD.folders.save(folders, function (k, v) { localStorage.setItem(k, v); }, FKEY); }
+function pruneFolders() { setFolders(HD.folders.reduce(folders, {type: 'prune', live: $$('.card', rowsEl).map(function (c) { return c.dataset.id; })})); }
 // 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
+var VA = null;
 var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
+  folders: {state: function () { return folders; }, dispatch: function (a) { setFolders(HD.folders.reduce(folders, a)); if (LY) LY.render(); }},
+  pick: function (ids, mode) {                   // 레이어에서 고르기: only = 그것만 · toggle = 넣고 빼기 · add = 더하기
+    if (mode === 'toggle') ids.forEach(function (id) { SL.dispatch({type: 'toggle', id: id}); });
+    else SL.dispatch({type: 'set', ids: mode === 'add' ? SL.ids().concat(ids) : ids});
+  },
+  arrange: function (ids, axis) {                // 폴더·줄의 [가로로/세로로 늘어놓기] — 간격은 정렬 패널 칸
+    if (boxesOf(ids).boxes.length < 2) { toast('늘어놓을 화면이 두 개 이상이어야 해요'); return; }
+    arrangeCards(ids, {op: 'stack', axis: axis, gap: VA ? VA.gap() : 80});
+  },
   tree: function () {
     var groups = $$('#rows .flow').map(function (f, i) {
       return {id: 'g' + i, name: $('.glabel', f).textContent, screens: $$('.card:not(.del)', f).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; })};
@@ -1144,6 +1199,11 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
   hide: hide, lock: lockCards, del: deleteCards,
   reveal: function (id) { SL.dispatch({type: 'only', id: id}); fitCards([id]); },
   addLayout: function () { var r = pane.getBoundingClientRect(); addLayout(r.left + r.width / 2, r.top + r.height / 2); }});
+// 정렬 패널 View(modules/view-align.js · 계산 modules/align.js, H18) — 고른 카드(잠김·숨김 빼고) 맞추기·간격 같게·늘어놓기
+VA = HD.viewAlign.mount({root: $('#pAlign'), $: $, esc: esc, key: 'hd-align-gap',
+  count: function () { return SL ? boxesOf(SL.ids()).boxes.length : 0; },
+  run: function (op) { arrangeCards(SL.ids(), op); },
+  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }});
 $('#legend').addEventListener('click', function (e) {   // 범례 줄 Ctrl+클릭 = 그 대상으로 카메라(범례가 판 밖이라 판의 클릭 처리 대신)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); }
 }, true);
@@ -1184,6 +1244,7 @@ function setLocked(ids, on) {
   ids.forEach(function (id) { if (on) locked[id] = 1; else delete locked[id]; });
   try { localStorage.setItem(LOCKKEY, JSON.stringify(Object.keys(locked))); } catch (e) {}
   if (LY) LY.render();
+  if (VA) VA.render();
 }
 function lockCards(ids, on) {
   ids = ids.filter(function (id) { return !!locked[id] !== on; }); if (!ids.length) return;
@@ -1633,6 +1694,7 @@ function renameLayout(el, id) {
 var deleted = {};
 var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
   if (LY) LY.render();
+  if (VA) VA.render();
   placeSelbar();
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
@@ -1875,6 +1937,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
     changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) { f.removeAttribute('src'); f.setAttribute('data-src', live[id].file + '?v=' + v); } });
     paintCardText(); drawArrows(); scheduleVisible();
+    pruneFolders(); if (LY) LY.render();
     if (VB) VB.render();
   }});
 // AI 수정 중 덮개 View(modules/view-busy.js · 상태 modules/busy.js, Q2b) — 터미널로 넘긴 화면에 덮개, 그 화면 파일이 바뀌면 걷고 그 카드만 다시(도우미로 열었을 때만)
@@ -1937,6 +2000,7 @@ renderNotes();
   $('#intro').style.maxWidth = mw; $('#foot').style.maxWidth = mw;
 })();
 loadCardPos();
+pruneFolders(); LY.render();                       // 빈 레이아웃 카드까지 그린 뒤에 없는 화면 id 를 버린다
 drawArrows();
 home();
 loadVisible();

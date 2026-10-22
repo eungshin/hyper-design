@@ -1924,7 +1924,7 @@ def test_layers_panel_tree_hide_lock_search(dpage):
     dpage.click('#dock .dk-tab[data-p="links"]')
     dpage.click("#thid")
     assert dpage.get_attribute('#lyF [data-f="hidden"]', "aria-pressed") == "true"
-    assert [l["id"] for l in layers(dpage) if l["kind"] != "row"] == [sid], layers(dpage)
+    assert [l["id"] for l in layers(dpage) if l["kind"] not in ("row", "folder")] == [sid], layers(dpage)
     dpage.click(f'#lyTree [data-ly="{sid}"] .ly-eye')
     assert dpage.locator(f'.card[data-id="{sid}"]').is_visible()
     dpage.click('#lyF [data-f="hidden"]')
@@ -2182,3 +2182,151 @@ def test_line_click_shows_end_handles_and_drag_retargets(dpage):
     dpage.wait_for_selector("#ar circle.ln-end")
     dpage.keyboard.press("Escape")
     assert not ln_ends(dpage) and not dpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "Esc = 손잡이·강조 풀기"
+
+
+# ---------------------------------------------------------------- task 7: 정렬 패널(H18) · 레이어 폴더(H17)
+BOX_JS = """(ids) => { const z = +document.getElementById('stage').dataset.zoom, rr = document.getElementById('rows').getBoundingClientRect();
+    return ids.map(id => { const r = document.querySelector('.card[data-id="' + id + '"]').getBoundingClientRect();
+      return {id, x: (r.left - rr.left) / z, y: (r.top - rr.top) / z, w: r.width / z, h: r.height / z}; }); }"""
+# 줄마다 옮길 수 있는 카드(숨김·삭제 대기·잠김 아님) 하나 — 앞 테스트가 남긴 상태와 상관없이
+MOVABLE_JS = """(n) => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-locked:')), lk = k ? JSON.parse(localStorage.getItem(k) || '[]') : [];
+    return [...document.querySelectorAll('#rows .flow')].slice(0, n).map((f, i) => {
+      const cs = [...f.querySelectorAll('.card')].filter(c => !c.classList.contains('hid') && !c.classList.contains('del') && c.offsetWidth && !lk.includes(c.dataset.id));
+      return cs.length ? cs[Math.min(i, cs.length - 1)].dataset.id : null; }); }"""
+CLEAR_T7 = "Object.keys(localStorage).filter(k => /^hd-(card-pos|folders):/.test(k) || k === 'hd-align-gap').forEach(k => localStorage.removeItem(k))"
+
+
+def boxes(pg, ids):
+    return {b["id"]: b for b in pg.evaluate(BOX_JS, ids)}
+
+
+def near(a, b, tol=1.5):
+    return abs(a - b) <= tol
+
+
+def shift_pick(pg, ids):
+    """판에서 첫 카드 누르기 + 나머지 Shift+클릭(여러 장 고르기)."""
+    pg.keyboard.press("Escape")
+    for i, sid in enumerate(ids):
+        pg.evaluate("([id, sh]) => document.querySelector('.card[data-id=\"' + id + '\"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1, shiftKey: sh}))", [sid, i > 0])
+
+
+def test_align_panel_aligns_distributes_and_stacks(dpage):
+    """H18: Shift 로 고른 카드 셋 → 정렬 패널(도크 '정렬' 탭) 위 맞추기 = 위 끝이 같게, Ctrl+Z 한 번에 셋 다 제자리 ·
+    가로 간격 같게 = 이웃 카드 사이 빈칸이 같게(처음·끝 그대로) · 간격 40 + 가로로 늘어놓기 = 정확히 40px · 새로고침 뒤에도 그 자리."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    ids = dpage.evaluate(MOVABLE_JS, 3)
+    assert None not in ids and len(set(ids)) == 3, ids
+    fit_view(dpage)
+    dpage.click('#dock .dk-tab[data-p="align"]')
+    assert dpage.text_content("#pAlign .al-n") == "화면을 두 개 이상 고르세요" and dpage.is_disabled('#pAlign [data-al="top"]')
+    shift_pick(dpage, ids)
+    assert dpage.text_content("#pAlign .al-n") == "고른 화면 3개" and not dpage.is_disabled('#pAlign [data-dist="x"]')
+    b0 = boxes(dpage, ids)
+    assert len({round(b["y"]) for b in b0.values()}) == 3, ("줄이 다른 카드 셋", b0)
+    # 위 맞추기 → 되돌리기 한 번
+    dpage.click('#pAlign [data-al="top"]')
+    b1 = boxes(dpage, ids)
+    top = min(b["y"] for b in b0.values())
+    assert all(near(b1[i]["y"], top) and near(b1[i]["x"], b0[i]["x"]) for i in ids), ("위 끝이 가장 위 카드에 맞는다", b0, b1)
+    assert "정렬: 위" in dpage.text_content("#hlist li.now"), "기록 한 줄"
+    dpage.keyboard.press("Control+z")
+    b2 = boxes(dpage, ids)
+    assert all(near(b2[i]["x"], b0[i]["x"]) and near(b2[i]["y"], b0[i]["y"]) for i in ids), ("Ctrl+Z 한 번에 셋 다 제자리", b0, b2)
+    # 가로 간격 같게
+    dpage.click('#pAlign [data-dist="x"]')
+    b3 = sorted(boxes(dpage, ids).values(), key=lambda b: b["x"])
+    s0 = sorted(b0.values(), key=lambda b: b["x"])
+    gaps = [b3[k + 1]["x"] - (b3[k]["x"] + b3[k]["w"]) for k in range(2)]
+    assert near(gaps[0], gaps[1]) and near(b3[0]["x"], s0[0]["x"]) and near(b3[2]["x"], s0[2]["x"]), ("빈칸이 같고 처음·끝은 그대로", b3)
+    # 간격 40 + 가로로 늘어놓기
+    dpage.fill("#alGap", "40")
+    dpage.click('#pAlign [data-stack="x"]')
+    b4 = sorted(boxes(dpage, ids).values(), key=lambda b: b["x"])
+    assert all(near(b4[k + 1]["x"] - (b4[k]["x"] + b4[k]["w"]), 40) for k in range(2)), ("카드 사이 정확히 40px", b4)
+    assert all(near(b["y"], b4[0]["y"]) for b in b4), ("한 줄(위 끝 같게)", b4)
+    assert "늘어놓기 (40px)" in dpage.text_content("#hlist li.now")
+    # 새로고침 뒤에도
+    reload(dpage)
+    b5 = boxes(dpage, ids)
+    assert all(near(b5[b["id"]]["x"], b["x"]) and near(b5[b["id"]]["y"], b["y"]) for b in b4), ("옮긴 자리 저장", b4, b5)
+    assert dpage.input_value("#alGap") == "40", "간격 칸도 저장"
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    assert not errs, errs
+
+
+FOLDER_LINES_JS = """() => [...document.querySelectorAll('#lyTree [data-kind="folder"]')].map(r => ({id: r.dataset.id,
+    name: (r.querySelector('.ly-name') || {}).textContent || '', count: (r.querySelector('.ly-count') || {}).textContent || '', icon: !!r.querySelector('.ly-ficon svg')}))"""
+IN_FOLDER_JS = """() => [...document.querySelectorAll('#lyTree [data-kind="screen"].infolder')].map(r => r.dataset.ly)"""
+DRAG_JS = """([c, h]) => { const dt = new DataTransfer(), s = document.querySelector('#lyTree [data-ly="' + c + '"]'), t = document.querySelector(h);
+    s.dispatchEvent(new DragEvent('dragstart', {bubbles: true, dataTransfer: dt}));
+    t.dispatchEvent(new DragEvent('dragover', {bubbles: true, cancelable: true, dataTransfer: dt}));
+    t.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})); }"""
+
+
+def test_layer_folders_group_rename_arrange_unfolder(dpage):
+    """H17: 레이어 패널에서 화면 줄 둘을 Ctrl/Shift+클릭 → [폴더로 묶기] = 맨 위에 폴더 줄(폴더 아이콘·화면 수 2), 바로 이름 바꾸기 →
+    새로고침 뒤에도 · 폴더 [세로로 늘어놓기] = 그 카드 둘이 정렬 패널 간격으로 한 열 · 화면 줄을 폴더 줄에 끌어 놓으면 폴더에 ·
+    [폴더 풀기] = 화면은 원래 줄 아래로. 폴더로 묶기만으로는 판 카드가 움직이지 않는다."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    a, b, c = dpage.evaluate(MOVABLE_JS, 3)
+    assert None not in (a, b, c) and len({a, b, c}) == 3, (a, b, c)
+    dpage.keyboard.press("Escape")
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    assert dpage.is_disabled('#lyBar [data-act="folder"]'), "고른 화면이 없으면 못 누른다"
+    b0 = boxes(dpage, [a, b, c])
+    dpage.click(f'#lyTree [data-ly="{a}"] .ly-name', modifiers=["Control"])
+    dpage.click(f'#lyTree [data-ly="{b}"] .ly-name', modifiers=["Shift"])
+    assert dpage.evaluate("(ids) => ids.every(id => document.querySelector('.card[data-id=\"' + id + '\"]').classList.contains('picked'))", [a, b])
+    dpage.click('#lyBar [data-act="folder"]')
+    dpage.wait_for_selector("#lyTree input.ly-rename")
+    first = dpage.evaluate("(() => { const r = document.querySelector('#lyTree [data-ly]'), i = r.querySelector('.ly-rename'); return [r.dataset.kind, i ? i.value : '']; })()")
+    assert first == ["folder", "새 폴더 1"], first
+    dpage.fill("#lyTree input.ly-rename", "내 묶음")
+    dpage.keyboard.press("Enter")
+    fl = dpage.evaluate(FOLDER_LINES_JS)
+    assert fl == [{"id": "f1", "name": "내 묶음", "count": "2", "icon": True}], fl
+    assert sorted(dpage.evaluate(IN_FOLDER_JS)) == sorted([a, b]), "폴더 아래 두 화면"
+    assert [l["id"] for l in layers(dpage) if l["kind"] == "screen"].count(a) == 1, "폴더 화면은 원래 줄 아래에서 빠진다"
+    assert boxes(dpage, [a, b, c]) == b0, "폴더로 묶어도 판 카드는 그대로"
+    # 새로고침 뒤에도
+    reload(dpage)
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    assert dpage.evaluate(FOLDER_LINES_JS)[0]["name"] == "내 묶음"
+    # 폴더 [세로로 늘어놓기] — 간격 = 정렬 패널 칸
+    gap = int(dpage.input_value("#alGap"))
+    head = '#lyTree [data-kind="folder"][data-id="f1"]'
+    dpage.hover(head)
+    dpage.click(f'{head} [data-arr="y"]')
+    col = sorted(boxes(dpage, [a, b]).values(), key=lambda q: q["y"])
+    assert near(col[1]["y"] - (col[0]["y"] + col[0]["h"]), gap) and near(col[0]["x"], col[1]["x"]), ("한 열, 정렬 패널 간격", gap, col)
+    assert "늘어놓기 (%dpx)" % gap in dpage.text_content("#hlist li.now")
+    # 끌어 넣기: 화면 줄 → 폴더 줄. Playwright 마우스 끌기는 긴 나무가 스크롤되며 다른 줄을 잡는다 — 같은 HTML5 끌기 이벤트(dragstart·dragover·drop)를 직접 보낸다
+    dpage.evaluate(DRAG_JS, [c, head])
+    fl = dpage.evaluate(FOLDER_LINES_JS)
+    assert fl[0]["count"] == "3" and c in dpage.evaluate(IN_FOLDER_JS), fl
+    # 스크린샷: 레이어 패널의 폴더 + 정렬 패널(따로 띄운 창)
+    dpage.evaluate("(ids) => ids.forEach((id, i) => document.querySelector('.card[data-id=\"' + id + '\"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1, shiftKey: i > 0})))", [a, b])
+    t = dpage.locator('#dock .dk-tab[data-p="align"]').bounding_box()
+    drag_to(dpage, t, 520, 200)
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    dpage.wait_for_timeout(200)
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    dpage.screenshot(path=str(ESHOTS / "h17-folders-align.png"))
+    dpage.evaluate("localStorage.removeItem('hd-dock')")
+    # 폴더 풀기
+    dpage.hover(head)
+    dpage.click(f'{head} [data-act="unfolder"]')
+    assert dpage.evaluate(FOLDER_LINES_JS) == [] and dpage.evaluate(IN_FOLDER_JS) == []
+    cards = dpage.evaluate("[...document.querySelectorAll('#rows .card:not(.del)')].map(c => c.dataset.id)")
+    assert [l["id"] for l in layers(dpage) if l["kind"] == "screen"] == cards, "화면은 원래 줄 아래로"
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    assert not errs, errs

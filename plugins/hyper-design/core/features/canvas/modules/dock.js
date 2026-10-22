@@ -20,13 +20,14 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
-var PANELS = ['links', 'show', 'notes', 'pending', 'history', 'layers', 'theme'];
+var PANELS = ['links', 'show', 'align', 'notes', 'pending', 'history', 'layers', 'theme'];
 var CLOSED0 = ['theme'];                          // 처음엔 닫힌 패널(창 메뉴로 켬)
-var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마'};
+var HOME = {align: 'show'};                       // 나중에 생긴 패널: 예전 저장 상태에 없으면 이 패널 옆에(없으면 마지막 묶음)
+var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마', align: '정렬'};
 
 function defaults() {
   return {v: V, w: W0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, hint: true, bare: false,
-          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
+          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show', 'align'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
 }
 function clampW(w) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : W0; }
 function okH(h) { return typeof h === 'number' && isFinite(h) && h > 0 ? h : 1; }
@@ -66,7 +67,10 @@ function normalize(o) {
   });
   old(Array.isArray(o.closed) ? o.closed : []).forEach(function (p) { if (take(p)) s.closed.push(p); });
   CLOSED0.forEach(function (p) { if (!seen[p]) { seen[p] = 1; s.closed.push(p); } });   // 새로 생긴 기본 닫힘 패널은 닫힌 채로
-  var miss = PANELS.filter(function (p) { return !seen[p]; });
+  var miss = PANELS.filter(function (p) { return !seen[p]; }).filter(function (p) {
+    var f = HOME[p] ? find(s, HOME[p]) : null; if (!f) return true;
+    f.box.tabs.splice(f.box.tabs.indexOf(HOME[p]) + 1, 0, p); return false;
+  });
   if (miss.length) {
     if (!s.groups.length) s.groups.push({tabs: [], active: null, h: 1});
     var last = s.groups[s.groups.length - 1]; last.tabs = last.tabs.concat(miss);
