@@ -439,3 +439,38 @@ def test_helper_redo_failure_tells_the_user(ctx, out):   # S5 — 다시 하기�
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def test_helper_written_edit_is_not_requeued_when_reload_fails(ctx, out):   # S2 — 파일에 쓴 편집은 판 다시 불러오기가 실패해도 반영 대기로 돌아가지 않는다
+    srv = _serve(out)
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    calls = []
+
+    def flaky(route):                                            # 쓴 뒤 첫 /api/data 한 번만 실패
+        calls.append(1)
+        if len(calls) == 1:
+            route.fulfill(status=500, content_type="application/json", body="{}")
+        else:
+            route.continue_()
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        from test_canvas_edit import fit_view
+        fit_view(pg)
+        pg.route("**/api/data", flaky)
+        c = pg.evaluate("() => { const r = document.querySelector('.card[data-id=\"job\"] .cover').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        pg.mouse.click(*c); pg.wait_for_timeout(150)
+        pg.locator('#legend .lgrow[data-from="job"][data-to="language"] .lgcut').click()
+        pg.wait_for_function("() => document.querySelector('#hlist li.now .hl') && document.querySelector('#hlist li.now .hl').textContent === '선 자르기'", timeout=20000)
+        assert _links_to(out, "language") == ["usage"], "파일에는 썼다"
+        pg.wait_for_timeout(2500)                                # 다시 불러오기(재시도)까지
+        assert pg.evaluate(NOTES_NOW) == [], "이미 쓴 편집을 반영 대기로 다시 넣지 않는다(다음 보내기에서 두 번 쓰임)"
+        assert len(calls) >= 2, "판 데이터를 다시 불러온다"
+        assert pg.locator("#hlist li.now .hs").text_content() == "파일에 씀"
+        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "다시 불러오기가 되어 바뀐 카드를 다시 싣는다"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

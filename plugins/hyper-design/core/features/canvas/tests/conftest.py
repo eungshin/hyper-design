@@ -110,6 +110,7 @@ BROWSER = {
     "test_card_reload_posts_pending_once_per_load": ("helper", "notes"),
     "test_copy_failure_keeps_notes_unsent_and_storage_failure_warns": ("notes",),
     "test_helper_redo_failure_tells_the_user": ("helper",),
+    "test_helper_written_edit_is_not_requeued_when_reload_fails": ("helper", "tools"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),
