@@ -166,6 +166,8 @@ def test_pick_note_pin_persists(page):
 def test_send_format(page):
     page.wait_for_selector("#notes:not([hidden])")
     page.click("#nsend")
+    # 복사는 비동기(클립보드 약속) — 알림·'보냄' 표시는 복사가 끝난 뒤에 붙는다. 바로 읽으면 #nmsg 가 비어 있다(-n 4 에서 가끔)
+    page.wait_for_function("document.getElementById('nmsg').textContent.indexOf('복사') >= 0", timeout=5000)
     t = page.evaluate("window.__hdLastSend")
     assert t, "보내기 글이 없음"
     lines = t.split("\n")
@@ -616,6 +618,14 @@ def test_v3_same_target_merge(gpage, gym_out):
         assert got.count(num) >= 2, ("같은 도착 버튼들은 같은 번호", num, got)
 
 
+def pointer_off_board(pg):
+    """마우스를 판 밖(위쪽 줄 왼쪽 끝)으로 — (5, 300) 같은 고정 자리는 앞 테스트가 남긴 카메라에 따라 카드 위일 수 있다(그러면 그 카드 선·태그가 강조된다).
+    올린 카드 강조(#rows.lnhov)가 꺼질 때까지 기다린다."""
+    b = pg.locator("header.hd").bounding_box()
+    pg.mouse.move(b["x"] + 2, b["y"] + b["height"] / 2)
+    pg.wait_for_function("!document.getElementById('rows').classList.contains('lnhov')", timeout=3000)
+
+
 def test_v3_main_flow_dashed(gpage):
     """2.5b(E7·E14·D9): 판에 늘 그리는 선은 실선(점선 = 반영 대기뿐), [주요 흐름] 버튼·범례 체크·A 키 없음, 태그는 평소 숨김.
     고르면(E20) 선은 그대로 다 보이고, 그 카드 선이 아닌 것만 흐리게(.18)."""
@@ -628,7 +638,7 @@ def test_v3_main_flow_dashed(gpage):
     assert all(d in ("none", "") for d in dash), dash
     assert gpage.locator("#arrows").count() == 0 and gpage.locator("#lgFlow").count() == 0
     assert "설계 단계" not in gpage.evaluate("document.body.innerText")
-    gpage.mouse.move(5, 300)
+    pointer_off_board(gpage)
     assert gpage.evaluate("[...document.querySelectorAll('#rows .alabel')].every(n => getComputedStyle(n).display === 'none')")
     zoom_to(gpage, "pt-detail", 300)
     gpage.mouse.wheel(-420, -160)
@@ -639,7 +649,7 @@ def test_v3_main_flow_dashed(gpage):
     shift_click(gpage, "pass")
     gpage.wait_for_function("!document.getElementById('legend').hidden", timeout=5000)
     assert gpage.evaluate("document.getElementById('rows').classList.contains('focusing')")
-    gpage.mouse.move(5, 300)
+    pointer_off_board(gpage)
     gpage.wait_for_timeout(250)
     assert vis() == total
     ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on):not(.pd)')].map(p => +getComputedStyle(p).opacity)")
