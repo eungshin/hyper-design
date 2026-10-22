@@ -106,6 +106,10 @@ BROWSER = {
     "test_file_mode_chip": ("helper",),
     "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),
     "test_helper_canvas_busy_overlay_lifts_on_file_change": ("helper", "notes"),
+    "test_helper_send_double_click_sends_once": ("helper", "notes"),
+    "test_card_reload_posts_pending_once_per_load": ("helper", "notes"),
+    "test_copy_failure_keeps_notes_unsent_and_storage_failure_warns": ("notes",),
+    "test_helper_redo_failure_tells_the_user": ("helper",),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),

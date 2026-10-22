@@ -955,8 +955,11 @@ function loadVisible() {
   $$('.phone iframe[data-src]', rowsEl).forEach(function (f) {
     var r = f.parentNode.getBoundingClientRect();
     if (r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
-      f.addEventListener('load', function () { sendTo(f); sendPending(f, f.closest('.card').dataset.id); });
-      f.src = f.getAttribute('data-src'); f.removeAttribute('data-src');
+      if (!f.dataset.wired) {                     // 다시 실을 때(data-src 다시 붙임)마다 듣는 이를 더하지 않는다 — 실을 때마다 메시지 한 번
+        f.dataset.wired = '1';
+        f.addEventListener('load', function () { var c = f.closest('.card'); sendTo(f); if (c) sendPending(f, c.dataset.id); });
+      }
+      f.src =f.getAttribute('data-src'); f.removeAttribute('data-src');
     }
   });
 }
@@ -1791,7 +1794,11 @@ function popItem(dr, last) {
   var n = dr.targets.length;
   return {text: n > 1 ? n + '개 요소 · ' + (last.text || '') : last.text, path: dr.targets.map(function (t) { return t.path; }).join('\n'), rect: last.rect};
 }
-function saveNotes() { try { localStorage.setItem(NKEY, JSON.stringify(notes)); } catch (e) {} renderNotes(); drawPins(); scheduleArrows(); if (LY) LY.render(); }   // 편집이 바뀌면 늘 그리는 선도
+var notesSaveWarned = false;                         // 저장이 안 되면(저장 공간 꽉 참) 한 번 알린다 — 다시 되면 다음 실패도 알린다
+function saveNotes() {
+  try { localStorage.setItem(NKEY, JSON.stringify(notes)); notesSaveWarned = false; }
+  catch (e) { if (!notesSaveWarned) { notesSaveWarned = true; toast('메모를 저장하지 못했어요 — 브라우저 저장 공간이 꽉 찼어요. 새로고침하면 보내지 않은 편집이 사라질 수 있어요', false, 9000); } }
+  renderNotes(); drawPins(); scheduleArrows(); if (LY) LY.render(); }   // 편집이 바뀌면 늘 그리는 선도
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
 function outDir() {
   if (window.__hdOut) return window.__hdOut;
@@ -1903,26 +1910,29 @@ function renderNotes() {
   if (typeof paintCardText === 'function' && ORIG) { renderDrafts(); paintDeleted(); paintCardText(); sendAllPending(); }
   if (VL && VL.refresh) VL.refresh();
 }
-function copyText(t) {
+function copyText(t) {                              // → Promise<복사됐나>
   function fallback() {
-    var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', '');
+    var ta = document.createElement('textarea'), ok = false; ta.value = t; ta.setAttribute('readonly', '');
     ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
     document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); } catch (e) {}
+    try { ok = !!document.execCommand('copy'); } catch (e) {}
     ta.remove();
+    return ok;
   }
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).catch(fallback);
-    else fallback();
-  } catch (e) { fallback(); }
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, fallback);
+  } catch (e) {}
+  return Promise.resolve(fallback());
 }
-function copySend(list, msg) {
+function copySend(list, msg) {                       // 복사가 된 때만 '보냄'(되돌리기 경계도) — 안 되면 보내지 않은 그대로
   var t = HD.edits.request(list, outDir());
   window.__hdLastSend = t;
-  copyText(t);
-  list.forEach(function (n) { n.sent = true; });
-  saveNotes(); HI.sent();
-  $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요'; toast($('#nmsg').textContent);
+  return copyText(t).then(function (ok) {
+    if (!ok) { $('#nmsg').textContent = '복사하지 못했어요 — 다시 눌러 보세요(보내지 않은 그대로예요)'; toast($('#nmsg').textContent); return; }
+    list.forEach(function (n) { n.sent = true; });
+    saveNotes(); HI.sent();
+    $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요'; toast($('#nmsg').textContent);
+  });
 }
 // 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
 var gone = {};                                       // 파일에서 지운 카드: 떼어 두었다가 되살리면 제자리로
@@ -1953,11 +1963,15 @@ var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id)
   },
   getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
   key: 'hd-busy:' + hashStr(KEYPATH), toast: function (m) { toast(m); }}) : null;
-$('#nsend').addEventListener('click', function () {
+var sending = false;                                 // 보내는 중에는 다시 보내지 않는다(두 번 누르기 = AI 에게 같은 요청 두 번 · S1)
+function sendDone() { sending = false; $('#nsend').disabled = !notes.length; }
+$('#nsend').addEventListener('click', function (e) {
+  if (sending || (e && e.detail > 1)) return;       // 더블클릭의 두 번째 누르기도 한 번으로
   var list = notes.filter(function (n) { return !n.sent; });
-  if (!list.length) list = notes.slice();
+  if (!list.length) list = notes.slice();            // 다 보냈으면 다시 보내기(따로 누른 한 번)
   if (!list.length) return;
-  if (!VS.on) { copySend(list); return; }
+  sending = true; $('#nsend').disabled = true;
+  if (!VS.on) { copySend(list).then(sendDone, sendDone); return; }
   $('#nmsg').textContent = '보내는 중…';
   VS.send(list).then(function (r) {
     notes = notes.filter(function (n) { return !r.ok[n.id]; });
@@ -1975,7 +1989,7 @@ $('#nsend').addEventListener('click', function () {
       r.left.forEach(function (n) { var c = VL.cardEl(n.screen), b = c && $('.cover', c); if (b && !seen[n.screen]) { seen[n.screen] = 1; scs.push({id: n.screen, file: b.dataset.file}); } });
       VB.mark(scs, r.fw && r.fw.via === 'paseo' ? 'paseo' : 'queue');
     }
-  }).catch(function () { copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); });
+  }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); }).then(sendDone, sendDone);
 });
 $('#nclear').addEventListener('click', function () {
   notes = notes.filter(function (n) { return !n.sent; });

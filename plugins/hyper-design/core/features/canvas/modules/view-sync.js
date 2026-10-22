@@ -39,7 +39,10 @@ function mount(ctx) {
     var cur = stamp;
     ctx.record({label: label, status: 'file',
                 undo: function () { restore(cur, label); },
-                redo: function () { again().then(function (r) { if (r && r.stamp) { cur = r.stamp; return reload(r.changed, r.stamp); } }); }});
+                redo: function () {               // 다시 쓰기가 안 되면 말한다(기록은 다시 한 줄로 보이지만 파일은 그대로)
+                  var fail = function () { ctx.toast('다시 하지 못했어요 — 파일에 쓰지 못했어요: ' + label); };
+                  again().then(function (r) { if (r && r.stamp) { cur = r.stamp; return reload(r.changed, r.stamp); } fail(); }, fail);
+                }});
   }
 
   function write(label, list) {

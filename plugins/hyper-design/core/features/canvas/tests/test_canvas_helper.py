@@ -326,3 +326,116 @@ def test_helper_canvas_busy_overlay_lifts_on_file_change(ctx, out):   # Q2b — 
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+SEED = """(notes) => { const k = 'hd-notes:' + (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(window.__hdKeyPath || location.pathname);
+    localStorage.setItem(k, JSON.stringify(notes)); }"""
+NOTES_NOW = "JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')"
+QUESTION = {"id": "q1", "screen": "job", "targets": [{"path": "h1", "text": "q"}], "path": "h1", "text": "q", "note": "이건 무슨 뜻?", "intent": "question", "sent": False}
+
+
+def _serve(out):
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_helper_send_double_click_sends_once(ctx, out):   # S1 — 보내기를 두 번 눌러도 AI 에게는 한 번
+    srv = _serve(out)
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.evaluate(SEED, [QUESTION])
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.dblclick("#nsend")
+        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
+        pg.wait_for_timeout(800)                                 # 두 번째 요청이 있었다면 이 사이에 대기열에 닿는다
+        q = out / ".hd-queue"
+        assert len(list(q.iterdir())) == 1, "두 번 눌러도 대기열 파일은 하나"
+        assert not pg.is_disabled("#nsend"), "보낸 뒤 버튼은 다시 켜진다(다시 보내기)"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+def test_card_reload_posts_pending_once_per_load(ctx, out):   # S4 — 카드를 여러 번 다시 실어도 실을 때마다 메시지는 한 번
+    srv = _serve(out)
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.add_init_script("""if (window !== window.top) { let n = 0; addEventListener('message', e => {
+        if (e.data && e.data.type === 'hd-pending') { n++; try { (top.__hdPendN = top.__hdPendN || {})[location.pathname + location.search] = n; } catch (_) {} } }); }""")
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        from test_canvas_v2 import zoom_to
+        zoom_to(pg, "job", 420)
+        pg.wait_for_function("!document.querySelector('.card[data-id=\"job\"] .phone iframe').hasAttribute('data-src')", timeout=10000)
+        counts = []
+        for i in range(1, 4):
+            key = pg.evaluate("""(i) => { const f = document.querySelector('.card[data-id="job"] .phone iframe'), b = document.querySelector('.card[data-id="job"] .cover');
+                f.removeAttribute('src'); f.setAttribute('data-src', b.dataset.file + '?v=t' + i); dispatchEvent(new Event('resize'));
+                return '/' + b.dataset.file.replace(/^[.]?[/]/, '') + '?v=t' + i; }""", i)
+            pg.wait_for_function("(k) => window.__hdPendN && window.__hdPendN[k] >= 1", arg=key, timeout=10000)
+            pg.wait_for_timeout(300)
+            counts.append(pg.evaluate("(k) => window.__hdPendN[k]", key))
+        assert counts == [1, 1, 1], f"다시 실을 때마다 hd-pending 한 번: {counts}"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+def test_copy_failure_keeps_notes_unsent_and_storage_failure_warns(ctx, out):   # S3 · S7 — 복사가 안 되면 '보냄'이 아니다 · 저장이 안 되면 알린다
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto((out / "index.html").resolve().as_uri())
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.evaluate(SEED, [QUESTION])
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.evaluate("""() => { navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); document.execCommand = () => false; }""")
+        pg.click("#nsend")
+        pg.wait_for_function("document.getElementById('toast').textContent.indexOf('복사하지 못했어요') >= 0", timeout=5000)
+        assert "복사했어요" not in pg.text_content("#nmsg")
+        assert [n["sent"] for n in pg.evaluate(NOTES_NOW)] == [False], "복사 실패 → 보내지 않은 그대로"
+        assert pg.text_content("#nsendc") == "1"
+        pg.evaluate("""() => { Storage.prototype.setItem = function () { throw new DOMException('full', 'QuotaExceededError'); }; }""")
+        pg.click('#nlist li[data-id="q1"] button[data-act="del"]')
+        pg.wait_for_function("document.getElementById('toast').textContent.indexOf('저장하지 못했어요') >= 0", timeout=5000)
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
+def test_helper_redo_failure_tells_the_user(ctx, out):   # S5 — 다시 하기가 파일에 못 쓰면 알린다
+    srv = _serve(out)
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        from test_canvas_edit import fit_view
+        fit_view(pg)
+        c = pg.evaluate("() => { const r = document.querySelector('.card[data-id=\"job\"] .cover').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }")
+        pg.mouse.click(*c); pg.wait_for_timeout(150)
+        pg.locator('#legend .lgrow[data-from="job"][data-to="language"] .lgcut').click()
+        pg.wait_for_function("document.querySelector('#hlist li.now .hs') && document.querySelector('#hlist li.now .hl').textContent === '선 자르기'", timeout=20000)
+        pg.click("#undo")
+        pg.wait_for_function("() => !document.getElementById('redo').disabled", timeout=20000)
+        pg.wait_for_timeout(500)
+        pg.route("**/api/apply", lambda r: r.fulfill(status=500, content_type="application/json", body="{}"))
+        pg.click("#redo")
+        pg.wait_for_function("document.getElementById('toast').textContent.indexOf('다시 하지 못했어요') >= 0", timeout=10000)
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
