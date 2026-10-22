@@ -135,7 +135,6 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #modal[hidden]{display:none}
 #modal .box{position:relative;border-radius:var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
 #modal iframe{display:block;width:var(--modal-w,390px);height:var(--modal-h,844px);border:0;transform-origin:0 0;background:#fff}
-#modal .close{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;min-width:44px;min-height:44px;padding:0 16px;border:0;border-radius:12px;background:#fff;font-size:15px;font-weight:600;cursor:pointer;z-index:2}
 #modal .mpick{flex:none;margin:48px 0 12px;min-width:44px;min-height:44px;padding:0 26px;border:2px solid #fff;border-radius:999px;background:var(--c-brand,#2563eb);color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 #modal .mpick:hover{filter:brightness(1.08)}
 #modal .mpick[aria-pressed="true"]{background:#fff;color:var(--c-brand-text,#1d4ed8);border-color:var(--c-brand,#2563eb)}
@@ -311,7 +310,7 @@ body.modal-open #tools{display:none}
 /* ---------- 오른쪽 패널 도크(modules/dock.js 배치 · modules/view-dock.js 그리기) — 판을 밀어 좁힌다 ---------- */
 body{--dockw:0px}
 #screens{right:var(--dockw)}
-#modal{right:var(--dockw)}
+#modal{right:var(--dockw);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
 #dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
 body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{display:none}
 #dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -393,7 +392,11 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
 #notes .nact .nbtn{min-height:30px;font-size:12px;padding:0 8px}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
-#modal .mtitle{position:absolute;top:max(10px,env(safe-area-inset-top));left:16px;right:96px;color:#fff;font-size:15px;font-weight:600;min-height:44px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd .mtitle,.hd .mx{display:none}
+body.modal-open .hd h1,body.modal-open .hd .tabs,body.modal-open .hd .pal{visibility:hidden}
+body.modal-open .hd .mtitle{display:flex;align-items:center;position:absolute;left:16px;right:72px;top:0;bottom:0;font-size:15px;font-weight:700;color:#2b2b29;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
+body.modal-open .hd .mx{display:grid;place-items:center;position:absolute;right:12px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:8px;background:none;color:#555;cursor:pointer}
+.hd .mx:hover{background:#F0F0ED}.hd .mx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 /* hd-motion */
 </style>
 </head>
@@ -406,6 +409,8 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
     <button class="tab" role="tab" data-tab="components" aria-selected="false">Components</button>
   </div>
   <div class="pal" data-group="palette" aria-label="색 바꾸기"></div>
+  <div class="mtitle" id="mtitle"></div>
+  <button type="button" class="mx" id="mclose" aria-label="닫기" title="닫기 (Esc · 바깥 누르기)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div class="view" data-group="view">
     <span class="mchip" id="mode" role="status"></span>
     <button class="vbtn" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
@@ -475,8 +480,6 @@ body:not([data-tab="screens"]) #dock,body:not([data-tab="screens"]) #dklayer{dis
   <div class="dkp" id="pLayers" data-panel="layers"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
-  <div class="mtitle" id="mtitle"></div>
-  <button class="close" id="mclose">닫기</button>
   <button class="mpick" id="mpick" aria-pressed="false" title="화면 안 요소를 눌러 주석 남기기 (P) · Shift+클릭으로 여러 개">주석 달기</button>
   <div class="box" id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
 </div>
@@ -864,16 +867,18 @@ addEventListener('resize', scheduleVisible);
 /* ---------- 크게 보기 ---------- */
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
 function sizeModal() {
-  var s = Math.min(1, (innerHeight - 128) / MH, (innerWidth - 16) / MW);   // 위 제목줄 48 + 아래 주석 달기 버튼 56 + 여유
+  var top = $('.hd').offsetHeight, dw = parseFloat(document.body.style.getPropertyValue('--dockw')) || 0;   // 덮개 = 위쪽 줄 아래 · 도크 왼쪽
+  var s = Math.min(1, (innerHeight - top - 128) / MH, (innerWidth - dw - 16) / MW);   // 위 주석 달기 버튼 56 + 여유
   mscale = s;
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
   mbox.style.width = Math.floor(MW * s) + 'px'; mbox.style.height = Math.floor(MH * s) + 'px';
 }
 function openModal(file, title, pick) {
+  document.body.style.setProperty('--hdh', $('.hd').offsetHeight + 'px');
   sizeModal(); $('#mtitle').textContent = title || '';
   mscreen = idOf(file);
   clearTimeout(mcloseT); modal.classList.remove('is-closing');
-  mframe.src = file; modal.hidden = false; document.body.classList.add('modal-open'); $('#mclose').focus();
+  mframe.src = file; modal.hidden = false; document.body.classList.add('modal-open'); $('#mclose').focus(); placeSelbar();   // 고른 카드의 선택 막대는 크게 보기 위에 뜨지 않게
   setPick(!!pick);
   drawPins();
 }
@@ -900,7 +905,7 @@ addEventListener('message', function (e) {         // 크게 보기 안에서 �
   hidePop(); drawPins(); sendPending(mframe, mscreen);
 });
 $('#mclose').addEventListener('click', closeModal);
-modal.addEventListener('click', function (e) { if (e.target === modal || e.target.id === 'mtitle') closeModal(); });
+modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });   // 화면 바깥 덮개를 누르면 닫힘
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();

@@ -1811,3 +1811,33 @@ def test_layers_panel_tree_hide_lock_search(dpage):
     dpage.keyboard.press("Control+z")
     assert dpage.locator(f'.card[data-id="{sid}"]').is_visible()
     assert not errs, errs
+
+
+# ---------------------------------------------------------------- 크게 보기 위쪽 줄 (G7 · 사용자 10-22)
+def test_modal_header_has_no_gap_and_no_text_close(dpage):
+    """크게 보기: 덮개는 위쪽 줄 아래부터 — 도크 위에 빈 칸이 남지 않고, 위쪽 줄은 화면 제목 + 닫기 아이콘(×)만(탭·색 숨김).
+    글자 [닫기] 버튼은 없고, 바깥(덮개)을 누르거나 × · Esc 로 닫힌다."""
+    dpage.keyboard.press("Escape")
+    dpage.click("#zoom"); dpage.click("#fit")
+    c = visible_cover(dpage)
+    dpage.mouse.dblclick(c["x"], c["y"])
+    dpage.wait_for_function("!document.getElementById('modal').hidden")
+    g = dpage.evaluate("""() => { const hd = document.querySelector('.hd').getBoundingClientRect(), m = document.getElementById('modal').getBoundingClientRect(),
+        dk = document.getElementById('dock').getBoundingClientRect(), t = document.getElementById('mtitle').getBoundingClientRect(),
+        tabs = document.querySelector('.hd .tabs'), x = document.getElementById('mclose');
+      return {modalTop: m.top, hdBottom: hd.bottom, dockTop: dk.top, titleInHeader: t.top >= hd.top && t.bottom <= hd.bottom && t.width > 0,
+              tabsHidden: getComputedStyle(tabs).visibility === 'hidden', closeText: x.textContent.trim(), closeLabel: x.getAttribute('aria-label'),
+              closeInHeader: x.getBoundingClientRect().bottom <= hd.bottom}; }""")
+    assert abs(g["modalTop"] - g["hdBottom"]) < 1 and abs(g["dockTop"] - g["hdBottom"]) < 1, g
+    assert g["titleInHeader"] and g["tabsHidden"], g
+    assert g["closeText"] != "닫기" and g["closeLabel"] == "닫기" and g["closeInHeader"], g
+    assert dpage.is_hidden("#selbar"), "크게 보기 위에 선택 막대가 뜨지 않는다(두 번 누르기의 첫 누르기가 고른 카드)"
+    m = dpage.locator("#modal").bounding_box()
+    assert dpage.evaluate("([x, y]) => document.elementFromPoint(x, y).id", [m["x"] + 12, m["y"] + m["height"] - 12]) == "modal"
+    dpage.mouse.click(m["x"] + 12, m["y"] + m["height"] - 12)            # 화면 바깥 덮개(왼쪽 아래 구석)
+    dpage.wait_for_function("document.getElementById('modal').hidden")
+    dpage.mouse.dblclick(c["x"], c["y"])
+    dpage.wait_for_function("!document.getElementById('modal').hidden")
+    dpage.click("#mclose")
+    dpage.wait_for_function("document.getElementById('modal').hidden")
+    assert dpage.evaluate("getComputedStyle(document.querySelector('.hd .tabs')).visibility") == "visible"

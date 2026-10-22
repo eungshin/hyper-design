@@ -79,6 +79,7 @@ BROWSER = {
     "test_memo_pending_history_panels": ("notes", "dock", "tools"),
     "test_view_and_window_menus": ("menu", "dock", "tools", "motion"),
     "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
+    "test_modal_header_has_no_gap_and_no_text_close": ("modal",),
     "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
     "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
     "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),
