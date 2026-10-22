@@ -1746,6 +1746,65 @@ def card_spot(pg, sid):
     return pg.evaluate("(id) => { const c = document.querySelector('.card[data-id=\"' + id + '\"]'); return [c.offsetLeft, c.offsetTop, c.style.transform]; }", sid)
 
 
+
+TRANSLATE_JS = r"(sel) => { const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(document.querySelector(sel).style.transform); return [+m[1], +m[2]]; }"
+
+
+def test_split_view_left_right_and_sync(dpage):
+    """H2·H3(조각 6, 범위 A): 보기 메뉴 → 좌우로 나누기 = 오른쪽 칸(보기 전용 판 복사본, 따로 이동·배율, 작은 배율 칩).
+    동시 스크롤은 나눴을 때만 — 켜면 한 칸을 움직일 때 다른 칸도 같은 만큼. 나누지 않기 = 칸이 사라지고 판이 다시 넓어짐."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.keyboard.press("Escape")
+    w0 = dpage.locator("#screens").bounding_box()["width"]
+    dpage.click("#zoom")
+    assert dpage.is_disabled('#vmenu [data-act="sync"]'), "나누지 않았으면 동시 스크롤은 못 누른다"
+    dpage.click('#vmenu [data-split="lr"]')
+    dpage.wait_for_selector("#vp2")
+    assert dpage.get_attribute('#vmenu [data-split="lr"]', "aria-checked") == "true"
+    a, b = dpage.locator("#screens").bounding_box(), dpage.locator("#vp2").bounding_box()
+    assert abs(a["width"] - b["width"]) < 3 and abs(a["x"] + a["width"] - b["x"]) < 3 and a["width"] < w0 * 0.6, (a, b, w0)
+    n = dpage.evaluate("[document.querySelectorAll('#rows .card').length, document.querySelectorAll('#vp2 .card').length, document.querySelectorAll('#vp2 [id]').length]")
+    assert n[0] == n[1] > 0 and n[2] == 0, ("복사본 = 같은 카드, id 는 겹치지 않게", n)
+    assert dpage.evaluate("document.querySelector('#vp2 .vp2-stage').inert"), "오른쪽 칸은 보기 전용"
+    dpage.wait_for_timeout(600)
+    ESHOTS.mkdir(parents=True, exist_ok=True)
+    dpage.screenshot(path=str(ESHOTS / "6-split-lr.png"))
+    dpage.keyboard.press("Escape")
+    main0, side0 = dpage.evaluate(TRANSLATE_JS, "#stage"), dpage.evaluate(TRANSLATE_JS, "#vp2 .vp2-stage")
+    dpage.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+    dpage.mouse.wheel(0, 120)
+    dpage.wait_for_timeout(100)
+    side1 = dpage.evaluate(TRANSLATE_JS, "#vp2 .vp2-stage")
+    assert abs(side1[1] - (side0[1] - 120)) < 1 and dpage.evaluate(TRANSLATE_JS, "#stage") == main0, "칸마다 따로 이동"
+    z0 = dpage.text_content("#vp2 .pz")
+    dpage.keyboard.down("Control"); dpage.mouse.wheel(0, -200); dpage.keyboard.up("Control")
+    dpage.wait_for_timeout(100)
+    assert dpage.text_content("#vp2 .pz") != z0 and dpage.evaluate(TRANSLATE_JS, "#stage") == main0, "칸마다 따로 배율(칩)"
+    # 동시 스크롤
+    dpage.click("#zoom"); dpage.click('#vmenu [data-act="sync"]')
+    assert dpage.get_attribute('#vmenu [data-act="sync"]', "aria-checked") == "true"
+    dpage.keyboard.press("Escape")
+    side1 = dpage.evaluate(TRANSLATE_JS, "#vp2 .vp2-stage")
+    dpage.mouse.move(a["x"] + a["width"] / 2, a["y"] + a["height"] / 2)
+    dpage.mouse.wheel(0, 90)
+    dpage.wait_for_timeout(100)
+    main1, side2 = dpage.evaluate(TRANSLATE_JS, "#stage"), dpage.evaluate(TRANSLATE_JS, "#vp2 .vp2-stage")
+    assert abs((main1[1] - main0[1]) - (side2[1] - side1[1])) < 1 and main1[1] != main0[1], ("왼쪽을 움직이면 오른쪽도", main0, main1, side1, side2)
+    dpage.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+    dpage.mouse.wheel(0, 60)
+    dpage.wait_for_timeout(100)
+    main2, side3 = dpage.evaluate(TRANSLATE_JS, "#stage"), dpage.evaluate(TRANSLATE_JS, "#vp2 .vp2-stage")
+    assert abs((main2[1] - main1[1]) + 60) < 1 and abs((side3[1] - side2[1]) + 60) < 1, "오른쪽을 움직여도 왼쪽이 같은 만큼(한 번만)"
+    # 나누지 않기
+    dpage.click("#zoom"); dpage.click('#vmenu [data-split="one"]')
+    assert dpage.locator("#vp2").count() == 0
+    assert abs(dpage.locator("#screens").bounding_box()["width"] - w0) < 3
+    assert dpage.is_disabled('#vmenu [data-act="sync"]') and dpage.get_attribute('#vmenu [data-act="sync"]', "aria-checked") == "false"
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("0")
+    assert not errs, errs
+
 def test_layers_panel_tree_hide_lock_search(dpage):
     """H6: 레이어 패널 = 줄(묶음, 접기) 아래 화면 — 줄마다 눈(숨김)·이름·잠금·메모 수, 위 검색(화면·줄 이름) + 거르기 아이콘,
     누르면 그 카드로, 아래 막대(빈 레이아웃·숨기기·잠그기·삭제). H7: 숨긴 화면 패널은 없애고 판 글(소개·끝 글)도 레이어 —

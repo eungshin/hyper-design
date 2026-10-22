@@ -64,6 +64,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `modules/view-menu.js`(위쪽 보기 메뉴 = 배율 칩 · 창 메뉴 · Tab) · 위쪽 줄 | `unit or menu or dock` |
 | `modules/layers.js` · `view-layers.js`(레이어 패널: 나무·숨김·잠금·검색) · 셸 숨기기·잠금 가드 | `unit or layers or tools` |
 | `modules/theme.js` · `view-theme.js`(테마 패널: 고르기·복제·색 네 칸·대비) · `foundation/palette.js` 의 `hd-theme-vars` | `unit or theme` |
+| `modules/viewport.js` · `view-viewport.js`(창 나누기·동시 스크롤 · 카메라 계산 zoomAt·fit) | `unit or menu or input` |
 | `helper.py` · `modules/view-sync.js`(화면 파일에 바로 쓰기: 잇기·끊기·삭제·되살리기·바뀐 카드만 다시·모드 칩) | `unit or helper` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |

@@ -210,6 +210,7 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 .vm,.wm{position:fixed;z-index:26;background:#fff;border:1px solid var(--ui-line,#e3e3df);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:4px}
 .vm[hidden],.wm[hidden]{display:none}
 .vm{display:flex;gap:2px}
+.vm hr{border:0;border-left:1px solid #e6e6e2;margin:4px 3px}
 .vm-ib{width:36px;height:36px;border:0;border-radius:7px;background:none;display:grid;place-items:center;cursor:pointer;color:#3a3a37}
 .vm-ib:hover{background:#F2F2EF}.vm-ib:disabled{opacity:.35;cursor:default;background:none}
 .vm-ib svg,.wm svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -320,6 +321,13 @@ body{--dockw:0px}
 #modal{right:var(--dockw);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
 #dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
 .pane{right:var(--dockw)}                          /* 모든 탭에서 도크 자리를 비킨다 — 테마 패널은 Foundation 에서도 쓴다(조각 5) */
+/* ---------- 창 나누기(modules/viewport.js · view-viewport.js, 조각 6) — 좌우 2분할: 오른쪽 칸 = 보기 전용 복사본 ---------- */
+body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
+.vp2{position:absolute;top:0;bottom:0;left:calc(50% - var(--dockw) / 2);right:var(--dockw);overflow:hidden;background:inherit;border-left:1px solid #cfcfca;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+.vp2.drag{cursor:grabbing}
+.vp2-stage{position:absolute;left:0;top:0;transform-origin:0 0;width:max-content}
+.vp2 .pz{position:absolute;left:10px;bottom:8px;font-size:11.5px;color:#666;background:rgba(255,255,255,.88);border-radius:6px;padding:2px 6px;pointer-events:none;font-variant-numeric:tabular-nums}
+body.split-lr #khint{display:none}
 #dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #dock.folded{width:44px;align-items:center;padding-top:4px;gap:4px}
 #dklayer{position:absolute;inset:0;right:var(--dockw);z-index:24;pointer-events:none}
@@ -641,7 +649,7 @@ function setCardPos(id, p) {                      // 되돌리기·다시 하기
 /* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8) — 되돌리기 50단계 · 줄 누르기 · 보낸 자리 앞은 되돌리지 않음 ---------- */
 var HI = HD.viewHistory.mount({$: $, esc: esc, list: $('#hlist'), undoBtn: $('#undo'), redoBtn: $('#redo'), toast: function (m) { toast(m); }, key: 'hd-edit-log:' + hashStr(KEYPATH),
                                getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }});
-function record(op) { HI.record(op); }             // op = {label, undo(), redo(), status?}
+function record(op) { HI.record(op); if (VP) VP.refresh(); }   // 판이 바뀌면 나눈 칸 복사본도 다시             // op = {label, undo(), redo(), status?}
 function undo() { HI.undo(); }
 function redo() { HI.redo(); }
 $('#undo').addEventListener('click', undo);
@@ -651,8 +659,10 @@ var arrowRaf = 0;
 function scheduleArrows() { if (arrowRaf) return; arrowRaf = requestAnimationFrame(function () { arrowRaf = 0; drawArrows(); }); }
 
 /* ---------- 이동·확대 ---------- */
-var z = Z0, tx = 0, ty = 0;
+var z = Z0, tx = 0, ty = 0, lastCam = {z: Z0, tx: 0, ty: 0};
 function apply() {
+  if (VP && z === lastCam.z) VP.follow(tx - lastCam.tx, ty - lastCam.ty);   // 동시 스크롤: 나눈 칸도 같은 만큼(배율은 따로)
+  lastCam = {z: z, tx: tx, ty: ty};
   stage.style.transform = 'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + z.toFixed(4) + ')';
   stage.dataset.zoom = z.toFixed(4);
   $('#zoom').textContent = Math.round(z * 100) + '% ▾';
@@ -668,9 +678,8 @@ function tagScale() { return Math.max(1, 0.75 / z); }   // 글자 16·0.75 = 12p
 var fitMin = ZMIN;                                // 전체 보기가 ZMIN 보다 작아야 하면 그만큼은 허용
 function clampZ(v) { return Math.min(ZMAX, Math.max(fitMin, v)); }
 function zoomAt(px, py, nz) {
-  nz = clampZ(nz);
-  var bx = (px - tx) / z, by = (py - ty) / z;
-  z = nz; tx = px - bx * z; ty = py - by * z; apply();
+  var c = HD.viewport.zoomAt({z: z, tx: tx, ty: ty}, px, py, clampZ(nz));
+  z = c.z; tx = c.tx; ty = c.ty; apply();
 }
 function home() {
   z = Z0;
@@ -678,13 +687,11 @@ function home() {
   ty = 0; apply();
 }
 function fit() {
-  var ex = cardExtent(), w = ex.x1 - ex.x0, h = ex.y1 - ex.y0;
-  var pw = pane.clientWidth, ph = pane.clientHeight;
-  var fz = Math.min((pw - 32) / w, (ph - 32) / h);
-  fitMin = Math.min(ZMIN, fz);
-  z = clampZ(fz);
-  tx = (pw - w * z) / 2 - ex.x0 * z;
-  ty = Math.max(16, (ph - h * z) / 2) - ex.y0 * z;
+  var ex = cardExtent(), pw = pane.clientWidth, ph = pane.clientHeight;
+  fitMin = Math.min(ZMIN, HD.viewport.fit(ex, pw, ph, 32).z);
+  var c = HD.viewport.fit(ex, pw, ph, 32, clampZ);
+  z = c.z; tx = c.tx;
+  ty = Math.max(16, (ph - (ex.y1 - ex.y0) * z) / 2) - ex.y0 * z;   // 위 여백은 16 이상
   apply();
 }
 
@@ -1014,7 +1021,7 @@ var DOCK_ICON = {
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
   layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
   theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>'};
-var VD = null, VMN = null;
+var VD = null, VMN = null, VP = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
                         panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme')},
@@ -1028,7 +1035,12 @@ VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), ho
                           if (typeof scheduleVisible === 'function') scheduleVisible();
                         }});
 // 위쪽 줄 보기·창 메뉴 View(modules/view-menu.js, 조각 3) — 배율 칩 = 보기 메뉴, [창 ▾] = 도구 막대·패널 보이기(상태는 도크 모델)
+// 창 나누기 View(modules/view-viewport.js · 상태 modules/viewport.js, 조각 6) — 오른쪽 칸은 보기 전용 복사본
+VP = HD.viewViewport.mount({stage: stage, host: $('.panes'), cam: function () { return {z: z, tx: tx, ty: ty}; }, clampZ: clampZ,
+  panMain: function (dx, dy) { tx += dx; ty += dy; apply(); }, onFrame: function (f) { sendTo(f); },
+  onChange: function () { placeSelbar(); scheduleVisible(); }});
 VMN = HD.viewMenu.mount({$: $, esc: esc, icons: DOCK_ICON, typing: typing, modalOpen: function () { return !modal.hidden; },
+  split: {state: function () { return VP.state(); }, dispatch: function (a) { VP.dispatch(a); }},
   dock: {state: function () { return VD.state(); }, dispatch: function (a) { VD.dispatch(a); }},
   view: {fit: fit, z100: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, 1); },
          zin: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z * 1.25); },

@@ -79,6 +79,7 @@ BROWSER = {
     "test_link_panel_trash_and_rename": ("links", "tools"),
     "test_memo_pending_history_panels": ("notes", "dock", "tools"),
     "test_view_and_window_menus": ("menu", "dock", "tools", "motion"),
+    "test_split_view_left_right_and_sync": ("menu", "input"),
     "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
     "test_modal_header_has_no_gap_and_no_text_close": ("modal",),
     "test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons": ("modal", "tools"),

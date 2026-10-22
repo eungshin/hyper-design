@@ -14,7 +14,7 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 PURE = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history"]
-ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme"]
+ALL_MODULES = ["graph", "route", "style", "camera", "edits", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "view-viewport"]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -355,7 +355,7 @@ def test_ui_chrome_colours_are_neutral_tokens():
 
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model",
+LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "layers": "Model", "theme": "Model", "viewport": "Model",
          "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
@@ -381,7 +381,7 @@ def test_gate_role_and_direction(name):
     own = _hd_name(name)
     for dep in sorted(set(re.findall(r"\bHD\.(\w+)", src)) - {own}):
         mod = NS.get(dep, dep)
-        if dep.startswith("view"):
+        if dep.startswith("view") and mod not in LAYER:   # viewport(Model) 처럼 이름만 view 로 시작하는 것은 층 표로
             assert False, f"{name}.js → HD.{dep}: View 끼리 직접 부르지 않는다 — ctx 로 받은 함수·의도로"
         assert mod in LAYER, f"{name}.js → HD.{dep}: 모르는 모듈"
         assert RANK[LAYER[mod]] <= RANK[me] and not (me == "Model" and LAYER[mod] != "Model"), f"{name}.js({me}) → {mod}({LAYER[mod]}): 위 층에 기댐"
@@ -507,3 +507,47 @@ def test_history_model_caps_undo_at_50():
     assert out["redo"] == {"at": 2, "label": "move 1"}
     assert out["branch"] == {"len": 2, "last": "new", "canRedo": False}, "되돌린 뒤 새 일 = 되돌린 줄은 버림"
     assert out["keep"]["len"] == 200 and out["keep"]["first"] == "r5"
+
+
+VIEWPORT_JS = r"""
+const fs = require('fs'), vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[2] + '/viewport.js', 'utf8'), {filename: 'viewport.js'});
+const V = globalThis.HD.viewport, out = {};
+const c = {z: 0.5, tx: 40, ty: -20}, n = V.zoomAt(c, 300, 200, 1.25);
+out.pinned = [(300 - c.tx) / c.z, (200 - c.ty) / c.z, (300 - n.tx) / n.z, (200 - n.ty) / n.z, n.z];
+const f = V.fit({x0: 100, y0: 50, x1: 1100, y1: 550}, 532, 532, 32);
+out.fit = [f.z, 100 * f.z + f.tx, 1100 * f.z + f.tx, 50 * f.z + f.ty, 550 * f.z + f.ty];
+out.clamped = V.fit({x0: 0, y0: 0, x1: 10, y1: 10}, 532, 532, 32, z => Math.min(1.5, z)).z;
+let s = V.initial(); out.s0 = s;
+out.syncWhenOne = V.reduce(s, {type: 'sync', on: true}) === s;
+s = V.reduce(s, {type: 'split', mode: 'lr'}); s = V.reduce(s, {type: 'sync', on: true}); out.lr = s;
+out.back = V.reduce(s, {type: 'split', mode: 'one'});
+out.bad = V.reduce(s, {type: 'split', mode: 'quad'}) === s;
+console.log(JSON.stringify(out));
+"""
+
+
+def test_viewport_model_zoom_fit_and_split():
+    """조각 6 카메라·나누기 규칙: 확대해도 마우스 아래 점은 그대로, 전체 보기 = 상자가 가운데 꽉, 배율 한도,
+    동시 스크롤은 나눴을 때만, 하나로 돌아가면 동시 스크롤도 꺼짐."""
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-vp-js-"))
+    try:
+        (tmp / "v.js").write_text(VIEWPORT_JS, encoding="utf-8")
+        r = subprocess.run([NODE, str(tmp / "v.js"), str(MOD)], capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    bx, by, bx2, by2, z = out["pinned"]
+    assert abs(bx - bx2) < 1e-9 and abs(by - by2) < 1e-9 and z == 1.25, "마우스 아래 판 점은 그대로"
+    fz, l, r_, t, b = out["fit"]
+    assert abs(fz - 0.5) < 1e-9 and abs(l - 16) < 1e-6 and abs(r_ - 516) < 1e-6, "가로 꽉 + 여백 16씩"
+    assert abs((t + b) / 2 - 266) < 1e-6, "세로 가운데"
+    assert out["clamped"] == 1.5
+    assert out["s0"] == {"split": "one", "sync": False}
+    assert out["syncWhenOne"], "나누지 않았으면 동시 스크롤 없음"
+    assert out["lr"] == {"split": "lr", "sync": True}
+    assert out["back"] == {"split": "one", "sync": False}
+    assert out["bad"]
