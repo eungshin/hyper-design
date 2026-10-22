@@ -495,8 +495,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     out = pathlib.Path(out).resolve()
     token = token or secrets.token_urlsafe(18)
     lock = threading.Lock()
-    inject = ('<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;</script>'
-              % (json.dumps(True), json.dumps(keypath(out)), json.dumps(out.as_posix())))
+    inject = ('<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;window.__hdAgent=%s;</script>'
+              % (json.dumps(True), json.dumps(keypath(out)), json.dumps(out.as_posix()), json.dumps(agent or None)))
 
     class H(SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):

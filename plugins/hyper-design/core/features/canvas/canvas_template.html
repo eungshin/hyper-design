@@ -464,11 +464,13 @@ body.split-lr #khint{display:none}
   </div>
   <div class="view" data-group="view">
     <span class="mchip" id="mode" role="status"></span>
+    <span class="mchip" id="aichip" role="status" hidden></span>
     <span class="sep" aria-hidden="true"></span>
     <button class="vbtn ib" id="undo" disabled title="되돌리기 (Ctrl+Z)" aria-label="되돌리기"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
     <button class="vbtn ib" id="redo" disabled title="다시 하기 (Ctrl+Shift+Z)" aria-label="다시 하기"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
     <span class="sep" aria-hidden="true"></span>
     <button class="vbtn wbtn" id="wbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="wmenu" title="창 — 도구 막대·패널 보이기">창 ▾</button>
+    <button class="vbtn ib" id="vbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="vmenu" title="보기 — 맞추기·배율·창 나누기" aria-label="보기"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
     <button class="vbtn zoom" id="zoom" aria-haspopup="menu" aria-expanded="false" aria-controls="vmenu" title="보기 — 배율">72% ▾</button>
     <button class="vbtn tsend" id="nsend" disabled title="메모·반영 대기 보내기">보내기<span class="scnt" id="nsendc" hidden></span></button>
   </div>
@@ -1278,10 +1280,10 @@ renderHidden();
 /* ---------- 트리거(L) · 소켓 끌기 · 자르기(C · 오른쪽 끌기) — 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓는다
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
 var toastT = 0, hitWait = [], pickT = null;
-function toast(msg, withUndo) {                     // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계)
+function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간
   var t = $('#toast'); t.textContent = msg;
   if (withUndo) { var b = document.createElement('button'); b.type = 'button'; b.textContent = '되돌리기'; b.addEventListener('click', function () { undo(); t.hidden = true; }); t.appendChild(b); }
-  t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, withUndo ? 5000 : 2600);
+  t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, ms || (withUndo ? 5000 : 2600));
 }
 function askHit(card, cx, cy, quiet, cb, leaf) {    // cb(null) = 1.5초 안에 답 없음(palette.js 없음) · {none} = 그 자리에 요소 없음 · 아니면 hd-hit 답 · leaf = 그 요소 그대로(글자)
   var ph = $('.phone', card), f = ph ? $('iframe', ph) : null; if (!f) { cb(null); return; }
@@ -1862,7 +1864,7 @@ function copySend(list, msg) {
 }
 // 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
 var gone = {};                                       // 파일에서 지운 카드: 떼어 두었다가 되살리면 제자리로
-var VS = HD.viewSync.mount({chip: $('#mode'), on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
+var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: window.__hdAgent || null, on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
   toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { addEdits(label, list, null, null, true); },
   request: function (list) { return HD.edits.request(list, outDir()); },
   data: function (nd, changed, v) {                  // 쓴 뒤 새 데이터: 선·이름은 새로, 바뀐 카드만 다시 싣는다(E17) — 보던 자리·배율·고른 것 그대로
@@ -1899,8 +1901,11 @@ $('#nsend').addEventListener('click', function () {
     r.left.forEach(function (n) { n.sent = true; });
     saveNotes();
     if (r.left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
-    toast($('#nmsg').textContent = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && r.left.length ? ' · ' : '') +
-      (r.left.length ? '터미널로 ' + r.left.length + '건(' + (r.fw && r.fw.via === 'paseo' ? 'Paseo' : '대기열 파일') + ')' : ''));
+    var paseo = r.fw && r.fw.via === 'paseo', ai = !r.left.length ? '' :   // 어디로 갔는지·AI 가 켜졌는지 말로(대기열이면 아무도 안 읽는다)
+      paseo ? 'AI 에이전트에게 ' + r.left.length + '건 보냈어요 — 카드에 “AI 수정 중”' :
+      window.__hdAgent ? 'AI 에이전트에게 보내지 못해 ' + r.left.length + '건을 대기열 파일에만 저장했어요' :
+      'AI 터미널이 연결돼 있지 않아요 — ' + r.left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요';
+    toast($('#nmsg').textContent = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai, false, ai ? 9000 : 0);
     window.__hdLastHelper = {apply: r.res, forward: r.fw};
     if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
       var seen = {}, scs = [];

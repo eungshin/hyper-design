@@ -1,5 +1,5 @@
 /* View — 위쪽 줄 메뉴 둘(조각 3, H1·H2·H4·H11).
-   보기 메뉴 = 배율 칩 `72% ▾`(#zoom)을 누르면 아이콘 줄: 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
+   보기 메뉴 = 화면 아이콘 단추(#vbtn) 또는 배율 칩 `72% ▾`(#zoom)을 누르면 아이콘 줄: 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
    그 아래 창 나누기 줄(하나 · 좌우 2분할, 조각 6) + 동시 스크롤(나눴을 때만). 나누기 상태의 주인은 modules/viewport.js.
    창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 판 아래 안내 · 패널마다 켜짐 체크(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
    창 상태의 주인은 modules/dock.js(도크와 같은 곳) — 여기는 의도만 보낸다(ctx.dock.dispatch).
@@ -27,7 +27,7 @@ var CHROME = [
 ];
 
 function mount(ctx) {
-  var $ = ctx.$, esc = ctx.esc, zbtn = $('#zoom'), wbtn = $('#wbtn'), vmenu = $('#vmenu'), wmenu = $('#wmenu');
+  var $ = ctx.$, esc = ctx.esc, zbtn = $('#zoom'), vbtn = $('#vbtn'), wbtn = $('#wbtn'), vmenu = $('#vmenu'), wmenu = $('#wmenu');
 
   function svg(d) { return '<svg viewBox="0 0 24 24">' + d + '</svg>'; }
   function renderView() {
@@ -64,10 +64,11 @@ function mount(ctx) {
     menu.hidden = false; place(menu, btn); btn.setAttribute('aria-expanded', 'true');
   }
   function close() {
-    [[vmenu, zbtn], [wmenu, wbtn]].forEach(function (m) { m[0].hidden = true; m[1].setAttribute('aria-expanded', 'false'); });
+    [[vmenu, zbtn], [vmenu, vbtn], [wmenu, wbtn]].forEach(function (m) { m[0].hidden = true; m[1].setAttribute('aria-expanded', 'false'); });
   }
   function toggle(menu, btn) { if (menu.hidden) open(menu, btn); else close(); }
   zbtn.addEventListener('click', function () { toggle(vmenu, zbtn); });
+  vbtn.addEventListener('click', function () { toggle(vmenu, vbtn); });
   wbtn.addEventListener('click', function () { toggle(wmenu, wbtn); });
 
   function zoom(k) { var f = {fit: ctx.view.fit, '100': ctx.view.z100, 'in': ctx.view.zin, out: ctx.view.zout, pick: ctx.view.pick}[k]; if (f) f(); }
@@ -91,7 +92,7 @@ function mount(ctx) {
     renderWin();
   });
   document.addEventListener('pointerdown', function (e) {
-    var t = e.target; if (!t.closest || t.closest('#vmenu, #wmenu, #zoom, #wbtn')) return;
+    var t = e.target; if (!t.closest || t.closest('#vmenu, #wmenu, #zoom, #vbtn, #wbtn')) return;
     close();
   }, true);
 

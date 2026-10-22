@@ -1749,7 +1749,12 @@ def test_view_and_window_menus(dpage):
     assert dpage.locator("#tbtn, #tmenu").count() == 0, "전환 버튼·메뉴는 없앤다(G4)"
     assert dpage.locator("header #fit").count() == 0, "[전체 보기]는 위쪽 줄 버튼이 아니다"
     assert dpage.text_content("#zoom").strip().endswith("▾")
-    # 보기 메뉴
+    # 보기 메뉴 — 화면 아이콘 단추로도 연다(배율 칩만 누르면 열린다는 게 어색하다는 피드백)
+    dpage.click("#vbtn")
+    dpage.wait_for_selector("#vmenu:not([hidden])")
+    assert dpage.get_attribute("#vbtn", "aria-expanded") == "true"
+    dpage.click("#vbtn")
+    dpage.wait_for_selector("#vmenu", state="hidden")
     dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu:not([hidden])")
     dpage.click("#fit")

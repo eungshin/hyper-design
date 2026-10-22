@@ -186,12 +186,14 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined")
         assert pg.text_content("#mode") == "파일에 바로 씀", "모드 칩(E9)"
+        assert pg.text_content("#aichip") == "AI 없음" and pg.is_visible("#aichip"), "보내기가 AI 로 가는지 위쪽 줄에 늘 보인다"
         pg.evaluate("window.__hdStay = 1")               # 새로고침하면 사라지는 표지
         pg.click("#nsend")
         pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
         last = pg.evaluate("window.__hdLastHelper")
         assert last["apply"]["applied"] == ["x1"] and last["forward"]["via"] == "queue", last
-        assert "바로 반영 1건" in pg.text_content("#nmsg") and "터미널로 1건" in pg.text_content("#nmsg")
+        assert "바로 반영 1건" in pg.text_content("#nmsg") and "AI 터미널이 연결돼 있지 않아요" in pg.text_content("#nmsg")
+        assert "대기열 파일" in pg.text_content("#toast") and pg.is_visible("#toast"), "보낸 뒤 어디로 갔는지 알림"
         assert "도우미가 씀" in (out / "screens" / "job.html").read_text(encoding="utf-8")
         assert "이건 무슨 뜻?" in pathlib.Path(last["forward"]["path"]).read_text(encoding="utf-8")
         assert pg.evaluate("window.__hdStay") == 1, "쓴 뒤 페이지 전체를 새로고침하지 않는다(E17)"
