@@ -232,7 +232,8 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         assert "도우미가 씀" in (out / "screens" / "job.html").read_text(encoding="utf-8")
         assert "이건 무슨 뜻?" in pathlib.Path(last["forward"]["path"]).read_text(encoding="utf-8")
         assert pg.evaluate("window.__hdStay") == 1, "쓴 뒤 페이지 전체를 새로고침하지 않는다(E17)"
-        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "바뀐 카드만 다시 싣는다"
+        job_src = pg.evaluate("(() => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return f.getAttribute('src') || f.getAttribute('data-src') || ''; })()")   # 한 번에 읽는다(따로 읽으면 그 사이 data-src → src 로 옮겨 가 둘 다 비어 보인다)
+        assert "?v=" in job_src, "바뀐 카드만 다시 싣는다"
         left = pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')")
         assert [n["id"] for n in left] == ["x2"] and left[0]["sent"], "바로 쓴 편집은 메모에서 빠지고, 터미널로 보낸 것은 보냄"
         srv.shutdown(); srv.server_close()                  # 도우미가 꺼지면 지금처럼 복사
