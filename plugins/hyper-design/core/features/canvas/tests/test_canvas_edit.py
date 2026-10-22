@@ -1637,6 +1637,9 @@ def test_drag_redraws_only_the_lines(dpage):
     b = dpage.locator('.card[data-id="job"] .cover').bounding_box()
     x, y = b["x"] + b["width"] / 2, b["y"] + min(b["height"] / 2, 80)
     d0 = ln_d(dpage, "job")
+    assert dpage.evaluate("""() => { const not = n => n.dataset.from !== 'job' && n.dataset.to !== 'job';
+        window.__keep = [[...document.querySelectorAll('#ar path.ln')].find(not), [...document.querySelectorAll('#rows .alabel')].find(not)];
+        window.__keepD = window.__keep[0].getAttribute('d'); return window.__keep.every(Boolean); }"""), "job 과 상관없는 선·태그가 있어야 한다"
     dpage.mouse.move(x, y)
     dpage.mouse.down()
     for i in range(1, 31):
@@ -1648,6 +1651,10 @@ def test_drag_redraws_only_the_lines(dpage):
     n = fr.evaluate("window.__lp")
     assert n <= 1, ("끄는 동안 화면 안 버튼 표시를 매 프레임 다시 보내지 않는다", n)
     assert fr.evaluate("document.querySelectorAll('[data-hd-links]').length") >= 1, "놓은 뒤에도 버튼 표시는 그대로"
+    kept = dpage.evaluate("""() => { const [p, l] = window.__keep, f = s => [...document.querySelectorAll(s)].find(n => n.dataset.from === p.dataset.from && n.dataset.to === p.dataset.to);
+        const g = [...document.querySelectorAll('#rows .alabel')].find(n => n.dataset.from === l.dataset.from && n.dataset.to === l.dataset.to);
+        return {path: p.isConnected && f('#ar path.ln') === p, label: l.isConnected && g === l, d: p.getAttribute('d') === window.__keepD}; }""")
+    assert kept == {"path": True, "label": True, "d": True}, ("옮기지 않은 카드끼리의 선·태그는 같은 노드 그대로(다시 만들지 않음)", kept)
     dpage.keyboard.press("Control+z")
     dpage.wait_for_timeout(150)
     dpage.keyboard.press("h")

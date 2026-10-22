@@ -15,16 +15,17 @@ function mount(ctx) {
   var rowsEl = ctx.rowsEl, svg = ctx.svg, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, CARD = ctx.CARD, LEFT = ctx.LEFT, prefs = ctx.prefs;
   var R = HD.route, S = HD.lineStyle, RADIUS = R.RADIUS, hov = null, foc = {}, pairKey = null, marks = {};
 
+  // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면(카드 끌기 등) 바뀐 d·자리만 고쳐 쓰고,
+  // 달라지면(편집·숨기기·색 프리셋) 전부 새로 넣는다. 카드 자리를 먼저 모두 읽고 그다음 쓴다(읽기·쓰기 번갈아 하지 않게).
+  var shape = null, lnEls = [], lbEls = [];
   function render() {
     var box = {}, rowOf = {}, rows = $$('.flow', rowsEl);
     $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {   // 숨긴·삭제 대기 화면의 선은 그리지 않는다
       box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};
       rowOf[c.dataset.id] = rows.indexOf(c.closest('.flow'));
     });
-    $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
-    $$('path.ln, marker.lnm', svg).forEach(function (n) { n.remove(); });
     var pairs = HD.graph.overview(ctx.graph(), ctx.pending()).filter(function (p) { return box[p.a] && box[p.b]; });
-    var per = {}, seen = {}, lab = {}, num = {}, cols = [], paths = '', labels = '', cross = 0, minX = LEFT;
+    var per = {}, seen = {}, lab = {}, num = {}, cols = [], lns = [], lbs = [], cross = 0, minX = LEFT;
     marks = {};
     pairs.forEach(function (p) {
       if (!p.ab && p.ba) { var t = p.a; p.a = p.b; p.b = t; p.ab = true; p.ba = false; p.lab = {ab: p.lab.ba, ba: p.lab.ab}; }
@@ -44,29 +45,69 @@ function mount(ctx) {
       }
       var color = p.plan ? PLAN : S.rowColor(prefs, rowOf[p.a]);
       var ci = cols.indexOf(color); if (ci < 0) { ci = cols.length; cols.push(color); }
-      paths += '<path class="ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : '') + '" data-from="' + esc(p.a) + '" data-to="' + esc(p.b) + '" data-both="' + (p.ba ? 1 : 0) +
-        '" stroke="' + color + '" marker-end="url(#hd-ln-' + ci + ')"' + (p.ba ? ' marker-start="url(#hd-lns-' + ci + ')"' : '') + ' d="' + d + '"/>';
+      lns.push({from: p.a, to: p.b, cls: 'ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : ''), both: p.ba ? 1 : 0, color: color,
+                end: 'url(#hd-ln-' + ci + ')', start: p.ba ? 'url(#hd-lns-' + ci + ')' : '', d: d});
       if (p.plan) return;
       [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(출발 카드 오른쪽에 쌓음)
         var from = x[1], to = x[2]; if (!p[x[0]]) return;
         var k = num[from] = (num[from] || 0) + 1, f = box[from], li = lab[from] || 0; lab[from] = li + 1;
         marks[from + '>' + to] = {n: k, color: color};
         var nm = ctx.names ? ctx.names.get(from, to) : '', tx2 = nm || p.lab[x[0]].slice(0, 2).join(' · ') || (p.pend ? '반영 대기' : '');
-        labels += '<div class="alabel' + (nm ? ' named' : '') + '" data-from="' + esc(from) + '" data-to="' + esc(to) + '" style="left:' + (f.x + CARD.w + 10) + 'px;top:' + (f.y + 24 + li * 44) +
-          'px;border-color:' + color + '" title="두 번 눌러 이름 바꾸기">' + esc(ctx.circled(k)) + (tx2 ? ' ' + esc(tx2) : '') + '</div>';
+        lbs.push({from: from, to: to, named: !!nm, left: (f.x + CARD.w + 10) + 'px', top: (f.y + 24 + li * 44) + 'px', color: color,
+                  html: esc(ctx.circled(k)) + (tx2 ? ' ' + esc(tx2) : '')});
       });
     });
-    var defs = '';
+    var key = cols.join(',') + '|' + lns.map(function (l) { return l.from + '>' + l.to; }).join('\n') + '|' + lbs.map(function (l) { return l.from + '>' + l.to; }).join('\n');
+    var same = key === shape && lns.length === lnEls.length && lbs.length === lbEls.length &&
+      lnEls.every(function (n) { return n.isConnected; }) && lbEls.every(function (n) { return n.isConnected; });
+    if (same) { lns.forEach(function (l, i) { patchLine(lnEls[i], l); }); lbs.forEach(function (l, i) { patchLabel(lbEls[i], l); }); }
+    else { rebuild(cols, lns, lbs); shape = key; }
+    mark();
+    return minX;
+  }
+  function rebuild(cols, lns, lbs) {                  // 처음·쌍 목록이나 색이 바뀌었을 때: 전부 지우고 새로
+    $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
+    $$('path.ln, marker.lnm', svg).forEach(function (n) { n.remove(); });
+    var defs = '', paths = '', labels = '';
     cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색 · 양방향은 시작에도(반대로)
       var head = '<path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/>';
       defs += '<marker class="lnm" id="hd-ln-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">' + head + '</marker>' +
               '<marker class="lnm" id="hd-lns-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">' + head + '</marker>';
     });
+    lns.forEach(function (l) {
+      paths += '<path class="' + l.cls + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" data-both="' + l.both +
+        '" stroke="' + l.color + '" marker-end="' + l.end + '"' + (l.start ? ' marker-start="' + l.start + '"' : '') + ' d="' + l.d + '"/>';
+    });
+    lbs.forEach(function (l) {
+      labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" style="left:' + l.left + ';top:' + l.top +
+        ';border-color:' + l.color + '" title="두 번 눌러 이름 바꾸기">' + l.html + '</div>';
+    });
     $('defs', svg).insertAdjacentHTML('beforeend', defs);
     svg.insertAdjacentHTML('beforeend', paths);
     rowsEl.insertAdjacentHTML('beforeend', labels);
-    mark();
-    return minX;
+    lnEls = $$('path.ln', svg); lbEls = $$('.alabel', rowsEl);
+    lnEls.forEach(function (n, i) { n._hd = lns[i]; });
+    lbEls.forEach(function (n, i) { n._hd = lbs[i]; });
+  }
+  function patchLine(n, l) {                          // 같은 쌍의 선: 달라진 속성만(대개 끈 카드에 닿은 선의 d 하나)
+    var o = n._hd || {};
+    if (o.cls !== l.cls) { n.classList.toggle('pd', l.cls.indexOf(' pd') >= 0); n.classList.toggle('plan', l.cls.indexOf(' plan') >= 0); }
+    if (o.both !== l.both) n.setAttribute('data-both', String(l.both));
+    if (o.color !== l.color) n.setAttribute('stroke', l.color);
+    if (o.end !== l.end) n.setAttribute('marker-end', l.end);
+    if (o.start !== l.start) { if (l.start) n.setAttribute('marker-start', l.start); else n.removeAttribute('marker-start'); }
+    if (o.d !== l.d) n.setAttribute('d', l.d);
+    n._hd = l;
+  }
+  function patchLabel(n, l) {                         // 같은 방향의 태그: 자리·색·글만(이름 고치던 칸이면 글을 되돌린다 — 예전처럼 새로 그린 것과 같게)
+    var o = n._hd || {}, editing = n.classList.contains('editing');
+    if (o.left !== l.left) n.style.left = l.left;
+    if (o.top !== l.top) n.style.top = l.top;
+    if (o.color !== l.color) n.style.borderColor = l.color;
+    if (o.named !== l.named) n.classList.toggle('named', l.named);
+    if (editing) n.classList.remove('editing');
+    if (o.html !== l.html || editing) n.innerHTML = l.html;
+    n._hd = l;
   }
   // 강조: 고른 카드(또는 Ctrl+클릭한 쌍)의 선·태그·이어진 카드 · 마우스를 올린 카드의 선·태그
   function touches(n, ids) { return !!ids[n.getAttribute('data-from')] || !!ids[n.getAttribute('data-to')]; }
