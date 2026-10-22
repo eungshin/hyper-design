@@ -313,7 +313,7 @@
     },
     {
       "slice": "4",
-      "commit": "(이번)",
+      "commit": "ab640eb",
       "numbered": true,
       "tests": {
         "full": 1,
@@ -350,6 +350,73 @@
         }
       ],
       "note": "미리보기 그림은 뺌(문서에 기록)."
+    },
+    {
+      "slice": "modal-fix",
+      "commit": "01ea6e2",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 12
+      },
+      "gate": {
+        "checks": 25,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "빈 칸·글자 [닫기] 테스트 빨강 확인, 스크린샷에서 선택 막대가 덮개 위에 뜨는 버그를 더 찾음"
+        }
+      ],
+      "waste": [
+        {
+          "what": "바깥 클릭 테스트가 6회 연속 시간 초과(회당 38초) — 원인을 애니메이션·닫힘 타이밍으로 세 번 잘못 짚고 대기를 덧댐. 실제 원인은 테스트가 고른 '바깥' 점이 좁은 창에서 덮개 밖(HTML)",
+          "minutes": 7,
+          "fix": "시간 초과가 두 번 나면 추측으로 대기를 더하지 말고 먼저 클릭 대상(elementFromPoint·이벤트 기록)을 찍는다"
+        },
+        {
+          "what": "영역 실행 실패 2개가 앞 테스트에 기대는 순서 의존 테스트(test_fit_includes_moved_card_and_drops_stale 등) — 원인 확인에 실행 2회",
+          "minutes": 1,
+          "fix": "순서 의존 테스트 목록을 tracking 에 두고 영역 실행 결과에서 먼저 거른다"
+        }
+      ],
+      "note": "비번호 조각(사용자 버그 신고)."
+    },
+    {
+      "slice": "7a",
+      "commit": "(이번)",
+      "numbered": true,
+      "budget_minutes": 12,
+      "tests": {
+        "full": 1,
+        "area": 0,
+        "minutes": 10.2
+      },
+      "gate": {
+        "checks": 25,
+        "sec": 0.6,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "합격 테스트 빨강 확인 → 첫 구현에서 초록"
+        }
+      ],
+      "waste": [
+        {
+          "what": "옛 테스트의 #mpick 을 주석 도구로 기계 치환 — 한 줄은 뜻이 반대로 바뀜(판에서 P 는 주석 도구를 고르는 게 맞음) → 그 실패가 같은 페이지의 다음 테스트까지 깨뜨림",
+          "minutes": 0.5,
+          "fix": "지운 요소에 묶인 단언은 치환 전에 '무엇을 지키던 단언인가'를 한 줄씩 읽고 바꾼다"
+        }
+      ],
+      "flaky": [
+        "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 실행에서 '바뀐 카드만 다시 싣는다' 실패, --lf 에서 통과(이번 변경과 무관한 곳)"
+      ],
+      "note": "예산 12분 안. 영역 실행 없이 전체 1회 + --lf."
     }
   ]
 }

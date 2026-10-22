@@ -136,8 +136,8 @@ def open_screen(pg, sid):
 def test_pick_note_pin_persists(page):
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
-    page.click("#mpick")
-    assert page.get_attribute("#mpick", "aria-pressed") == "true"
+    page.click('#tools [data-tool="annotate"]')
+    assert page.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
     page.wait_for_timeout(150)
     target = fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first
     want = re.sub(r"\s+", " ", target.inner_text()).strip()[:60]
@@ -195,7 +195,7 @@ def test_multi_select_note(page):
     """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 요소마다 한 항목(형식 그대로)."""
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
-    page.click("#mpick")
+    page.click('#tools [data-tool="annotate"]')
     page.wait_for_timeout(150)
     els = fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S"))
     assert els.count() >= 2
@@ -345,12 +345,7 @@ def test_gym_annotate_button(gpage):
     gpage.wait_for_function("!document.getElementById('modal').hidden")
     gpage.frame_locator("#mframe").locator("body").wait_for()
     gpage.wait_for_timeout(400)
-    assert gpage.text_content("#mpick").strip() == "주석 달기"
-    pb, fb = gpage.locator("#mpick").bounding_box(), gpage.locator("#mbox").bounding_box()
-    assert pb["y"] + pb["height"] <= fb["y"], (pb, fb)          # v2: 휴대폰 위 가운데
-    assert pb["y"] >= 0
-    assert abs((pb["x"] + pb["width"] / 2) - (fb["x"] + fb["width"] / 2)) < 2
-    assert pb["y"] + pb["height"] <= gpage.viewport_size["height"]
+    assert gpage.is_visible('#tools [data-tool="annotate"]'), "크게 보기의 주석 = 왼쪽 주석 도구(G6)"
     GSHOTS.mkdir(parents=True, exist_ok=True)
     gpage.screenshot(path=str(GSHOTS / "c-modal-annotate.png"))
     gpage.keyboard.press("Escape")
@@ -368,7 +363,7 @@ def test_gym_annotate_button(gpage):
     assert ab["y"] + ab["height"] <= b["y"] + 0.5, (ab, b)      # 카드 바깥(오른쪽 위)
     pres.click()
     gpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert gpage.get_attribute("#mpick", "aria-pressed") != "true"
+    assert gpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true"
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(150)
 

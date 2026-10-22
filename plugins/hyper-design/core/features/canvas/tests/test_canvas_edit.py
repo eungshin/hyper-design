@@ -27,7 +27,7 @@ def seed_notes(pg, n):
     """메모 하나를 화면에서 만들고(키를 얻으려고) 그 키에 메모 n개를 채운 뒤 새로고침."""
     sid = pg.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(pg, sid)
-    pg.click("#mpick")
+    pg.click('#tools [data-tool="annotate"]')
     pg.wait_for_timeout(150)
     fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first.click()
     pg.wait_for_selector("#pop:not([hidden])")
@@ -468,7 +468,7 @@ def test_context_menu_by_target(epage):
     epage.mouse.click(c["x"], c["y"], button="right")
     pick(epage, "크게 보기")
     epage.wait_for_function("!document.getElementById('modal').hidden")
-    assert epage.get_attribute("#mpick", "aria-pressed") != "true", "메뉴의 크게 보기 = ▶ 보기와 같다(주석은 왼쪽 도구)"
+    assert epage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true", "메뉴의 크게 보기 = ▶ 보기와 같다(주석은 왼쪽 도구)"
     epage.keyboard.press("Escape")
     epage.wait_for_timeout(150)
     if epage.evaluate("!document.getElementById('modal').hidden"):
@@ -1011,7 +1011,7 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     assert "보기" in pres.text_content() and dpage.locator(".anno").count() == 0, "검정 [주석] 버튼은 없어졌다"
     pres.click()
     dpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert dpage.get_attribute("#mpick", "aria-pressed") != "true", "보기는 주석 달기를 켜지 않는다"
+    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true", "보기는 주석 달기를 켜지 않는다"
     fr = dpage.frame_locator("#mframe")
     fr.locator("h1").wait_for()
     dpage.wait_for_timeout(300)
@@ -1112,7 +1112,7 @@ def picked(pg):
 
 
 def selbar(pg):
-    return pg.evaluate("(() => { const b = document.getElementById('selbar'); return b && !b.hidden ? [...b.querySelectorAll('button')].filter(x => !x.hidden).map(x => x.textContent) : null; })()")
+    return pg.evaluate("(() => { const b = document.getElementById('selbar'); return b && !b.hidden ? [...b.querySelectorAll('button')].filter(x => !x.hidden).map(x => x.getAttribute('aria-label')) : null; })()")
 
 
 def test_pick_cards_selection_bar_delete_and_del_key(dpage):
@@ -1129,7 +1129,7 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.wait_for_timeout(150)
     assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage) == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
     n0 = len(notes_of(dpage))
-    dpage.locator("#selbar button", has_text="삭제").click()
+    dpage.click('#selbar [data-act="del"]')
     wait_notes(dpage, n0 + 2)
     assert {n["edit"] for n in notes_of(dpage)[-2:]} == {"delete"}
     for cid in (p["id"], q["id"]):                    # 재검증 C3: 사라지지 않고 흐리게 + '삭제 대기'
@@ -1841,3 +1841,37 @@ def test_modal_header_has_no_gap_and_no_text_close(dpage):
     dpage.click("#mclose")
     dpage.wait_for_function("document.getElementById('modal').hidden")
     assert dpage.evaluate("getComputedStyle(document.querySelector('.hd .tabs')).visibility") == "visible"
+
+
+# ---------------------------------------------------------------- 조각 7a 크게 보기 = 모드 · 선택 막대 아이콘 (G5·G6·G8)
+TOOLS_JS = """() => [...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.getAttribute('aria-pressed'), b.getAttribute('aria-disabled')])"""
+
+
+def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
+    """G8: 선택 막대 = 아이콘 + 툴팁(이름·키). G5: 크게 보기에서도 왼쪽 도구 막대가 남는다 — 쓸 수 있는 도구는 손(눌러 보기)·주석뿐.
+    G6: 화면 위 [주석 달기] 버튼은 없애고 왼쪽 주석 도구 하나로(P 도 같음). 닫으면 판의 도구로 돌아온다."""
+    dpage.keyboard.press("Escape")
+    dpage.click("#zoom"); dpage.click("#fit")
+    c = visible_cover(dpage)
+    dpage.mouse.click(c["x"], c["y"])
+    dpage.wait_for_selector("#selbar:not([hidden])")
+    bar = dpage.evaluate("[...document.querySelectorAll('#selbar button')].map(b => [b.dataset.act, b.textContent.trim(), b.getAttribute('aria-label'), !!b.querySelector('svg'), b.title])")
+    assert [b[0] for b in bar] == ["memo", "hide", "del"], bar
+    assert all(b[1] == "" and b[2] and b[3] and b[4] for b in bar), "아이콘만 · 이름은 aria-label · 툴팁"
+    dpage.mouse.dblclick(c["x"], c["y"])
+    dpage.wait_for_function("!document.getElementById('modal').hidden")
+    assert dpage.locator("#mpick").count() == 0, "화면 위 [주석 달기] 버튼은 없다(G6)"
+    assert dpage.is_visible("#tools"), "크게 보기에서도 도구 막대(G5)"
+    t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
+    assert t["hand"][1] != "true" and t["annotate"][1] != "true", t
+    assert all(t[k][1] == "true" for k in ("move", "trigger", "knife", "layout", "memo")), t
+    dpage.click('#tools [data-tool="annotate"]')
+    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    dpage.keyboard.press("p")
+    assert dpage.get_attribute('#tools [data-tool="hand"]', "aria-pressed") == "true", "P 로 끄면 손(눌러 보기)"
+    dpage.keyboard.press("p")
+    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_function("document.getElementById('modal').hidden")
+    t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
+    assert t["hand"][0] == "true" and all(d != "true" for p, d in t.values()), "닫으면 판의 도구(손)로, 모두 다시 쓸 수 있게"
