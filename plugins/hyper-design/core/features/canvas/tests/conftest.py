@@ -1,6 +1,6 @@
 """캔버스 테스트 영역 표시(marker) — 고친 곳에 맞는 테스트만 골라 돌리려고(contract.md '테스트 층').
 
-test_canvas_modules.py 는 통째로 unit(node, 약 1초). 브라우저 테스트는 아래 표에서 영역을 받는다.
+test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저 없음, 수 초). 브라우저 테스트는 아래 표에서 영역을 받는다.
 표에 없는 브라우저 테스트가 생기면 수집 단계에서 실패한다 — 새 테스트는 여기에 한 줄을 더한다.
 """
 import json, time
@@ -133,7 +133,7 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     missing = []
     for it in items:
-        if it.fspath.basename == "test_canvas_modules.py":
+        if it.fspath.basename == "test_canvas_modules.py" or it.fspath.basename.startswith("test_canvas_unit_"):   # 브라우저 없는 테스트 파일
             it.add_marker(pytest.mark.unit)
             continue
         if not it.fspath.basename.startswith("test_canvas_"):
