@@ -162,6 +162,43 @@ def test_dock_tabs_fit_when_many(epage):
     epage.evaluate("localStorage.removeItem('hd-dock')")
     reload(epage)
 
+
+WIDTH_DRAG_JS = """async () => {
+  const edge = document.querySelector('#dock .dk-edge'), b = edge.getBoundingClientRect(), x = b.left + 4, y = b.top + 300;
+  const o = (cx) => ({bubbles: true, button: 0, clientX: cx, clientY: y, pointerId: 1});
+  let writes = 0, frames = 0, rec = true;
+  const mo = new MutationObserver(l => { writes += l.length; }); mo.observe(document.body, {attributes: true, attributeFilter: ['style']});
+  const f = () => { if (!rec) return; frames++; requestAnimationFrame(f); }; requestAnimationFrame(f);
+  edge.dispatchEvent(new PointerEvent('pointerdown', o(x)));
+  for (let i = 1; i <= 40; i++) document.body.dispatchEvent(new PointerEvent('pointermove', o(x - i * 2)));
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  document.body.dispatchEvent(new PointerEvent('pointerup', o(x - 80)));
+  await new Promise(r => setTimeout(r, 60)); rec = false; await new Promise(r => setTimeout(r, 0)); mo.disconnect();
+  return {writes, frames, w: getComputedStyle(document.body).getPropertyValue('--dockw').trim(), dock: document.getElementById('dock').offsetWidth};
+}"""
+
+
+def test_dock_width_drag_once_per_frame_and_tab_switch_keeps_nodes(epage):
+    """도크 너비 끌기: 판 너비(--dockw)는 한 프레임에 한 번만 바뀌고 놓은 너비로 끝난다(P4).
+    탭 바꾸기는 다른 묶음을 다시 만들지 않는다 — 다른 묶음의 탭 줄 노드가 그대로다."""
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+    r = epage.evaluate(WIDTH_DRAG_JS)
+    assert r["w"] == "380px" and abs(r["dock"] - 380) <= 1, r
+    assert 1 <= r["writes"] <= r["frames"], f"한 프레임에 한 번만 판 너비를 바꾼다: {r}"
+    assert dock_state(epage)["w"] == 380, "놓으면 저장"
+    epage.evaluate("window.__g0 = document.querySelector('#dock .dk-g[data-g=\"0\"] .dk-tabs')")
+    epage.click('#dock .dk-tab[data-p="pending"]')
+    assert dock_state(epage)["groups"][2]["active"] == "pending"
+    assert epage.evaluate("!!document.getElementById('pPending').closest('.dk-g[data-g=\"2\"] .dk-body')"), "고른 패널이 그 묶음 몸통에"
+    assert epage.evaluate("!document.getElementById('pNotes').closest('#dock')"), "앞에서 빠진 패널은 보관함으로"
+    assert epage.evaluate("document.querySelector('#dock .dk-tab.on[data-p=\"pending\"]').getAttribute('aria-selected')") == "true"
+    assert epage.evaluate("document.querySelector('#dock .dk-g[data-g=\"0\"] .dk-tabs') === window.__g0"), "다른 묶음은 다시 만들지 않는다"
+    epage.click('#dock .dk-tab[data-p="notes"]')
+    assert epage.evaluate("!!document.getElementById('pNotes').closest('.dk-g[data-g=\"2\"] .dk-body')")
+    epage.evaluate("localStorage.removeItem('hd-dock')")
+    reload(epage)
+
 def visible_cover(pg, skip=()):
     p = pg.evaluate("""(skip) => { const r = document.getElementById('screens').getBoundingClientRect();
         for (const c of document.querySelectorAll('#rows .card .cover')) { const id = c.closest('.card').dataset.id; if (skip.includes(id)) continue;

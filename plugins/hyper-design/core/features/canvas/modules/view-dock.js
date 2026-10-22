@@ -38,7 +38,43 @@ function mount(ctx) {
     var body = boxEl.querySelector('.dk-body'), p = ctx.panels[box.active];
     if (p) body.appendChild(p);
   }
+  // 배치 모양(묶음·탭 차례·떠 있는 창·접힘)이 그대로면 다시 만들지 않고 고른 탭·패널·탭 숫자만 고친다(P4)
+  var built = null;
+  function shape() {
+    return JSON.stringify([st.collapsed, st.closed.length > 0, st.groups.map(function (g) { return [g.tabs, g.h]; }),
+                           st.floats.map(function (f) { return [f.tabs, f.x, f.y, f.w, f.h]; })]);
+  }
+  function setCount(b, id) {
+    var t = ctx.title ? ctx.title(id) : {}, c = b.querySelector('.dk-cnt');
+    if (!t.count) { if (c) c.remove(); return; }
+    if (!c) { c = document.createElement('span'); c.className = 'dk-cnt'; b.insertBefore(c, b.querySelector('.dk-x')); }
+    if (c.textContent !== String(t.count)) c.textContent = t.count;
+  }
+  function sync(boxEl, box) {
+    if (!boxEl || !box) return;
+    boxEl.querySelectorAll('.dk-tab').forEach(function (t) {
+      var on = t.dataset.p === box.active;
+      if (t.classList.contains('on') !== on) { t.classList.toggle('on', on); t.setAttribute('aria-selected', String(on)); }
+    });
+    var body = boxEl.querySelector('.dk-body'), p = ctx.panels[box.active];
+    if (body.firstChild === p && body.childNodes.length === 1) return;
+    while (body.firstChild) hold.appendChild(body.firstChild);
+    if (p) body.appendChild(p);
+  }
+  function refresh() {
+    if (!st.collapsed && st.groups.length) {
+      root.style.width = st.w + 'px';
+      st.groups.forEach(function (g, i) { sync(root.querySelector('.dk-g[data-g="' + i + '"]'), g); });
+    }
+    st.floats.forEach(function (f, i) { sync(layer.querySelector('.dk-f[data-f="' + i + '"]'), f); });
+    root.querySelectorAll('.dk-tab, .dk-sb').forEach(function (b) { setCount(b, b.dataset.p); });
+    layer.querySelectorAll('.dk-f .dk-tab').forEach(function (b) { setCount(b, b.dataset.p); });
+    if (ctx.onLayout) ctx.onLayout(st);
+  }
   function render() {
+    var sh = shape();
+    if (sh === built) { refresh(); return; }
+    built = sh;
     Object.keys(ctx.panels).forEach(function (id) { hold.appendChild(ctx.panels[id]); });
     var ctl = '<button type="button" class="dk-ib dk-more" title="닫은 패널 다시 열기"' + (st.closed.length ? '' : ' disabled') + '>' + ICON.plus + '</button>' +
               '<button type="button" class="dk-ib dk-fold" title="패널 접기">' + ICON.fold + '</button>';
@@ -147,8 +183,8 @@ function mount(ctx) {
       if (!z.ghost) { z.ghost = document.createElement('div'); z.ghost.className = 'dk-ghost'; z.ghost.innerHTML = (ctx.icons[z.id] || '') + esc(K.LABEL[z.id]); document.body.appendChild(z.ghost); }
       z.ghost.style.left = (e.clientX + 10) + 'px'; z.ghost.style.top = (e.clientY + 6) + 'px';
       z.ghost.style.display = 'none'; z.drop = dropAt(e); z.ghost.style.display = ''; mark(z.drop);
-    } else if (z.kind === 'width') {
-      st = K.reduce(st, {type: 'width', w: z.w - dx}); root.style.width = st.w + 'px'; if (ctx.onLayout) ctx.onLayout(st);
+    } else if (z.kind === 'width') {                 // 한 프레임에 한 번만 너비를 바꾼다(판 너비 다시 재기가 비싸다, P4)
+      z.pw = z.w - dx; if (!z.raf) z.raf = requestAnimationFrame(function () { z.raf = 0; widthNow(z); });
     } else if (z.kind === 'split') {
       var hs = z.hs.slice(), a = Math.max(80, Math.min(hs[z.i] + hs[z.i + 1] - 80, hs[z.i] + dy));
       hs[z.i + 1] = hs[z.i] + hs[z.i + 1] - a; hs[z.i] = a;
@@ -161,6 +197,10 @@ function mount(ctx) {
       if (el) el.style.cssText = 'left:' + b.x + 'px;top:' + b.y + 'px;width:' + b.w + 'px;height:' + b.h + 'px';
     }
   }
+  function widthNow(z) {
+    var n = K.reduce(st, {type: 'width', w: z.pw}); if (n.w === st.w) return;
+    st = n; root.style.width = st.w + 'px'; if (ctx.onLayout) ctx.onLayout(st);
+  }
   function end(e) {
     var z = drag; if (!z) return; drag = null;
     document.querySelectorAll('.dk-act').forEach(function (n) { n.classList.remove('dk-act'); });
@@ -170,6 +210,7 @@ function mount(ctx) {
       var d = z.drop || dropAt(e); delete d.el; d.id = z.id;
       dispatch(d); return;
     }
+    if (z.raf) { cancelAnimationFrame(z.raf); z.raf = 0; widthNow(z); }   // 놓은 자리 너비로 끝낸다
     if (z.moved) { save(); if (z.kind !== 'width') render(); }
   }
   root.addEventListener('pointerdown', start);

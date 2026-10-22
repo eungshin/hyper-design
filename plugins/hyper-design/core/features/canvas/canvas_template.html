@@ -358,7 +358,10 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 .cm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
 .cm .cmh.sub{font-size:11.5px;color:#999;padding-top:2px}
 /* ---------- 오른쪽 패널 도크(modules/dock.js 배치 · modules/view-dock.js 그리기) — 판을 밀어 좁힌다 ---------- */
+/* 도크 너비는 쓰는 칸만 물려받는다(상속 안 함) — body 에서 바뀔 때 판 전체 스타일을 다시 계산하지 않게(P4, 끌기 4× 33 ms/프레임 → 0) */
+@property --dockw{syntax:'<length>';inherits:false;initial-value:0px}
 body{--dockw:0px}
+.panes,#screens,#modal,.pane,.vp2,#dklayer{--dockw:inherit}   /* .panes = 칸들의 부모(물려받는 사슬) */
 #screens{right:var(--dockw)}
 #modal{right:var(--dockw);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
 #dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}

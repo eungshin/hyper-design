@@ -374,6 +374,16 @@ def test_ui_chrome_colours_are_neutral_tokens():
         assert hexv not in tpl, f"채도 높은 판 바깥 색이 남음: {hexv}"
 
 
+def test_dock_width_is_not_inherited_by_the_board():
+    """P4: --dockw 는 상속하지 않는 속성으로 등록하고, 쓰는 칸만 물려받는다 — 도크 너비를 끌 때 판 전체 스타일을 다시 계산하지 않게."""
+    tpl = (SCRIPTS / "canvas_template.html").read_text(encoding="utf-8")
+    assert re.search(r"@property --dockw\{[^}]*inherits:false", tpl), "--dockw 는 inherits:false"
+    users = set(re.findall(r"([#.][\w-]+)\{[^}]*var\(--dockw", tpl))
+    taker = re.search(r"^([^{\n]*)\{--dockw:inherit\}", tpl, re.M)
+    assert taker, "쓰는 칸이 --dockw 를 물려받는 줄"
+    assert users <= set(taker.group(1).split(",")), (users, taker.group(1))
+
+
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
 NS = {"lineStyle": "style", "lineEnds": "line-ends"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
