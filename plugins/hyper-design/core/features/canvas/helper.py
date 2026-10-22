@@ -18,6 +18,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
   /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
   /api/forward {text}                                         → {via:'paseo'|'queue', agent?, path?}
+  /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
 """
 import argparse, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, subprocess, sys, threading, urllib.parse, webbrowser
 from html.parser import HTMLParser
@@ -465,6 +466,23 @@ def forward(out, text, agent=None, paseo=None):
     return {"via": "queue", "path": str(p)}
 
 
+def watch(out, files):
+    """화면 파일 바뀐 시각 보기(Q2b) — files = out 기준 상대 경로 목록 → {mtimes:{경로: st_mtime | None}}. 없거나 out 밖이면 None."""
+    out = pathlib.Path(out).resolve()
+    mtimes = {}
+    if not isinstance(files, list):
+        return {"mtimes": mtimes}
+    for f in files:
+        if not isinstance(f, str):
+            continue
+        try:
+            p = out / f
+            mtimes[f] = p.stat().st_mtime if _inside(out, p) and p.is_file() else None
+        except (OSError, ValueError):
+            mtimes[f] = None
+    return {"mtimes": mtimes}
+
+
 # ---------------------------------------------------------------- 서버
 def keypath(out):                                    # file:// 로 열었을 때의 location.pathname — 캔버스 저장 키를 같게
     return urllib.parse.urlparse((pathlib.Path(out).resolve() / "index.html").as_uri()).path
@@ -531,6 +549,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     return self._json(code, r)
             if self.path == "/api/forward":
                 return self._json(200, forward(out, str(body.get("text") or ""), agent, paseo))
+            if self.path == "/api/watch":
+                return self._json(200, watch(out, body.get("files") if isinstance(body, dict) else None))
             return self._json(404, {"error": "모르는 주소"})
 
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)
