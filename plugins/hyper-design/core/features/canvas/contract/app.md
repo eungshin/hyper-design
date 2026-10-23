@@ -33,7 +33,6 @@ python3 $SK/features/hd/hd.py open dayfine
 
 ## 아직 (다른 곳의 일)
 
-- 메모에 `src` 를 담기: 캔버스 고르기 처리(`canvas_template.html` 의 `hd-picked` → `it = {path, text, rect, quote}`)가 `src` 를 버린다 — 템플릿 한 줄(`src: d.src || null`) 필요. '보내기' 요청문 줄 `   소스: <file>:<line>` 은 `modules/edits.js` 의 요청문 만들기에 한 줄. 둘 다 이 작업의 주인 파일이 아니다
 - 무대: 지금 10개. Welcome · Tutorial 틀 · History · Popup 은 dictionary 세션이 twin 무대로 더할 때까지 카드가 없다(더하면 `app_out.py` 를 다시 돌리면 된다)
 - `__svelte_meta` 는 Svelte 비공개 API(5.56.0 에서 확인) — 바뀌면 `src` 가 빠질 뿐 고르기는 그대로. 글 마디는 부모 요소의 줄만 준다
 - 카드 ≠ 진짜 창(pywebview 브리지 없음, 드래그·닫기 무반응) — 눈 확인은 앱의 규칙(R-UI6)대로

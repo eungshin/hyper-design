@@ -25,7 +25,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 추가된 메시지(기존 것은 그대로): `hd-hit-at {x, y}` → 화면이 `hd-hit {screen, path, text, rect, to}`로 답한다(그 자리 요소, 없으면 `path:null`). 1.5초 안에 답이 없으면(palette.js 없음) 캔버스는 "이 화면은 편집할 수 없어요"를 띄운다
 - `hd-hit-at`에 `leaf:true`를 붙이면 글자를 가진 그 자리 요소로 답한다(글자 고치기 — 자기 글자가 없으면 글자 가진 자손이 하나일 때만, 아니면 `path:null`). 답에는 고칠 글 전체 `full`이 있다
 - 메모 자리(task 11): `hd-picked`·`hd-hit` 답에 `quote:{exact, prefix, suffix}`(요소 글 ≤200자, 문서 글에서 앞·뒤 32자). `hd-locate {items:[{key, path, quote}]}` → 화면이 `hd-located {items:[{key, rect|null, how:'path'|'quote'|'none'}]}` — path 가 있고 (quote 가 없거나 그 요소 글에 `quote.exact` 가 있음) = path, 아니면 문서 글에서 `quote.exact` 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = quote, 못 찾으면 none. 캔버스는 카드 iframe 이 실릴 때(다시 실을 때 포함)·크게 보기가 실릴 때·메모가 바뀐 카드에 묻는다. rect 는 지금 `rect` 와 같은 화면 CSS px
-- `hd-pending {items:[{path, text}]}` → 화면이 그 요소 글을 잠시 바꿔 점선으로 보인다(반영 대기 미리보기, `items:[]`이면 되돌림)
+- `hd-pending {items:[{path, text} | {path, remove:true}]}` → 화면이 그 요소의 글 전체를 잠시 바꾸거나(빈 글 허용) 지울 요소를 숨겨 점선으로 보인다(반영 대기 미리보기, `items:[]`이면 되돌림 — `contract/edits.md`)
 - 화면 파일을 바꾸는 편집(트리거 지정·해제, 잇기, 도착 바꾸기, 연결 끊기, 글자·카드 이름·설명 고치기)은 메모(`intent=change`, 메모 안 `edit` 종류)로 쌓여 같은 "보내기" 요청문으로 나간다. 카드 이름·설명은 `path=screens.json > screens[id=…] > title|purpose`. 보내지 않은 편집이 있으면 새로고침·닫기 전에 묻고, 변경 기록은 `hd-edit-log:` 키에 남는다
 
 ## 새 기능 더하기 (공용 파일을 고치지 않는다)
