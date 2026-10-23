@@ -1,0 +1,39 @@
+# tracking — 캔버스 ↔ AI 피드백 왕복 추적
+
+사람이 캔버스에 남긴 메모가 AI에게 닿고, 반영되어 다시 캔버스에서 확인되기까지의 왕복을 기록한다.
+목적은 하나다: **어디서 시간이 새고 어디서 뜻이 틀어지는지** 근거로 찾아, 캔버스·하네스의 개발 방향을 정한다.
+
+테스트 실행 비용 추적(`plugins/hyper-design/core/features/canvas/tests/tracking/`)과는 다른 것이다. 그쪽은 개발 조각의 검토 비용, 이쪽은 실사용 피드백 왕복이다.
+
+## 구조
+
+```
+tracking/
+  README.md                 이 파일
+  <날짜>-<run 이름>/        실사용 세션 하나
+    rounds.jsonl            피드백 항목 한 줄 = 한 건 (기계용, 집계 대상)
+    log.md                  왕복 순서대로의 서술 + 마찰 + 그 세션의 인사이트
+  insights.md               세션을 넘어 반복되는 패턴과 개발 후보 (세션이 끝날 때 올린다)
+```
+
+## rounds.jsonl 한 줄
+
+| 필드 | 뜻 |
+|---|---|
+| `round` | 사람이 한 번에 넘긴 묶음 번호 (1부터) |
+| `item` | 묶음 안 번호 |
+| `screen` / `path` | 캔버스가 붙인 대상 |
+| `ask` | 요청 한 줄 요약 |
+| `kind` | `canvas-fix`(캔버스에서 바로) · `plan-change`(정본 결정이 바뀜) · `real-ui`(정적 캔버스로 표현 불가) · `new-screen` · `dup`(다른 항목과 같은 요청) |
+| `channel` | 메모가 AI에 닿은 길: `queue`(전달 → 대기열 파일) · `paste`(사람이 복사해 붙임) · `paseo` |
+| `sent` / `applied` / `confirmed` | 시각(ISO, 로컬). 모르면 null |
+| `route` | 반영한 길: `fix`(/hyper-design:fix) · `direct`(AI 직접 수정) · `twin`(실제 부품 캡처) · `doc`(정본 문서) |
+| `rework` | 사람이 같은 항목을 다시 지적한 횟수 |
+| `friction` | 이 항목에서 생긴 마찰 코드 목록 (log.md의 마찰 표) |
+
+## 쓰는 법
+
+- 묶음을 받으면 그 자리에서 항목을 `rounds.jsonl`에 넣는다(`sent`, `kind`, `channel`).
+- 반영하면 `applied`·`route`를, 사람이 캔버스에서 확인하면 `confirmed`를 채운다. 다시 지적되면 `rework` +1.
+- 마찰은 생긴 순간 `log.md` 마찰 표에 코드로 적고 항목에 붙인다. 추측이 아니라 관찰만 쓴다.
+- 세션 끝: `log.md` 끝에 그 세션 인사이트 3줄 이내, 반복된 것만 `insights.md`로 올린다.
