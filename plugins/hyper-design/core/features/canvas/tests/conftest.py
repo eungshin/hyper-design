@@ -102,6 +102,7 @@ BROWSER = {
     "test_memo_popup_moves_resizes_and_remembers_place": ("notes",),
     "test_badge_opens_that_screens_memos_like_comments": ("notes",),
     "test_blank_layout_caption_has_name_and_multiline_purpose": ("tools",),
+    "test_shift_enter_in_card_caption": ("tools",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),

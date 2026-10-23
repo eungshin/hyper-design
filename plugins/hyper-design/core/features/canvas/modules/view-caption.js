@@ -1,7 +1,7 @@
 /* View — 카드 아래 글 한 상자(H16). 비교 규칙은 modules/caption.js(Model), 여기는 상자 그리기·글쇠·저장/취소.
    상자 = <div class="capbox" role="group" aria-label="카드 글 고치기">: 첫 줄 = 상태 칩(고칠 수 없음) + 제목 [data-f="title"],
    그다음 설명 [data-f="purpose"], 정책 줄 목록 ul[data-f="policies"] > li, 아래 안내 .capfoot. 상자는 카드의 .phone 바로 뒤에 들어간다.
-   글쇠: 제목에서 Enter = 설명으로 · 설명에서 Shift+Enter = 줄바꿈(Enter = 다음 칸) · 정책 줄에서 Enter = 아래에 새 줄(allowAdd) 또는 다음 줄로
+   글쇠: 제목에서 Enter·Shift+Enter = 설명으로(제목은 한 줄) · 설명에서 Shift+Enter = 줄바꿈(Enter = 다음 칸) · 정책 줄에서 Enter·Shift+Enter = 아래에 새 줄(allowAdd) 또는 다음 줄로(#226)
          ↑/↓ = 칸의 첫/마지막 줄이면 앞/뒤 칸으로 · 빈 새 정책 줄에서 Backspace = 그 줄 지우기 · Esc = 취소 · Ctrl+Enter = 저장
    밖을 누르면 저장, 다른 카드 상자를 열면 열린 상자를 먼저 저장. 붙여넣기는 글만.
    HD.viewCaption.mount(ctx) → {open(cardEl, focus), close(save), isOpen()}  focus = {field: 'title'|'purpose'|'policy', index?}
@@ -11,7 +11,7 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var STOP = ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress'];
-var FOOT = '제목 · 설명 · 정책 한 상자 · Esc 취소 · Ctrl+Enter 저장 · 밖을 누르면 저장';
+var FOOT = '제목 · 설명 · 정책 한 상자 · 설명은 Shift+Enter 줄바꿈 · Esc 취소 · Ctrl+Enter 저장 · 밖을 누르면 저장';
 
 function readText(el) {                             // 칸의 글: 글 마디 그대로, <br>·블록 = 줄바꿈(화면 배치와 무관)
   var s = '';
@@ -82,8 +82,8 @@ function mount(ctx) {
     if (!el) return;
     var f = el.dataset.f || 'policy';
     if (k === 'Enter') {
-      if (f === 'purpose' && e.shiftKey) { e.preventDefault(); document.execCommand('insertLineBreak'); return; }
-      e.preventDefault();
+      if (f === 'purpose' && e.shiftKey) { e.preventDefault(); document.execCommand('insertLineBreak'); return; }   // 줄바꿈은 설명(목적)에서만
+      e.preventDefault();                           // 제목·정책 줄의 Shift+Enter 는 Enter 와 같다 — 삼키지 않고 다음 칸으로
       if (f === 'policy' && ctx.allowAdd) {
         var li = policyLi('', true); cur.list.insertBefore(li, el.nextSibling); caretTo(li, false); return;
       }

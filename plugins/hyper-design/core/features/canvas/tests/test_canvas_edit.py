@@ -2659,3 +2659,31 @@ def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
     dpage.evaluate(DROP_DRAFTS_JS)
     reload(dpage)
     assert not errs, errs
+
+
+def test_shift_enter_in_card_caption(dpage):
+    """#226: 카드 아래 글 상자에서 Shift+Enter — 제목 = 설명으로 넘어감(줄을 넣지 않음), 설명 = 줄바꿈(안내 글에 적힘), 정책 줄 = Enter 와 같이 다음 줄로."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    fit_view(dpage)
+    __import__("test_canvas_v2").zoom_to(dpage, "job", 200)
+    card = '.card[data-id="job"]'
+    bring_into_view(dpage, card + " .ftitle")
+    n0 = len(notes_of(dpage))
+    dpage.dblclick(card + " .ftitle")
+    box = dpage.locator(card + " .capbox")
+    assert box.is_visible()
+    title0 = box.locator('[data-f="title"]').text_content()
+    assert "Shift+Enter 줄바꿈" in box.locator('[data-f="purpose"]').get_attribute("data-ph")
+    dpage.keyboard.press("Shift+Enter")
+    assert dpage.evaluate("document.activeElement.dataset.f") == "purpose", "제목에서 Shift+Enter = 설명으로"
+    assert box.locator('[data-f="title"]').text_content() == title0 and box.locator('[data-f="title"] br').count() == 0, "제목에는 줄을 넣지 않는다"
+    dpage.keyboard.press("Shift+Enter")
+    assert dpage.evaluate("document.activeElement.dataset.f") == "purpose" and box.locator('[data-f="purpose"] br').count() >= 1, "설명에서는 줄바꿈"
+    if box.locator('ul[data-f="policies"] > li').count() >= 2:
+        box.locator('ul[data-f="policies"] > li').first.click()
+        dpage.keyboard.press("Shift+Enter")
+        assert dpage.evaluate("document.activeElement === document.querySelector('" + card + " .capbox ul[data-f=\"policies\"] > li:nth-child(2)')"), "정책 줄 Shift+Enter = Enter(다음 줄)"
+    dpage.keyboard.press("Escape")
+    assert not box.count() and len(notes_of(dpage)) == n0
+    assert not errs, errs
