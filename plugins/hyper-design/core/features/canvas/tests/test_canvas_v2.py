@@ -148,7 +148,7 @@ def test_pick_note_pin_persists(page):
     page.fill("#pnote", "가격을 오른쪽 끝으로 붙이고 굵게")
     page.click("#padd")
     assert page.locator("#mpins .pin").count() == 1
-    assert page.text_content("#mpins .pin") == "①"
+    assert page.text_content("#mpins .pin") == "1", "핀 = 그 화면의 메모 번호(n.no)"
     SHOTS.mkdir(parents=True, exist_ok=True)
     # 팝오버 + 핀을 한 장에: 두 번째 요소를 고른 상태로 찍고 취소
     fr.locator("body *").filter(has_text=re.compile(r"\S")).nth(3).click()
@@ -185,18 +185,21 @@ def test_send_format(page):
 
 
 def test_clear_sent(page):
-    assert page.is_visible("#nclear")
+    """[보낸 것 완료로]: 보낸 메모를 지우지 않고 완료(답 '확인')로 — 목록·배지에서 빠지고 기록은 메모 안에 남는다."""
+    assert page.is_visible("#nclear") and page.text_content("#nclear") == "보낸 것 완료로"
     page.click("#nclear")
     assert page.evaluate("document.querySelectorAll('#nlist li').length") == 0
     assert page.is_hidden("#notes")
     reload(page)
     assert page.locator(".nbadge").count() == 0
+    ns = page.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))))")
+    assert ns and all(n["replies"][-1]["kind"] == "확인" and n["replies"][-1]["by"] == "user" for n in ns), ns
 
 
 def test_multi_select_note(page):
     """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 요소마다 한 항목(형식 그대로)."""
     # 메모 없이 시작 — 영역(-m)으로 골라 돌리면 앞 테스트(test_pick_note_pin_persists)의 메모를 지우는 test_clear_sent 가 빠진다
-    page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes:')).forEach(k => localStorage.removeItem(k))")
+    page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes:') || k.startsWith('hd-note-seq:')).forEach(k => localStorage.removeItem(k))")
     reload(page)
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
@@ -214,7 +217,7 @@ def test_multi_select_note(page):
     page.fill("#pnote", "두 곳 모두 굵게")
     page.click("#padd")
     pins = page.locator("#mpins .pin")
-    assert pins.count() == 2 and pins.nth(0).text_content() == pins.nth(1).text_content() == "①"
+    assert pins.count() == 2 and pins.nth(0).text_content() == pins.nth(1).text_content() == "1"
     assert "2개 요소" in page.text_content("#nlist")
     page.keyboard.press("Escape")
     page.click("#nsend")

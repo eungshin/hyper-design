@@ -1,6 +1,6 @@
 /* Model — 편집 메모(화면 파일을 바꾸는 편집). DOM·저장소·메시지를 쓰지 않는다.
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
-   메모 = {id, screen, targets:[{path,text,rect}], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
+   메모 = {id, no, screen, targets:[{path,text,rect,quote?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index) · new-screen · cut-in · delete · copy
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, split, tally, request, say} */
 (function () {
@@ -11,7 +11,8 @@ function newId() { return Date.now().toString(36) + Math.random().toString(36).s
 
 // 메모 하나 — h = 대상 요소 {path, text, rect}
 function note(screen, h, text, op, to) {
-  return {id: newId(), screen: screen, targets: [{path: h.path, text: h.text, rect: h.rect}],
+  var t = {path: h.path, text: h.text, rect: h.rect}; if (h.quote) t.quote = h.quote;   // quote = 다시 찾을 글(palette.js, task 11)
+  return {id: newId(), screen: screen, targets: [t],
           path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link', op: op || '', to: to || ''};
 }
 

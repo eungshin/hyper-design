@@ -8,7 +8,7 @@
 <link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'">
 <style>
 /* 판 바깥 UI 색(무채색 고정) — 색은 판 위 내용(화면·연결선)과 그 순간 위험한 곳(--ui-danger)에만. 테마가 바꾸는 앱 색(--c-*)과 섞지 않는다 */
-:root{--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f}
+:root{--ui-accent:#c2590a;--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden}
 body{display:flex;flex-direction:column;background:#ECECE8;color:#1c1c1c;font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;word-break:keep-all;-webkit-text-size-adjust:100%}
@@ -174,7 +174,17 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #thread{position:fixed;z-index:39;width:320px;max-height:min(60vh,520px);display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-size:13.5px}
 #thread[hidden]{display:none}
 #thread .thh{padding:10px 12px 6px;font-weight:700;font-size:14px;border-bottom:1px solid #eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#thread .thlist{list-style:none;margin:0;padding:4px 0;overflow:auto;flex:1 1 auto}
+#thread .thbody{overflow:auto;flex:1 1 auto}
+#thread .thlist{list-style:none;margin:0;padding:4px 0}
+#thread .thlist li.focus{background:#f4f4f1}
+#thread .thn{flex:none;font-weight:700;color:#1c1c1c}
+#thread .ths{flex:none;color:#888}
+#thread .ths[data-st="decide"]{color:var(--ui-accent);font-weight:700}
+#thread .thlost{margin-top:3px;font-size:12px;color:#777}
+#thread .threp{margin-top:6px;padding-left:8px;border-left:2px solid #e4e4df;font-size:12.5px;color:#444}
+#thread .thold summary,#thread .thdone>summary{cursor:pointer;color:#888;font-size:12px}
+#thread .thdone{padding:6px 12px;border-top:1px solid #f1f1ee}
+#thread .thdone .thlist li{padding:8px 0;opacity:.75}
 #thread .thlist li{padding:8px 12px;border-bottom:1px solid #f1f1ee}
 #thread .thlist li.sent{opacity:.6}
 #thread .thl{display:flex;gap:8px;justify-content:space-between;color:#777;font-size:12px}
@@ -440,8 +450,18 @@ body.split-lr #khint{display:none}
 
 /* ---------- 주석 달기 · 메모 ---------- */
 #mpins{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
-.pin{position:absolute;transform:translate(-40%,-40%);min-width:24px;height:24px;padding:0 4px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.pin{position:absolute;pointer-events:auto;cursor:pointer;border:0;font-family:inherit;transform:translate(-40%,-40%);min-width:24px;height:24px;padding:0 4px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .pin-box{position:absolute;border:2px dashed var(--ui-badge);border-radius:4px}
+.pin[data-st="decide"],.npin[data-st="decide"]{background:var(--ui-accent)}
+.pin.hi,.npin.hi{box-shadow:0 0 0 3px #fff,0 0 0 5px var(--ui-mark)}
+.pin-box.hi{border-style:solid;border-color:var(--ui-mark)}
+/* 판 카드 메모 핀(modules/view-pins.js): 고른·올린·막 메모를 단 카드, 또는 판 배율로 화면이 실제의 60% 이상일 때만 */
+.npins{position:absolute;inset:0;z-index:2;pointer-events:none;display:none}
+.card.picked .npins,.card:hover .npins,.card.pins-on .npins,#rows.pins-near .npins,.npins.show{display:block}
+.npin{position:absolute;pointer-events:auto;cursor:pointer;transform:translate(-40%,-40%);min-width:calc(24px * var(--ts,1));height:calc(24px * var(--ts,1));padding:0 calc(4px * var(--ts,1));border:0;border-radius:999px;background:var(--ui-badge);color:#fff;font:700 calc(15px * var(--ts,1))/1 system-ui,sans-serif;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.npbox{position:absolute;display:none;border:calc(2px * var(--ts,1)) solid var(--ui-mark);border-radius:4px;box-sizing:border-box}
+.npbox.hi{display:block}
+.npsel{position:absolute;z-index:3;pointer-events:none;border:calc(2px * var(--ts,1)) dashed var(--ui-mark);background:rgba(43,43,41,.08);border-radius:4px;box-sizing:border-box}
 .sel-box{position:absolute;border:2px solid var(--ui-mark);background:rgba(43,43,41,.08);border-radius:4px}
 .sel-box b{position:absolute;left:-2px;top:-20px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--ui-mark);color:#fff;font-size:12px;line-height:18px;text-align:center}
 #pop{position:fixed;z-index:40;width:300px;background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.3);padding:12px;font-size:14px}
@@ -543,7 +563,7 @@ body.split-lr #khint{display:none}
     <div id="notes" hidden aria-label="메모 목록">
       <ol id="nlist"></ol>
       <div class="nfoot">
-        <button class="nbtn" id="nclear" hidden>보낸 것 지우기</button>
+        <button class="nbtn" id="nclear" hidden>보낸 것 완료로</button>
         <div class="nmsg" id="nmsg"></div>
       </div>
     </div>
@@ -694,6 +714,20 @@ var ST = HD.viewStateSync.mount({hash: hashStr(KEYPATH), on: !!window.__hdHelper
 var PKEY = 'hd-card-pos:' + hashStr(KEYPATH), cardPos = {};
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);         // 메모 목록 하나(modules/notes.js) — 바꾼 뒤 saveNotes() 가 저장하고 닿은 카드만 다시 그린다
 var NS = HD.notes.store(HD.notes.parse((function () { try { return ST.getItem(NKEY); } catch (e) { return null; } })()));
+var QKEY = 'hd-note-seq:' + hashStr(KEYPATH);       // 화면마다 지금까지 쓴 가장 큰 메모 번호(modules/annotation.js) — 지워도 번호를 다시 쓰지 않게
+var noteSeq = (function () {
+  var t = null; try { t = ST.getItem(QKEY); } catch (e) { t = null; }   // 저장소를 못 읽으면 빈 값(번호는 목록에서 다시 맞춘다)
+  if (t == null) return {};
+  try { var v = JSON.parse(t); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch (e) {}
+  console.warn('[hd] note-seq 저장값이 깨져 목록에서 다시 맞춥니다'); return {};
+})();
+function numberNotes() {                             // 번호 없는 메모(새 메모·옛 메모)에 번호 · 답 칸 — 바뀌면 true
+  var m = HD.annotation.migrate(NS.list(), noteSeq), seqChanged = JSON.stringify(m.seq) !== JSON.stringify(noteSeq);
+  noteSeq = m.seq;
+  if (seqChanged) { try { ST.setItem(QKEY, JSON.stringify(noteSeq)); } catch (e) {} }   // 저장 실패는 아래 메모 저장 알림이 알린다
+  return m.changed;
+}
+if (numberNotes()) { try { ST.setItem(NKEY, JSON.stringify(NS.list())); } catch (e) {} }   // 옛 메모를 한 번 번호 매겨 둔다(저장 실패 = 다음 저장 때 다시)
 function groupOf(c) { var f = c.closest('.flow'), g = f ? $('.glabel', f) : null; return g ? g.textContent : ''; }
 function loadCardPos() {
   var raw = {}; try { raw = JSON.parse(ST.getItem(PKEY) || '{}') || {}; } catch (e) { raw = {}; }
@@ -791,6 +825,7 @@ function apply() {
   rowsEl.style.setProperty('--lw', Math.max(2, 1.2 / z).toFixed(2));   // 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
   var ts = tagScale();                             // 선 위 태그: 작게 볼 때 화면에서 읽히는 크기로(겹침 상자도 다시 잰다)
   rowsEl.style.setProperty('--ts', ts.toFixed(3));
+  if (PN) PN.zoom(z);                              // 화면이 실제의 60% 이상이면 메모 핀을 늘 보인다
   placeSelbar();
   if (Math.abs(ts - lastTs) > 0.02) { lastTs = ts; clearTimeout(tsT); tsT = setTimeout(function () { if (VL) VL.paint(); }, 120); }
   scheduleVisible();
@@ -995,7 +1030,7 @@ function loadVisible() {
     if (r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
       if (!f.dataset.wired) {                     // 다시 실을 때(data-src 다시 붙임)마다 듣는 이를 더하지 않는다 — 실을 때마다 메시지 한 번
         f.dataset.wired = '1';
-        f.addEventListener('load', function () { var c = f.closest('.card'); sendTo(f); if (c) sendPending(f, c.dataset.id); });
+        f.addEventListener('load', function () { var c = f.closest('.card'); sendTo(f); if (c) { sendPending(f, c.dataset.id); if (PN) PN.locate(c.dataset.id, f); } });   // 메모 자리 다시 찾기(hd-locate)
       }
       f.src =f.getAttribute('data-src'); f.removeAttribute('data-src');
     }
@@ -1031,7 +1066,7 @@ function closeModal() {                            // hidden 은 바로(상태),
   mcloseT = setTimeout(function () { modal.classList.remove('is-closing'); if (modal.hidden) mframe.removeAttribute('src'); },
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
-mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) sendPending(mframe, mscreen); try { mframe.contentWindow.postMessage({type: 'hd-edit', on: true}, '*'); } catch (e) {} });
+mframe.addEventListener('load', function () { sendTo(mframe); sendPick(); if (mscreen) { sendPending(mframe, mscreen); if (PN) PN.locateModal(); } try { mframe.contentWindow.postMessage({type: 'hd-edit', on: true}, '*'); } catch (e) {} });
 addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl) → 그 자리에 고치기 칸
   var d = e.data; if (!d || d.type !== 'hd-dbl' || modal.hidden || e.source !== mframe.contentWindow) return;
   if (!d.path) { toast('여기에는 고칠 글자가 없어요'); return; }
@@ -1042,7 +1077,7 @@ addEventListener('message', function (e) {         // 크게 보기 안에서 �
   try { e.source.postMessage({type: 'hd-edit', on: true}, '*'); } catch (err) {}   // 그림·글꼴을 다 받기(load) 전에도 두 번 누르기 고치기가 되게
   if (d.screen === mscreen) return;
   mscreen = String(d.screen); $('#mtitle').textContent = titleOf(mscreen);
-  hidePop(); drawPins(); sendPending(mframe, mscreen);
+  hidePop(); drawPins(); sendPending(mframe, mscreen); if (PN) PN.locateModal();
 });
 $('#mclose').addEventListener('click', closeModal);
 modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });   // 화면 바깥 덮개를 누르면 닫힘
@@ -1714,8 +1749,9 @@ function renderDrafts(ids) {                         // 메모의 빈 레이아�
   });
 }
 function openElemMemo(id, h, x, y) {                 // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이)
-  editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect}]};
+  editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect, quote: h.quote || null}]};
   showPop({text: h.text || h.path, path: h.path, rect: null}, '', 'change', {x: x, y: y});
+  drawPins();                                        // 메모 창이 열린 동안 그 카드에 고른 요소 테두리
 }
 function editLayout(id, changes) {                  // 빈 레이아웃 카드 글(#225): 이름·목적은 그 메모 안(n.value·n.purpose) — 보내면 목적이 AI 의 첫째 브리프 · 되돌리기 한 단계
   if (!layoutOf(id)) { toast('그 빈 레이아웃이 없어요 — 이미 지워졌어요'); return; }
@@ -1733,6 +1769,7 @@ var deleted = {};
 var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
   if (LY) LY.render();
   if (VA) VA.render();
+  if (PN && st.ids.length) PN.focus(null);          // 다른 카드를 고르면 막 메모를 단 카드의 핀 보이기는 끝
   placeSelbar();
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
@@ -1830,6 +1867,7 @@ function popItem(dr, last) {
 }
 var notesSaveWarned = false, notesLinesKey = HD.notes.linesKey(NS.list());                         // 저장이 안 되면(저장 공간 꽉 참) 한 번 알린다 — 다시 되면 다음 실패도 알린다
 function saveNotes() {
+  numberNotes();
   try { ST.setItem(NKEY, JSON.stringify(NS.list())); notesSaveWarned = false; }
   catch (e) { if (!notesSaveWarned) { notesSaveWarned = true; toast('메모를 저장하지 못했어요 — 브라우저 저장 공간이 꽉 찼어요. 새로고침하면 보내지 않은 편집이 사라질 수 있어요', false, 9000); } }
   renderNotes(NS.commit()); drawPins(); if (LY) LY.render();   // 지난 저장 뒤 메모가 바뀐 화면 카드만 다시
@@ -1893,7 +1931,8 @@ function commitPop() {
     var n = NS.find(editing);
     if (n) { n.note = note; n.intent = intent; n.sent = false; }
   } else if (draft) {
-    var t0 = draft.targets[0];
+    var t0 = draft.targets[0], at = draft.screen;
+    if (modal.hidden && PN) PN.focus(at);            // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
     NS.add({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: draft.screen, targets: draft.targets.slice(),
                 path: t0.path, text: t0.text, rect: t0.rect, note: note, intent: intent, sent: false});
   }
@@ -1906,7 +1945,7 @@ addEventListener('message', function (e) {
   var d = e.data; if (!d || typeof d !== 'object' || e.source !== mframe.contentWindow) return;
   if (d.type === 'hd-picked' && picking) {
     if (d.screen) mscreen = String(d.screen);
-    var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null};
+    var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null};
     if (d.add && draft && !editing && !pop.hidden) {   // Shift+클릭: 고른 묶음에 더하거나 빼기
       var note = $('#pnote').value, intent = curIntent(), at = -1;
       draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
@@ -1920,22 +1959,7 @@ addEventListener('message', function (e) {
     drawPins(); showPop(popItem(draft, it), '', 'change');
   }
 });
-function drawPins() {
-  var layer = $('#mpins'), h = '';
-  if (mscreen && !modal.hidden) NS.list().forEach(function (n, i) {
-    if (n.screen !== mscreen) return;
-    tgts(n).forEach(function (t) {
-      var r = t.rect, s = mscale; if (!r) return;
-      h += '<div class="pin-box" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
-        '<div class="pin" data-n="' + (i + 1) + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + circled(i + 1) + '</div>';
-    });
-  });
-  if (draft && !modal.hidden) draft.targets.forEach(function (t, i) {   // 지금 고른 요소들: 테두리 + 고른 순서
-    var r = t.rect, s = mscale; if (!r) return;
-    h += '<div class="sel-box" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"><b>' + (i + 1) + '</b></div>';
-  });
-  layer.innerHTML = h;
-}
+function drawPins() { if (PN) PN.paint(); }           // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js)
 function editMemo(id) {                             // 메모 고치기 — 메모 패널·카드 메모 묶음(#224)이 같이 쓴다
   var n = NS.find(id); if (!n) { toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
   editing = id; draft = null;
@@ -1956,13 +1980,31 @@ var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: ci
                              del: delMemo, edit: editMemo});
 // 카드 메모 배지 → 그 화면 메모 묶음(modules/view-thread.js, #224) — 고치기·지우기는 메모 패널과 같은 함수, [메모 추가] = 화면 전체 메모
 var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { return NS.list(); }, title: function (id) { return titleOf(id); },
-                              edit: editMemo, del: delMemo, add: function (id) { openCardMemo(id); }});
+                              edit: editMemo, del: delMemo, add: function (id) { openCardMemo(id); },
+                              done: function (id) { addReply([id], '확인', '메모 완료'); }, reopen: function (id) { addReply([id], '다시', '메모 다시 열기'); },
+                              lost: function (n) { return PN ? PN.lost(n) : false; }, highlight: function (id, no) { if (PN) PN.highlight(id, no); }});
+// 메모 핀(modules/view-pins.js, task 11): 판 카드·크게 보기의 번호 핀 — 누르면 그 화면 메모 묶음이 그 메모로 열린다
+var PN = HD.viewPins.mount({rowsEl: rowsEl, mpins: $('#mpins'), $: $, $$: $$, esc: esc, CARD: CARD, list: function () { return NS.list(); },
+  cardEl: function (id) { return VL.cardEl(id); },
+  modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, frame: mframe, draft: draft}; },
+  openThread: function (id, no, el) { TH.open(id, el, no); },
+  changed: function () { TH.refresh(); }});
+PN.zoom(z);
+function addReply(ids, kind, label) {                // 사람 답(완료 = 확인 · 다시 열기 = 다시, 보내기 전으로) — 메모 안 n.replies 에 덧붙임, 되돌리기 한 단계
+  var at = new Date().toISOString(), hit = ids.map(function (id) { return NS.find(id); }).filter(Boolean);
+  if (!hit.length) { toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
+  var was = hit.map(function (n) { return {n: n, sent: n.sent, k: (n.replies || []).length}; });
+  var go = function () { hit.forEach(function (n) { n.replies = (n.replies || []).concat([HD.annotation.reply(kind, at)]); if (kind === '다시') n.sent = false; }); saveNotes(); };
+  go();
+  record({label: label, redo: go, undo: function () { was.forEach(function (w) { w.n.replies = (w.n.replies || []).slice(0, w.k); w.n.sent = w.sent; }); saveNotes(); }});
+}
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   var c = VN.render(NS.list(), ids), was = notesShown;
   notesShown = c;
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)
   if (ORIG) { renderDrafts(ids); paintDeleted(ids); paintCardText(ids); sendAllPending(ids); }   // ORIG 전(시작 중)에는 아직 그릴 카드 글이 없다
   if (VL && VL.refresh) VL.refresh();
+  if (PN) PN.render(ids);
   if (TH) TH.refresh();
 }
 function copyText(t) {                              // → Promise<복사됐나>
@@ -2019,11 +2061,11 @@ var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id)
   getItem: ST.getItem, setItem: ST.setItem,
   key: 'hd-busy:' + hashStr(KEYPATH), toast: function (m) { toast(m); }}) : null;
 var sending = false;                                 // 보내는 중에는 다시 보내지 않는다(두 번 누르기 = AI 에게 같은 요청 두 번 · S1)
-function sendDone() { sending = false; $('#nsend').disabled = !NS.list().length; }
+function sendDone() { sending = false; $('#nsend').disabled = !NS.list().some(HD.annotation.isOpen); }
 $('#nsend').addEventListener('click', function (e) {
   if (sending || (e && e.detail > 1)) return;       // 더블클릭의 두 번째 누르기도 한 번으로
-  var list = NS.unsent();
-  if (!list.length) list = NS.list().slice();            // 다 보냈으면 다시 보내기(따로 누른 한 번)
+  var open = NS.list().filter(HD.annotation.isOpen), list = open.filter(function (n) { return !n.sent; });   // 완료한 메모는 보내지 않는다
+  if (!list.length) list = open;                          // 다 보냈으면 다시 보내기(따로 누른 한 번)
   if (!list.length) return;
   sending = true; $('#nsend').disabled = true;
   if (!VS.on) { copySend(list).then(sendDone, sendDone); return; }
@@ -2046,10 +2088,17 @@ $('#nsend').addEventListener('click', function (e) {
     }
   }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); }).then(sendDone, sendDone);
 });
-$('#nclear').addEventListener('click', function () {
-  NS.remove(function (n) { return n.sent; });
-  $('#nmsg').textContent = '';
-  saveNotes();
+$('#nclear').addEventListener('click', function () {   // 보낸 메모 = 완료(답 '확인'을 덧붙여 기록은 남긴다) · 보낸 편집(반영 대기)은 예전처럼 목록에서 뺀다 — 되돌리기 한 단계
+  var A = HD.annotation, at = new Date().toISOString(), before = NS.list().slice();
+  var memos = before.filter(function (n) { return n.sent && !n.edit && A.isOpen(n); }), k = memos.map(function (n) { return (n.replies || []).length; });
+  var edits = before.filter(function (n) { return n.sent && n.edit; });
+  if (!memos.length && !edits.length) return;
+  var go = function () {
+    memos.forEach(function (n) { n.replies = (n.replies || []).concat([A.reply('확인', at)]); });
+    NS.remove(function (n) { return edits.indexOf(n) >= 0; }); $('#nmsg').textContent = ''; saveNotes();
+  };
+  go();
+  record({label: '보낸 것 완료로', redo: go, undo: function () { memos.forEach(function (n, i) { n.replies = n.replies.slice(0, k[i]); }); NS.set(before); saveNotes(); }});
 });
 addEventListener('keydown', function (e) {
   if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;

@@ -59,7 +59,7 @@ def out():
 
 
 def test_only_per_project_keys_map_to_names(out):
-    assert out["names"] == ["notes", "card-pos", "edit-log", "link-names", "hidden", "locked", "folders", "busy"]
+    assert out["names"] == ["notes", "card-pos", "edit-log", "link-names", "hidden", "locked", "folders", "busy", "note-seq"]
     assert out["key"] == "hd-card-pos:abc"
     assert out["nameOf"] == ["notes", "card-pos", "busy", None, None, None, None, None, None], "다른 프로젝트·전역 설정·모르는 키는 파일로 가지 않는다"
 

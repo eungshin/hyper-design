@@ -103,6 +103,10 @@ BROWSER = {
     "test_badge_opens_that_screens_memos_like_comments": ("notes",),
     "test_blank_layout_caption_has_name_and_multiline_purpose": ("tools",),
     "test_shift_enter_in_card_caption": ("tools",),
+    # test_canvas_annotations.py — task 11 메모 핀·번호·다시 찾기·완료
+    "test_board_pin_numbers_thread_and_done": ("notes",),
+    "test_pins_reanchor_after_screen_changes": ("notes",),
+    "test_answered_memo_has_no_pin_and_leaves_badge": ("notes",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),

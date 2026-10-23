@@ -12,7 +12,7 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy'];
+var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy', 'note-seq'];
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 
 function keyOf(name, hash) { return 'hd-' + name + ':' + hash; }
