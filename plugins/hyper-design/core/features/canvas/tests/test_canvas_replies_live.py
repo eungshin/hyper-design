@@ -1,7 +1,7 @@
 """AI 답이 캔버스에 살아서 온다(task 16 · A2a) — 도우미로 연 캔버스, `hd reply` 와 같은 길(POST /api/reply)로 상태 파일에 답을 쓴다 (Playwright).
 
-(a) 반영됨 → 새로고침 없이 몇 초 안에 핀·배지 수가 빠지고 묶음에 답 줄(올리면 화면·캡처).
-(b) 질문 → 위쪽 줄 '결정 필요 1'·카드 배지 강조색 · 고를 것 누르기 = 질문 메모 완료 + 새 메모를 그것만 보냄(대기열 파일).
+(a) 반영됨 → 새로고침 없이 몇 초 안에 핀 상태가 완료로 바뀌고 묶음에 답 줄(올리면 화면·캡처) — 보낸 메모 보기 켜고(task 29), 끄면 둘 다 숨김.
+(b) 질문 → 숨어 있던 보낸 메모가 다시 보임(task 29) · 위쪽 줄 '결정 필요 1'·카드 배지 강조색 · 고를 것 누르기 = 질문 메모 완료 + 새 메모를 그것만 보냄(대기열 파일).
 (c) 받는 AI 가 없으면 칩 '받는 곳 없음', 보낸 메모는 묶음에서 '대기열'.
 """
 import json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request
@@ -11,7 +11,7 @@ import pytest
 
 from test_canvas_v2 import SCRIPTS, browser, ctx  # noqa: F401
 from test_canvas_edit import fit_view
-from test_canvas_annotations import PAY, DONE
+from test_canvas_annotations import PAY, DONE, show_sent
 
 sys.path.insert(0, str(SCRIPTS))
 import helper  # noqa: E402
@@ -85,16 +85,18 @@ def file_notes(pg):
 
 @pytest.mark.area("notes", "helper")
 def test_agent_reply_shows_live_without_reload(live):
-    """(a) 반영됨 → ~3초 안에 핀·배지 수가 빠지고 묶음 '완료' 에 답 줄, 페이지는 그대로(표지가 남음). (c) 칩 '받는 곳 없음'."""
+    """(a) 반영됨 → ~3초 안에 그 핀이 완료 상태, 묶음 '완료' 에 답 줄, 페이지는 그대로(표지가 남음). (c) 칩 '받는 곳 없음'.
+    보낸 메모는 숨김(task 29)이라 '보낸 메모 보기'를 켜고 본다 — 끄면 둘(대기열·완료) 다 숨는다."""
     pg = live
     assert pg.text_content("#aichip") == "받는 곳 없음" and pg.is_visible("#aichip"), "받는 AI 가 없으면 칩이 그렇게 말한다(R4)"
+    show_sent(pg, True)
     fit_view(pg)
     pg.wait_for_function(f"document.querySelectorAll('{PIN}').length === 2", timeout=8000)
     assert pg.text_content(BADGE) == "2"
     pg.evaluate("window.__hdStay = 1")
     reply(pg, "m1", {"kind": "반영됨", "what": "버튼 키움", "screens": ["pay"], "captured": True})
-    pg.wait_for_function(f"(() => {{ const b = document.querySelector('{BADGE}'); return b && b.textContent === '1'; }})()", timeout=4000)
-    pg.wait_for_function(f"document.querySelectorAll('{PIN}').length === 1", timeout=3000)
+    pg.wait_for_selector(PIN + '[data-id="m1"][data-st="done"]', state="attached", timeout=4000)
+    assert pg.locator(PIN).count() == 2 and pg.text_content(BADGE) == "2", "켜져 있으면 완료한 메모도 보인다(흐리게)"
     assert pg.evaluate("window.__hdStay") == 1, "새로고침 없이"
     pg.click(BADGE)
     pg.wait_for_selector("#thread:not([hidden])")
@@ -104,19 +106,23 @@ def test_agent_reply_shows_live_without_reload(live):
     assert line.count() == 1, "답 줄"
     assert "캡처 확인함" in line.get_attribute("title")
     pg.keyboard.press("Escape")
+    show_sent(pg, False)
+    pg.wait_for_selector(BADGE, state="detached", timeout=3000)
+    assert pg.locator(PIN).count() == 0, "끄면 보낸(대기열)·완료 메모 둘 다 숨는다"
 
 
 @pytest.mark.area("notes", "helper")
 def test_question_reply_surfaces_and_choice_sends_follow_up(live):
     """(b) 질문 → '결정 필요 1'·배지 강조색 · 고르기 = 질문 메모 완료(확인 + answer) + 새 메모 '질문 "…" → 파랑' 를 대기열로 보냄."""
     pg = live
+    show_sent(pg, False)
     fit_view(pg)
-    pg.wait_for_selector(BADGE)
-    assert pg.is_hidden("#decn")
+    pg.wait_for_selector("#nsent:not([disabled])")
+    assert pg.locator(BADGE).count() == 0 and pg.is_hidden("#decn"), "보낸 메모(AI 차례)는 숨김(task 29)"
     reply(pg, "m2", {"kind": "질문", "question": "어느 색?", "choices": ["파랑", "검정"]})
     pg.wait_for_selector("#decn:not([hidden])", timeout=4000)
     assert pg.get_attribute("#decn", "data-n") == "1"
-    assert "decide" in pg.get_attribute(BADGE, "class") and pg.text_content(BADGE) == "2", "배지 강조색, 수는 열린 메모 수 그대로"
+    assert "decide" in pg.get_attribute(BADGE, "class") and pg.text_content(BADGE) == "1", "질문 받은 메모는 다시 보인다 — 배지 강조색, 수 = 보이는 메모"
     pg.click(BADGE)
     pg.wait_for_selector('#thread li[data-id="m2"] button.thc')
     assert pg.get_attribute('#thread li[data-id="m2"] .ths', "data-st") == "decide"
@@ -143,8 +149,9 @@ ASKED = dict(memo("m2", 2, T_LEAD, "안내 글 색"), replies=[{"kind": "질문"
 @pytest.mark.parametrize("live", [[memo("m1", 1, T_BTN, "버튼을 더 크게"), ASKED]], indirect=True, ids=["asked"])
 @pytest.mark.area("notes", "helper")
 def test_decide_chip_filters_memo_panel_to_decide_only(live):
-    """#232: 위쪽 '결정 필요' 누르기 = 메모 패널을 결정 필요 메모만으로(#ndec 눌림) · #ndec 다시 누르기 = 모두."""
+    """#232: 위쪽 '결정 필요' 누르기 = 메모 패널을 결정 필요 메모만으로(#ndec 눌림) · #ndec 다시 누르기 = 모두(보낸 메모 보기 켜짐 — task 29)."""
     pg = live
+    show_sent(pg, True)
     pg.wait_for_selector("#decn:not([hidden])", timeout=5000)
     pg.click("#decn")
     pg.wait_for_selector("#nlist li")

@@ -66,6 +66,14 @@ def el_box(pg, ph, fr, sel):
     return {"x": ph["x"] + r[0] * sc, "y": ph["y"] + r[1] * sc, "w": r[2] * sc, "h": r[3] * sc}
 
 
+def show_sent(pg, on):
+    """메모 패널의 '보낸 메모 보기'(task 29)를 on 으로 — 패널 탭을 앞으로 한 뒤 누른다."""
+    pg.click('#dock .dk-tab[data-p="notes"]')
+    if (pg.get_attribute("#nsent", "aria-pressed") == "true") != on:
+        pg.click("#nsent")
+    assert pg.get_attribute("#nsent", "aria-pressed") == ("true" if on else "false")
+
+
 def annotate_button(pg, note):
     ph = zoom_to(pg, "pay", 420)                     # 카드 화면 ≈ 실제의 52% — 배율만으로는 핀이 안 보이는 크기
     fr = frame_of(pg, "pay")
@@ -84,7 +92,7 @@ def annotate_button(pg, note):
 @pytest.mark.area("notes")
 def test_board_pin_numbers_thread_and_done(apage):
     """(a) 카드 요소에 메모 → 그 요소 자리에 핀 1(다시 불러오지 않고 바로) · 핀 누르기 = 그 메모로 열린 묶음(카드 고르기 아님).
-    (b) 1 을 지우고 더하면 2. 완료 → 핀·배지 수가 빠지고 '완료' 묶음 · 다시 열기 → 핀이 돌아온다."""
+    (b) 1 을 지우고 더하면 2. 완료 → 핀·배지가 빠지고 묶음엔 '숨김' 한 줄(task 29) · 보낸 메모 보기를 켜면 '완료' 묶음에 [다시 열기] → 핀이 돌아온다."""
     pg = apage
     fit_view(pg)
     ph, (x, y) = annotate_button(pg, "버튼을 더 크게")
@@ -115,13 +123,17 @@ def test_board_pin_numbers_thread_and_done(apage):
     pg.click('#thread li.focus button[data-act="done"]')   # 완료(사람 답 '확인')
     pg.wait_for_function(f"!document.querySelector('{PIN}')")
     assert pg.locator(BADGE).count() == 0, "완료한 메모는 배지 수에서 빠진다"
-    assert pg.locator("#thread details.thdone li").count() == 1
+    assert pg.locator("#thread details.thdone").count() == 0 and "1건 숨김" in pg.text_content("#thread .thhid"), "완료 묶음은 보낸 메모 보기를 켰을 때만(task 29)"
     assert notes_of(pg)[0]["replies"][-1]["kind"] == "확인"
+    show_sent(pg, True)
+    pg.click(BADGE)                                    # 켜면 완료한 메모도 배지 수에
+    pg.wait_for_selector("#thread details.thdone li", state="attached")
     pg.click("#thread details.thdone summary")
     pg.click('#thread details.thdone button[data-act="reopen"]')
     pg.wait_for_selector(PIN + '[data-no="2"]', state="attached", timeout=4000)
     n = notes_of(pg)[0]
     assert [r["kind"] for r in n["replies"]] == ["확인", "다시"] and n["sent"] is False and pg.text_content(BADGE) == "1"
+    show_sent(pg, False)
     pg.keyboard.press("Control+z")                     # 다시 열기 = 되돌리기 한 단계
     pg.wait_for_function(f"!document.querySelector('{PIN}')")
     pg.keyboard.press("Control+y")
@@ -187,3 +199,63 @@ def test_answered_memo_has_no_pin_and_leaves_badge(apage):
     zoom_to(pg, "pay", 0.7 * 812)
     pg.mouse.move(5, 500)
     assert pins(pg)[0]["vis"], "화면이 실제의 60% 이상이면 늘 보인다"
+
+
+SEED_JS = """() => { const t = {path: 'button.pay', text: '지금 결제하기', quote: {exact: '지금 결제하기', prefix: '', suffix: ''}},
+        l = {path: 'p.lead', text: '카드를 고르세요', quote: {exact: '카드를 고르세요', prefix: '', suffix: ''}};
+    const a = [{id: 'm1', no: 1, screen: 'pay', targets: [t], path: t.path, text: t.text, rect: null, note: '버튼을 더 크게', intent: 'change', sent: false, replies: []},
+               {id: 'q1', no: 2, screen: 'pay', targets: [l], path: l.path, text: l.text, rect: null, note: '안내 글 색', intent: 'change', sent: true,
+                replies: [{kind: '질문', question: '어느 색?', choices: ['파랑', '검정']}]}];
+    const h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(location.pathname);
+    localStorage.setItem('hd-notes:' + h, JSON.stringify(a)); localStorage.setItem('hd-note-seq:' + h, JSON.stringify({pay: 2})); localStorage.removeItem('hd-show-sent:' + h); }"""
+
+
+@pytest.mark.area("notes")
+def test_sent_memo_hidden_until_show_sent(apage):
+    """task 29: 메모 둘(m1 보내기 전 · q1 질문 받음) → 보내기 = m1 이 목록·배지 수·핀에서 사라짐, 질문 받은 q1 은 그대로 ·
+    '보낸 메모 보기 (1)' 켜기 = m1 이 흐리게 + 'AI 작업 중' · 새로고침해도 켜짐 그대로 · 끄면 다시 숨김."""
+    pg = apage
+    pg.evaluate(SEED_JS)
+    reload(pg)
+    fit_view(pg)
+    zoom_to(pg, "pay", 0.7 * 812)                    # 화면이 실제의 60% 이상 = 핀이 늘 보임
+    pg.wait_for_selector(PIN + '[data-no="1"]', state="attached", timeout=5000)
+    assert sorted(p["no"] for p in pins(pg)) == ["1", "2"] and pg.text_content(BADGE) == "2"
+    assert pg.get_attribute("#nsent", "aria-pressed") == "false" and pg.is_disabled("#nsent") and pg.text_content("#nsent") == "보낸 메모 보기 (0)", "0 이면 꺼진 단추(자리 유지)"
+    pg.click("#nsend")
+    pg.wait_for_function("document.getElementById('nmsg').textContent.indexOf('복사') >= 0", timeout=5000)
+    assert {n["id"]: n["sent"] for n in notes_of(pg)} == {"m1": True, "q1": True}
+    pg.wait_for_function(f"!document.querySelector('{PIN}[data-no=\"1\"]')", timeout=4000)
+    assert [p["no"] for p in pins(pg)] == ["2"], "보낸 메모 핀은 사라지고 질문 받은 메모 핀은 남는다"
+    assert pg.text_content(BADGE) == "1", "배지 수 = 보이는 메모"
+    pg.click('#dock .dk-tab[data-p="notes"]')
+    assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["q1"], "목록에서 보낸 메모가 빠진다"
+    assert pg.text_content("#nsent") == "보낸 메모 보기 (1)" and not pg.is_disabled("#nsent")
+    show_sent(pg, True)
+    assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["m1", "q1"]
+    assert "nhid" in pg.get_attribute('#nlist li[data-id="m1"]', "class") and pg.text_content('#nlist li[data-id="m1"] .nsst') == "AI 작업 중", "흐리게 + 상태 말"
+    assert float(pg.eval_on_selector('#nlist li[data-id="m1"]', "l => getComputedStyle(l).opacity")) < 0.7
+    pg.wait_for_selector(PIN + '[data-no="1"].nhid', state="attached", timeout=4000)
+    assert pg.text_content(BADGE) == "2"
+    reload(pg)
+    fit_view(pg)
+    pg.click('#dock .dk-tab[data-p="notes"]')
+    assert pg.get_attribute("#nsent", "aria-pressed") == "true", "켜짐은 새로고침 뒤에도(캔버스마다 저장)"
+    assert pg.locator("#nlist li").count() == 2
+    show_sent(pg, False)
+    assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["q1"]
+    assert pg.text_content(BADGE) == "1"
+
+
+@pytest.mark.area("notes")
+def test_broken_show_sent_value_warns_and_defaults_off(apage):
+    """깨진 저장값(hd-show-sent) = [hd] 경고 한 줄 + 꺼짐(오류 탐지)."""
+    pg = apage
+    pg.evaluate(SEED_JS)
+    pg.evaluate("""() => { const h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(location.pathname);
+        localStorage.setItem('hd-show-sent:' + h, 'yes please'); }""")
+    warns = []
+    pg.on("console", lambda m: warns.append(m.text) if m.type == "warning" else None)
+    reload(pg)
+    assert pg.get_attribute("#nsent", "aria-pressed") == "false"
+    assert any(w.startswith("[hd] hd-show-sent:") for w in warns), warns

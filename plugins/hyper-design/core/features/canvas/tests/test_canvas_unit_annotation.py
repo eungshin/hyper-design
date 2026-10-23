@@ -75,6 +75,14 @@ out.decide = A.decideCount([ask, {sent: true}, {sent: true, replies: [R('질문'
 const a = {id: 'a', note: '1', old: 1}, b = {id: 'b'}, cur = [a, b];
 const got = A.adopt(cur, [{id: 'c', note: 'new'}, {id: 'a', note: '2', replies: [R('반영됨')]}]);
 out.adopt = {same: got[1] === a, ids: got.map(n => n.id), a: a, curLen: cur.length};
+// 보낸 메모 숨기기(task 29): 상태마다 숨김/보임 · showSent = 다 보임
+const VIS = {draft: {sent: false}, working: {sent: true}, decide: {sent: true, replies: [R('질문')]}, partial: {sent: true, replies: [R('일부')]},
+  done: {sent: true, replies: [R('반영됨')]}, userDone: {sent: false, replies: [{kind: '확인'}]}, reopened: {sent: false, replies: [R('반영됨'), {kind: '확인'}, {kind: '다시'}]},
+  resent: {sent: true, replies: [R('반영됨'), {kind: '확인'}, {kind: '다시'}]}, answered: {sent: true, replies: [R('질문'), A.answer('b', 't')]}};
+out.vis = {}; out.visOn = {};
+Object.keys(VIS).forEach(k => { out.vis[k] = A.visible(VIS[k], false); out.visOn[k] = A.visible(VIS[k], true); });
+out.visDefault = A.visible({sent: true});
+out.hidden = [A.hiddenCount(Object.values(VIS)), A.hiddenCount([]), A.hiddenCount(null)];
 console.log(JSON.stringify(out));
 """
 
@@ -164,3 +172,12 @@ def test_adopt_keeps_object_identity(out):
     assert d["same"] and d["ids"] == ["c", "a"], "같은 id 는 같은 객체, 새 목록 차례, 없어진 메모는 빠짐"
     assert d["a"] == {"id": "a", "note": "2", "replies": [{"kind": "반영됨", "what": "w", "screens": ["s"], "captured": True}]}, "없어진 칸은 지우고 새 칸은 씀"
     assert d["curLen"] == 2, "지금 목록 배열은 그대로(새 배열을 돌려줌)"
+
+
+def test_sent_memos_hidden_unless_show_sent(out):
+    """task 29: 보낸 뒤 AI 차례(working)·끝난 것(done)은 숨김, 사람 차례(draft·decide·partial)는 늘 보임 · 다시 보내면 다시 숨김 · showSent = 다 보임."""
+    assert out["vis"] == {"draft": True, "working": False, "decide": True, "partial": True, "done": False, "userDone": False,
+                          "reopened": True, "resent": False, "answered": False}, out["vis"]
+    assert all(out["visOn"].values()), "보낸 메모 보기 켜짐 = 다 보임"
+    assert out["visDefault"] is False, "showSent 를 안 주면 꺼짐"
+    assert out["hidden"] == [5, 0, 0], "숨김 수 = working·done(사람 완료·다시 보냄·고른 답 포함)"

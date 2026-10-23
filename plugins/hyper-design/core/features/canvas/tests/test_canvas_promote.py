@@ -10,7 +10,7 @@ import pytest
 
 from test_canvas_v2 import SCRIPTS, browser, ctx  # noqa: F401
 from test_canvas_edit import fit_view
-from test_canvas_annotations import PAY, DONE
+from test_canvas_annotations import PAY, DONE, show_sent
 
 sys.path.insert(0, str(SCRIPTS))
 import helper  # noqa: E402
@@ -92,10 +92,12 @@ def test_reflected_blank_layout_becomes_the_screen_in_place_and_undo_restores(li
     assert ns["L1m"]["screen"] == "done" and ns["L1m"]["no"] == 2 and ns["K1"]["to"] == "done" and ns["L1"]["screen"] == "done" and "edit" not in ns["L1"]
     assert pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-folders:'))))")["folders"][0]["ids"] == ["done"]
     pg.keyboard.press("h")
+    show_sent(pg, True)                                # 옮겨 온 L1m 은 보낸 메모(AI 차례)라 숨김 — 보낸 메모 보기로 본다(task 29)
     pg.click('.card[data-id="done"] .nbadge')
     pg.wait_for_selector("#thread:not([hidden])")
     assert pg.text_content('#thread li[data-id="L1m"] .thmv') == "빈 레이아웃 '쿠폰'에서 옮겨 왔어요", "묶음 줄이 옮겨 온 것을 말한다"
     pg.keyboard.press("Escape")
+    show_sent(pg, False)
     pg.click("#undo")
     pg.wait_for_selector('.card.draft[data-id="new-ab"]', timeout=3000)
     back, home = phone(pg, "new-ab"), phone(pg, "done")

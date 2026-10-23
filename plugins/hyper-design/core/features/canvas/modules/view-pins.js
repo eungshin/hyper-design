@@ -1,8 +1,10 @@
 /* View — 메모 핀: 판 카드와 크게 보기 위, 메모가 달린 요소 자리에 번호(n.no) 핀. 자리는 화면에 다시 물어(hd-locate) 찾은 곳.
    상태(저장하지 않음) = 화면마다 다시 찾은 자리 located{화면 id: {키: {rect, how}}}(키 = 메모 id:대상 차례) · 크게 보기 것 따로 · 막 메모를 단 카드(focus) 하나.
-   판: 열린 메모(HD.annotation.isOpen)이고 다시 찾은 자리가 있는 대상만. 카드를 고르거나 올리거나, 판 배율로 화면이 실제의 60% 이상일 때(.pins-near), 막 메모를 단 카드에만 보인다(CSS).
+   판: 보이는 메모(HD.annotation.visible — 아래 task 29)이고 다시 찾은 자리가 있는 대상만. 카드를 고르거나 올리거나, 판 배율로 화면이 실제의 60% 이상일 때(.pins-near), 막 메모를 단 카드에만 보인다(CSS).
      화면 전체(body)·빈 레이아웃·편집 메모는 핀 없음(배지·묶음만). 색: decide = --ui-accent 하나, 나머지 --ui-badge.
-   크게 보기(셸 drawPins → paint): 그 화면 메모 전부(닫힌 것 빼고), 다시 찾은 자리가 있으면 그것, 아직 답이 없으면 저장한 rect.
+   크게 보기(셸 drawPins → paint): 그 화면 보이는 메모 전부, 다시 찾은 자리가 있으면 그것, 아직 답이 없으면 저장한 rect.
+   보낸 메모 숨기기(task 29): 판·크게 보기 모두 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = view-notes 가 쓰는 document.documentElement.dataset.hdShowSent === '1'),
+     숨김이 될 메모의 핀은 켜졌을 때 흐리게(.nhid). document 의 'hd-show-sent' 이벤트 = 다시 그리고 자리를 다시 묻는다.
    핀 누르기 = ctx.openThread(화면 id, no, 핀) — 카드 고르기·끌기로 가지 않는다.
    HD.viewPins.mount(ctx) → {locate(id, frame), locateModal(), render(ids?), paint(), zoom(z), focus(id|null), highlight(id, no|null), lost(n)}
    ctx = {rowsEl, mpins, $, $$, esc, CARD, list() → 메모 전부, cardEl(id), modal() → {open, screen, scale, frame, draft}, openThread(id, no, el)} */
@@ -15,6 +17,12 @@ function mount(ctx) {
   var located = {}, mloc = {screen: null, items: {}}, asked = [], focused = null;
 
   function key(n, i) { return n.id + ':' + i; }
+  function on() { return document.documentElement.dataset.hdShowSent === '1'; }
+  function shows(n) { return A.visible(n, on()); }   // 보일 메모(task 29) — 꺼짐이면 working·done 빠짐
+  function dim(n) { return A.visible(n, false) ? '' : ' nhid'; }
+  var css = document.createElement('style'); css.id = 'hd-pins-sent-css';
+  css.textContent = '.npin.nhid,.pin.nhid{opacity:.55}.npbox.nhid,.pin-box.nhid{opacity:.4}';
+  document.head.appendChild(css);
   function pinnable(t) { return t && t.path && t.path !== 'body' && t.path !== '(새 화면)'; }
   function boardMemos(id) {                          // 판 핀이 될 메모: 사람이 쓴 메모(편집 아님)
     return ctx.list().filter(function (n) { return n.screen === id && !n.edit; });
@@ -30,10 +38,10 @@ function mount(ctx) {
     asked.push({win: win, slot: slot, id: id});
     try { win.postMessage({type: 'hd-locate', items: its}, '*'); } catch (e) {}
   }
-  function locate(id, frame) { if (frame && frame.contentWindow) ask(frame.contentWindow, 'card', id, boardMemos(id).filter(A.isOpen)); }
+  function locate(id, frame) { if (frame && frame.contentWindow) ask(frame.contentWindow, 'card', id, boardMemos(id).filter(shows)); }
   function locateModal() {
     var m = ctx.modal(); if (!m.open || !m.screen || !m.frame || !m.frame.contentWindow) return;
-    ask(m.frame.contentWindow, 'modal', m.screen, ctx.list().filter(function (n) { return n.screen === m.screen && A.isOpen(n); }));
+    ask(m.frame.contentWindow, 'modal', m.screen, ctx.list().filter(function (n) { return n.screen === m.screen && shows(n); }));
   }
   addEventListener('message', function (e) {
     var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-located' || !Array.isArray(d.items)) return;
@@ -55,13 +63,13 @@ function mount(ctx) {
     if (map && loaded(ph)) {
       var s = scaleOf(ph);
       boardMemos(id).forEach(function (n) {
-        if (!A.isOpen(n)) return;
+        if (!shows(n)) return;
         var st = A.status(n);
         T(n).forEach(function (t, i) {
           var at = map[key(n, i)]; if (!pinnable(t) || !at || !at.rect) return;
           var r = at.rect;
-          h += '<div class="npbox" data-no="' + n.no + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
-               '<button type="button" class="npin" data-id="' + esc(n.id) + '" data-no="' + n.no + '" data-st="' + st + '" title="메모 ' + n.no + ' — ' + A.LABEL[st] + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + n.no + '</button>';
+          h += '<div class="npbox' + dim(n) + '" data-no="' + n.no + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
+               '<button type="button" class="npin' + dim(n) + '" data-id="' + esc(n.id) + '" data-no="' + n.no + '" data-st="' + st + '" title="메모 ' + n.no + ' — ' + A.LABEL[st] + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + n.no + '</button>';
         });
       });
     }
@@ -84,11 +92,11 @@ function mount(ctx) {
     if (m.open && m.screen) {
       var mine = mloc.screen === m.screen ? mloc.items : {};
       ctx.list().forEach(function (n) {
-        if (n.screen !== m.screen || !A.isOpen(n)) return;
+        if (n.screen !== m.screen || !shows(n)) return;
         T(n).forEach(function (t, i) {
           var at = mine[key(n, i)], r = at ? at.rect : t.rect; if (!r) return;
-          h += '<div class="pin-box" data-no="' + n.no + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
-            '<button type="button" class="pin" data-id="' + esc(n.id) + '" data-n="' + n.no + '" data-no="' + n.no + '" data-st="' + A.status(n) + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + n.no + '</button>';
+          h += '<div class="pin-box' + dim(n) + '" data-no="' + n.no + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
+            '<button type="button" class="pin' + dim(n) + '" data-id="' + esc(n.id) + '" data-n="' + n.no + '" data-no="' + n.no + '" data-st="' + A.status(n) + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + n.no + '</button>';
         });
       });
       if (m.draft) m.draft.targets.forEach(function (t, i) {   // 지금 고른 요소들: 테두리 + 고른 순서
@@ -148,6 +156,8 @@ function mount(ctx) {
   ['pointerdown', 'dblclick'].forEach(function (n) {
     ctx.rowsEl.addEventListener(n, function (e) { if (pinOf(e)) e.stopPropagation(); });   // 판 끌기·카드 옮기기·크게 보기로 가지 않게
   });
+
+  document.addEventListener('hd-show-sent', function () { render(); });   // 보낸 메모 보기가 바뀜(view-notes) — 핀 다시 + 자리 다시 묻기
 
   return {locate: locate, locateModal: locateModal, render: render, paint: paint, zoom: zoom, focus: focus, highlight: highlight, lost: lost};
 }

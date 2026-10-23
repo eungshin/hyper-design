@@ -6,7 +6,9 @@
    답 검사(validReply)는 hd_model.check_reply 와 같은 규칙 — 공유 fixture(core/features/hd/tests/fixtures/replies.json)가 둘을 묶는다.
    HD.annotation = {KINDS, USER, LABEL, status(n), isOpen(n), rework(n), nextNo(seq, screen), migrate(list, seq) → {seq, changed}, validReply(r, intent?, agent?) → {ok, why, errors},
      says(r), tip(r), question(n) → {question, choices}|null, answer(choice, at), followUp(question, choice), label(n, queued), decideCount(list), adopt(cur, next), reply(kind, at),
-     SCOPES, scopeOf(n), scopeWord(n)}
+     SCOPES, scopeOf(n), scopeWord(n), visible(n, showSent), hiddenCount(list)}
+   보낸 메모 숨기기(task 29): visible(n, showSent) — 보낸 뒤 AI 차례(working)·끝난 것(done)은 숨김(showSent 면 다 보임). draft·decide(AI 가 사람에게 물음)·partial(남긴 것)은 늘 보임.
+     다시 → 다시 보냄 = working = 다시 숨김. hiddenCount = 숨김이 될 메모 수('보낸 메모 보기 (N)', 켜짐과 상관없이)
    범위(R7): n.scope = element|screen|all(없음·모르는 값 = element) — SCOPES = 메모 창 고르기 [값, 말] 차례, scopeWord = 묶음 줄에 보일 말(이 요소 = '') */
 (function () {
 'use strict';
@@ -32,6 +34,9 @@ function status(n) {
   return 'working';                                              // 다시(다시 보낸 뒤) · 모르는 종류
 }
 function isOpen(n) { return status(n) !== 'done'; }
+var HIDE = {working: 1, done: 1};                                // 보낸 메모 숨기기 — decide·partial 은 사람 차례라 숨기지 않는다
+function visible(n, showSent) { return !!showSent || !HIDE[status(n)]; }
+function hiddenCount(list) { return (list || []).filter(function (n) { return !visible(n, false); }).length; }
 function rework(n) { return replies(n).filter(function (r) { return r && r.kind === '다시'; }).length; }
 
 function nextNo(seq, screen) { var v = seq && +seq[screen]; return (v > 0 ? Math.floor(v) : 0) + 1; }
@@ -153,5 +158,5 @@ function reply(kind, at) { return {by: 'user', kind: kind, at: at}; }   // 사�
 
 HD.annotation = {KINDS: KINDS, USER: USER, LABEL: LABEL, status: status, isOpen: isOpen, rework: rework, nextNo: nextNo, migrate: migrate, validReply: validReply,
                  says: says, tip: tip, question: question, answer: answer, followUp: followUp, label: label, decideCount: decideCount, adopt: adopt, reply: reply,
-                 SCOPES: SCOPES, scopeOf: scopeOf, scopeWord: scopeWord};
+                 SCOPES: SCOPES, scopeOf: scopeOf, scopeWord: scopeWord, visible: visible, hiddenCount: hiddenCount};
 })();
