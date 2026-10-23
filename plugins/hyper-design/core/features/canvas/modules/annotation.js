@@ -5,7 +5,9 @@
      반영됨/대체됨/답변/확인 → done · 다시 → (보내지 않았으면 draft, 다시 보냈으면) working.
    답 검사(validReply)는 hd_model.check_reply 와 같은 규칙 — 공유 fixture(core/features/hd/tests/fixtures/replies.json)가 둘을 묶는다.
    HD.annotation = {KINDS, USER, LABEL, status(n), isOpen(n), rework(n), nextNo(seq, screen), migrate(list, seq) → {seq, changed}, validReply(r, intent?, agent?) → {ok, why, errors},
-     says(r), tip(r), question(n) → {question, choices}|null, answer(choice, at), followUp(question, choice), label(n, queued), decideCount(list), adopt(cur, next), reply(kind, at)} */
+     says(r), tip(r), question(n) → {question, choices}|null, answer(choice, at), followUp(question, choice), label(n, queued), decideCount(list), adopt(cur, next), reply(kind, at),
+     SCOPES, scopeOf(n), scopeWord(n)}
+   범위(R7): n.scope = element|screen|all(없음·모르는 값 = element) — SCOPES = 메모 창 고르기 [값, 말] 차례, scopeWord = 묶음 줄에 보일 말(이 요소 = '') */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -142,8 +144,14 @@ function adopt(cur, next) {
   });
 }
 
+var SCOPES = [['element', '이 요소'], ['screen', '이 화면'], ['all', '모든 화면']];
+var SCOPE_WORD = {screen: '이 화면', all: '모든 화면'};
+function scopeOf(n) { return n && SCOPE_WORD[n.scope] ? n.scope : 'element'; }
+function scopeWord(n) { return SCOPE_WORD[scopeOf(n)] || ''; }
+
 function reply(kind, at) { return {by: 'user', kind: kind, at: at}; }   // 사람 답(확인·다시) — at = ISO 시각(셸이 넣는다)
 
 HD.annotation = {KINDS: KINDS, USER: USER, LABEL: LABEL, status: status, isOpen: isOpen, rework: rework, nextNo: nextNo, migrate: migrate, validReply: validReply,
-                 says: says, tip: tip, question: question, answer: answer, followUp: followUp, label: label, decideCount: decideCount, adopt: adopt, reply: reply};
+                 says: says, tip: tip, question: question, answer: answer, followUp: followUp, label: label, decideCount: decideCount, adopt: adopt, reply: reply,
+                 SCOPES: SCOPES, scopeOf: scopeOf, scopeWord: scopeWord};
 })();

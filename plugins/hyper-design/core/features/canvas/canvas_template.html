@@ -196,6 +196,7 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #thread .thl{display:flex;gap:8px;justify-content:space-between;color:#777;font-size:12px}
 #thread .the{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #thread .thi{flex:none;font-weight:600}
+#thread .thsc{flex:none;color:#555}
 #thread .tht{margin-top:3px;white-space:pre-wrap;word-break:break-word;color:#1c1c1c}
 #thread .tha{display:flex;gap:6px;margin-top:6px}
 #thread .thf{padding:8px 12px;border-top:1px solid #eee;display:flex;justify-content:flex-end}
@@ -486,6 +487,7 @@ body.split-lr #khint{display:none}
 #pop .seg{display:flex;background:#EFEFEB;border-radius:9px;padding:2px;margin-right:auto}
 #pop .seg button{border:0;background:transparent;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px;font-weight:600;color:#666}
 #pop .seg button[aria-pressed="true"]{background:#fff;color:#1c1c1c;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+#pop #pscope button{padding:5px 9px;font-size:12.5px}
 .nbtn{min-height:36px;padding:0 12px;border:1px solid #dcdcd7;border-radius:9px;background:#fff;font-size:14px;font-weight:600;cursor:pointer}
 .nbtn.pri{background:var(--ui-primary);border-color:var(--ui-primary);color:#fff}
 #notes{display:flex;flex-direction:column;flex:1;font-size:14px}
@@ -611,8 +613,9 @@ body.split-lr #khint{display:none}
   <div class="ptitle" id="ptitle"></div>
   <div class="ppath" id="ppath"></div>
   <textarea id="pnote" placeholder="무엇을 바꿀지 적어 주세요…"></textarea>
+  <div class="prow"><div class="seg" id="pscope" role="group" aria-label="범위"></div></div>
   <div class="prow">
-    <div class="seg" role="group" aria-label="Intent"><button data-intent="change" aria-pressed="true">Change</button><button data-intent="question" aria-pressed="false">Question</button></div>
+    <div class="seg" id="pintent" role="group" aria-label="Intent"><button data-intent="change" aria-pressed="true">Change</button><button data-intent="question" aria-pressed="false">Question</button></div>
     <button class="nbtn" id="pcancel">취소</button>
     <button class="nbtn pri" id="padd" title="Ctrl+Enter">추가</button>
   </div>
@@ -1937,14 +1940,19 @@ function placePop(rect, at, screen) {              // at = 누른 자리(판 위
     return {x: Math.max(8, Math.min(innerWidth - 308, x)), y: Math.max(8, Math.min(innerHeight - 240, y))};
   }, screen && VL ? VL.cardEl(screen) : null);
 }
-function setIntent(v) { $$('#pop .seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.intent === v)); }); }
-function curIntent() { var b = $('#pop .seg button[aria-pressed="true"]'); return b ? b.dataset.intent : 'change'; }
-$$('#pop .seg button').forEach(function (b) { b.addEventListener('click', function () { setIntent(b.dataset.intent); }); });
-function showPop(item, note, intent, at) {
+function setIntent(v) { $$('#pintent button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.intent === v)); }); }
+function curIntent() { var b = $('#pintent button[aria-pressed="true"]'); return b ? b.dataset.intent : 'change'; }
+$$('#pintent button').forEach(function (b) { b.addEventListener('click', function () { setIntent(b.dataset.intent); }); });
+$('#pscope').innerHTML = HD.annotation.SCOPES.map(function (s) { return '<button type="button" data-scope="' + s[0] + '" aria-pressed="false">' + esc(s[1]) + '</button>'; }).join('');   // 범위(R7) 말은 annotation
+function setScope(v) { $$('#pscope button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.scope === v)); }); }
+function curScope() { var b = $('#pscope button[aria-pressed="true"]'); return b ? b.dataset.scope : 'element'; }
+$$('#pscope button').forEach(function (b) { b.addEventListener('click', function () { setScope(b.dataset.scope); }); });
+function showPop(item, note, intent, at, scope) {    // scope 없음 = 기본(화면 전체 메모 = 이 화면, 그 밖 = 이 요소)
   $('#ptitle').textContent = item.text || '(글자 없음)';
   $('#ppath').textContent = item.path || '';
   $('#pnote').value = note || '';
   setIntent(intent || 'change');
+  setScope(scope || (item.path === 'body' ? 'screen' : 'element'));
   $('#padd').textContent = editing ? '저장' : '추가';
   var en = editing && NS.find(editing);
   pop.hidden = false; placePop(item.rect, at, en ? en.screen : draft && draft.screen);
@@ -1952,15 +1960,17 @@ function showPop(item, note, intent, at) {
 }
 function hidePop() { pop.hidden = true; draft = null; editing = null; PP.close(); drawPins(); }
 function commitPop() {
-  var note = $('#pnote').value.trim(), intent = curIntent();
+  var note = $('#pnote').value.trim(), intent = curIntent(), scope = curScope();
+  var setSc = function (n) { if (scope === 'element') delete n.scope; else n.scope = scope; };   // 이 요소 = 칸 없음(옛 메모와 같음)
   if (editing) {
     var n = NS.find(editing);
-    if (n) { n.note = note; n.intent = intent; n.sent = false; }
+    if (n) { n.note = note; n.intent = intent; n.sent = false; setSc(n); }
   } else if (draft) {
     var t0 = draft.targets[0], at = draft.screen;
     if (modal.hidden && PN) PN.focus(at);            // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
-    NS.add({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: draft.screen, targets: draft.targets.slice(),
-                path: t0.path, text: t0.text, rect: t0.rect, note: note, intent: intent, sent: false});
+    var nn = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: draft.screen, targets: draft.targets.slice(),
+              path: t0.path, text: t0.text, rect: t0.rect, note: note, intent: intent, sent: false};
+    setSc(nn); NS.add(nn);
   }
   hidePop(); saveNotes();
 }
@@ -1973,11 +1983,11 @@ addEventListener('message', function (e) {
     if (d.screen) mscreen = String(d.screen);
     var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null};
     if (d.add && draft && !editing && !pop.hidden) {   // Shift+클릭: 고른 묶음에 더하거나 빼기
-      var note = $('#pnote').value, intent = curIntent(), at = -1;
+      var note = $('#pnote').value, intent = curIntent(), sc = curScope(), at = -1;
       draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
       if (at >= 0) draft.targets.splice(at, 1); else draft.targets.push(it);
       if (!draft.targets.length) { hidePop(); return; }
-      drawPins(); showPop(popItem(draft, it), note, intent);
+      drawPins(); showPop(popItem(draft, it), note, intent, null, sc);
       return;
     }
     editing = null;
@@ -1991,7 +2001,7 @@ function editMemo(id) {                             // 메모 고치기 — 메�
   editing = id; draft = null;
   var ts = tgts(n);
   showPop({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
-           rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent);
+           rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent, null, HD.annotation.scopeOf(n));
 }
 function delMemo(id) {                              // 메모 지우기·편집 빼기 — 메모 패널·카드 메모 묶음이 같이 쓴다, 되돌리기 한 단계(제자리로)
   var at = -1; NS.list().forEach(function (x, i) { if (x.id === id) at = i; });
@@ -2048,14 +2058,14 @@ function copyText(t) {                              // → Promise<복사됐나>
   } catch (e) {}
   return Promise.resolve(fallback());
 }
-function copySend(list, msg) {                       // 복사가 된 때만 '보냄'(되돌리기 경계도) — 안 되면 보내지 않은 그대로
+function copySend(list, msg, warn) {                 // 복사가 된 때만 '보냄'(되돌리기 경계도) — 안 되면 보내지 않은 그대로 · warn = 알림 앞에 붙일 말
   var t = HD.edits.request(list, outDir());
   window.__hdLastSend = t;
   return copyText(t).then(function (ok) {
     if (!ok) { $('#nmsg').textContent = '복사하지 못했어요 — 다시 눌러 보세요(보내지 않은 그대로예요)'; toast($('#nmsg').textContent); return; }
     list.forEach(function (n) { n.sent = true; });
     saveNotes(); HI.sent();
-    $('#nmsg').textContent = msg || '복사했어요 — 터미널에 붙여넣으세요'; toast($('#nmsg').textContent);
+    $('#nmsg').textContent = (warn ? warn + ' · ' : '') + (msg || '복사했어요 — 터미널에 붙여넣으세요'); toast($('#nmsg').textContent, false, warn ? 9000 : 0);
   });
 }
 // 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
@@ -2099,7 +2109,8 @@ $('#nsend').addEventListener('click', function (e) {
 // 보내기 길 하나(위쪽 [보내기]·질문 고르기) — 셸 함수인 까닭: VS·VB·HI·복사 대체를 잇기만 한다
 function sendList(list) {
   sending = true; $('#nsend').disabled = true;
-  if (!VS.on) { copySend(list).then(sendDone, sendDone); return; }
+  var warn = HD.edits.emptyLayouts(list).length ? HD.edits.say.emptyLayout : '';   // 목적·메모 없는 빈 레이아웃(R5) — 보내기는 그대로, 결과 알림 앞에 한 번
+  if (!VS.on) { copySend(list, null, warn).then(sendDone, sendDone); return; }
   $('#nmsg').textContent = '보내는 중…';
   VS.send(list).then(function (r) {
     NS.remove(function (n) { return r.ok[n.id]; });
@@ -2110,14 +2121,15 @@ function sendList(list) {
       paseo ? 'AI 에이전트에게 ' + r.left.length + '건 보냈어요 — 카드에 “AI 수정 중”' :
       window.__hdAgent ? 'AI 에이전트에게 보내지 못해 ' + r.left.length + '건을 대기열 파일에만 저장했어요' :
       'AI 터미널이 연결돼 있지 않아요 — ' + r.left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요. 받게 하려면 터미널 에이전트에 hd 명령(hd notes)으로 읽게 하거나 도우미를 --paseo-agent <id> 로 다시 띄우세요';
-    toast($('#nmsg').textContent = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai, false, ai ? 9000 : 0);
+    var said = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai;
+    toast($('#nmsg').textContent = (warn ? warn + (said ? ' · ' : '') : '') + said, false, ai || warn ? 9000 : 0);
     window.__hdLastHelper = {apply: r.res, forward: r.fw};
     if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
       var seen = {}, scs = [];
       r.left.forEach(function (n) { var c = VL.cardEl(n.screen), b = c && $('.cover', c); if (b && !seen[n.screen]) { seen[n.screen] = 1; scs.push({id: n.screen, file: b.dataset.file}); } });
       VB.mark(scs, r.fw && r.fw.via === 'paseo' ? 'paseo' : 'queue');
     }
-  }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요'); }).then(sendDone, sendDone);
+  }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요', warn); }).then(sendDone, sendDone);
 }
 // 질문 고르기(view-thread): 질문 메모에 고른 답(확인 + answer) = 닫기 + 같은 자리 새 메모 '질문 "…" → 고른 것' 을 그것만 보내기
 // 되돌리기 한 단계(둘을 함께) — 보내지면 보낸 자리가 기록의 경계라 그 앞으로는 되돌리지 않는다(보내기와 같음). 셸 함수인 까닭: NS·record·sendList 를 잇기만 한다
@@ -2128,6 +2140,7 @@ function answerQuestion(id, choice) {
   var at = new Date().toISOString(), k = q.replies.length, ts = tgts(q);
   var n = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: q.screen, targets: ts.slice(), path: ts[0].path, text: ts[0].text, rect: ts[0].rect,
            note: A.followUp(ask.question, choice), intent: 'change', sent: false};
+  if (A.scopeOf(q) !== 'element') n.scope = q.scope;   // 질문 메모의 범위(R7)를 이어받는다
   var go = function () { q.replies = q.replies.slice(0, k).concat([A.answer(choice, at)]); if (!NS.find(n.id)) NS.add(n); saveNotes(); };
   go();
   record({label: '질문에 답하기', redo: go, undo: function () { q.replies = q.replies.slice(0, k); NS.remove(function (x) { return x.id === n.id; }); saveNotes(); }});

@@ -644,6 +644,48 @@
         "note": "-n 4 전체 239개"
       },
       "note": "새 모듈 3(pop-place·view-pop-place·view-thread), 빈 레이아웃은 H16 상자 재사용(셸 editLayout), 요청문 줄바꿈은 들여 쓴 다음 줄. 새 브라우저 테스트 4·unit 파일 2"
+    },
+    {
+      "slice": "task17 A2b 한 번 보내기가 말하는 것 (R5·R6·R7)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 1,
+        "area": 1,
+        "minutes": 6
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "빈 레이아웃 알림 규칙을 목적 검사 없이 깨도 unit 이 통과 → '목적만 있는 레이아웃' 경우를 더해 한 번 실패를 확인"
+        }
+      ],
+      "waste": [],
+      "flaky": [],
+      "profile": {
+        "total_sec": 177,
+        "top": [
+          [
+            "test_helper_canvas_busy_overlay_lifts_on_file_change",
+            16.7
+          ],
+          [
+            "test_fit_includes_moved_card_and_drops_stale",
+            13.8
+          ],
+          [
+            "test_helper_canvas_writes_delete_and_link_without_reload",
+            13.4
+          ]
+        ],
+        "note": "-n 4 전체 286개"
+      },
+      "note": "새 모듈 없음: edits.items·emptyLayouts(R5·R6·범위 줄), annotation.SCOPES·scopeOf·scopeWord(R7), 메모 창 #pscope·묶음 .thsc. 옛 메모 출력은 unit 으로 먼저 고정. 여러 요소 메모가 한 항목이 되어 test_multi_select_note 를 고침. unit 파일 1·브라우저 테스트 1"
     }
   ]
 }

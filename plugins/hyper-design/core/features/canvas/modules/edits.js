@@ -2,7 +2,8 @@
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, no, screen, targets:[{path,text,rect,quote?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
-   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, split, tally, request, say} */
+   n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
+   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, split, tally, request, items, emptyLayouts, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -65,17 +66,63 @@ function split(notes) {
   return out;
 }
 
-// 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 바꾸지 않는다). 여러 요소 메모는 요소마다 한 항목으로 펼친다
-// 요청 글이 여러 줄이면 둘째 줄부터 '요청: ' 뒤 글자 자리에 맞춰 들여 쓴다(항목은 늘 '번호. screen=' 줄로 시작)
+// 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 항목 머리 '번호. screen=… · path=…'·text·요청 세 줄은 바꾸지 않는다)
+// 요청 글이 여러 줄이면 둘째 줄부터 '요청: ' 뒤 글자 자리에 맞춰 들여 쓴다. 그 아래 덧붙는 줄(task 17):
+//   빈 레이아웃(R5) = 그 화면 메모 본문 '- …'(번호 차례) · 범위(R7) '   범위: …' · 같은 요청의 다른 자리(R6) '   다른 곳: 경로 ("짧은 글") · …'
 var CONT = '       ';
+var SCOPE_LINE = {screen: '이 화면 전체', all: '모든 화면'};   // 범위 이름(이 요소 = 줄 없음) — 고르기 말은 annotation.SCOPES
 function targetsOf(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
+function flat(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+function scopeOf(n) { return n && SCOPE_LINE[n.scope] ? n.scope : 'element'; }
+function byNo(a, b) { return (+a.no || 0) - (+b.no || 0); }
+function isLayout(n) { return n.edit === 'new-screen'; }
+// 보낼 메모 목록 → 항목들 [{screen, path, text, intent, note, scope, also:[{path,text}], memos:[메모], notes:[이 항목에 든 메모 전부]}]
+function items(list) {
+  list = list || [];
+  var lay = {}, out = [], merge = {};
+  list.forEach(function (n) { if (isLayout(n)) lay[n.screen] = 1; });
+  var body = function (n) { return !n.edit && lay[n.screen]; };   // 빈 레이아웃 화면의 메모 = 그 레이아웃 항목에 실림(R5)
+  list.forEach(function (n) {
+    if (body(n)) return;
+    var ts = targetsOf(n);
+    if (isLayout(n)) {
+      var ms = list.filter(function (m) { return body(m) && m.screen === n.screen; }).sort(byNo);
+      out.push({screen: n.screen, path: ts[0].path, text: ts[0].text, intent: n.intent, note: n.note, scope: 'element', also: [], memos: ms, notes: [n].concat(ms)});
+      return;
+    }
+    var key = n.edit ? null : [n.screen, n.intent, scopeOf(n), flat(n.note)].join('\u0001');   // 같은 화면·의도·범위·글 메모 = 한 항목(R6) — 편집은 하나씩
+    var it = key && merge[key];
+    if (!it) {
+      it = {screen: n.screen, path: ts[0].path, text: ts[0].text, intent: n.intent, note: n.note, scope: scopeOf(n), also: [], memos: [], notes: []};
+      ts = ts.slice(1); out.push(it); if (key) merge[key] = it;
+    }
+    it.notes.push(n);
+    ts.forEach(function (t) {
+      if (t.path !== it.path && !it.also.some(function (a) { return a.path === t.path; })) it.also.push({path: t.path, text: t.text});
+    });
+  });
+  return out;
+}
+function indent(s, pad) { return String(s).replace(/[ \t]*\r?\n\s*/g, '\n' + pad); }   // 줄바꿈은 들여 쓴 다음 줄로 이어 남긴다(#225)
+function place(a) { var t = flat(a.text); return a.path + (t && t.length <= 20 ? ' ("' + t + '")' : ''); }
 function request(notes, out) {
-  var list = [];
-  (notes || []).forEach(function (n) { targetsOf(n).forEach(function (t) { list.push({screen: n.screen, path: t.path, text: t.text, intent: n.intent, note: n.note}); }); });
+  var list = items(notes);
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
     return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
-      '\n   요청: ' + String(n.note).replace(/[ \t]*\r?\n\s*/g, '\n' + CONT);   // 줄바꿈은 들여 쓴 다음 줄로 이어 남긴다(#225)
+      '\n   요청: ' + indent(n.note, CONT) +
+      n.memos.filter(function (m) { return flat(m.note); }).map(function (m) {
+        return '\n' + CONT + '- ' + (m.intent === 'question' ? '(질문) ' : '') + indent(String(m.note).trim(), CONT + '  ');
+      }).join('') +
+      (n.scope !== 'element' ? '\n   범위: ' + SCOPE_LINE[n.scope] : '') +
+      (n.also.length ? '\n   다른 곳: ' + n.also.map(place).join(' · ') : '');
   }).join('\n');
+}
+// 보낼 목록에서 목적도 메모 본문도 없는 빈 레이아웃 화면 id(복제는 내용이 있어 빼고) — 셸이 보낼 때 한 번 알린다(보내기는 그대로 간다)
+function emptyLayouts(notes) {
+  return items(notes).filter(function (it) {
+    var n = it.notes[0];
+    return isLayout(n) && !n.copyOf && !flat(n.purpose) && !it.memos.some(function (m) { return flat(m.note); });
+  }).map(function (it) { return it.screen; });
 }
 
 // 화면마다 반영 대기 편집 수
@@ -107,8 +154,9 @@ var say = {
   linkNew: function (value, id) { return '이 요소를 누르면 새 화면 "' + value + '"(' + id + ')으로 가게 연결'; },
   copy: function (value, id, src) { return '새 화면 "' + value + '"(' + id + ')을 ' + src + ' 화면을 복제해 만들기'; },
   remove: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },
-  cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; }
+  cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; },
+  emptyLayout: '빈 레이아웃에 목적이나 메모가 없어요 — AI가 채울 내용을 모를 수 있어요'
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, split: split, tally: tally, request: request, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, split: split, tally: tally, request: request, items: items, emptyLayouts: emptyLayouts, say: say, FIELD: FIELD};
 })();

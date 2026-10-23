@@ -197,7 +197,7 @@ def test_clear_sent(page):
 
 
 def test_multi_select_note(page):
-    """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 요소마다 한 항목(형식 그대로)."""
+    """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 한 항목 + 다른 곳 줄(task 17 R6, 머리 형식 그대로)."""
     # 메모 없이 시작 — 영역(-m)으로 골라 돌리면 앞 테스트(test_pick_note_pin_persists)의 메모를 지우는 test_clear_sent 가 빠진다
     page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-notes:') || k.startsWith('hd-note-seq:')).forEach(k => localStorage.removeItem(k))")
     reload(page)
@@ -223,11 +223,11 @@ def test_multi_select_note(page):
     page.click("#nsend")
     t = page.evaluate("window.__hdLastSend")
     lines = t.split("\n")
-    assert re.match(r"^\[hyper-design 수정 요청\] out=.+ · 2건$", lines[0]), lines[0]
-    assert len(lines) == 7
-    assert lines[1].startswith("1. screen=" + sid + " · path=") and lines[4].startswith("2. screen=" + sid + " · path=")
-    assert lines[1] != lines[4]
-    assert lines[3] == lines[6] == "   요청: 두 곳 모두 굵게"
+    assert re.match(r"^\[hyper-design 수정 요청\] out=.+ · 1건$", lines[0]), lines[0]   # task 17 R6: 여러 요소 메모 = 한 항목 + 다른 곳
+    assert len(lines) == 5
+    assert lines[1].startswith("1. screen=" + sid + " · path=")
+    assert lines[3] == "   요청: 두 곳 모두 굵게"
+    assert lines[4].startswith("   다른 곳: ")
     page.click("#nclear")
 
 

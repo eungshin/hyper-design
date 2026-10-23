@@ -78,3 +78,25 @@ def test_template_emits_same_format():
     for i in items:
         assert TEXT_RE.match(out[i + 1]), out[i + 1]
         assert NOTE_RE.match(out[i + 2]), out[i + 2]
+
+
+def test_other_places_and_scope_lines_keep_the_format():
+    # task 17: 같은 글 두 요소 = 한 항목 + '다른 곳:' 줄, 범위 = '범위:' 줄 — 머리·text·요청 줄은 그대로 읽히고, 덧붙은 줄은 스킬 본문이 말한다
+    import json, shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node 없음")
+    js = ("require(%s); const n=[{screen:'a',path:'a.one',text:'x',intent:'change',note:'bold',no:1},"
+          "{screen:'a',path:'a.two',text:'y',intent:'change',note:'bold',no:2},"
+          "{screen:'a',path:'body',text:'',intent:'change',note:'gradient',scope:'all',no:3}]; process.stdout.write(HD.edits.request(n,'C:/out'))") % json.dumps(str(EDITS))
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, encoding="utf-8", check=True).stdout.splitlines()
+    assert HEADER_RE.match(out[0]) and out[0].endswith(" · 2건"), out[0]
+    items = [i for i, l in enumerate(out) if ITEM_RE.match(l)]
+    assert items == [1, 5], out
+    for i in items:
+        assert TEXT_RE.match(out[i + 1]), out[i + 1]
+        assert NOTE_RE.match(out[i + 2]), out[i + 2]
+    assert out[4].startswith("   다른 곳: a.two") and out[8] == "   범위: 모든 화면", out
+    _, body = _split()
+    assert "다른 곳:" in body and "범위:" in body

@@ -1,7 +1,7 @@
 /* View — 카드 메모 배지(.nbadge)를 누르면 그 화면 메모 묶음(Word 메모처럼, #224): 배지 옆 작은 창에 요소·종류·글 전체, 줄마다 [고치기]·[지우기], 아래 [메모 추가].
    메모 나누기(배지 수와 같은 것)는 HD.edits.split(Model). 고치기·지우기·더하기는 셸이 메모 패널과 같은 함수를 건넨다(여기서 메모를 바꾸지 않는다).
    상태 = 지금 연 화면 id 하나(저장하지 않음). 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc(셸이 close 를 부른다)·바깥 누르기 = 닫기.
-   줄마다 번호 #n.no · 상태 말(HD.annotation.label — 받는 곳 없이 보낸 것 = '대기열', decide 만 강조색) · 답(답마다 회색 한 줄 HD.annotation.says, 마지막 것 펼침, 앞 것 접힘,
+   줄마다 번호 #n.no · 범위 말(이 요소가 아닐 때만, HD.annotation.scopeWord — R7) · 상태 말(HD.annotation.label — 받는 곳 없이 보낸 것 = '대기열', decide 만 강조색) · 답(답마다 회색 한 줄 HD.annotation.says, 마지막 것 펼침, 앞 것 접힘,
    반영됨 줄에 올리면 화면·캡처 · 사람 답은 작게 '완료함/다시 엶' + 시각) · 기다리는 질문이면 고를 것 단추(누르기 = ctx.choose) · [완료](사람 답 '확인'). 닫힌 메모는 아래 접힌 '완료 N' 묶음에 [다시 열기].
    다시 찾지 못한 대상(ctx.lost)이 있고 닫히지 않은 메모 = "대상이 바뀌었어요". 줄에 올리면 ctx.highlight(화면, no) — 그 핀·요소 테두리.
    핀 누르기(셸이 open(id, 핀, no)) = 그 메모로 스크롤하고 펼침. 배지가 없어져도(열린 메모 0) 메모가 남아 있으면 그 자리에 둔다.
@@ -48,7 +48,8 @@ function mount(ctx) {
   function row(n) {
     var st = A.status(n), open = st !== 'done';
     return '<li data-id="' + esc(n.id) + '" data-no="' + esc(n.no) + '"' + (n.sent && open ? ' class="sent"' : '') + '><div class="thl"><span class="thn">#' + esc(n.no) + '</span><span class="the">' + esc(label(n)) + '</span>' +
-      '<span class="ths" data-st="' + st + '">' + esc(A.label(n, ctx.queued())) + '</span><span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span></div>' +
+      '<span class="ths" data-st="' + st + '">' + esc(A.label(n, ctx.queued())) + '</span>' + (A.scopeWord(n) ? '<span class="thsc">' + esc(A.scopeWord(n)) + '</span>' : '') +
+      '<span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span></div>' +
       (open && ctx.lost(n) ? '<div class="thlost">대상이 바뀌었어요</div>' : '') +
       '<div class="tht">' + esc(n.note || '') + '</div>' + reps(n) + choices(n) +
       '<div class="tha">' + (open ? '<button type="button" class="nbtn" data-act="edit">고치기</button><button type="button" class="nbtn" data-act="del">지우기</button><button type="button" class="nbtn" data-act="done">완료</button>'

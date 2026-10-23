@@ -110,6 +110,8 @@ BROWSER = {
     # test_canvas_replies_live.py — task 16 AI 답이 살아서 옴 · 결정 필요 · 받는 곳 없음
     "test_agent_reply_shows_live_without_reload": ("notes", "helper"),
     "test_question_reply_surfaces_and_choice_sends_follow_up": ("notes", "helper"),
+    # test_canvas_send_composition.py — task 17 한 번 보내기가 말하는 것(범위 · 빈 레이아웃 + 메모 한 항목)
+    "test_scope_all_screens_reaches_the_queue_and_layout_memo_rides_with_layout": ("notes",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
