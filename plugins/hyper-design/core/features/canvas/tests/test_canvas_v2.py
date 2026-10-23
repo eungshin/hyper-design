@@ -2,7 +2,7 @@
 
 runs/laundry-v1/out 를 임시 폴더로 복사하고 build_canvas.py 로 다시 만든 뒤 index.html 을 file:// 로 연다.
 """
-import os, re, shutil, subprocess, sys, tempfile
+import os, re, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 
 import pytest
@@ -604,8 +604,19 @@ def assert_no_vertical_in_cards(pg, sel):
 
 @pytest.mark.area("flow", "links")
 def test_v2_no_vertical_through_cards(gpage, gym_out):
+    """카드 높이가 늦게 정해지면(부하 아래 화면 크기 맞추기) 선은 다음 다시 그리기 때 따라온다 — 그 사이의 옛 선은 보지 않고 다시 잰다.
+    R55(브라우저 4개 동시 부하에서 잡음): 첫 측정 때 gym 카드 위 7844 · home→gym 선은 7992 에서 들어감(옛 배치) → 2초 뒤 카드 7757·선 그대로 → 5초 안에 선이 다시 그려져 통과.
+    길 찾기가 정말 틀리면 10초 뒤에도 그대로라 마지막 실패를 그대로 던진다."""
     gpage.keyboard.press("Escape")
-    assert assert_no_vertical_in_cards(gpage, "#rows path.ln") > 0
+    end = time.time() + 10
+    while True:
+        try:
+            assert assert_no_vertical_in_cards(gpage, "#rows path.ln") > 0
+            return
+        except AssertionError:
+            if time.time() > end:
+                raise
+            gpage.wait_for_timeout(250)
 
 
 # ---------------------------------------------------------------- canvas-v3 (phase 1): 주요 흐름 점선 · 같은 도착 묶기

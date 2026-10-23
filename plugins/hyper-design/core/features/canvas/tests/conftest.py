@@ -28,7 +28,7 @@ AREAS = {
 
 
 # 격리(fable #4): -n 4 에서만 가끔 깨지는 테스트 — -n 실행은 고르지 않고, 끝에 `pytest tests -m serial`(-n 없이)로 따로 돌린다. 원인을 찾으면 여기서 뺀다.
-SERIAL = ("test_v2_no_vertical_through_cards", "test_line_click_shows_end_handles_and_drag_retargets")
+SERIAL = ("test_line_click_shows_end_handles_and_drag_retargets",)
 
 
 def _xdist_on(config):                              # 주 프로세스(-n N, N>0) 또는 일꾼
