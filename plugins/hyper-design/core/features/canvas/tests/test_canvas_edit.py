@@ -1218,6 +1218,17 @@ def test_caption_one_box_edits_all_fields(dpage):
     assert not box.count()
     dpage.wait_for_timeout(200)
     assert len(notes_of(dpage)) == n0 and dpage.text_content(d_sel) == old_desc
+    dpage.dblclick(d_sel)                            # #243: 정책 줄을 비우고 닫으면 그 줄 지우기 반영 대기
+    pols.first.click()
+    dpage.keyboard.press("Control+a")
+    dpage.keyboard.press("Backspace")
+    dpage.mouse.click(e["x"], e["y"])
+    wait_notes(dpage, n0 + 1)
+    n = notes_of(dpage)[-1]
+    assert (n["edit"], n.get("index"), n.get("value")) == ("policy", 0, ""), n
+    assert "1번째 줄" in n["note"] and "지우기" in n["note"] and "policies[0]" in n["note"], n["note"]
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0)
 
 
 def test_trigger_tool_click_selects_element_with_its_socket(dpage):

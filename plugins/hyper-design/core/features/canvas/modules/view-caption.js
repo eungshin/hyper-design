@@ -6,11 +6,14 @@
    밖을 누르면 저장, 다른 카드 상자를 열면 열린 상자를 먼저 저장. 붙여넣기는 글만.
    HD.viewCaption.mount(ctx) → {open(cardEl, focus), close(save), isOpen()}  focus = {field: 'title'|'purpose'|'policy', index?}
    ctx = {values(id) → {title, purpose, policies}(반영 대기 포함 지금 값), badge(cardEl) → 칩 Node|null, commit(id, changes), allowAdd, onClose(),
-          hint(id) → {title?, purpose?} 빈 칸 안내 글(선택 — 빈 레이아웃은 목적·메모의 몫을 여기서 말한다)} */
+          hint(id) → {title?, purpose?} 빈 칸 안내 글(선택 — 빈 레이아웃은 목적·메모의 몫을 여기서 말한다),
+          toast(msg)(선택 — 제목을 비우고 닫으면 알림, 없으면 말없이 원래 제목)}
+   지우기(#243): 비운 정책 줄 = 지우기 편집 · 비운 설명 = '' 편집 · 비운 제목 = 편집 없음(원래 이름) · 빈 새 줄 = 버림(비교는 caption.diff) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var STOP = ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress'];
+var TITLE_KEEP = '제목은 비울 수 없어요 — 원래 이름으로 둘게요';
 var FOOT = '제목 · 설명 · 정책 한 상자 · 설명은 Shift+Enter 줄바꿈 · Esc 취소 · Ctrl+Enter 저장 · 밖을 누르면 저장';
 
 function readText(el) {                             // 칸의 글: 글 마디 그대로, <br>·블록 = 줄바꿈(화면 배치와 무관)
@@ -163,7 +166,9 @@ function mount(ctx) {
     if (save) {
       var edited = {title: readText(c.title), purpose: readText(c.purpose),
                     policies: [].map.call(c.list.children, function (li) { return readText(li); })};
-      var changes = C.diff(ctx.values(c.id), edited, {allowAdd: !!ctx.allowAdd});
+      var before = ctx.values(c.id) || {};
+      var changes = C.diff(before, edited, {allowAdd: !!ctx.allowAdd});
+      if (!C.normalise('title', edited.title) && C.normalise('title', before.title) && ctx.toast) ctx.toast(TITLE_KEEP);
       if (changes.length) ctx.commit(c.id, changes);
     }
     c.box.remove();

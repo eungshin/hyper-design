@@ -330,7 +330,10 @@ def apply_edits(out, edits, stamp=None):
             if kind in ("title", "purpose", "policy"):
                 if kind == "policy" and not isinstance(e.get("index"), int):
                     raise ValueError("정책 줄 번호가 없어요")
-                json_ops.append((eid, sid, kind if kind != "policy" else ("policy", e["index"]), str(e.get("value", ""))))
+                v = str(e.get("value", ""))
+                if kind == "policy" and (e.get("op") == "delete" or not v.strip()):   # 비운 정책 줄 = 그 줄 지우기(#243)
+                    kind = "policy-delete"
+                json_ops.append((eid, sid, kind if kind not in ("policy", "policy-delete") else (kind, e["index"]), v))
                 continue
             if kind == "text":
                 op = ("text", str(e.get("value", "")))
@@ -363,15 +366,22 @@ def apply_edits(out, edits, stamp=None):
             applied += [o[0] for o in good]; changed.add(owner[f])
     if json_ops:
         by = {s["id"]: s for s in data["screens"]}
+        drop = {}                                   # 화면 → 지울 정책 줄 번호(원래 번호) — 바꾸기를 다 한 뒤 큰 번호부터
         for eid, sid, kind, v in json_ops:
             if isinstance(kind, tuple):                 # 정책 줄 i
                 pol = by[sid].setdefault("policies", [])
                 if not 0 <= kind[1] < len(pol):
                     failed.append({"id": eid, "reason": "없는 정책 줄: %d" % kind[1]}); continue
-                pol[kind[1]] = v
+                if kind[0] == "policy-delete":
+                    drop.setdefault(sid, set()).add(kind[1])
+                else:
+                    pol[kind[1]] = v
             else:
                 by[sid][kind] = v
             applied.append(eid); changed.add(sid)
+        for sid, idx in drop.items():
+            for i in sorted(idx, reverse=True):
+                del by[sid]["policies"][i]
         raw = sj.read_text(encoding="utf-8")
         w.keep(sj); _write_json(sj, data, raw)
     changed = sorted(changed)

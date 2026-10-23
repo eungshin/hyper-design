@@ -58,9 +58,9 @@ def test_title_changed_is_normalised(out):
     assert out["title"] == [{"field": "title", "value": "로그인 · 구글 계속", "old": "로그인"}]
 
 
-def test_emptied_title_and_purpose_are_not_edits(out):
-    assert out["emptyTitle"] == []
-    assert out["emptyPolicy"] == [], "비운 정책 줄도 편집이 아니다(지우기 없음)"
+def test_emptied_title_is_not_an_edit_but_purpose_and_policy_are(out):   # #243 — 제목은 비울 수 없고, 설명은 '', 정책 줄은 지우기
+    assert out["emptyTitle"] == [{"field": "purpose", "value": "", "old": "구글로 시작한다.\n쿠폰은 선택."}]
+    assert out["emptyPolicy"] == [{"field": "policy", "index": 0, "op": "delete", "value": "", "old": "[R8] 구글만"}]
 
 
 def test_purpose_keeps_newlines(out):
