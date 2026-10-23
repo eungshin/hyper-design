@@ -583,6 +583,67 @@
         "note": "-n 4 전체 200개"
       },
       "note": "4단계 연결(셸 boxesOf·moveCards·arrangeCards, 폴더 상태, 정렬 패널 도크). 새 브라우저 테스트 2개, 옛 레이어 테스트의 숨긴 것만 확인을 폴더 줄 빼고로 다짐"
+    },
+    {
+      "slice": "task9 메모 UX (#223~#226)",
+      "commit": "9128386 · ec824c3 · 71930f8 · 3e06a35",
+      "numbered": true,
+      "tests": {
+        "full": 1,
+        "area": 6,
+        "minutes": 14
+      },
+      "gate": {
+        "checks": 40,
+        "sec": 0.6,
+        "fired": [
+          {
+            "rule": "책임(모르는 모듈)",
+            "real": false,
+            "min": 1,
+            "what": "HD.popPlace 이름이 파일 이름(pop-place)과 달라 NS 표에 한 줄 더함"
+          }
+        ]
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "메모 창 크기 비교가 여는 움직임(scale) 중 getBoundingClientRect 를 읽어 어긋남 → View·테스트 모두 offset 값으로"
+        },
+        {
+          "by": "new-test",
+          "what": "배지 테스트가 -n 4 영역 실행에서 앞 테스트가 남긴 도구 상태로 선택 막대를 못 찾음 → 메모 도구(M)로 직접 열고 손 도구로 돌아감"
+        }
+      ],
+      "waste": [],
+      "flaky": [],
+      "profile": {
+        "total_sec": 153,
+        "top": [
+          [
+            "test_layer_folders_group_rename_arrange_unfolder",
+            16.8
+          ],
+          [
+            "test_helper_canvas_busy_overlay_lifts_on_file_change",
+            11.7
+          ],
+          [
+            "test_undo_redo_card_moves",
+            11.4
+          ],
+          [
+            "test_tag_rename_keeps_button_text",
+            11.2
+          ],
+          [
+            "test_fit_includes_moved_card_and_drops_stale",
+            10.8
+          ]
+        ],
+        "note": "-n 4 전체 239개"
+      },
+      "note": "새 모듈 3(pop-place·view-pop-place·view-thread), 빈 레이아웃은 H16 상자 재사용(셸 editLayout), 요청문 줄바꿈은 들여 쓴 다음 줄. 새 브라우저 테스트 4·unit 파일 2"
     }
   ]
 }
