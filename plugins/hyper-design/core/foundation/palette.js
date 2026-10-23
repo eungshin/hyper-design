@@ -15,7 +15,10 @@
    leaf:true 면 그 자리 요소 그대로(글자 고치기).
    반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
-   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다. */
+   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
+   메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
+   다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
+   아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null). */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -64,6 +67,66 @@
     var t = el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('alt') || '';
     return String(t).replace(/\s+/g, ' ').trim().slice(0, 60);
   }
+  /* 문서 글: 글 마디를 차례로 이어 붙인 한 줄(공백은 하나로) + 마디마다 시작·끝 자리 — quote 를 만들고 다시 찾는 데 같이 쓴다 */
+  var SKIP = {SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1};
+  function docText() {
+    var t = '', nodes = [], root = document.body; if (!root) return {t: t, nodes: nodes};
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode: function (n) {
+      for (var p = n.parentElement; p && p !== root; p = p.parentElement) if (SKIP[p.tagName] || p.hasAttribute('data-hd-links') || p.hasAttribute('data-hd-pick')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }}), n;
+    while ((n = w.nextNode())) {
+      var v = n.nodeValue.replace(/\s+/g, ' ');
+      if (!v || v === ' ' && (!t || t.charAt(t.length - 1) === ' ')) continue;
+      if (v.charAt(0) === ' ' && t.charAt(t.length - 1) === ' ') v = v.slice(1);
+      nodes.push({n: n, s: t.length, e: t.length + v.length}); t += v;
+    }
+    return {t: t, nodes: nodes};
+  }
+  function spanOf(el, d) {                            // 그 요소 글이 문서 글에서 차지하는 [s, e)(앞뒤 공백 뺌)
+    var s = -1, e = -1;
+    d.nodes.forEach(function (x) { if (el.contains(x.n)) { if (s < 0) s = x.s; e = x.e; } });
+    if (s < 0) return null;
+    while (s < e && d.t.charAt(s) === ' ') s++;
+    while (e > s && d.t.charAt(e - 1) === ' ') e--;
+    return {s: s, e: e};
+  }
+  function quoteOf(el, d) {
+    d = d || docText();
+    var sp = el && spanOf(el, d); if (!sp || sp.e <= sp.s) return {exact: '', prefix: '', suffix: ''};
+    var e = Math.min(sp.e, sp.s + 200);
+    return {exact: d.t.slice(sp.s, e), prefix: d.t.slice(Math.max(0, sp.s - 32), sp.s), suffix: d.t.slice(e, e + 32)};
+  }
+  function common(a, b, fromEnd) {                    // 앞(또는 끝)부터 같은 글자 수
+    var k = 0, n = Math.min(a.length, b.length);
+    while (k < n && (fromEnd ? a.charAt(a.length - 1 - k) === b.charAt(b.length - 1 - k) : a.charAt(k) === b.charAt(k))) k++;
+    return k;
+  }
+  function locateOne(it, d) {
+    var q = it.quote && it.quote.exact ? String(it.quote.exact) : '', el = null;
+    try { el = it.path ? document.querySelector(it.path) : null; } catch (e) { el = null; }
+    if (el && el !== document.body && el !== document.documentElement) {
+      var sp = q ? spanOf(el, d) : null;
+      if (!q || (sp && d.t.slice(sp.s, sp.e).indexOf(q) >= 0)) return {key: it.key, rect: rectOf(el), how: 'path'};
+    }
+    if (!q) return {key: it.key, rect: null, how: 'none'};
+    var best = -1, score = -1, at = d.t.indexOf(q), pre = String(it.quote.prefix || ''), suf = String(it.quote.suffix || '');
+    while (at >= 0) {                                 // 같은 글이 여럿이면 앞·뒤 글이 가장 많이 맞는 곳
+      var sc = common(d.t.slice(Math.max(0, at - pre.length), at), pre, true) + common(d.t.slice(at + q.length, at + q.length + suf.length), suf, false);
+      if (sc > score) { score = sc; best = at; }
+      at = d.t.indexOf(q, at + 1);
+    }
+    if (best < 0) return {key: it.key, rect: null, how: 'none'};
+    var hit = d.nodes.filter(function (x) { return x.e > best && x.s < best + q.length; });
+    var box = hit[0].n.parentElement;                 // 그 글을 모두 감싼 가장 작은 요소
+    while (box && box !== document.body && !hit.every(function (x) { return box.contains(x.n); })) box = box.parentElement;
+    if (!box || box === document.body) return {key: it.key, rect: null, how: 'none'};
+    return {key: it.key, rect: rectOf(box), how: 'quote'};
+  }
+  function locate(items) {
+    var d = docText();
+    send({type: 'hd-located', screen: screenId(), items: (items || []).map(function (it) { return locateOne(it || {}, d); })});
+  }
   function screenId() {
     var f = decodeURIComponent(location.pathname.split('/').pop() || '');
     return f.replace(/\.html?$/i, '');
@@ -92,7 +155,7 @@
     if (!picking) return;
     block(e);
     var t = target(e); if (!t) return;
-    send({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), add: !!e.shiftKey});
+    send({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey});
   }, true);
 
   /* ---------- 연결 보기: 다른 화면으로 가는 링크 ---------- */
@@ -156,7 +219,7 @@
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
     send({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
-          rect: rectOf(el), to: toOf(el), kind: kindOf(el)});
+          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el)});
   }
   var pend = [];
   function pending(items) {                           // 반영 대기 글: 첫 글자 마디만 바꾸고, 다음 호출에서 되돌린다
@@ -223,6 +286,7 @@
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
     else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
     else if (d.type === 'hd-pending') pending(d.items);
+    else if (d.type === 'hd-locate') locate(d.items);
     else if (d.type === 'hd-edit') editOn = !!d.on;
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null;
