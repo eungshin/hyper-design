@@ -35,7 +35,18 @@ out.bootLocal = S.boot(broken, local.values);
 // 새로고침이 쓰기 모음(300ms)보다 빠를 때: 브라우저 캐시에는 아직 보내지 못한 메모, 페이지에 끼운 스냅숏은 그 전 rev
 const stale = S.snapshot({rev: 4, state: {notes: [{id: 'f1'}], 'note-seq': {home: 1}}});
 const unsent = S.fromLocal(mk({'hd-notes:abc': '[{"id":"f1"},{"id":"unsent"}]', 'hd-note-seq:abc': '{"home":2}'}), H);
-out.bootStale = S.boot(stale, unsent.values);
+// 보내지 못한 이름은 쓰기 대기 표시(hd-unsent:<hash> = {base: 그때 rev, names})로 남는다
+out.unsentKey = S.unsentKey(H);
+out.unsentParse = ['{"base":4,"names":["notes","note-seq","dock"]}', '{bad', '{"base":-1,"names":[]}', '{"base":2}', null].map(S.unsent);
+const mark = S.unsent('{"base":4,"names":["notes","note-seq"]}');
+out.bootStale = S.boot(stale, unsent.values, mark);                     // 파일이 그대로(rev 4) = 보내지 못한 값이 새것
+out.bootStaleNoMark = S.boot(stale, unsent.values, null);              // 표시 없음 = 지금처럼 파일이 이김
+const landed = S.snapshot({rev: 5, state: {notes: [{id: 'f1'}, {id: 'unsent'}], 'note-seq': {home: 2}}});
+out.bootLanded = S.boot(landed, unsent.values, mark);                   // 닫을 때 보낸 것이 먼저 닿음 = 올릴 것 없음
+const moved = S.snapshot({rev: 5, state: {notes: [{id: 'other'}], 'note-seq': {home: 2}}});
+out.bootMoved = S.boot(moved, unsent.values, mark);                     // 그 사이 다른 곳이 씀 = 파일이 이김(409 규칙), 잃은 이름을 알림
+const removed = S.fromLocal(mk({}), H);
+out.bootRemoved = S.boot(stale, removed.values, S.unsent('{"base":4,"names":["notes"]}'));   // 보내지 못한 지우기
 out.read = [S.read({notes: [1, 2]}, 'notes'), S.read({}, 'notes'), S.read({notes: null}, 'notes')];
 const st0 = {notes: [], future: 7};
 const w = S.write(st0, 'notes', '[{"id":"a"}]');
@@ -112,9 +123,25 @@ def test_body_has_only_changed_keys(out):
     assert out["body"] == {"rev": 4, "state": {"notes": [1], "busy": None}}, "바뀐 키만 · 없는 값은 null(지움)"
 
 
-def test_boot_with_stale_snapshot_drops_unsent_local_change(out):
-    """지금 동작 고정(빚): 300ms 안에 새로고침하면 보내지 못한 브라우저 값이 스냅숏(그 전 rev)에 덮인다 — 파일이 이기고 올리기 없음.
-    boot 는 캐시가 파일보다 새것인지 알 수 없다(캐시에 rev·더러움 표시가 없음). 고치면 이 테스트를 새 규칙으로 바꾼다."""
+def test_unsent_mark_key_and_parse(out):
+    assert out["unsentKey"] == "hd-unsent:abc", "NAMES 가 아니라 파일로 가지 않는다"
+    assert out["unsentParse"] == [{"base": 4, "names": ["notes", "note-seq"]}, None, None, None, None], "모르는 이름은 빼고 · 깨지면 null"
+
+
+def test_boot_with_stale_snapshot_keeps_unsent_local_change(out):
+    """300ms 안에 새로고침: 스냅숏(rev 4)이 쓰기 대기 표시의 base 와 같으면 보내지 못한 브라우저 값이 이기고 다시 올린다."""
     b = out["bootStale"]
-    assert b["mode"] == "file" and b["rev"] == 4 and b["upload"] == []
-    assert b["cache"]["notes"] == '[{"id":"f1"}]' and b["cache"]["note-seq"] == '{"home":1}', "보내지 못한 메모(unsent)는 사라진다"
+    assert b["mode"] == "file" and b["rev"] == 4 and b["upload"] == ["notes", "note-seq"] and b["lost"] == []
+    assert b["state"] == {"notes": [{"id": "f1"}, {"id": "unsent"}], "note-seq": {"home": 2}}
+    assert b["cache"]["notes"] == '[{"id":"f1"},{"id":"unsent"}]' and b["cache"]["note-seq"] == '{"home":2}', "캐시도 보내지 못한 값 그대로"
+    n = out["bootStaleNoMark"]
+    assert n["upload"] == [] and n["cache"]["notes"] == '[{"id":"f1"}]', "표시가 없으면 파일이 이긴다"
+
+
+def test_boot_unsent_mark_after_file_moved(out):
+    l = out["bootLanded"]
+    assert l["rev"] == 5 and l["upload"] == [] and l["lost"] == [], "닫을 때 보낸 것이 이미 닿았으면 올릴 것도 잃은 것도 없다"
+    m = out["bootMoved"]
+    assert m["rev"] == 5 and m["upload"] == [] and m["lost"] == ["notes"] and m["state"]["notes"] == [{"id": "other"}], "다른 곳이 썼으면 파일이 이기고 잃은 이름을 알린다"
+    r = out["bootRemoved"]
+    assert r["upload"] == ["notes"] and "notes" not in r["state"] and r["cache"]["notes"] is None, "보내지 못한 지우기도 다시 올린다"

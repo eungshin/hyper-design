@@ -5,7 +5,11 @@
    snapshot(raw) → {ok:true, rev, state} | {ok:false, why}   raw = helper 가 페이지에 끼워 넣은 __hdState({rev, state})
    fromLocal(getItem, hash) → {values:{이름: 값}, bad:[이름]}   깨진 JSON 은 bad 로(View 가 [hd] 경고)
    decide(snap, values) → 'local'(스냅숏 없음·깨짐) | 'file'(파일이 있음 = 파일이 이김, 또는 둘 다 비었음) | 'migrate'(파일 없음 + 브라우저에 값 있음 = 한 번 올리기)
-   boot(snap, values) → {mode, rev, state, cache:{이름: 글|null}(캐시에 덮어쓸 것, null = 지우기), upload:[이름]}
+   unsentKey(hash) → 쓰기 대기 표시 키 'hd-unsent:<hash>'(NAMES 가 아님 — 파일로 가지 않는다) · unsent(text) → {base, names} | null(없음·깨짐; 모르는 이름은 뺌)
+     표시 = 아직 파일에 닿았다고 확인 못 한 이름들과 그 변경의 기준 rev. 300ms 안의 새로고침에서 브라우저 캐시의 값이 새것임을 boot 가 알게 한다.
+   boot(snap, values, mark?) → {mode, rev, state, cache:{이름: 글|null}(캐시에 덮어쓸 것, null = 지우기), upload:[이름], lost:[이름]}
+     'file' + mark: 파일 rev === mark.base 면 표시된 이름의 브라우저 값(없으면 지움)이 이기고 upload(같은 rev 로 다시 보냄 — 그 사이 닿았으면 409 규칙).
+     rev 가 다르면 파일이 이긴다; 파일 값이 브라우저 값과 같으면(닫을 때 보낸 것이 닿음) 그만, 다르면 lost(View 가 [hd] 경고).
    read(state, name) → 저장 글 | null · write(state, name, text) → {ok, state(새 객체)} (JSON 이 아니면 ok:false, 상태 그대로) · drop(state, name) → 그 이름을 뺀 새 상태
    body(rev, state, names) → PUT 본문 {rev, state:{이름: 값 | null(지움)}}
    HD.stateFile = {NAMES, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body} */
@@ -49,14 +53,30 @@ function decide(snap, values) {
   return Object.keys(values || {}).length ? 'migrate' : 'file';
 }
 
-function boot(snap, values) {
+function unsentKey(hash) { return 'hd-unsent:' + hash; }
+function unsent(text) {
+  if (text == null) return null;
+  var o; try { o = JSON.parse(text); } catch (e) { return null; }
+  if (!isObj(o) || typeof o.base !== 'number' || o.base < 0 || Math.floor(o.base) !== o.base || !Array.isArray(o.names)) return null;
+  return {base: o.base, names: NAMES.filter(function (n) { return o.names.indexOf(n) >= 0; })};
+}
+function text(o, n) { return has(o, n) && o[n] != null ? JSON.stringify(o[n]) : null; }
+
+function boot(snap, values, mark) {
   values = values || {};
   var mode = decide(snap, values);
-  if (mode === 'local') return {mode: mode, rev: 0, state: copy(values), cache: {}, upload: []};
-  if (mode === 'migrate') return {mode: mode, rev: snap.rev, state: copy(values), cache: {}, upload: NAMES.filter(function (n) { return has(values, n); })};
-  var cache = {};
-  NAMES.forEach(function (n) { cache[n] = has(snap.state, n) && snap.state[n] != null ? JSON.stringify(snap.state[n]) : null; });
-  return {mode: mode, rev: snap.rev, state: copy(snap.state), cache: cache, upload: []};
+  if (mode === 'local') return {mode: mode, rev: 0, state: copy(values), cache: {}, upload: [], lost: []};
+  if (mode === 'migrate') return {mode: mode, rev: snap.rev, state: copy(values), cache: {}, upload: NAMES.filter(function (n) { return has(values, n); }), lost: []};
+  var state = copy(snap.state), cache = {}, upload = [], lost = [];
+  NAMES.forEach(function (n) { cache[n] = text(state, n); });
+  (mark ? mark.names : []).forEach(function (n) {
+    var mine = text(values, n);
+    if (mine === cache[n]) return;                    // 이미 파일에 있음
+    if (snap.rev !== mark.base) { lost.push(n); return; }   // 그 사이 파일이 움직임 = 파일이 이긴다
+    if (mine == null) delete state[n]; else state[n] = values[n];
+    cache[n] = mine; upload.push(n);
+  });
+  return {mode: mode, rev: snap.rev, state: state, cache: cache, upload: upload, lost: lost};
 }
 
 function read(state, name) { return has(state, name) && state[name] != null ? JSON.stringify(state[name]) : null; }
@@ -76,5 +96,5 @@ function body(rev, state, names) {
   return {rev: rev, state: s};
 }
 
-HD.stateFile = {NAMES: NAMES, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
+HD.stateFile = {NAMES: NAMES, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
 })();
