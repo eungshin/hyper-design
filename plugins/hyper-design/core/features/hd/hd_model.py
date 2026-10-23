@@ -95,21 +95,23 @@ def replies(note):
 
 def status(note):
     """메모 → draft | working | decide | partial | done (PLAN §3)."""
-    if not isinstance(note, dict) or not note.get("sent"):
+    if not isinstance(note, dict):
         return "draft"
     rs = replies(note)
+    k = rs[-1].get("kind") if rs and isinstance(rs[-1], dict) else None
+    if k == "확인":                                     # 사람이 닫은 것은 보냈든 아니든 완료 (annotation.js 와 같은 규칙)
+        return "done"
+    if not note.get("sent"):
+        return "draft"                                  # 다시 열기는 sent 를 내리므로 여기서 draft
     if not rs:
         return "working"
-    k = rs[-1].get("kind") if isinstance(rs[-1], dict) else None
     if k == "질문":
         return "decide"
     if k == "일부":
         return "partial"
     if k in DONE:
         return "done"
-    if k == "다시":
-        return "draft"
-    return "working"
+    return "working"                                    # 다시 연 뒤 다시 보냄 · 모르는 종류
 
 
 def _pos(v):

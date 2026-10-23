@@ -566,7 +566,7 @@
  {
   "name": "user 다시 reopens",
   "note_intent": "change",
-  "sent": true,
+  "sent": false,
   "from": "any",
   "replies": [
    {
@@ -584,6 +584,42 @@
   ],
   "valid": true,
   "status": "draft"
+ },
+ {
+  "name": "reopened then sent again",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   },
+   {
+    "kind": "다시",
+    "by": "user"
+   }
+  ],
+  "valid": true,
+  "status": "working"
+ },
+ {
+  "name": "unsent memo closed by user",
+  "note_intent": "change",
+  "sent": false,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "확인",
+    "by": "user"
+   }
+  ],
+  "valid": true,
+  "status": "done"
  },
  {
   "name": "agent cannot post 확인",
