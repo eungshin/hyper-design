@@ -29,13 +29,20 @@ from html.parser import HTMLParser
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "style", "camera", "edits", "notes", "annotation", "tools", "dock", "prefs", "selection", "history", "view-links", "view-link-panel", "view-motion", "view-dock", "view-edge-pan", "view-select", "view-lines", "view-history", "view-notes", "view-sync", "view-menu", "layers", "view-layers", "theme", "view-theme", "viewport", "busy", "line-ends", "caption", "align", "folders", "view-viewport", "view-busy", "view-line-ends", "view-caption", "view-align", "pop-place", "view-pop-place", "view-thread", "view-pins", "state-file", "view-state-sync"]   # 끼워 넣는 순서(셸이 늦게 mount 하므로 층 순서가 아니어도 된다 — 모듈은 정의만 하고 서로를 mount 때 찾는다). 새 모듈은 여기 한 곳에만 더한다(테스트가 이 목록을 읽는다)
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
 PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
 SCALE, CARD, MODAL, RADIUS = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28   # surface.json이 없을 때(폰)
+
+
+def modules():
+    """끼워 넣을 모듈 = modules/*.js 전부(손으로 적는 목록 없음 — 새 모듈은 파일만 만든다). 테스트도 이 함수를 읽는다.
+    차례: view-* 가 아닌 것(Model·ViewModel·등록부 features) 먼저, 그다음 view-*, 묶음 안은 이름 차례.
+    까닭: 모듈은 정의만 하고 서로를 mount 때 찾지만, View 는 읽힐 때 `HD.feature(...)` 로 자기를 등록할 수 있다 — 그때 등록부가 있어야 한다."""
+    names = sorted(f.stem for f in MODULES_DIR.glob("*.js"))
+    return [n for n in names if not n.startswith("view-")] + [n for n in names if n.startswith("view-")]
 
 
 def frame(out):
@@ -61,7 +68,7 @@ def inline_modules(tpl):
     """modules/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
     assert MODULES_MARKER in tpl, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
     parts = []
-    for name in MODULES:
+    for name in modules():
         f = MODULES_DIR / f"{name}.js"
         assert f.exists(), f"캔버스 모듈이 없다: {f}"
         js = f.read_text(encoding="utf-8").replace("</", "<\\/").replace("<!--", "<\\!--")

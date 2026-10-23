@@ -14,12 +14,21 @@ MOD = SCRIPTS / "modules"
 REPO = SCRIPTS.parents[4]
 GYM = REPO / "runs" / "gym-v2" / "out"
 sys.path.insert(0, str(SCRIPTS))
-from build_canvas import MODULES as ALL_MODULES   # 빌드가 끼워 넣는 순서 그대로 — 따로 적어 두면 어긋난다
+from build_canvas import modules as _modules   # 빌드가 끼워 넣는 모듈·순서 그대로(modules/*.js 전부) — 따로 적어 두면 어긋난다
 sys.path.pop(0)
-# 층 표(책임 게이트) — view-* 가 아닌 모듈은 모두 여기 있어야 한다. 순수성 검사는 이 표의 Model·ViewModel 전부
-LAYER = {"graph": "Model", "route": "Model", "style": "Model", "camera": "Model", "edits": "Model", "notes": "Model", "annotation": "Model", "layers": "Model", "theme": "Model", "viewport": "Model", "busy": "Model", "line-ends": "Model", "caption": "Model", "align": "Model", "folders": "Model", "pop-place": "Model", "state-file": "Model",
-         "tools": "ViewModel", "dock": "ViewModel", "prefs": "ViewModel", "selection": "ViewModel", "history": "ViewModel"}
-PURE = [n for n in ALL_MODULES if n in LAYER]
+ALL_MODULES = _modules()
+HEAD = re.compile(r"/\* (Model|ViewModel|View) — \S")
+
+
+def _head_layer(name):
+    """층은 파일이 말한다 — 머리 주석 첫 줄 `/* 층 — 맡은 일`. 없으면 None(게이트가 잡는다)."""
+    m = HEAD.match((MOD / f"{name}.js").read_text(encoding="utf-8"))
+    return m and m.group(1)
+
+
+# 층 표(책임 게이트)는 손으로 적지 않는다 — 머리 주석에서 읽고, 파일 이름과 맞는지는 layer_rule_errors 가 본다(view-* = View, 그 밖 = Model·ViewModel)
+LAYER = {n: _head_layer(n) for n in ALL_MODULES}
+PURE = [n for n in ALL_MODULES if LAYER[n] in ("Model", "ViewModel")]
 NODE = shutil.which("node")
 
 HARNESS = r"""
@@ -215,13 +224,36 @@ def test_purity(name):
     assert not hits, f"{name}.js: {hits}"
 
 
+def layer_rule_errors(layers):
+    """층 규칙 — 파일 이름과 머리 주석이 같은 말을 한다: view-* = View, 그 밖 = Model 또는 ViewModel. 머리 주석이 없으면 분류되지 않은 모듈."""
+    errs = []
+    for n, layer in layers.items():
+        if layer is None:
+            errs.append(f"{n}.js: 머리 주석 첫 줄 '/* Model|ViewModel|View — 맡은 일' 이 없어 층을 모른다")
+        elif n.startswith("view-") != (layer == "View"):
+            errs.append(f"{n}.js: 파일 이름({'view-*' if n.startswith('view-') else 'view-* 아님'})과 머리 주석({layer})이 다르다")
+    return errs
+
+
 def test_purity_covers_every_model():
-    """Model·ViewModel 파일은 빠짐없이 순수성 검사를 받는다 — view-* 가 아닌 모듈이 층 표에 없으면 실패."""
+    """Model·ViewModel 파일은 빠짐없이 순수성 검사를 받는다 — 빌드가 끼우는 모듈 = modules/*.js 전부, 층은 머리 주석과 파일 이름이 함께 정한다."""
     on_disk = sorted(p.stem for p in MOD.glob("*.js"))
-    assert sorted(ALL_MODULES) == on_disk, "modules/*.js 와 build_canvas.MODULES 가 다르다"
-    missing = [n for n in ALL_MODULES if not n.startswith("view-") and n not in LAYER]
-    assert not missing, f"층 표(LAYER)에 없는 Model/ViewModel: {missing}"
-    assert set(PURE) == set(LAYER)
+    assert sorted(ALL_MODULES) == on_disk, "modules/*.js 와 build_canvas.modules() 가 다르다"
+    assert not layer_rule_errors(LAYER), layer_rule_errors(LAYER)
+    assert set(PURE) == {n for n in ALL_MODULES if not n.startswith("view-")}
+
+
+def test_layer_rule_catches_unclassified_and_disagreeing_modules():
+    """새 모듈은 층 표 없이 분류된다 — 머리 주석이 없거나 파일 이름과 다르면 게이트가 잡는다(규칙 자체를 확인)."""
+    assert layer_rule_errors({"a": "Model", "b": "ViewModel", "view-c": "View"}) == []
+    errs = layer_rule_errors({"x": None, "view-y": "Model", "z": "View"})
+    assert len(errs) == 3 and "x.js" in errs[0] and "view-y.js" in errs[1] and "z.js" in errs[2], errs
+
+
+def test_registry_loads_before_views():
+    """View 는 읽힐 때 HD.feature 로 등록할 수 있다 — 등록부(features)를 포함한 view-* 아닌 모듈이 모두 먼저 끼워진다."""
+    kinds = [n.startswith("view-") for n in ALL_MODULES]
+    assert kinds == sorted(kinds) and "features" in ALL_MODULES
 
 
 def test_single_file_output(res):
@@ -386,17 +418,23 @@ def test_dock_width_is_not_inherited_by_the_board():
 
 # ── 책임 게이트(contract.md '책임 게이트') — 한 객체가 다시 커지지 않게, 기능 사이는 의도로만
 RANK = {"Model": 0, "ViewModel": 1, "View": 2}
-NS = {"lineStyle": "style", "lineEnds": "line-ends", "popPlace": "pop-place", "stateFile": "state-file"}                          # HD 이름 → 모듈 파일(이름이 다른 것만)
+DEFINE = re.compile(r"\bHD\.(\w+)\s*=(?!=)")       # 모듈이 정의하는 HD 이름(`HD.이름 =`) — 손으로 적는 이름 표 없음
 
 
-def _layer(name):
-    return "View" if name.startswith("view-") else LAYER[name]
+def _defines():
+    own = {}
+    for n in ALL_MODULES:
+        for x in set(DEFINE.findall((MOD / f"{n}.js").read_text(encoding="utf-8"))):
+            own.setdefault(x, []).append(n)
+    return own
 
 
-def _hd_name(name):
-    if name.startswith("view-"):
-        return "view" + "".join(p.title() for p in name.split("-")[1:])
-    return {v: k for k, v in NS.items()}.get(name, name)
+DEFINES = {x: ns[0] for x, ns in _defines().items()}   # HD 이름 → 주인 모듈
+
+
+def test_each_hd_name_has_one_owner():
+    """HD 이름 하나 = 주인 모듈 하나(자율) — 두 파일이 같은 이름을 정의하면 실패."""
+    assert not {x: ns for x, ns in _defines().items() if len(ns) > 1}
 
 
 @pytest.mark.parametrize("name", ALL_MODULES)
@@ -404,14 +442,14 @@ def test_gate_role_and_direction(name):
     """책임: 머리 주석 첫 줄이 층(Model/ViewModel/View)과 맡은 일 하나를 밝힌다.
     협력: 의존은 아래 층으로만(Model → 다른 층 모름, ViewModel → View 모름), View 끼리는 서로 부르지 않는다(셸이 의도로 잇는다)."""
     src = (MOD / f"{name}.js").read_text(encoding="utf-8")
-    me = _layer(name)
-    assert re.match(r"/\* (Model|ViewModel|View) — \S", src) and src[3:].startswith(me), f"{name}.js 첫 줄 = '/* {me} — 맡은 일'"
-    own = _hd_name(name)
-    for dep in sorted(set(re.findall(r"\bHD\.(\w+)", src)) - {own}):
-        mod = NS.get(dep, dep)
-        if dep.startswith("view") and mod not in LAYER:   # viewport(Model) 처럼 이름만 view 로 시작하는 것은 층 표로
-            assert False, f"{name}.js → HD.{dep}: View 끼리 직접 부르지 않는다 — ctx 로 받은 함수·의도로"
-        assert mod in LAYER, f"{name}.js → HD.{dep}: 모르는 모듈"
+    me = LAYER[name]
+    assert me and not layer_rule_errors({name: me}), f"{name}.js 첫 줄 = '/* {'View' if name.startswith('view-') else 'Model|ViewModel'} — 맡은 일'"
+    for dep in sorted(set(re.findall(r"\bHD\.(\w+)", src))):
+        mod = DEFINES.get(dep)
+        assert mod, f"{name}.js → HD.{dep}: 모르는 모듈"
+        if mod == name:
+            continue
+        assert LAYER[mod] != "View", f"{name}.js → HD.{dep}: View 끼리 직접 부르지 않는다 — ctx 로 받은 함수·의도로"
         assert RANK[LAYER[mod]] <= RANK[me] and not (me == "Model" and LAYER[mod] != "Model"), f"{name}.js({me}) → {mod}({LAYER[mod]}): 위 층에 기댐"
 
 

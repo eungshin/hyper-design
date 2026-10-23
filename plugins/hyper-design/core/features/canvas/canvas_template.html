@@ -1923,11 +1923,10 @@ function modalTools() {                            // 크게 보기면 손·주�
     if (open && t !== 'hand' && t !== 'annotate') b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
   });
 }
-// 메모 창 틀(modules/view-pop-place.js, #223): 끌어 옮기기·크기·저장한 자리(hd-pop)·대상 카드 표시 — 여기는 자동 자리 계산만
-var PP = HD.viewPopPlace.mount({pop: pop, head: $('#ptitle'), key: 'hd-pop', warn: function (m) { console.warn(m); },
-  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }});
+// 메모 창 틀(modules/view-pop-place.js, #223): 끌어 옮기기·크기·저장한 자리(hd-pop)·대상 카드 표시 — 기능 등록부로 붙는다(아래 mountAll → PP), 여기는 자동 자리 계산만
+var PP = null;
 function placePop(rect, at, screen) {              // at = 누른 자리(판 위 요소 메모) · 저장한 자리가 있으면 그것(PP)
-  PP.open(function () {
+  var auto = function () {
     var x = 24, y = 80;
     if (at) { x = at.x + 14; y = at.y + 14; }
     else if (rect && !modal.hidden) {
@@ -1938,7 +1937,9 @@ function placePop(rect, at, screen) {              // at = 누른 자리(판 위
       var nb = notesEl.getBoundingClientRect(); x = nb.left - 312; y = nb.top;
     }
     return {x: Math.max(8, Math.min(innerWidth - 308, x)), y: Math.max(8, Math.min(innerHeight - 240, y))};
-  }, screen && VL ? VL.cardEl(screen) : null);
+  };
+  if (PP) { PP.open(auto, screen && VL ? VL.cardEl(screen) : null); return; }
+  var a = auto(); pop.style.left = a.x + 'px'; pop.style.top = a.y + 'px';   // 틀 기능이 붙지 못했으면(mountAll 이 [hd] 로 알림) 자동 자리만
 }
 function setIntent(v) { $$('#pintent button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.intent === v)); }); }
 function curIntent() { var b = $('#pintent button[aria-pressed="true"]'); return b ? b.dataset.intent : 'change'; }
@@ -1958,7 +1959,7 @@ function showPop(item, note, intent, at, scope) {    // scope 없음 = 기본(�
   pop.hidden = false; placePop(item.rect, at, en ? en.screen : draft && draft.screen);
   $('#pnote').focus();
 }
-function hidePop() { pop.hidden = true; draft = null; editing = null; PP.close(); drawPins(); }
+function hidePop() { pop.hidden = true; draft = null; editing = null; if (PP) PP.close(); drawPins(); }
 function commitPop() {
   var note = $('#pnote').value.trim(), intent = curIntent(), scope = curScope();
   var setSc = function (n) { if (scope === 'element') delete n.scope; else n.scope = scope; };   // 이 요소 = 칸 없음(옛 메모와 같음)
@@ -2165,6 +2166,16 @@ addEventListener('keydown', function (e) {
   else if (k === 'p' && !modal.hidden) { e.preventDefault(); setPick(!picking); }
   else if (HD.tools.byKey(k) && $('#tools [data-tool="' + HD.tools.byKey(k) + '"]') && modal.hidden && document.body.dataset.tab === 'screens') { e.preventDefault(); setTool(HD.tools.byKey(k)); }   // 도구 키(modules/tools.js)
 });
+// 기능 등록부(modules/features.js): 모듈이 HD.feature(이름, {needs, mount}) 로 등록한 기능을 여기서 한 번에 붙인다 — 새 기능은 이 ctx 를 받을 뿐 셸을 고치지 않는다.
+// 칸이 모자라거나 mount 가 던지면 그 기능만 빠지고 [hd] 오류 + 토스트(나머지는 붙음). 칸 뜻은 features.js 머리 주석
+var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
+  rowsEl: rowsEl, CARD: CARD, title: function (id) { return titleOf(id); }, cardEl: function (id) { return VL.cardEl(id); },
+  notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
+  store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},
+  local: {getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }},
+  key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); }, record: function (op) { record(op); },
+  prefs: function () { return prefs; }, savePrefs: function () { savePrefs(); }});
+PP = FT.popPlace || null;
 renderNotes();
 
 /* ---------- 시작 ---------- */

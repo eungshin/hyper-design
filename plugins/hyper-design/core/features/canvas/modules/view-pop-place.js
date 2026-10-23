@@ -3,7 +3,8 @@
    한 번 옮기거나 크기를 바꾸면 다음부터 늘 그 자리(지금 창 안으로 맞춤), 머리 줄 두 번 누르기 = 저장 지우고 자동 자리로.
    HD.viewPopPlace.mount(ctx) → {open(auto, cardEl), close(), saved()}
      open: 저장한 자리가 있으면 그것, 없으면 auto() → {x, y}(셸이 계산한 자동 자리) · cardEl = 메모 대상 카드(테두리 표시, 없으면 null)
-   ctx = {pop, head(끄는 머리 줄 Node), key, getItem(k), setItem(k, v), removeItem(k), warn(msg)} */
+   ctx = {pop, head(끄는 머리 줄 Node), key, getItem(k), setItem(k, v), removeItem(k), warn(msg)}
+   붙이기: 기능 등록부(modules/features.js)에 'popPlace' 로 등록 — 셸 ctx 의 $ · local(전역 설정 키) · warn 으로 위 ctx 를 만든다. 셸은 mountAll 결과의 popPlace 를 쓴다 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -81,4 +82,8 @@ function mount(ctx) {
 }
 
 HD.viewPopPlace = {mount: mount};
+HD.feature('popPlace', {needs: ['$', 'local', 'warn'], mount: function (c) {
+  return mount({pop: c.$('#pop'), head: c.$('#ptitle'), key: 'hd-pop', warn: c.warn,
+                getItem: c.local.getItem, setItem: c.local.setItem, removeItem: c.local.removeItem});
+}});
 })();
