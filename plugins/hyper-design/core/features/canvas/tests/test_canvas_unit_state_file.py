@@ -32,6 +32,10 @@ out.decide = {
 out.bootMigrate = S.boot(empty, local.values);
 out.bootFile = S.boot(file, local.values);
 out.bootLocal = S.boot(broken, local.values);
+// 새로고침이 쓰기 모음(300ms)보다 빠를 때: 브라우저 캐시에는 아직 보내지 못한 메모, 페이지에 끼운 스냅숏은 그 전 rev
+const stale = S.snapshot({rev: 4, state: {notes: [{id: 'f1'}], 'note-seq': {home: 1}}});
+const unsent = S.fromLocal(mk({'hd-notes:abc': '[{"id":"f1"},{"id":"unsent"}]', 'hd-note-seq:abc': '{"home":2}'}), H);
+out.bootStale = S.boot(stale, unsent.values);
 out.read = [S.read({notes: [1, 2]}, 'notes'), S.read({}, 'notes'), S.read({notes: null}, 'notes')];
 const st0 = {notes: [], future: 7};
 const w = S.write(st0, 'notes', '[{"id":"a"}]');
@@ -106,3 +110,11 @@ def test_read_write_drop(out):
 
 def test_body_has_only_changed_keys(out):
     assert out["body"] == {"rev": 4, "state": {"notes": [1], "busy": None}}, "바뀐 키만 · 없는 값은 null(지움)"
+
+
+def test_boot_with_stale_snapshot_drops_unsent_local_change(out):
+    """지금 동작 고정(빚): 300ms 안에 새로고침하면 보내지 못한 브라우저 값이 스냅숏(그 전 rev)에 덮인다 — 파일이 이기고 올리기 없음.
+    boot 는 캐시가 파일보다 새것인지 알 수 없다(캐시에 rev·더러움 표시가 없음). 고치면 이 테스트를 새 규칙으로 바꾼다."""
+    b = out["bootStale"]
+    assert b["mode"] == "file" and b["rev"] == 4 and b["upload"] == []
+    assert b["cache"]["notes"] == '[{"id":"f1"}]' and b["cache"]["note-seq"] == '{"home":1}', "보내지 못한 메모(unsent)는 사라진다"

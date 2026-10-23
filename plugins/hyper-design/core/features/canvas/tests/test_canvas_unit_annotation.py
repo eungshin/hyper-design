@@ -58,7 +58,9 @@ out.reply = A.reply('확인', 't0');
 // 공유 fixture(drift): hd_model 과 같은 답 검사·상태
 out.fixture = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')).map(c => {
   const errs = [].concat(...c.replies.map(r => A.validReply(r, c.note_intent, c.from === 'agent').errors));
-  return {name: c.name, valid: !errs.length, errs, status: A.status({intent: c.note_intent, sent: c.sent, replies: c.replies})};
+  const r = c.replies[c.replies.length - 1];
+  return {name: c.name, valid: !errs.length, errs, status: A.status({intent: c.note_intent, sent: c.sent, replies: c.replies}),
+          says: r && typeof r === 'object' ? A.says(r) : null};
 });
 // 답 글 · 질문 고르기 · 대기열 말
 out.says = ['반영됨', '일부', '대체됨', '답변', '질문'].map(k => A.says(R(k))).concat([A.says({kind: '확인'}), A.says(A.answer('B', 't')), A.says({kind: '다시'})]);
@@ -135,6 +137,8 @@ def test_shared_fixture_matches_hd_model(out):
         assert got["valid"] == c["valid"], (c["name"], got["errs"])
         if c["valid"]:
             assert got["status"] == c["status"], c["name"]
+            if "says" in c:                          # 캔버스 답 줄 = fixture 글 그대로(hd_model 은 이 글로 시작)
+                assert got["says"] == c["says"], (c["name"], got["says"])
         else:
             assert any(c["reason"] in e for e in got["errs"]), (c["name"], c["reason"], got["errs"])
 

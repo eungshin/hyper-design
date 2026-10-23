@@ -37,7 +37,7 @@ python $SK/features/hd/hd.py forget <name> [--json]
 보내지 않은 메모(draft)에는 답하지 않는다(400).
 상태(저장하지 않음): 보내지 않음 → draft · 보냄+답 없음 → working · 마지막 질문 → decide · 일부 → partial · 반영됨/대체됨/답변/확인 → done · 다시 → draft.
 번호: 메모의 `no`, 없으면 canvas `annotation.migrate` 와 같은 규칙(그 화면의 가장 큰 번호·`note-seq` 다음부터 목록 차례) — 메모 파일은 고치지 않는다.
-공유 fixture `tests/fixtures/replies.json` = `[{name, note_intent, sent, from: agent|any, replies, valid, reason?, status?}]` — `from=agent` 는 에이전트가 보낸 답(사람 종류 거절), `reason` 은 오류 글 안 조각, `status` 는 valid 일 때 계산 상태. Python 테스트가 읽고, A2 가 JS 테스트도 같은 파일을 읽게 한다.
+공유 fixture `tests/fixtures/replies.json` = `[{name, note_intent, sent, from: agent|any, replies, valid, reason?, status?, says?}]` — `from=agent` 는 에이전트가 보낸 답(사람 종류 거절), `reason` 은 오류 글 안 조각, `status` 는 valid 일 때 계산 상태, `says` 는 마지막 답의 캔버스 답 줄(`annotation.says` 와 같아야 하고, `hd_model.says` 는 그 글로 시작 — 뒤에 터미널 덧붙임만). Python 테스트가 읽고, A2 가 JS 테스트도 같은 파일을 읽게 한다.
 
 ## 구조 (층)
 - Model `hd_model.py` — 순수: 답 검사·찍기(by/at 은 받은 값), 상태, 번호, 메모 찾기, 줄 객체·사람용 줄. I/O·시계 없음(`tests/test_hd_model.py` 순수성 검사). `canvas/helper.py` 도 이 파일 하나로 검사한다(규칙 하나)

@@ -22,10 +22,14 @@ def test_fixture_case(case):
     else:
         note = {"intent": case["note_intent"], "sent": case.get("sent", True), "replies": case["replies"]}
         assert M.status(note) == case["status"]
+        if "says" in case:                           # 첫 말은 캔버스 annotation.says 와 같고, 터미널 덧붙임(캡처·고를 것)만 뒤에 허용(hd contract)
+            assert M.says(case["replies"][-1]).startswith(case["says"]), (M.says(case["replies"][-1]), case["says"])
 
 
 def test_fixture_covers_every_kind_and_status():
     kinds = {r.get("kind") for c in CASES for r in c["replies"] if isinstance(r, dict)}
+    said = {c["replies"][-1]["kind"] for c in CASES if "says" in c}
+    assert set(M.KINDS) <= said, ("says 가 없는 종류", set(M.KINDS) - said)
     assert set(M.KINDS) | {"보류"} <= kinds
     assert {c["status"] for c in CASES if c["valid"]} == set(M.STATUSES)
 
