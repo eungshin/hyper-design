@@ -434,6 +434,12 @@ body.split-lr #khint{display:none}
 #pop .ptitle{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pop .ppath{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#777;margin:2px 0 8px;word-break:break-all;white-space:pre-line;max-height:80px;overflow:auto}
 #pop textarea{width:100%;min-height:72px;border:1px solid #dcdcd7;border-radius:8px;padding:8px;font:inherit;resize:vertical}
+#pop{display:flex;flex-direction:column}
+#pop .ptitle{cursor:move;user-select:none;flex:none}
+#pop.sized{box-sizing:border-box}
+#pop.sized textarea{flex:1 1 auto;min-height:40px;resize:none;box-sizing:border-box}
+#pop .prs{position:absolute;right:2px;bottom:2px;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#b9b9b4 50%,#b9b9b4 58%,transparent 58%,transparent 70%,#b9b9b4 70%,#b9b9b4 78%,transparent 78%);border-bottom-right-radius:12px}
+.card.memo-target .phone{outline:4px dashed var(--ui-mark);outline-offset:8px}
 #pop .prow{display:flex;align-items:center;gap:6px;margin-top:8px}
 #pop .seg{display:flex;background:#EFEFEB;border-radius:9px;padding:2px;margin-right:auto}
 #pop .seg button{border:0;background:transparent;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px;font-weight:600;color:#666}
@@ -1685,9 +1691,7 @@ function renderDrafts(ids) {                         // 메모의 빈 레이아�
 }
 function openElemMemo(id, h, x, y) {                 // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이)
   editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect}]};
-  showPop({text: h.text || h.path, path: h.path, rect: null}, '', 'change');
-  pop.style.left = Math.max(8, Math.min(innerWidth - 308, x + 14)) + 'px';
-  pop.style.top = Math.max(8, Math.min(innerHeight - 240, y + 14)) + 'px';
+  showPop({text: h.text || h.path, path: h.path, rect: null}, '', 'change', {x: x, y: y});
 }
 function renameLayout(el, id) {
   var n = NS.list().filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0]; if (!n) return;
@@ -1832,31 +1836,37 @@ function modalTools() {                            // 크게 보기면 손·주�
     if (open && t !== 'hand' && t !== 'annotate') b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
   });
 }
-function placePop(rect) {
-  var x = 24, y = 80;
-  if (rect && !modal.hidden) {
-    var b = mbox.getBoundingClientRect();
-    x = b.left + rect.x * mscale; y = b.top + (rect.y + rect.h) * mscale + 8;
-    if (y + 240 > innerHeight) y = Math.max(8, b.top + rect.y * mscale - 248);
-  } else if (!notesEl.hidden) {
-    var nb = notesEl.getBoundingClientRect(); x = nb.left - 312; y = nb.top;
-  }
-  pop.style.left = Math.max(8, Math.min(innerWidth - 308, x)) + 'px';
-  pop.style.top = Math.max(8, Math.min(innerHeight - 240, y)) + 'px';
+// 메모 창 틀(modules/view-pop-place.js, #223): 끌어 옮기기·크기·저장한 자리(hd-pop)·대상 카드 표시 — 여기는 자동 자리 계산만
+var PP = HD.viewPopPlace.mount({pop: pop, head: $('#ptitle'), key: 'hd-pop', warn: function (m) { console.warn(m); },
+  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }});
+function placePop(rect, at, screen) {              // at = 누른 자리(판 위 요소 메모) · 저장한 자리가 있으면 그것(PP)
+  PP.open(function () {
+    var x = 24, y = 80;
+    if (at) { x = at.x + 14; y = at.y + 14; }
+    else if (rect && !modal.hidden) {
+      var b = mbox.getBoundingClientRect();
+      x = b.left + rect.x * mscale; y = b.top + (rect.y + rect.h) * mscale + 8;
+      if (y + 240 > innerHeight) y = Math.max(8, b.top + rect.y * mscale - 248);
+    } else if (!notesEl.hidden) {
+      var nb = notesEl.getBoundingClientRect(); x = nb.left - 312; y = nb.top;
+    }
+    return {x: Math.max(8, Math.min(innerWidth - 308, x)), y: Math.max(8, Math.min(innerHeight - 240, y))};
+  }, screen && VL ? VL.cardEl(screen) : null);
 }
 function setIntent(v) { $$('#pop .seg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.intent === v)); }); }
 function curIntent() { var b = $('#pop .seg button[aria-pressed="true"]'); return b ? b.dataset.intent : 'change'; }
 $$('#pop .seg button').forEach(function (b) { b.addEventListener('click', function () { setIntent(b.dataset.intent); }); });
-function showPop(item, note, intent) {
+function showPop(item, note, intent, at) {
   $('#ptitle').textContent = item.text || '(글자 없음)';
   $('#ppath').textContent = item.path || '';
   $('#pnote').value = note || '';
   setIntent(intent || 'change');
   $('#padd').textContent = editing ? '저장' : '추가';
-  pop.hidden = false; placePop(item.rect);
+  var en = editing && NS.find(editing);
+  pop.hidden = false; placePop(item.rect, at, en ? en.screen : draft && draft.screen);
   $('#pnote').focus();
 }
-function hidePop() { pop.hidden = true; draft = null; editing = null; drawPins(); }
+function hidePop() { pop.hidden = true; draft = null; editing = null; PP.close(); drawPins(); }
 function commitPop() {
   var note = $('#pnote').value.trim(), intent = curIntent();
   if (editing) {

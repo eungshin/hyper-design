@@ -21,6 +21,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `caption`(Model)·`view-caption`(View) — 카드 아래 글 한 상자(H16): 제목·설명·정책 줄을 한 상자에서 고치고, 바뀐 칸마다 반영 대기 편집(`title`·`purpose`·`policy`[i]) 을 한 번의 `addEdits` 로(되돌리기 한 번). 정책 줄 더하기·지우기 없음(helper 가 못 씀)
 - `align`(Model)·`view-align`(View) — 정렬 패널(H18, 도크 패널 `align`): 고른 카드(잠김·숨김·삭제 대기 빼고)의 상자로 맞추기 6·간격 같게 2·늘어놓기 2(간격 칸 px, 키 `hd-align-gap`). 옮기기는 셸 `moveCards` 가 카드 옮긴 자리(`hd-card-pos:`)에 더하고 기록 한 단계
 - `folders`(Model)·`layers`(Model, 폴더 줄)·`view-layers`(View) — 레이어 폴더(H17): 패널에서만 묶음(판 카드·화면 파일 그대로, 키 `hd-folders:`), 데이터 줄 = 고정 폴더, 폴더·줄의 [가로로/세로로 늘어놓기]는 정렬 패널 간격으로 셸 `arrangeCards`
+- `pop-place`(Model)·`view-pop-place`(View) — 메모 창(`#pop`) 틀(#223): 머리 줄 끌어 옮기기·오른쪽 아래 모서리 크기(가장 작게 260×160, 창 안으로). 한 번 옮기거나 키우면 다음부터 늘 그 자리(키 `hd-pop`, 모든 캔버스 공용), 머리 줄 두 번 누르기 = 자동 자리. 열린 동안 대상 카드에 `.memo-target` 테두리. 자동 자리 계산은 셸 `placePop`
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pLayers`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다
@@ -85,6 +86,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `modules/busy.js` · `view-busy.js`(AI 수정 중 덮개: 터미널로 넘긴 화면 · 화면 파일이 바뀌면 걷힘 · [걷기]) · `helper.py` `/api/watch` | `unit or helper or notes` |
 | `modules/line-ends.js` · `view-line-ends.js`(선 누르기 = 쌍 강조 + 도착 끝 손잡이 · 끌어 놓기 = 도착 바꾸기) | `unit or flow or tools` |
 | `modules/caption.js` · `view-caption.js`(카드 아래 글 한 상자: 두 번 누르기·글자 도구·카드 메뉴 이름/설명 → 바뀐 칸마다 반영 대기, 되돌리기 한 번) | `unit or tools or notes` |
+| `modules/pop-place.js` · `view-pop-place.js`(메모 창 옮기기·크기·저장한 자리·대상 카드 표시) · 셸 `placePop`·`showPop`·`hidePop` | `unit or notes or modal or tools` |
 | `foundation/palette.js` | `links or modal or tools` |
 | `helper.py` | `helper` |
 | `build_canvas.py` | `unit or flow or links` |

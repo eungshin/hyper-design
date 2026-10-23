@@ -2492,3 +2492,69 @@ def test_layer_folders_move_between_folders_and_blank_layouts(dpage):
     dpage.evaluate(CLEAR_T7)
     reload(dpage)
     assert not errs, errs
+
+
+# ---------------------------------------------------------------- task 9 메모 UX (#223~#226)
+POP_BOX_JS = "(() => { const p = document.getElementById('pop'); return {x: p.offsetLeft, y: p.offsetTop, w: p.offsetWidth, h: p.offsetHeight}; })()"   # 여는 움직임(scale) 영향 없이
+
+
+def open_card_memo(pg):
+    """메모 도구(M)로 보이는 카드 하나에 메모 창을 연다 → 그 카드 id."""
+    fit_view(pg)
+    pg.keyboard.press("m")
+    c = visible_cover(pg)
+    pg.mouse.click(c["x"], c["y"])
+    pg.wait_for_selector("#pop:not([hidden])")
+    return c["id"]
+
+
+def test_memo_popup_moves_resizes_and_remembers_place(dpage):
+    """#223: 메모 창은 머리 줄을 끌어 옮기고 모서리로 크기를 바꾼다 — 다음에 열어도 그 자리(hd-pop), 머리 줄 두 번 누르기 = 자동 자리.
+    열린 동안 대상 카드에 테두리, 닫으면 없어진다."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.evaluate("localStorage.removeItem('hd-pop')")
+    cid = open_card_memo(dpage)
+    assert dpage.evaluate("[...document.querySelectorAll('.card.memo-target')].map(c => c.dataset.id)") == [cid], "열린 동안 대상 카드 표시"
+    auto = dpage.evaluate(POP_BOX_JS)
+    h = dpage.locator("#ptitle").bounding_box()
+    hx, hy = h["x"] + 30, h["y"] + h["height"] / 2
+    dpage.mouse.move(hx, hy)
+    dpage.mouse.down()
+    dpage.mouse.move(hx + 100, hy + 40, steps=4)
+    dpage.mouse.move(hx + 200, hy + 80, steps=4)
+    dpage.mouse.up()
+    moved = dpage.evaluate(POP_BOX_JS)
+    assert abs(moved["x"] - (auto["x"] + 200)) <= 2 and abs(moved["y"] - (auto["y"] + 80)) <= 2, (auto, moved)
+    g = dpage.locator("#pop .prs").bounding_box()
+    gx, gy = g["x"] + g["width"] / 2, g["y"] + g["height"] / 2
+    ta0 = dpage.locator("#pnote").bounding_box()
+    dpage.mouse.move(gx, gy)
+    dpage.mouse.down()
+    dpage.mouse.move(gx + 60, gy + 80, steps=6)
+    dpage.mouse.up()
+    sized = dpage.evaluate(POP_BOX_JS)
+    ta1 = dpage.locator("#pnote").bounding_box()
+    assert sized["x"] == moved["x"] and abs(sized["w"] - (moved["w"] + 60)) <= 2 and abs(sized["h"] - (moved["h"] + 80)) <= 2, (moved, sized)
+    assert ta1["height"] > ta0["height"] + 60 and ta1["width"] > ta0["width"] + 50, ("글 칸이 같이 커진다", ta0, ta1)
+    saved = dpage.evaluate("JSON.parse(localStorage.getItem('hd-pop'))")
+    assert saved == sized, saved
+    dpage.keyboard.press("Escape")
+    assert dpage.is_hidden("#pop") and dpage.locator(".card.memo-target").count() == 0, "닫으면 표시도 없어진다"
+    open_card_memo(dpage)                            # 다시 열면 저장한 자리·크기
+    assert dpage.evaluate(POP_BOX_JS) == sized
+    reload(dpage)                                    # 새로고침 뒤에도
+    open_card_memo(dpage)
+    assert dpage.evaluate(POP_BOX_JS) == sized
+    dpage.dblclick("#ptitle")                        # 두 번 누르기 = 자동 자리
+    assert dpage.evaluate("localStorage.getItem('hd-pop')") is None
+    back = dpage.evaluate(POP_BOX_JS)
+    assert (back["x"], back["y"], back["w"]) == (auto["x"], auto["y"], auto["w"]), (auto, back)
+    dpage.keyboard.press("Escape")
+    dpage.evaluate("localStorage.setItem('hd-pop', '{broken')")   # 깨진 저장값 = 자동 자리(오류 없이)
+    open_card_memo(dpage)
+    back2 = dpage.evaluate(POP_BOX_JS)
+    assert (back2["x"], back2["y"]) == (auto["x"], auto["y"]) and dpage.evaluate("localStorage.getItem('hd-pop')") is None
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")
+    assert not errs, errs
