@@ -2174,7 +2174,11 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},
   local: {getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }},
   key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); }, record: function (op) { record(op); },
-  prefs: function () { return prefs; }, savePrefs: function () { savePrefs(); }});
+  prefs: function () { return prefs; }, savePrefs: function () { savePrefs(); },
+  api: {on: VS.on, call: function (method, path, body) {   // 로컬 도우미 부르기 → {status, body} (도우미 없으면 on=false — 부르기 전에 볼 것)
+    return fetch(path, {method: method, headers: {'Content-Type': 'application/json', 'X-HD-Token': new URLSearchParams(location.search).get('hd') || ''},
+      body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
+  }}});
 PP = FT.popPlace || null;
 renderNotes();
 
