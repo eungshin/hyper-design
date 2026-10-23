@@ -23,6 +23,7 @@ FIELDS = {
     "확인": {},
     "다시": {},
 }
+OPTIONAL = {"확인": {"answer": ("str", 40)}}   # 있어도 되는 칸: 사람이 질문에 고른 답으로 닫을 때(annotation.js OPTIONAL)
 COMMON = {"kind", "by", "at", "detail"}
 DETAIL_MAX = 2000
 BY_MAX = 40
@@ -46,10 +47,10 @@ def check_reply(reply, intent, agent=True, known_screens=None):
     errs = []
     if kind == "답변" and intent != "question":
         errs.append("kind: 답변은 질문 메모에만")
-    spec = FIELDS[kind]
-    for name in sorted(set(reply) - COMMON - set(spec)):
+    spec, opt = FIELDS[kind], OPTIONAL.get(kind, {})
+    for name in sorted(set(reply) - COMMON - set(spec) - set(opt)):
         errs.append("%s: %s 에 없는 칸" % (name, kind))
-    for name, (shape, limit) in spec.items():
+    for name, (shape, limit) in list(spec.items()) + [(k, v) for k, v in opt.items() if k in reply]:
         v = reply.get(name)
         if name not in reply:
             errs.append("%s: 없어요" % name)
@@ -214,7 +215,7 @@ def says(r):
     if k == "질문":
         return "질문 — %s (%s)" % (r.get("question", ""), " / ".join(r.get("choices") or []))
     if k == "확인":
-        return "완료로 표시함"
+        return "완료로 표시함" + (" — 고름: %s" % r["answer"] if _str(r.get("answer")) else "")
     if k == "다시":
         return "다시 열었음"
     return str(k or "")

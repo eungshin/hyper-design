@@ -2,7 +2,7 @@
    어떤 편집을 바로 쓰는지는 HD.edits.instantOf(Model). 판 다시 그리기·카드 다시 싣기·기록은 셸이 ctx 로 넘긴다(View 끼리 부르지 않음).
    HD.viewSync.mount(ctx) → {on, write(label, list) → Promise, del(ids) → Promise, send(list) → Promise<{ok, done, left, fw, res}>}
    ctx = {chip, aiChip, agent, on, token, toast(msg, undoable), record(op), pend(label, list), request(list) → text, data(D, changed, stamp), retryMs?(쓴 뒤 다시 불러오기 재시도 간격, 기본 1초)}
-   aiChip = 보내기가 어디로 가는지(agent = helper 의 --paseo-agent, 없으면 대기열 파일에만)
+   aiChip = 보내기가 어디로 가는지(agent = helper 의 --paseo-agent → 'AI 연결됨', 없으면 '받는 곳 없음' = 대기열 파일에만, R4)
    on 이 아니면(file:// · 토큰 없음) 칩만 '파일로 열림' 이고 나머지는 부르지 않는다. 네트워크가 끊기면 Promise 가 실패 → 셸이 지금처럼(반영 대기·복사) */
 (function () {
 'use strict';
@@ -15,9 +15,9 @@ function mount(ctx) {
   ctx.chip.title = on ? '삭제·잇기·끊기가 화면 파일에 바로 써져요(되돌리기 됨)' : '보내기는 요청문을 복사해요 — 터미널에 붙여넣으세요';
   if (ctx.aiChip) {
     ctx.aiChip.hidden = !on;
-    ctx.aiChip.textContent = ctx.agent ? 'AI 연결됨' : 'AI 없음';
+    ctx.aiChip.textContent = ctx.agent ? 'AI 연결됨' : '받는 곳 없음';
     ctx.aiChip.classList.toggle('on', !!ctx.agent);
-    ctx.aiChip.title = ctx.agent ? '보내기 = Paseo 에이전트 ' + ctx.agent + ' 터미널에 요청을 넣어요' : '연결된 AI 터미널이 없어요 — 보내기는 요청을 .hd-queue 대기열 파일에만 저장해요';
+    ctx.aiChip.title = ctx.agent ? '보내기 = Paseo 에이전트 ' + ctx.agent + ' 터미널에 요청을 넣어요' : '연결된 AI 터미널이 없어요 — 보내기는 요청을 .hd-queue 대기열 파일에만 저장해요. 받으려면 터미널에서 hd notes 로 읽거나, 도우미를 --paseo-agent <id> 로 다시 띄우세요';
   }
 
   function post(url, body) {

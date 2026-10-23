@@ -622,6 +622,90 @@
   "status": "done"
  },
  {
+  "name": "user 확인 with chosen answer",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   },
+   {
+    "kind": "확인",
+    "by": "user",
+    "answer": "B"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "확인 answer blank",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   },
+   {
+    "kind": "확인",
+    "by": "user",
+    "answer": " "
+   }
+  ],
+  "valid": false,
+  "reason": "answer"
+ },
+ {
+  "name": "확인 answer 41",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   },
+   {
+    "kind": "확인",
+    "by": "user",
+    "answer": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "answer"
+ },
+ {
+  "name": "answer only on 확인",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "다시",
+    "by": "user",
+    "answer": "B"
+   }
+  ],
+  "valid": false,
+  "reason": "answer"
+ },
+ {
   "name": "agent cannot post 확인",
   "note_intent": "change",
   "sent": true,
