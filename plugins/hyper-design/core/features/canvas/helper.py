@@ -21,14 +21,20 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
   GET /api/state                                              → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0)
   PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413(2 MB 넘음)
+  POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
+    — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
+  떠 있는 표지: ~/.hyper-design/active/<pid>.json = {pid, project, out, url, token, port, agent, started} (HD_HOME 으로 바꿈) — `hd ls` 가 읽는다. 정상 종료 때 지운다.
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
   index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 """
-import argparse, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, subprocess, sys, threading, urllib.parse, webbrowser
+import argparse, atexit, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, signal, subprocess, sys, threading, urllib.parse, webbrowser
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import build_canvas
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
+import hd_model  # noqa: E402  — 답 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
@@ -541,9 +547,48 @@ def state_put(out, body):
             state.pop(k, None)
         else:
             state[k] = v
-    rev = cur["rev"] + 1
-    _state_write(out, {"version": 1, "rev": rev, "updated": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state})
-    return 200, {"rev": rev}
+    return 200, {"rev": _state_save(out, cur["rev"] + 1, state)}
+
+
+def _now():
+    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _state_save(out, rev, state):
+    _state_write(out, {"version": 1, "rev": rev, "updated": _now(), "state": state})
+    return rev
+
+
+def reply_post(out, body):
+    """POST /api/reply 본문 {note: id | {screen, no}, reply} → (code, 답). 최신 상태 파일의 그 메모 replies 에 붙이고 rev+1."""
+    if not isinstance(body, dict) or not isinstance(body.get("reply"), dict):
+        return 400, {"error": "{note, reply: {kind, …}} 가 아니에요", "errors": ["reply: 객체가 아니에요"]}
+    ref = body.get("note")
+    if isinstance(ref, dict):
+        if not isinstance(ref.get("screen"), str) or type(ref.get("no")) is not int:
+            return 400, {"error": "note: {screen: 글, no: 정수} 또는 메모 id", "errors": ["note: {screen, no} 모양이 아니에요"]}
+    elif not isinstance(ref, str) or not ref:
+        return 400, {"error": "note: 메모 id 또는 {screen, no}", "errors": ["note: 없어요"]}
+    cur = state_load(out)
+    notes = cur["state"].get("notes")
+    notes = notes if isinstance(notes, list) else []
+    i = hd_model.find(notes, ref, cur["state"].get("note-seq"))
+    if i is None:
+        return 404, {"error": "없는 메모: %s" % (ref if isinstance(ref, str) else "%s#%s" % (ref["screen"], ref["no"]))}
+    note = notes[i]
+    if not note.get("sent"):
+        return 400, {"error": "note: 아직 보내지 않은 메모(draft)에는 답하지 않아요", "errors": ["note: 보내지 않은 메모"]}
+    try:
+        known = {s["id"] for s in json.loads((pathlib.Path(out) / "screens.json").read_text(encoding="utf-8")).get("screens", [])}
+    except (OSError, ValueError, KeyError, TypeError):
+        known = None                                  # screens.json 을 못 읽으면 화면 id 는 모양만 본다
+    errs = hd_model.check_reply(body["reply"], note.get("intent"), agent=True, known_screens=known)
+    if errs:
+        return 400, {"error": "; ".join(errs), "errors": errs}
+    note = dict(note, replies=hd_model.replies(note) + [hd_model.stamp(body["reply"], _now())])
+    notes = notes[:i] + [note] + notes[i + 1:]
+    rev = _state_save(out, cur["rev"] + 1, dict(cur["state"], notes=notes))
+    return 200, {"rev": rev, "status": hd_model.status(note), "note": note.get("id"), "screen": note.get("screen")}
 
 
 def state_inject(out):                               # 페이지에 끼워 넣을 동기 스냅숏(window.__hdState) — </script> 가 끊지 않게 < 는 <
@@ -625,6 +670,10 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     r = restore(out, str(body.get("stamp") or ""))
                     code = {"changed-since": 409, "missing": 404}.get(r.get("reason"), 500 if "error" in r else 200)
                     return self._json(code, r)
+            if self.path == "/api/reply":
+                with lock:                                  # 상태 파일 쓰기는 /api/state 와 같은 자물쇠
+                    code, res = reply_post(out, body)
+                return self._json(code, res)
             if self.path == "/api/forward":
                 return self._json(200, forward(out, str(body.get("text") or ""), agent, paseo))
             if self.path == "/api/watch":
@@ -663,6 +712,26 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     return srv
 
 
+def hd_home():
+    return pathlib.Path(os.environ.get("HD_HOME") or pathlib.Path.home() / ".hyper-design")
+
+
+def write_marker(out, srv, agent=None):
+    """떠 있는 표지 ~/.hyper-design/active/<pid>.json 을 쓰고 그 경로를 돌려준다(`hd ls`·`hd notes`·`hd reply` 가 읽는다)."""
+    out = pathlib.Path(out).resolve()
+    d = hd_home() / "active"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / ("%d.json" % os.getpid())
+    p.write_text(json.dumps({"pid": os.getpid(), "project": hd_model.project_name(out.name, out.parent.name), "out": str(out),
+                             "url": srv.url, "token": srv.token, "port": srv.server_address[1], "agent": agent or None,
+                             "started": _now()}, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def _stop(signum, frame):                              # SIGTERM·SIGBREAK → Ctrl+C 와 같은 정상 종료(finally·atexit 가 표지를 지운다)
+    raise KeyboardInterrupt
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="hyper-design 캔버스 로컬 도우미")
     ap.add_argument("out")
@@ -675,6 +744,11 @@ def main(argv=None):
     if not (out / "index.html").is_file() or not (out / "screens.json").is_file():
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)
     srv = make_server(out, a.port, a.paseo_agent, a.paseo_cmd)
+    marker = write_marker(out, srv, a.paseo_agent)
+    atexit.register(lambda: marker.unlink(missing_ok=True))
+    for name in ("SIGTERM", "SIGBREAK"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), _stop)
     print(srv.url, flush=True)
     run = out / ".hd-helper.json"                    # 스킬이 이미 떠 있는지 보는 표지(그 url 이 응답하면 다시 띄우지 않는다)
     run.write_text(json.dumps({"url": srv.url, "pid": os.getpid()}), encoding="utf-8")
@@ -687,6 +761,7 @@ def main(argv=None):
         pass
     finally:
         run.unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
