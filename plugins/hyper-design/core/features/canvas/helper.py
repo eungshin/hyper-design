@@ -4,7 +4,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
 - 127.0.0.1 에만 열고, 실행마다 새 토큰을 만든다. 출력한 주소(…/index.html?hd=<토큰>)로 캔버스를 열면 '보내기'가 도우미를 쓴다.
 - 쓰는 곳은 <out> 안뿐이다. 쓰기 전에 원본을 <out>/.hd-history/<시각>/ 에 남기고, 쓴 뒤 build_canvas.py 로 캔버스를 다시 만든다(실패하면 원본으로 되돌림).
-- 바로 쓰는 편집(결정형): 글자(text) · 카드 이름(title) · 설명(purpose) · 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
+- 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 카드 이름(title) · 설명(purpose) · 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
   나머지 메모(질문, 새 화면, 도착 없는 트리거 지정 등)는 요청문 그대로 <out>/.hd-queue/<시각>.txt 대기열 파일에 쓰고,
   --paseo-agent 가 있으면 그 파일을 `paseo send <agent> --prompt-file … --no-wait` 로 그 에이전트 터미널에 넣는다
   (없으면 터미널에서 /hyper-design:fix 에 그 내용을 붙여 넣는다).
@@ -14,6 +14,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
 API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localhost 의 그 포트만)
   /api/apply   {edits:[{id, screen, edit, path, value?, to?}]} → {applied:[id], failed:[{id, reason}], stamp, changed:[screen]}
+    edit: text(value — 요소 안 글·인라인 자식 전부를 바꿈, 안에 블록 자식이면 거절) · remove(요소 통째로, html·body·화면 뿌리 거절) · title · purpose · policy · link · reason = 한국어
   /api/delete  {screens:[id]}                                 → {deleted:[id], cut:[{screen, path, to}], failed, stamp, changed:[screen]}
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
   /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
@@ -61,6 +62,8 @@ class Node:
     def __init__(self, tag, attrs, start, open_end, parent):
         self.tag, self.attrs, self.start, self.open_end, self.parent = tag, dict(attrs), start, open_end, parent
         self.children, self.texts = [], []          # texts: (원문 위치, 길이, 글) — 이 요소 바로 아래 글
+        self.close = None                           # 닫는 태그 (시작, 끝) — void·self-closing 은 없음(끝 = open_end), 닫히지 않은 요소도 없음
+        self.void = False
         self.order = []                             # 아이·글을 문서 순서대로: ('el', Node) | ('tx', (pos, len, data))
 
 
@@ -84,15 +87,20 @@ class Tree(HTMLParser):
         self.stack[-1].children.append(n); self.stack[-1].order.append(("el", n))
         if tag not in VOID and not raw.rstrip().endswith("/>"):
             self.stack.append(n)
+        else:
+            n.void = True
 
     def handle_startendtag(self, tag, attrs):
         pos = self._pos(); raw = self.get_starttag_text() or ""
         n = Node(tag, attrs, pos, pos + len(raw), self.stack[-1])
+        n.void = True
         self.stack[-1].children.append(n); self.stack[-1].order.append(("el", n))
 
     def handle_endtag(self, tag):
         for i in range(len(self.stack) - 1, 0, -1):
             if self.stack[i].tag == tag:
+                pos = self._pos(); gt = self.src.find(">", pos)
+                self.stack[i].close = (pos, gt + 1 if gt >= 0 else len(self.src))
                 del self.stack[i:]
                 return
 
@@ -166,17 +174,6 @@ def select(tree, path):
     return hits[0]
 
 
-def _first_text(n):
-    for kind, x in n.order:
-        if kind == "tx" and x[2].strip():
-            return x
-        if kind == "el" and x.tag not in ("script", "style"):
-            t = _first_text(x)
-            if t:
-                return t
-    return None
-
-
 def _set_attr(tag_src, name, value):                # 시작 태그 원문에서 속성 하나 바꾸기(없으면 더하기 · None 이면 지우기)
     rx = re.compile(r'(\s' + re.escape(name) + r')(\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+))?', re.I)
     if value is None:
@@ -188,22 +185,74 @@ def _set_attr(tag_src, name, value):                # 시작 태그 원문에서
     return tag_src[:end].rstrip() + new + tag_src[end:]
 
 
+# 글자 고치기(task 30): 요소 안 내용 전부(글 + 인라인 자식)를 새 글로 — 이 태그들(글이 든 것, br·wbr)만 안에 있어도 된다.
+# 그 밖(블록·그림·입력·링크 a·글 없는 아이콘 자식)이 안에 있으면 거절 — 일부만 바꾸지 않는다. palette.js 미리보기(pending)와 같은 규칙.
+INLINE = {"b", "strong", "i", "em", "span", "small", "u", "s", "mark", "sub", "sup", "code", "abbr", "cite", "q", "kbd", "var", "time",
+          "font", "del", "ins", "br", "wbr"}
+BLOCK_REASON = "안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요"
+
+
+def _has_text(n):
+    return any(x[2].strip() for x in n.texts) or any(_has_text(c) for c in n.children if c.tag not in ("script", "style"))
+
+
+def _inline_only(n):
+    for c in n.children:
+        if c.tag not in INLINE or (c.tag not in ("br", "wbr") and not _has_text(c)) or not _inline_only(c):
+            return False
+    return True
+
+
+def _is_root(el):                                    # html·head·body · 화면 뿌리(body 또는 조각 맨 위의 유일한 요소)
+    if el.tag in ("html", "head", "body"):
+        return True
+    p = el.parent
+    if p is None or p.tag not in ("body", "#root"):
+        return False
+    return [c for c in p.children if c.tag not in ("script", "style", "link", "meta")] == [el]
+
+
+def _text_patch(src, el, value, path):
+    if el.void or el.close is None:
+        raise ValueError("글자를 넣을 수 없는 요소예요(닫는 태그 없음): " + path)
+    if not _inline_only(el):
+        raise ValueError(BLOCK_REASON)
+    a, b = el.open_end, el.close[0]
+    inner = src[a:b]
+    lead = inner[: len(inner) - len(inner.lstrip())]
+    trail = inner[len(inner.rstrip()):] if inner.strip() else ""
+    return a, b, lead + html.escape(value, quote=False).replace("\n", "<br>") + trail
+
+
+def _remove_patch(el, path):
+    if _is_root(el):
+        raise ValueError("화면 뿌리(html·body·맨 바깥 요소)는 지울 수 없어요 — 화면을 지우려면 카드 메뉴의 삭제: " + path)
+    if el.void:
+        return el.start, el.open_end, ""
+    if el.close is None:
+        raise ValueError("닫는 태그를 찾지 못해 지울 수 없어요: " + path)
+    return el.start, el.close[1], ""
+
+
 def edit_html(src, edits):
-    """edits = [(path, op, value)] — op: text | link(value=도착 id) | cut. 원문 위치 기준으로 뒤에서부터 바꾼다."""
-    tree, patches = Tree(src), []
+    """edits = [(path, op, value)] — op: text(요소 안 내용 전부를 value 로, '' = 비우기) | remove(요소 통째로) | link(value=도착 id) | cut.
+    원문 위치 기준으로 뒤에서부터 바꾼다. 같은 자리 두 편집 = 나중 것, 겹치는 자리(안팎) = ValueError."""
+    tree, spans = Tree(src), {}
     for path, op, value in edits:
         el = select(tree, path)
         if op == "text":
-            t = _first_text(el)
-            if not t:
-                raise ValueError("글자가 없는 요소: " + path)
-            pos, ln, data = t
-            lead, trail = data[: len(data) - len(data.lstrip())], data[len(data.rstrip()):]
-            patches.append((pos, pos + ln, lead + html.escape(value, quote=False).replace("\n", "<br>") + trail))
+            p = _text_patch(src, el, value, path)
+        elif op == "remove":
+            p = _remove_patch(el, path)
         elif op in ("link", "cut"):
-            patches.append(_relink(src, el, op, value, path))
+            p = _relink(src, el, op, value, path)
         else:
             raise ValueError("모르는 편집: " + op)
+        spans[(p[0], p[1])] = p                       # 같은 자리 = 나중 것
+    patches = sorted(spans.values(), key=lambda p: (p[0], p[1]))
+    for x, y in zip(patches, patches[1:]):
+        if y[0] < x[1]:
+            raise ValueError("한 요소에 겹치는 편집이에요 — 하나씩 반영해 주세요")
     return _patch(src, patches)
 
 
@@ -351,6 +400,8 @@ def apply_edits(out, edits, stamp=None):
                 continue
             if kind == "text":
                 op = ("text", str(e.get("value", "")))
+            elif kind == "remove":
+                op = ("remove", None)
             elif kind == "link" and e.get("op") == "link" and e.get("to") in files:
                 op = ("link", e["to"])
             elif kind == "link" and e.get("op") in ("cut", "untrigger"):
@@ -369,9 +420,9 @@ def apply_edits(out, edits, stamp=None):
     for f, ops in html_ops.items():                 # 한 화면 안에서 하나가 실패하면 그 하나만 빼고 다시
         src = f.read_text(encoding="utf-8")
         good = []
-        for o in ops:
+        for o in ops:                               # 앞서 된 것과 함께 되는지 — 겹치면 나중 것만 실패
             try:
-                edit_html(src, [(o[1], o[2], o[3])]); good.append(o)
+                edit_html(src, [(g[1], g[2], g[3]) for g in good] + [(o[1], o[2], o[3])]); good.append(o)
             except ValueError as err:
                 failed.append({"id": o[0], "reason": str(err)})
         if good:

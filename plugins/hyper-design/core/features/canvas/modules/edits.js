@@ -1,9 +1,9 @@
 /* Model — 편집 메모(화면 파일을 바꾸는 편집). DOM·저장소·메시지를 쓰지 않는다.
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
-   메모 = {id, no, screen, targets:[{path,text,rect,quote?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
-     edit: link(op: link·cut·untrigger·trigger·new) · text · title · purpose · policy(index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
+   메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
+     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · title · purpose · policy(index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
-   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, split, tally, request, items, emptyLayouts, say} */
+   HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -13,6 +13,7 @@ function newId() { return Date.now().toString(36) + Math.random().toString(36).s
 // 메모 하나 — h = 대상 요소 {path, text, rect}
 function note(screen, h, text, op, to) {
   var t = {path: h.path, text: h.text, rect: h.rect}; if (h.quote) t.quote = h.quote;   // quote = 다시 찾을 글(palette.js, task 11)
+  if (h.src) t.src = h.src;                          // src = 앱 소스 위치 {file, line, column}(palette.js, task 27) — 요청문 '소스:' 줄
   return {id: newId(), screen: screen, targets: [t],
           path: h.path, text: h.text, rect: h.rect, note: text, intent: 'change', sent: false, edit: 'link', op: op || '', to: to || ''};
 }
@@ -50,13 +51,19 @@ function pendingLink(notes, from, path, to) {
 
 // 도우미(helper.py)가 화면 파일에 바로 쓸 수 있는 편집
 function directOf(n) {
-  return n.edit === 'text' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' ||
+  return n.edit === 'text' || n.edit === 'remove' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' ||
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 
 // 누르는 즉시 파일에 쓰는 편집(조각 2.2 D1): 잇기·끊기·트리거 해제 — 도착이 빈 레이아웃(new-…)이면 아직 파일이 없어 반영 대기로
 function instantOf(n) {
-  return n.edit === 'link' && (n.op === 'cut' || n.op === 'untrigger' || (n.op === 'link' && !!n.to && !/^new-/.test(n.to)));
+  return n.edit === 'remove' || n.edit === 'link' && (n.op === 'cut' || n.op === 'untrigger' || (n.op === 'link' && !!n.to && !/^new-/.test(n.to)));
+}
+
+// 반영 대기 미리보기(palette.js hd-pending 항목) — 그 화면의 글자 고치기 {path, text}(text '' = 비움) · 요소 지우기 {path, remove:true}, 쌓인 차례대로
+function preview(notes, screen) {
+  return (notes || []).filter(function (n) { return n.screen === screen && (n.edit === 'text' || n.edit === 'remove'); })
+    .map(function (n) { return n.edit === 'remove' ? {path: n.path, remove: true} : {path: n.path, text: String(n.value == null ? '' : n.value)}; });
 }
 
 // 메모 패널 둘로(E5): pending = 기계적 편집(파일에 바로 쓸 수 있는 것) · memos = 나머지(AI 에 보내는 요청)
@@ -68,7 +75,7 @@ function split(notes) {
 
 // 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 항목 머리 '번호. screen=… · path=…'·text·요청 세 줄은 바꾸지 않는다)
 // 요청 글이 여러 줄이면 둘째 줄부터 '요청: ' 뒤 글자 자리에 맞춰 들여 쓴다. 그 아래 덧붙는 줄(task 17):
-//   빈 레이아웃(R5) = 그 화면 메모 본문 '- …'(번호 차례) · 범위(R7) '   범위: …' · 같은 요청의 다른 자리(R6) '   다른 곳: 경로 ("짧은 글") · …'
+//   소스(task 27·30) '   소스: 파일:줄'(첫 대상에 src 가 있을 때 — 앱 카드) · 빈 레이아웃(R5) = 그 화면 메모 본문 '- …'(번호 차례) · 범위(R7) '   범위: …' · 같은 요청의 다른 자리(R6) '   다른 곳: 경로 ("짧은 글") · …'
 var CONT = '       ';
 var SCOPE_LINE = {screen: '이 화면 전체', all: '모든 화면'};   // 범위 이름(이 요소 = 줄 없음) — 고르기 말은 annotation.SCOPES
 function targetsOf(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
@@ -94,6 +101,7 @@ function items(list) {
     var it = key && merge[key];
     if (!it) {
       it = {screen: n.screen, path: ts[0].path, text: ts[0].text, intent: n.intent, note: n.note, scope: scopeOf(n), also: [], memos: [], notes: []};
+      if (ts[0].src) it.src = ts[0].src;
       ts = ts.slice(1); out.push(it); if (key) merge[key] = it;
     }
     it.notes.push(n);
@@ -110,6 +118,7 @@ function request(notes, out) {
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
     return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
       '\n   요청: ' + indent(n.note, CONT) +
+      (n.src && n.src.file ? '\n   소스: ' + n.src.file + (n.src.line ? ':' + n.src.line : '') : '') +
       n.memos.filter(function (m) { return flat(m.note); }).map(function (m) {
         return '\n' + CONT + '- ' + (m.intent === 'question' ? '(질문) ' : '') + indent(String(m.note).trim(), CONT + '  ');
       }).join('') +
@@ -138,7 +147,7 @@ var say = {
   cut: function (to) { return '연결 끊기: 이 요소를 눌러도 ' + to + ' 화면으로 가지 않게'; },
   untrigger: function (to) { return '트리거 해제: 이 요소를 눌러도 화면이 바뀌지 않게(지금 ' + to + '로 가는 연결 없애기)'; },
   trigger: function () { return '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)'; },
-  text: function (v) { return '글자를 "' + v + '"(으)로 바꾸기'; },
+  text: function (v) { return v === '' ? '글자 비우기 — 요소는 그대로 두고 안의 글만 지우기' : '글자를 "' + v + '"(으)로 바꾸기'; },
   field: function (field, v, index, old) {          // v '' = 지우기(#243): 정책 줄 = 그 줄 지우기 · 설명 = 비우기 (old = 원래 글, 있으면 따옴표로)
     var at = ' (screens.json의 ' + (field === 'policy' ? 'policies[' + index + ']' : field) + ')';
     if (v === '' && field === 'policy') return '정책 ' + (index + 1) + '번째 줄 ' + (old ? '"' + old + '" ' : '') + '지우기' + at;
@@ -153,10 +162,11 @@ var say = {
   },
   linkNew: function (value, id) { return '이 요소를 누르면 새 화면 "' + value + '"(' + id + ')으로 가게 연결'; },
   copy: function (value, id, src) { return '새 화면 "' + value + '"(' + id + ')을 ' + src + ' 화면을 복제해 만들기'; },
-  remove: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },
+  remove: function () { return '요소 지우기 — 이 요소(안의 글·자식 포함)를 화면에서 없애기'; },   // 요소 하나(task 30)
+  removeScreen: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; },
   emptyLayout: '빈 레이아웃에 목적이나 메모가 없어요 — AI가 채울 내용을 모를 수 있어요'
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, split: split, tally: tally, request: request, items: items, emptyLayouts: emptyLayouts, say: say, FIELD: FIELD};
+HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, preview: preview, split: split, tally: tally, request: request, items: items, emptyLayouts: emptyLayouts, say: say, FIELD: FIELD};
 })();

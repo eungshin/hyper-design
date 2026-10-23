@@ -13,7 +13,9 @@
    {type:'hd-hit', screen, path, text, full, rect, to, kind} 를 보낸다(to = 지금 가는 화면 id 또는 null, full = 고칠 글 전체,
    kind = link·button·field·text·box — 캔버스가 종류별 테두리를 그린다, 요소가 없으면 path:null).
    leaf:true 면 그 자리 요소 그대로(글자 고치기).
-   반영 대기 미리보기: {type:'hd-pending', items:[{path, text}]} 를 받으면 그 요소 글을 잠시 바꿔 점선으로 보여 준다(items:[] 이면 되돌린다).
+   반영 대기 미리보기: {type:'hd-pending', items:[{path, text} | {path, remove:true}]} 를 받으면 그 요소 안 내용 전부(글 + 인라인 자식)를 잠시 새 글로(\n = 줄바꿈, '' = 비움)
+   바꿔 점선으로, remove 는 그 요소를 숨겨 보여 준다(items:[] 이면 되돌린다). 글 바꾸기 규칙은 helper.py edit_html 과 같다: 안에 인라인(글 있는 b·span…, br) 아닌
+   자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
@@ -245,19 +247,40 @@
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
     send(withSrc({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
-          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el)}, el));
+          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el), textOk: textOk(el)}, el));
+  }
+  // 글자만 바꿔도 되는 요소 — 안의 자식이 모두 인라인(글이 든 b·span…, 또는 br·wbr)일 때. helper.py INLINE·_inline_only 와 같은 규칙
+  var INLINE = /^(b|strong|i|em|span|small|u|s|mark|sub|sup|code|abbr|cite|q|kbd|var|time|font|del|ins|br|wbr)$/;
+  var VOIDS = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/;
+  function textOk(el) {
+    if (!el || el.nodeType !== 1 || VOIDS.test(el.tagName.toLowerCase())) return false;
+    return Array.prototype.every.call(el.querySelectorAll('*'), function (c) {
+      var t = c.tagName.toLowerCase();
+      return INLINE.test(t) && (t === 'br' || t === 'wbr' || !!c.textContent.trim());
+    });
   }
   var pend = [];
-  function pending(items) {                           // 반영 대기 글: 첫 글자 마디만 바꾸고, 다음 호출에서 되돌린다
-    pend.reverse().forEach(function (q) { q.node.nodeValue = q.orig; q.el.style.outline = q.o; q.el.style.outlineOffset = q.oo; }); pend = [];
+  function pending(items) {                           // 반영 대기: 글 = 안의 마디를 떼어 두고 새 글로 · 지우기 = 숨김 — 다음 호출에서 처음대로(떼어 둔 마디를 그대로 되돌림)
+    pend.reverse().forEach(function (q) {
+      if (q.kids) { while (q.el.firstChild) q.el.removeChild(q.el.firstChild); q.kids.forEach(function (k) { q.el.appendChild(k); }); }
+      if (q.disp !== undefined) q.el.style.display = q.disp;
+      q.el.style.outline = q.o; q.el.style.outlineOffset = q.oo;
+    });
+    pend = [];
     (items || []).forEach(function (it) {
       var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
       if (!el) return;
-      var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, first = null;
-      while ((n = w.nextNode())) if (n.nodeValue.trim()) { first = n; break; }
-      if (!first) return;
-      pend.push({el: el, node: first, orig: first.nodeValue, o: el.style.outline, oo: el.style.outlineOffset});
-      first.nodeValue = String(it.text); el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px';
+      var q = {el: el, o: el.style.outline, oo: el.style.outlineOffset};
+      if (it.remove) { q.disp = el.style.display; el.style.display = 'none'; pend.push(q); return; }
+      if (!textOk(el)) return;                         // 도우미도 거절할 요소 — 일부만 바꿔 보이지 않는다
+      q.kids = Array.prototype.slice.call(el.childNodes);
+      q.kids.forEach(function (k) { el.removeChild(k); });
+      String(it.text == null ? '' : it.text).split('\n').forEach(function (line, i) {
+        if (i) el.appendChild(document.createElement('br'));
+        if (line) el.appendChild(document.createTextNode(line));
+      });
+      el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px';
+      pend.push(q);
     });
   }
   document.addEventListener('click', function (e) {    // Ctrl/Cmd+클릭: 이동 대신 '어디로 가나'

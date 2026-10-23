@@ -41,7 +41,7 @@ def test_helper_edit_html_ops():
     s = helper.edit_html(SAMPLE, [("section.block:nth-of-type(1) > h1.title:nth-of-type(1)", "text", "바뀐 <제목>")])
     assert '<h1 class="title">바뀐 &lt;제목&gt;</h1>' in s, "글자만 바꾸고 태그는 그대로(이스케이프)"
     s = helper.edit_html(SAMPLE, [("a.row:nth-of-type(1)", "text", "새 글")])
-    assert '<a class="row" href="a.html">새 글 <b>›</b></a>' in s, "첫 글자 마디만"
+    assert '<a class="row" href="a.html">새 글</a>' in s, "요소 안 내용 전부(인라인 <b> 포함)를 새 글로(task 30)"
     s = helper.edit_html(SAMPLE, [("button.btn:nth-of-type(1)", "link", "job"), ("a.row:nth-of-type(1)", "link", "usage")])
     assert """<button class="btn" onclick="location.href=&#x27;job.html&#x27;">시작</button>""" in s and 'href="usage.html"' in s
     assert 'href="a.html"' not in s

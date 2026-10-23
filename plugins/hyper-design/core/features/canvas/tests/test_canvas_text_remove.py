@@ -1,0 +1,190 @@
+"""글자 고치기가 옛 글을 남기던 버그(task 30, K1) · 글 비우기 · 요소 지우기 — 브라우저.
+
+K1: 두 줄 글을 두 번 고치면(도우미가 파일에 씀) 카드·파일에 마지막 글만. 비우기: 빈 글 저장 = 요소 글이 빔(미리보기), 되돌리기 = 원래 글.
+요소 지우기: 요소 메뉴 '요소 지우기' → 카드에서 사라짐(미리보기), 되돌리기 = 다시 보임 · 도우미가 있으면 화면 파일에서 바로 지워지고 되돌리기 = 되살리기.
+"""
+import os, shutil, subprocess, sys, tempfile, threading
+from pathlib import Path
+
+import pytest
+
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, reload, zoom_to  # noqa: F401
+from test_canvas_edit import NOTES_JS, notes_of, wait_notes
+
+sys.path.insert(0, str(SCRIPTS))
+import helper  # noqa: E402
+
+DAYFINE = REPO / "runs" / "dayfine-onboarding-v1" / "out"
+H1 = "h1.title"
+OLD = "하는 일이 무엇인가요?"
+
+
+@pytest.fixture()
+def out():
+    if not DAYFINE.exists():
+        pytest.skip(f"fixture 없음: {DAYFINE}")
+    tmp = Path(tempfile.mkdtemp(prefix="hd-textrm-"))
+    o = tmp / "out"
+    shutil.copytree(DAYFINE, o)
+    r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(o)], capture_output=True, text=True, encoding="utf-8",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    assert r.returncode == 0, r.stderr
+    yield o
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _open(ctx, url):
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.on("dialog", lambda d: d.accept())
+    pg.goto(url)
+    pg.wait_for_function("window.__hdReady !== undefined")
+    pg.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-')).forEach(k => localStorage.removeItem(k))")
+    reload(pg)
+    return pg, errors
+
+
+def _frame(pg, sid="job"):
+    return next(f for f in pg.frames if f.url.split("?")[0].endswith("/" + sid + ".html"))
+
+
+def _h1_xy(pg):
+    """job 카드를 키워 제목(h1) 가운데의 판 좌표."""
+    ph = zoom_to(pg, "job", 420)
+    fr = _frame(pg)
+    fr.wait_for_selector(H1, state="attached", timeout=5000)
+    r = fr.evaluate("(s) => { const b = document.querySelector(s).getBoundingClientRect(); return {x: b.left + b.width / 2, y: b.top + b.height / 2}; }", H1)
+    sc = ph["width"] / pg.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card?.w || 375")
+    return ph["x"] + r["x"] * sc, ph["y"] + r["y"] * sc
+
+
+def _edit_text(pg, xy, value):
+    pg.keyboard.press("e")                               # 글자 도구: 글자 위를 한 번 누르면 그 자리에서 고친다
+    pg.mouse.click(*xy)
+    pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    pg.fill("#tedit textarea", value)
+    pg.press("#tedit textarea", "Enter")
+
+
+def _h1_in_file(o):
+    s = (o / "screens" / "job.html").read_text(encoding="utf-8")
+    i = s.find('<h1 class="title">')
+    return None if i < 0 else s[i + len('<h1 class="title">'): s.find("</h1>", i)]
+
+
+def _serve(o):
+    srv = helper.make_server(o, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+@pytest.mark.area("helper", "tools")
+def test_editing_a_two_line_text_twice_leaves_only_the_latest(ctx, out):   # K1 — 사용자 보고 1 "이전 입력이 지워지지 않는다"
+    srv = _serve(out)
+    pg, errors = _open(ctx, srv.url)
+    try:
+        xy = _h1_xy(pg)
+        _edit_text(pg, xy, "줄1\n줄2")
+        wait_notes(pg, 1)
+        pg.click("#nsend")
+        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
+        assert _h1_in_file(out) == "줄1<br>줄2"
+        pg.evaluate("window.__hdLastHelper = null")
+        pg.wait_for_timeout(600)                         # 바뀐 카드 다시 싣기
+        xy = _h1_xy(pg)
+        _edit_text(pg, xy, "끝")
+        wait_notes(pg, 1)
+        _frame(pg).wait_for_function("(s) => document.querySelector(s).textContent.trim() === '끝'", arg=H1, timeout=3000)   # 미리보기도 마지막 글만
+        pg.click("#nsend")
+        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
+        assert _h1_in_file(out) == "끝", "두 번째 고치기 뒤 옛 줄(줄2)이 남으면 안 된다"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools")
+def test_clearing_a_text_empties_the_element_and_undo_restores(ctx, out):   # 사용자 보고 2 — 다 지우면 비워진다(강제로 남는 글 없음)
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    xy = _h1_xy(pg)
+    fr = _frame(pg)
+    _edit_text(pg, xy, "")
+    wait_notes(pg, 1)
+    n = notes_of(pg)[0]
+    assert n["edit"] == "text" and n["value"] == "" and n["note"].startswith("글자 비우기"), n
+    fr.wait_for_function("(s) => { const e = document.querySelector(s); return e && e.textContent === ''; }", arg=H1, timeout=3000)
+    pg.keyboard.press("Control+z")
+    wait_notes(pg, 0)
+    fr.wait_for_function("([s, t]) => document.querySelector(s).textContent.trim() === t", arg=[H1, OLD], timeout=3000)
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools")
+def test_element_menu_removes_element_from_card_and_undo_brings_it_back(ctx, out):
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    xy = _h1_xy(pg)
+    fr = _frame(pg)
+    pg.keyboard.press("v")
+    pg.mouse.click(*xy, button="right")
+    pg.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /요소 지우기/.test(b.textContent))", timeout=3000)
+    pg.locator("#cmenu button", has_text="요소 지우기").first.click()
+    wait_notes(pg, 1)
+    n = notes_of(pg)[0]
+    assert n["edit"] == "remove" and n["path"].endswith("h1.title:nth-of-type(1)"), n
+    fr.wait_for_function("(s) => getComputedStyle(document.querySelector(s)).display === 'none'", arg=H1, timeout=3000)
+    req = pg.evaluate("HD.edits.request(" + NOTES_JS + ", 'o')")
+    assert "   요청: 요소 지우기" in req, req
+    pg.keyboard.press("Control+z")
+    wait_notes(pg, 0)
+    fr.wait_for_function("(s) => getComputedStyle(document.querySelector(s)).display !== 'none'", arg=H1, timeout=3000)
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("helper", "tools")
+def test_remove_with_helper_writes_the_file_and_undo_restores_it(ctx, out):
+    before = (out / "screens" / "job.html").read_bytes()
+    srv = _serve(out)
+    pg, errors = _open(ctx, srv.url)
+    try:
+        xy = _h1_xy(pg)
+        pg.keyboard.press("v")
+        pg.mouse.click(*xy, button="right")
+        pg.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /요소 지우기/.test(b.textContent))", timeout=3000)
+        pg.locator("#cmenu button", has_text="요소 지우기").first.click()
+        pg.wait_for_function("document.querySelector('#hlist li.now .hs') && document.querySelector('#hlist li.now .hs').textContent === '파일에 씀'", timeout=20000)
+        assert _h1_in_file(out) is None, "요소가 화면 파일에서 지워졌다"
+        assert pg.evaluate("(" + NOTES_JS + ").length") == 0, "반영 대기로 남지 않는다"
+        pg.click("#undo")
+        pg.wait_for_function("1", timeout=1000)
+        for _ in range(100):
+            if (out / "screens" / "job.html").read_bytes() == before:
+                break
+            pg.wait_for_timeout(100)
+        assert (out / "screens" / "job.html").read_bytes() == before, "되돌리기 = 되살리기"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools", "modal")
+def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: 두 번 눌러 연 고치기 칸의 '요소 지우기'
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    pg.keyboard.press("0")
+    pg.evaluate("document.querySelector('.card[data-id=\"job\"] .pres').click()")
+    pg.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
+    mf = next(f for f in pg.frames if f.parent_frame and f.frame_element().get_attribute("id") == "mframe")
+    mf.wait_for_selector(H1, timeout=5000)
+    mf.dblclick(H1)
+    pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    pg.click("#tedel")
+    wait_notes(pg, 1)
+    assert notes_of(pg)[0]["edit"] == "remove"
+    assert pg.evaluate("document.getElementById('tedit').hidden")
+    mf.wait_for_function("(s) => getComputedStyle(document.querySelector(s)).display === 'none'", arg=H1, timeout=3000)
+    assert not errors, errors
+    pg.close()

@@ -373,6 +373,7 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 #tedit[hidden]{display:none}
 #tedit textarea{display:block;font:14px/1.4 system-ui,sans-serif;border:2px solid var(--ui-mark);border-radius:6px;padding:4px 6px;min-height:2.4em;resize:both;box-sizing:border-box}
 #tedit .th{font-size:11px;color:#888;margin-top:4px;padding:0 6px;white-space:nowrap}
+#tedit .th button{font:inherit;color:var(--ui-ink,#333);background:none;border:1px solid #ccc;border-radius:4px;padding:0 6px;margin-left:6px;cursor:pointer}
 .card.moved{z-index:2}                            /* 옮긴 카드는 제자리 카드 위(링크 층 7 · 펼친 카드 6 아래) */
 .card.moving{z-index:6}
 .card.moving .phone{box-shadow:0 0 0 4px var(--ui-mark),0 12px 34px rgba(0,0,0,.22)}
@@ -606,7 +607,7 @@ body.split-lr #khint{display:none}
 <div id="ttip" hidden></div>
 <div id="toast" role="status" hidden></div>
 <div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="memo" aria-label="메모" title="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button><button type="button" data-act="hide" aria-label="숨기기" title="숨기기"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg></button><button type="button" data-act="del" aria-label="삭제" title="삭제 (Del)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
-<div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소</div></div>
+<div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · 다 지우고 Enter = 글 비우기 · Esc 취소 <button type="button" id="tedel">요소 지우기</button></div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
 <div id="vmenu" class="vm" role="menu" aria-label="보기" hidden></div>
 <div id="wmenu" class="wm" role="menu" aria-label="창" hidden></div>
@@ -1461,7 +1462,9 @@ function addEdits(label, list, msg, drops, keep) {   // drops = 같이 취소할
   drops = drops || [];
   if (!list.length && !drops.length) return;
   if (VS && VS.on && !keep && !drops.length && list.every(HD.edits.instantOf)) {   // 잇기·끊기 = 화면 파일에 바로(조각 2.2)
-    VS.write(label, list).catch(function () { addEdits(label, list, msg, drops, true); });
+    VS.write(label, list).then(function (res) {      // 도우미가 거절한 까닭(한국어)을 알린다 — 그 편집은 반영 대기로 남았다
+      var f = res && res.failed && res.failed[0]; if (f && f.reason) toast(label + ' — 파일에 쓰지 못해 반영 대기로 남겼어요: ' + f.reason, false, 6000);
+    }, function () { addEdits(label, list, msg, drops, true); });
     return;
   }
   var lids = list.map(function (n) { return n.id; }), dids = drops.map(function (d) { return d.id; });
@@ -1519,7 +1522,8 @@ function openElemMenu(from, h, x, y, tail) {         // 요소: 트리거 지정
                     {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, HD.edits.say.untrigger(scr(h.to)), 'untrigger', h.to)]); }}]
                  : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, HD.edits.say.trigger(), 'trigger')]); }},
                     {label: '잇기', key: 'L 끌기', act: function () { startPick(from, [h], x, y); }}];
-  els.push({label: '글자 고치기', key: '더블클릭', act: function () { editScreenText(from, h); }});
+  els.push({label: '글자 고치기', key: '더블클릭', act: function () { editScreenText(from, h); }},
+           {label: '요소 지우기', key: 'Del', act: function () { removeElement(from, h); }});
   openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
 }
 function startTrig(hits, card, e) {                  // hits 를 알면(소켓) 바로, 모르면 화면에 물어 본다
@@ -1659,6 +1663,7 @@ var tedCtx = null;
 function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소 자리에 고치기 칸(판 위 카드 또는 크게 보기)
   closeCmenu(); endPick();
   if (lockGuard([id])) return;
+  if (h.textOk === false) { toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요'); return; }   // helper.py edit_html 과 같은 규칙(palette.js textOk)
   var c = inModal ? null : VL.cardEl(id), ph = inModal ? mbox : c ? $('.phone', c) : null; if (!ph) return;
   var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / CARD.w, q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
@@ -1677,7 +1682,7 @@ function closeTedit(save) {
   tedCtx = null; tedit.hidden = true;
   var ta = $('textarea', tedit); if (document.activeElement === ta) ta.blur();   // 숨긴 칸에 포커스가 남으면 다음 단축키를 '입력 중'으로 먹는다
   if (!modal.hidden) $('#mclose').focus({preventScroll: true});   // 크게 보기: 키(Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
-  if (save && v && v !== t.old) {
+  if (save && v !== t.old) {                          // 빈 글 = 글 비우기(요소는 남음, task 30)
     var n = editNote(t.id, t.h, HD.edits.say.text(v));
     n.edit = 'text'; n.value = v;
     addEdits('글자 고치기', [n]);
@@ -1689,6 +1694,14 @@ $('textarea', tedit).addEventListener('keydown', function (e) {
   else if (e.key === 'Escape') { e.preventDefault(); closeTedit(false); }
 });
 $('textarea', tedit).addEventListener('blur', function () { closeTedit(true); });
+$('#tedel').addEventListener('mousedown', function (e) { e.preventDefault(); });   // 글 칸 blur(= 저장)보다 먼저 오지 않게
+$('#tedel').addEventListener('click', function () { var t = tedCtx; if (!t) return; closeTedit(false); removeElement(t.id, t.h); });
+function removeElement(id, h) {                      // 요소 지우기(task 30) — 편집 메모 edit:'remove' 하나 = 되돌리기 한 번. 도우미가 있으면 파일에 바로(instantOf)
+  closeCmenu();
+  if (lockGuard([id])) return;
+  var n = editNote(id, h, HD.edits.say.remove()); n.edit = 'remove';
+  addEdits('요소 지우기', [n], '요소를 지웠어요 — 반영 대기');
+}
 pane.addEventListener('dblclick', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
   if (cl('#tools') || cl('.alabel') || typing(e)) return;
@@ -1831,7 +1844,7 @@ function deleteCards(ids) {                          // 진짜 화면 = 삭제 �
   var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
   SL.dispatch({type: 'clear'});
   var pend = function () { if (real.length) addEdits('화면 삭제', real.map(function (id) {
-    var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.remove(scr(id))); n.edit = 'delete'; return n;
+    var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.removeScreen(scr(id))); n.edit = 'delete'; return n;
   }), real.length + '개 화면을 지웠어요 — 반영 대기'); };
   if (real.length && VS && VS.on) VS.del(real).catch(pend); else pend();   // 파일에 바로 지우고 오는 연결도 끊음(E1·E10)
   if (drafts.length) {
@@ -1855,6 +1868,7 @@ function cutIncoming(ids) {
 }
 addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
   if ((e.key !== 'Delete' && e.key !== 'Backspace') || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens') return;
+  if (selEl && e.key === 'Delete') { var se = selEl; e.preventDefault(); unselectEl(); removeElement(se.card.dataset.id, se.h); return; }   // 고른 요소 = 요소 지우기(task 30)
   var ids = SL.ids(); if (!ids.length) return;
   e.preventDefault(); deleteCards(ids);
 });
@@ -1863,7 +1877,7 @@ function openCardMemo(id) {                          // 메모 도구·빈 레�
   showPop({text: titleOf(id) + ' — 화면 전체', path: 'body', rect: null}, '', 'change');
 }
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
-  var items = NS.list().filter(function (n) { return n.screen === id && n.edit === 'text'; }).map(function (n) { return {path: n.path, text: n.value}; });
+  var items = HD.edits.preview(NS.list(), id);       // 글자 고치기·요소 지우기(edits.js)
   try { if (f && f.contentWindow) f.contentWindow.postMessage({type: 'hd-pending', items: items}, '*'); } catch (e) {}
 }
 function sendAllPending(ids) {                       // ids = 닿은 화면에만(없으면 실린 카드 전부)
@@ -1986,7 +2000,7 @@ addEventListener('message', function (e) {
   var d = e.data; if (!d || typeof d !== 'object' || e.source !== mframe.contentWindow) return;
   if (d.type === 'hd-picked' && picking) {
     if (d.screen) mscreen = String(d.screen);
-    var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null};
+    var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null, src: d.src || null};   // src = 앱 소스 위치(task 27)
     if (d.add && draft && !editing && !pop.hidden) {   // Shift+클릭: 고른 묶음에 더하거나 빼기
       var note = $('#pnote').value, intent = curIntent(), sc = curScope(), at = -1;
       draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
