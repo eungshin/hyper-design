@@ -20,6 +20,7 @@ python3 build_canvas.py <out_dir>
 screens.json:
 {"groups": [...], "story": {...}, "badges": {"뜻": "is-brand", ...},
  "screens": [{"id", "file", "title", "group", "purpose", "policies": [], "branches": [{"to", "label"}]}]}
+ file = out 안 경로(기본 screens/<id>.html) 또는 이 PC 개발 서버 주소 http(s)://127.0.0.1|localhost[:포트]/…(앱 카드 — features/app, 링크 미리 뽑기 없음)
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 """
@@ -114,8 +115,18 @@ class _Links(HTMLParser):
         for o in self.open: o[3].append(d)
 
 
+DEV_URL = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d{1,5})?/", re.I)
+
+
+def is_dev_url(f):
+    """화면 file 이 이 PC 의 개발 서버 주소(http(s)://127.0.0.1|localhost[:포트]/…)인가 — 앱 카드(features/app). 카드가 그 주소를 그대로 불러온다(복사·파일 검사 없음)."""
+    return isinstance(f, str) and bool(DEV_URL.match(f))
+
+
 def screen_links(out, card, ids):
-    """카드 하나의 화면 파일에서 다른 화면으로 가는 링크 → [{to, text}] (도착 = 같은 폴더 .html 파일 이름)."""
+    """카드 하나의 화면 파일에서 다른 화면으로 가는 링크 → [{to, text}] (도착 = 같은 폴더 .html 파일 이름). 개발 서버 주소 카드는 읽을 파일이 없다 → []."""
+    if is_dev_url(card["file"]):
+        return []
     f = out / card["file"]
     try:
         src = f.read_text(encoding="utf-8")

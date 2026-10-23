@@ -18,7 +18,9 @@
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
-   아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null). */
+   아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
+   소스 위치(앱 카드, Svelte 개발 서버): 요소나 그 조상에 __svelte_meta.loc 이 있으면 hd-picked·hd-hit·hd-dbl 답과 hd-located 항목에
+   src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다. */
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {
@@ -107,7 +109,7 @@
     try { el = it.path ? document.querySelector(it.path) : null; } catch (e) { el = null; }
     if (el && el !== document.body && el !== document.documentElement) {
       var sp = q ? spanOf(el, d) : null;
-      if (!q || (sp && d.t.slice(sp.s, sp.e).indexOf(q) >= 0)) return {key: it.key, rect: rectOf(el), how: 'path'};
+      if (!q || (sp && d.t.slice(sp.s, sp.e).indexOf(q) >= 0)) return withSrc({key: it.key, rect: rectOf(el), how: 'path'}, el);
     }
     if (!q) return {key: it.key, rect: null, how: 'none'};
     var best = -1, score = -1, at = d.t.indexOf(q), pre = String(it.quote.prefix || ''), suf = String(it.quote.suffix || '');
@@ -121,12 +123,36 @@
     var box = hit[0].n.parentElement;                 // 그 글을 모두 감싼 가장 작은 요소
     while (box && box !== document.body && !hit.every(function (x) { return box.contains(x.n); })) box = box.parentElement;
     if (!box || box === document.body) return {key: it.key, rect: null, how: 'none'};
-    return {key: it.key, rect: rectOf(box), how: 'quote'};
+    return withSrc({key: it.key, rect: rectOf(box), how: 'quote'}, box);
   }
   function locate(items) {
     var d = docText();
     send({type: 'hd-located', screen: screenId(), items: (items || []).map(function (it) { return locateOne(it || {}, d); })});
   }
+  /* 소스 위치: 가장 가까운 __svelte_meta.loc(Svelte 5 개발 런타임, 비공개 API) → {src, comp} | null */
+  function srcPath(f) {
+    f = slash(f); var cfg = window.__hdSrc || null; if (!cfg) return f;
+    var root = slash(cfg.root).replace(/\/+$/, ''), base = slash(cfg.base).replace(/^\/+|\/+$/g, '');
+    if (root && f.toLowerCase().indexOf(root.toLowerCase() + '/') === 0) return f.slice(root.length + 1);
+    if (/^([a-z]:)?\//i.test(f)) return f;              // 저장소 밖 절대 경로는 그대로
+    return (base ? base + '/' : '') + f.replace(/^\.\//, '');
+  }
+  function slash(f) { return String(f || '').split(String.fromCharCode(92)).join('/'); }   // 역슬래시 → '/'
+  function baseName(f) { return slash(f).split('/').pop().replace(/\.svelte$/i, ''); }
+  function srcOf(el) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var m = n.__svelte_meta, loc = m && m.loc;
+      if (!loc || !loc.file) continue;
+      var comp = [baseName(loc.file)];
+      for (var s = m.parent, k = 0; s && k < 50; s = s.parent, k++) {
+        if (s.type === 'component' && s.file) { var c = baseName(s.file); if (c && c !== comp[comp.length - 1]) comp.push(c); }
+      }
+      return {src: {file: srcPath(loc.file), line: +loc.line || 0, column: +loc.column || 0}, comp: comp.slice(0, 8)};
+    }
+    return null;
+  }
+  function withSrc(msg, el) { var s = el ? srcOf(el) : null; if (s) { msg.src = s.src; msg.comp = s.comp; } return msg; }
+  window.__hdSrcOf = srcOf;                           // 테스트·디버그용(읽기만)
   function screenId() {
     var f = decodeURIComponent(location.pathname.split('/').pop() || '');
     return f.replace(/\.html?$/i, '');
@@ -155,7 +181,7 @@
     if (!picking) return;
     block(e);
     var t = target(e); if (!t) return;
-    send({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey});
+    send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
 
   /* ---------- 연결 보기: 다른 화면으로 가는 링크 ---------- */
@@ -218,8 +244,8 @@
   function sendHit(at, leaf, type) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
-    send({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
-          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el)});
+    send(withSrc({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
+          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el)}, el));
   }
   var pend = [];
   function pending(items) {                           // 반영 대기 글: 첫 글자 마디만 바꾸고, 다음 호출에서 되돌린다
