@@ -3,11 +3,14 @@
 - 임시 git 저장소: 작업 트리의 build_canvas.py 가 깨져 있어도 커밋된 판으로 빌드된다 · 없는 ref 는 실패.
 - git 저장소가 아니면 경고 한 줄 뒤 작업 트리의 build_canvas.py 로.
 - 이 저장소 HEAD 로 실제 결과 폴더 사본을 빌드 → index.html (fixture 가 없으면 건너뜀).
+셋 다 하위 프로세스(git·python 빌드)를 띄운다 — slow 표시로 unit 에서 빠진다(`-m slow` · 전체 실행에서 돈다).
 """
 import os, shutil, subprocess, sys
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.slow
 
 HERE = Path(__file__).resolve().parent
 CANVAS = HERE.parent

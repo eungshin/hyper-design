@@ -1,6 +1,7 @@
 """캔버스 테스트 영역 표시(marker) — 고친 곳에 맞는 테스트만 골라 돌리려고(contract.md '테스트 층').
 
-test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저 없음, 수 초). 브라우저 테스트는 아래 표에서 영역을 받는다.
+test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저 없음, 수 초) — 단 `@pytest.mark.slow`(git·하위 프로세스 빌드 같은 I/O)는 unit 에서 빠진다.
+브라우저 테스트는 아래 표에서 영역을 받는다. SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
 표에 없는 브라우저 테스트가 생기면 수집 단계에서 실패한다 — 새 테스트는 여기에 한 줄을 더한다.
 """
 import json, time
@@ -157,6 +158,14 @@ BROWSER = {
 }
 
 
+# 격리(fable #4): -n 4 에서만 가끔 깨지는 테스트 — -n 실행은 고르지 않고, 끝에 `pytest tests -m serial`(-n 없이)로 따로 돌린다. 원인을 찾으면 여기서 뺀다.
+SERIAL = ("test_v2_no_vertical_through_cards", "test_line_click_shows_end_handles_and_drag_retargets")
+
+
+def _xdist_on(config):                              # 주 프로세스(-n N, N>0) 또는 일꾼
+    return getattr(config, "workerinput", None) is not None or bool(getattr(config.option, "numprocesses", 0))
+
+
 # 모듈 하나를 차례로 이어 쓰는 페이지(앞 테스트가 남긴 메모·펼침·옮긴 카드를 뒤 테스트가 전제) — -n 에서도 한 일꾼에서 차례대로.
 # dpage(편집 테스트 대부분)·gpage 는 나눠 돌린다 — gpage 를 묶으면 -m 으로 고른 일부만 차례로 돌 때 test_v3_main_flow_dashed 가 앞 테스트의 카메라 자리를 이어받아 깨진다
 SHARED = ("page", "epage")
@@ -169,6 +178,8 @@ def pytest_configure(config):
     elif getattr(config.option, "dist", "no") == "load":   # -n 4: 묶음(xdist_group)만 한 일꾼으로, 나머지는 지금처럼 나눠 돌린다
         config.option.dist = "loadgroup"
     config.addinivalue_line("markers", "unit: 순수 함수(node) — 늘 같이 돌린다")
+    config.addinivalue_line("markers", "slow: unit 파일 안의 I/O 테스트(git·빌드 하위 프로세스) — unit 에 들지 않는다")
+    config.addinivalue_line("markers", "serial: -n 에서 가끔 깨지는 격리 테스트 — -n 실행에서 빠지고 `-m serial`(-n 없이)로 따로")
     for name, what in AREAS.items():
         config.addinivalue_line("markers", f"{name}: {what}")
 
@@ -178,7 +189,8 @@ def pytest_collection_modifyitems(config, items):
     missing = []
     for it in items:
         if it.fspath.basename == "test_canvas_modules.py" or it.fspath.basename.startswith("test_canvas_unit_"):   # 브라우저 없는 테스트 파일
-            it.add_marker(pytest.mark.unit)
+            if not it.get_closest_marker("slow"):
+                it.add_marker(pytest.mark.unit)
             continue
         if not it.fspath.basename.startswith("test_canvas_"):
             continue
@@ -188,11 +200,18 @@ def pytest_collection_modifyitems(config, items):
             continue
         for a in areas:
             it.add_marker(getattr(pytest.mark, a))
+        if (it.originalname or it.name) in SERIAL:
+            it.add_marker(pytest.mark.serial)
         shared = [f for f in SHARED if f in getattr(it, "fixturenames", ())]
         if shared:
             it.add_marker(pytest.mark.xdist_group(it.fspath.purebasename + ":" + shared[0]))
     if missing:
         raise pytest.UsageError("영역 표(tests/conftest.py BROWSER)에 없는 브라우저 테스트: " + ", ".join(missing))
+    if _xdist_on(config):                             # -n: 격리 테스트는 빼고(주·일꾼이 같은 목록을 갖게 둘 다에서)
+        out = [it for it in items if it.get_closest_marker("serial")]
+        if out:
+            items[:] = [it for it in items if not it.get_closest_marker("serial")]
+            config.hook.pytest_deselected(items=out)
 
 
 # ── 검토 과정 기록(tracking/README.md): 테스트를 돌릴 때마다 무엇을·얼마나·결과를 tracking/runs.json 에 한 줄 — review.py 가 과한 검토를 찾는다

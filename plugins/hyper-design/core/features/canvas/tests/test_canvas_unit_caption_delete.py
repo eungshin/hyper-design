@@ -1,9 +1,9 @@
 """카드 글 상자에서 지우기(#243, task 15) — caption.diff 의 지우기 편집 · say 글귀 · helper 가 정책 줄을 지우고 설명을 비운다.
 
 Model(node): 비운 정책 줄 = {field:'policy', index, op:'delete', value:''} (원래 번호 그대로), 비운 설명 = '' 편집, 비운 제목 = 편집 없음,
-빈 새 줄 = 버림. 도우미(브라우저 없음): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
+빈 새 줄 = 버림. 도우미(브라우저·HTTP·빌드 없음, apply_edits 직접): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
 """
-import json, os, shutil, subprocess, sys, tempfile, threading, urllib.request
+import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
 
 import pytest
@@ -11,9 +11,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent
 MOD = SCRIPTS / "modules"
-REPO = SCRIPTS.parents[4]
 NODE = shutil.which("node")
-DAYFINE = REPO / "runs" / "dayfine-onboarding-v1" / "out"
 
 JS = r"""
 const fs = require('fs'), vm = require('vm');
@@ -72,56 +70,47 @@ def test_say_delete_text(js):
     assert js["sayEdit"] == '정책 1번째 줄을 "새"(으)로 바꾸기 (screens.json의 policies[0])', "바꾸기 글귀는 그대로"
 
 
-# --- helper(브라우저 없음) ---
+# --- helper(브라우저 없음) — apply_edits 를 바로 부른다: screens.json 하나뿐인 작은 out, 다시 빌드(하위 프로세스)는 성공으로 바꿔 둔다 ---
 
-@pytest.fixture()
-def out():
-    if not DAYFINE.exists():
-        pytest.skip(f"fixture 없음: {DAYFINE}")
+JOB = {"id": "job", "file": "screens/job.html", "title": "일", "purpose": "일을 고른다", "policies": ["하나", "둘", "셋"]}
+
+
+@pytest.fixture(scope="module")
+def helper():
+    sys.path.insert(0, str(SCRIPTS))
+    import helper as h
+    return h
+
+
+@pytest.fixture(scope="module")
+def outdir():
     tmp = Path(tempfile.mkdtemp(prefix="hd-capdel-"))
-    o = tmp / "out"
-    shutil.copytree(DAYFINE, o)
-    r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(o)], capture_output=True, text=True, encoding="utf-8",
-                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
-    assert r.returncode == 0, r.stderr
-    yield o
+    yield tmp / "out"
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _helper():
-    sys.path.insert(0, str(SCRIPTS))
-    import helper
-    return helper
+@pytest.fixture()
+def out(outdir, helper, monkeypatch):
+    """테스트마다 screens.json 을 처음 모양으로 다시 쓰고 기록(.hd-history)을 비운다 — 같은 폴더를 모듈에서 한 번 만든다."""
+    shutil.rmtree(outdir, ignore_errors=True)
+    outdir.mkdir(parents=True)
+    (outdir / "screens.json").write_text(json.dumps({"screens": [JOB]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    monkeypatch.setattr(helper, "_build", lambda o: types.SimpleNamespace(returncode=0, stderr=""))
+    return outdir
 
 
 def _job(o):
     return next(s for s in json.loads((o / "screens.json").read_text(encoding="utf-8"))["screens"] if s["id"] == "job")
 
 
-def _post(url, body, token):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json", "X-HD-Token": token})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return r.status, json.loads(r.read())
-
-
-def test_helper_deletes_policy_lines_and_clears_purpose_over_http(out):
-    helper = _helper()
-    pol = _job(out)["policies"]
-    assert len(pol) == 3
-    srv = helper.make_server(out, 0)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    base = srv.url.split("/index.html")[0]
-    try:
-        code, res = _post(base + "/api/apply", {"edits": [
-            {"id": "d0", "screen": "job", "edit": "policy", "op": "delete", "index": 0, "value": ""},
-            {"id": "e1", "screen": "job", "edit": "policy", "index": 1, "value": "바뀐 둘째"},
-            {"id": "d2", "screen": "job", "edit": "policy", "op": "delete", "index": 2, "value": ""},
-            {"id": "p", "screen": "job", "edit": "purpose", "value": ""},
-        ]}, srv.token)
-    finally:
-        srv.shutdown(); srv.server_close()
-    assert code == 200 and sorted(res["applied"]) == ["d0", "d2", "e1", "p"] and not res["failed"], res
+def test_helper_deletes_policy_lines_and_clears_purpose_in_one_apply(out, helper):
+    res = helper.apply_edits(out, [
+        {"id": "d0", "screen": "job", "edit": "policy", "op": "delete", "index": 0, "value": ""},
+        {"id": "e1", "screen": "job", "edit": "policy", "index": 1, "value": "바뀐 둘째"},
+        {"id": "d2", "screen": "job", "edit": "policy", "op": "delete", "index": 2, "value": ""},
+        {"id": "p", "screen": "job", "edit": "purpose", "value": ""},
+    ], stamp="t0")
+    assert sorted(res["applied"]) == ["d0", "d2", "e1", "p"] and not res["failed"], res
     job = _job(out)
     assert job["policies"] == ["바뀐 둘째"], "원래 번호로 바꾸고, 지우기는 큰 번호부터"
     assert job["purpose"] == ""
@@ -129,17 +118,16 @@ def test_helper_deletes_policy_lines_and_clears_purpose_over_http(out):
     assert len(hist) == 1, "한 번 적용 = 기록 하나"
 
 
-def test_helper_empty_policy_value_without_op_is_a_delete(out):   # 지금 셸은 op 를 싣지 않는다 — 빈 값 = 지우기
-    res = _helper().apply_edits(out, [{"id": "d", "screen": "job", "edit": "policy", "index": 1, "value": ""}], stamp="t1")
+def test_helper_empty_policy_value_without_op_is_a_delete(out, helper):   # 지금 셸은 op 를 싣지 않는다 — 빈 값 = 지우기
+    res = helper.apply_edits(out, [{"id": "d", "screen": "job", "edit": "policy", "index": 1, "value": ""}], stamp="t1")
     assert res["applied"] == ["d"], res
-    assert len(_job(out)["policies"]) == 2
+    assert _job(out)["policies"] == ["하나", "셋"]
 
 
-def test_helper_delete_out_of_range_fails_alone(out):
-    pol = _job(out)["policies"]
-    res = _helper().apply_edits(out, [
+def test_helper_delete_out_of_range_fails_alone(out, helper):
+    res = helper.apply_edits(out, [
         {"id": "bad", "screen": "job", "edit": "policy", "op": "delete", "index": 7, "value": ""},
         {"id": "ok", "screen": "job", "edit": "policy", "op": "delete", "index": 0, "value": ""},
     ], stamp="t2")
     assert res["applied"] == ["ok"] and [f["id"] for f in res["failed"]] == ["bad"], res
-    assert _job(out)["policies"] == pol[1:]
+    assert _job(out)["policies"] == ["둘", "셋"]

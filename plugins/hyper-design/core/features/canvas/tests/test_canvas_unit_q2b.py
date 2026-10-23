@@ -112,6 +112,7 @@ def _post(url, body, token=None):
         return e.code, None
 
 
+@pytest.mark.slow                                   # 결과 폴더 사본 + 빌드 하위 프로세스 + HTTP 서버 — unit 에서 뺀다(전체 실행·`-m slow`)
 def test_helper_watch_reports_mtimes(out):
     """/api/watch: 있는 파일 → float mtime, 없는 파일 · out 밖 → null, 토큰 없으면 403, 잘못된 몸 → 200 {mtimes:{}}."""
     real = next(p for p in sorted((out / "screens").glob("*.html")))
