@@ -1,10 +1,10 @@
-"""fix 스킬 계약 테스트 — frontmatter, 참조, 요청문 예시가 canvas_template.html 형식과 맞는지."""
+"""fix 스킬 계약 테스트 — frontmatter, 참조, 요청문 예시가 캔버스(modules/edits.js)가 만드는 형식과 맞는지."""
 import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE / "SKILL.md"
-TEMPLATE = HERE.parents[1] / "core" / "features" / "canvas" / "canvas_template.html"
+EDITS = HERE.parents[1] / "core" / "features" / "canvas" / "modules" / "edits.js"
 
 HEADER_RE = re.compile(r"^\[hyper-design 수정 요청\] out=.+ · \d+건$")
 ITEM_RE = re.compile(r"^(\d+)\. screen=[^\s·]+ · path=.+$")
@@ -62,10 +62,19 @@ def test_example_matches_canvas_format():
 
 
 def test_template_emits_same_format():
-    js = TEMPLATE.read_text(encoding="utf-8")
-    nl = chr(92) + "n"  # JS source escape for newline
-    for frag in ("'[hyper-design 수정 요청] out=' + outDir() + ' · ' + list.length + '건" + nl + "'",
-                 "'. screen=' + n.screen + ' · path=' + n.path + '" + nl + "   text=\"'",
-                 "'\" · intent=' + n.intent",
-                 "'" + nl + "   요청: '"):
-        assert frag in js, frag
+    # 캔버스가 실제로 만드는 요청문(modules/edits.js request)이 이 스킬이 읽는 형식과 같은지 — 소스 글이 아니라 출력으로 본다
+    import json, shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node 없음")
+    # 명령 줄 인자는 ASCII 로만(Windows 코드 페이지가 한글을 깨뜨림) — 여러 줄 메모 하나 + 질문 하나
+    js = ("require(%s); const n=[{screen:'a',path:'div:nth-of-type(1)',text:'old',intent:'change',note:'fix it\\nsecond line'},"
+          "{screen:'b',path:'body',text:'',intent:'question',note:'why?'}]; process.stdout.write(HD.edits.request(n,'C:/out'))") % json.dumps(str(EDITS))
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, encoding="utf-8", check=True).stdout.splitlines()
+    assert HEADER_RE.match(out[0]), out[0]
+    items = [i for i, l in enumerate(out) if ITEM_RE.match(l)]
+    assert len(items) == 2, out
+    for i in items:
+        assert TEXT_RE.match(out[i + 1]), out[i + 1]
+        assert NOTE_RE.match(out[i + 2]), out[i + 2]
