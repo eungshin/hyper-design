@@ -3,7 +3,7 @@
    409(다른 곳에서 바뀜) = 보내지 못한 이번 변경은 버리고 알린 뒤 ctx.reload()(새로 연 페이지가 파일 상태를 받는다).
    보내기가 실패하면(도우미 꺼짐 등) 한 번 알리고 [hd] 경고, 바뀐 키는 다음 쓰기 때 같이 보낸다.
    살아 있는 새로 받기(A2a): 페이지가 보이는 동안 2초마다(숨으면 10초) GET /api/state. 파일 rev 가 더 크면 —
-     보내지 않은 변경이 있으면 먼저 보낸다(409 = 위 충돌 길) · 바뀐 이름이 notes·note-seq 뿐이면 제자리에서 받아(상태·캐시) ctx.onExternal(이름들) ·
+     보내지 않은 변경이 있으면 먼저 보낸다(409 = 위 충돌 길) · 바뀐 이름이 notes·note-seq·busy 뿐이면 제자리에서 받아(상태·캐시) ctx.onExternal(이름들) ·
      다른 이름(자리·폴더…)도 바뀌었으면 셸이 따로 들고 있으니 지금처럼 알리고 다시 불러오기. 네트워크 실패 3번 연속 = 멈추고 한 번 알림, 창에 돌아오면(focus) 다시.
    HD.viewStateSync.mount(ctx) → {mode, getItem(k), setItem(k, v), removeItem(k), flush(), rev(), poll()(지금 한 번 — 테스트·focus)}
      mode = 'off'(file:// · 토큰 없음) | 'local'(스냅숏 깨짐) | 'file' | 'migrate'. off·local 이면 모든 키가 ctx.storage 그대로(던지는 것도 그대로)
@@ -14,7 +14,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 var CONFLICT = '다른 곳에서 바뀌어 다시 불러왔어요';
 var FAILED = '캔버스 상태를 파일에 저장하지 못했어요 — 이 브라우저에만 남아요';
 var LOST = '도우미에 닿지 않아 AI 답을 새로 받지 않아요 — 창을 다시 누르면 다시 시도해요';
-var LIVE = {notes: 1, 'note-seq': 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름 — 나머지는 다시 불러오기
+var LIVE = {notes: 1, 'note-seq': 1, busy: 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름 — 나머지는 다시 불러오기
 
 function mount(ctx) {
   var S = HD.stateFile, store = ctx.storage, on = !!(ctx.on && ctx.token);
