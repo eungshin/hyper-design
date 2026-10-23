@@ -2613,3 +2613,49 @@ def test_badge_opens_that_screens_memos_like_comments(dpage):
         localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
     reload(dpage)
     assert not errs, errs
+
+
+def drop_layout(pg):
+    from test_canvas_baseline import empty_point
+    fit_view(pg)
+    pg.keyboard.press("n")
+    e = empty_point(pg)
+    pg.mouse.click(e["x"], e["y"])
+    pg.wait_for_selector(".card.draft")
+    pg.keyboard.press("h")
+    return pg.evaluate("document.querySelector('.card.draft').dataset.id")
+
+
+def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
+    """#225: 빈 레이아웃 카드 아래 글 = 이름(한 줄) + 목적(여러 줄, Shift+Enter 줄바꿈) — 메모 안(n.value·n.purpose)에 남고,
+    보내는 요청문에 목적이 첫째 브리프로 줄바꿈째 들어간다. 되돌리기 한 번."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    did = drop_layout(dpage)
+    card = f'.card.draft[data-id="{did}"]'
+    dpage.dblclick(card + " .ftitle")
+    box = dpage.locator(card + " .capbox")
+    assert box.is_visible() and dpage.is_hidden("#pop"), "두 번 누르기 = 카드 글 상자(메모 창 아님)"
+    ph = box.locator('[data-f="purpose"]').get_attribute("data-ph")
+    assert "목적" in ph and "메모" in ph and "Shift+Enter" in ph, ph
+    dpage.keyboard.press("Control+a")
+    dpage.keyboard.type("결제 화면")
+    dpage.keyboard.press("Enter")                    # 이름에서 Enter = 목적으로
+    assert dpage.evaluate("document.activeElement.dataset.f") == "purpose"
+    dpage.keyboard.type("카드로 결제한다")
+    dpage.keyboard.press("Shift+Enter")
+    dpage.keyboard.type("쿠폰은 선택")
+    dpage.keyboard.press("Control+Enter")
+    dpage.wait_for_function(f"({NOTES_JS}).some(n => n.screen === '{did}' && n.purpose)")
+    n = [x for x in notes_of(dpage) if x["screen"] == did][0]
+    assert n["value"] == "결제 화면" and n["purpose"] == "카드로 결제한다\n쿠폰은 선택" and not n["sent"], n
+    assert "목적: 카드로 결제한다\n쿠폰은 선택" in n["note"], n["note"]
+    req = dpage.evaluate(f"HD.edits.request(({NOTES_JS}).filter(n => n.screen === '{did}'), 'o')")
+    assert "목적: 카드로 결제한다\n       쿠폰은 선택" in req, req
+    assert dpage.text_content(card + " .ftitle") == "결제 화면" and dpage.text_content(card + " .fdesc") == "카드로 결제한다\n쿠폰은 선택"
+    dpage.keyboard.press("Control+z")
+    dpage.wait_for_function(f"({NOTES_JS}).some(n => n.screen === '{did}' && !n.purpose)")
+    assert dpage.text_content(card + " .ftitle") == "빈 레이아웃" and dpage.text_content(card + " .fdesc") == ""
+    dpage.evaluate(DROP_DRAFTS_JS)
+    reload(dpage)
+    assert not errs, errs

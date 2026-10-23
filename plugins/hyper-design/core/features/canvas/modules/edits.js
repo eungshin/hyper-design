@@ -65,13 +65,15 @@ function split(notes) {
 }
 
 // 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 바꾸지 않는다). 여러 요소 메모는 요소마다 한 항목으로 펼친다
+// 요청 글이 여러 줄이면 둘째 줄부터 '요청: ' 뒤 글자 자리에 맞춰 들여 쓴다(항목은 늘 '번호. screen=' 줄로 시작)
+var CONT = '       ';
 function targetsOf(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
 function request(notes, out) {
   var list = [];
   (notes || []).forEach(function (n) { targetsOf(n).forEach(function (t) { list.push({screen: n.screen, path: t.path, text: t.text, intent: n.intent, note: n.note}); }); });
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
     return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
-      '\n   요청: ' + String(n.note).replace(/\s*\n\s*/g, ' ');
+      '\n   요청: ' + String(n.note).replace(/[ \t]*\r?\n\s*/g, '\n' + CONT);   // 줄바꿈은 들여 쓴 다음 줄로 이어 남긴다(#225)
   }).join('\n');
 }
 
@@ -93,7 +95,11 @@ var say = {
     return (field === 'policy' ? '정책 ' + (index + 1) + '번째 줄' : FIELD[field]) + '을 "' + v + '"(으)로 바꾸기 (screens.json의 ' +
            (field === 'policy' ? 'policies[' + index + ']' : field) + ')';
   },
-  layout: function (value, id) { return '새 화면 "' + value + '"(' + id + ')을 빈 레이아웃으로 만들기 — 내용은 이 화면에 남긴 메모를 따라 채우기'; },
+  layout: function (value, id, purpose) {           // purpose = 이 화면의 목적(여러 줄 그대로) — 있으면 첫째 브리프(#225)
+    var p = purpose == null ? '' : String(purpose).trim();
+    return '새 화면 "' + value + '"(' + id + ')을 빈 레이아웃으로 만들기 — ' +
+           (p ? '목적: ' + p + ' · 내용은 이 목적과 이 화면에 남긴 메모를 따라 채우기' : '내용은 이 화면에 남긴 메모를 따라 채우기');
+  },
   linkNew: function (value, id) { return '이 요소를 누르면 새 화면 "' + value + '"(' + id + ')으로 가게 연결'; },
   copy: function (value, id, src) { return '새 화면 "' + value + '"(' + id + ')을 ' + src + ' 화면을 복제해 만들기'; },
   remove: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },

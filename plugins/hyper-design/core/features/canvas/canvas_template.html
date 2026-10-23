@@ -335,7 +335,6 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:42;background:#1c1c1c;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);pointer-events:none}
 #toast[hidden]{display:none}
 .ftitle.pend,.fdesc.pend{background:#FFF4D6;border-radius:6px;box-shadow:0 0 0 3px #FFF4D6;white-space:pre-line}
-.ftitle input.cedit{font:inherit;color:inherit;width:100%;box-sizing:border-box;border:2px solid var(--ui-mark);border-radius:6px;padding:2px 6px;background:#fff}
 /* 카드 아래 글 한 상자(H16, modules/view-caption.js) — 여는 동안 그 카드의 제목·설명·정책 줄은 숨긴다 */
 .card.capopen>.ftitle,.card.capopen>.fdesc,.card.capopen>.pol,.card.capopen>.more{display:none}
 .capbox{margin-top:16px;border:1.5px solid #2b2b29;border-radius:8px;background:#fff;padding:12px 14px 6px;box-shadow:0 2px 10px rgba(0,0,0,.08);cursor:text}
@@ -344,6 +343,9 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 .capttl .state{flex:none}
 .capt{flex:1;min-width:0;font-size:22px;font-weight:700;line-height:1.35}
 .capd{font-size:18px;color:#555;margin-top:4px;line-height:1.45;min-height:1.45em}
+.capbox [data-ph]:empty::before{content:attr(data-ph);color:#aaa;font-weight:400;pointer-events:none}
+.card.draft .fdesc{white-space:pre-line}
+.card.draft .fdesc:empty{display:none}
 .capp{margin:8px 0 0;padding-left:22px;font-size:17px;line-height:1.5;color:#444}
 .capp li{min-height:1.5em}
 .capfoot{border-top:1px solid #eee;margin-top:8px;padding-top:6px;font-size:11.5px;color:#8a8a85}
@@ -965,7 +967,7 @@ pane.addEventListener('click', function (e) {
     }, tool === 'text');
     return;
   }
-  if (mc && !e.shiftKey && (tool === 'memo' || (mc.classList.contains('draft') && e.detail >= 2))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }   // 빈 레이아웃: 한 번 = 고르기, 두 번 = 메모(10-24)
+  if (mc && !e.shiftKey && (tool === 'memo' || (mc.classList.contains('draft') && e.detail >= 2 && cl('.phone')))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }   // 빈 레이아웃: 한 번 = 고르기, 두 번 = 메모(10-24)
   var an = cl('.pres');
   if (an) { e.preventDefault(); e.stopPropagation(); openModal(an.dataset.file, an.dataset.title); return; }   // ▶ 보기 = 실제로 눌러 보기
   var c = cl('.cover');
@@ -1562,13 +1564,15 @@ function paintCardText(ids) {
 // 바뀐 칸마다 편집 메모 하나(title·purpose·policy[i]) → 한 번의 addEdits = 되돌리기 한 번. 정책 줄 더하기·지우기는 helper 가 못 써서 막는다(allowAdd:false)
 var CAP = HD.viewCaption.mount({
   values: function (id) {
-    var o = ORIG[id]; if (!o) return null;
+    var o = ORIG[id];
+    if (!o) { var dn = layoutOf(id); return dn ? {title: dn.value, purpose: dn.purpose || '', policies: []} : null; }   // 빈 레이아웃 = 그 메모의 이름·목적
     var t = pendingOf(id, 'title'), d = pendingOf(id, 'purpose');
     return {title: t != null ? t : o.title, purpose: d != null ? d : o.purpose,
             policies: o.policies.map(function (x, i) { var v = pendingOf(id, 'policy', i); return v != null ? v : x; })};
   },
   badge: function (c) { return $('.ftitle .state', c); },
   commit: function (id, changes) {
+    if (!ORIG[id]) { editLayout(id, changes); return; }
     var list = changes.map(function (ch) {
       var pol = ch.field === 'policy', path = 'screens.json > screens[id=' + id + '] > ' + (pol ? 'policies[' + ch.index + ']' : ch.field);
       var n = editNote(id, {path: path, text: ch.old, rect: null}, pol ? HD.edits.say.field('policy', ch.value, ch.index) : HD.edits.say.field(ch.field, ch.value));
@@ -1578,6 +1582,7 @@ var CAP = HD.viewCaption.mount({
     addEdits('카드 글', list);
   },
   allowAdd: false,
+  hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로) · Shift+Enter 줄바꿈'}; },
   onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(c ? [c.dataset.id] : null); }
 });
 function openCaption(el, focus) {                   // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
@@ -1585,7 +1590,6 @@ function openCaption(el, focus) {                   // el = 카드 안 아무 �
   var c = el && el.closest('.card'); if (!c) return;
   var id = c.dataset.id;
   if (lockGuard([id])) return;
-  if (!ORIG[id]) { var t = $('.ftitle', c); if (focus.field === 'title' && t && !$('input', t)) renameLayout(t, id); return; }   // 빈 레이아웃 = 이름만
   if (focus.field === 'policy') focus = {field: 'policy', index: $$('.pol li', c).indexOf(el)};
   c.classList.add('capopen');
   CAP.open(c, focus);
@@ -1677,7 +1681,8 @@ pane.addEventListener('mousemove', function (e) {
 
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }
-function layoutText(n) { return HD.edits.say.layout(n.value, n.screen); }
+function layoutText(n) { return HD.edits.say.layout(n.value, n.screen, n.purpose); }
+function layoutOf(id) { return NS.list().filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0] || null; }
 function layoutNote(cx, cy) {
   var p = boardPt(cx, cy), id = 'new-' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
   var n = editNote(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
@@ -1694,12 +1699,12 @@ function renderDrafts(ids) {                         // 메모의 빈 레이아�
     if (c && ids && ids.indexOf(id) < 0) return;
     if (!c) {
       c = document.createElement('div'); c.className = 'card draft'; c.dataset.id = id;
-      c.innerHTML = '<div class="phone"><div class="blank">빈 레이아웃</div><button class="cover" data-file=""></button></div><div class="ftitle"></div>';
+      c.innerHTML = '<div class="phone"><div class="blank">빈 레이아웃</div><button class="cover" data-file=""></button></div><div class="ftitle"></div><div class="fdesc"></div>';
       rowsEl.appendChild(c);
     }
     c.dataset.x = n.x; c.dataset.y = n.y;
     var cv = $('.cover', c); cv.dataset.title = n.value; cv.setAttribute('aria-label', n.value + ' — 빈 레이아웃(두 번 누르면 메모)');
-    if (!$('input', $('.ftitle', c))) $('.ftitle', c).textContent = n.value;
+    $('.ftitle', c).textContent = n.value; $('.fdesc', c).textContent = n.purpose || '';   // 이름 · 목적(여러 줄)
     placeCard(c);
   });
 }
@@ -1707,21 +1712,16 @@ function openElemMemo(id, h, x, y) {                 // 주석 도구: 판 위 �
   editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect}]};
   showPop({text: h.text || h.path, path: h.path, rect: null}, '', 'change', {x: x, y: y});
 }
-function renameLayout(el, id) {
-  var n = NS.list().filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0]; if (!n) return;
-  var inp = document.createElement('input'), cur = n.value;
-  inp.className = 'cedit'; inp.value = cur; inp.setAttribute('aria-label', '빈 레이아웃 이름');
-  el.textContent = ''; el.appendChild(inp); inp.focus(); inp.select();
-  var set = function (v) { n.value = v; n.note = n.copyOf ? HD.edits.say.copy(v, n.screen, scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes(); };
-  var done = false, finish = function (save) {
-    if (done) return; done = true;
-    var v = inp.value.replace(/\s+/g, ' ').trim(); inp.remove();
-    if (save && v && v !== cur) { set(v); record({label: '빈 레이아웃 이름', undo: function () { set(cur); }, redo: function () { set(v); }}); }
-    else renderDrafts();
+function editLayout(id, changes) {                  // 빈 레이아웃 카드 글(#225): 이름·목적은 그 메모 안(n.value·n.purpose) — 보내면 목적이 AI 의 첫째 브리프 · 되돌리기 한 단계
+  if (!layoutOf(id)) { toast('그 빈 레이아웃이 없어요 — 이미 지워졌어요'); return; }
+  var n0 = layoutOf(id), before = {value: n0.value, purpose: n0.purpose || ''}, after = {value: before.value, purpose: before.purpose};
+  changes.forEach(function (ch) { if (ch.field === 'title') after.value = ch.value; else if (ch.field === 'purpose') after.purpose = ch.value; });
+  var set = function (v) {
+    var n = layoutOf(id); if (!n) return;
+    n.value = v.value; n.purpose = v.purpose; n.note = n.copyOf ? HD.edits.say.copy(v.value, n.screen, scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes();
   };
-  inp.addEventListener('keydown', function (ev) { ev.stopPropagation(); if (ev.key === 'Enter') { ev.preventDefault(); finish(true); } else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } });
-  inp.addEventListener('blur', function () { finish(true); });
-  ['pointerdown', 'click', 'dblclick', 'contextmenu', 'wheel'].forEach(function (ev) { inp.addEventListener(ev, function (x) { x.stopPropagation(); }); });
+  set(after);
+  record({label: '빈 레이아웃 글', undo: function () { set(before); }, redo: function () { set(after); }});
 }
 /* ---------- 카드 고르기(한 번 누르기 · 이동 도구 Ctrl+클릭) · 선택 막대 · 삭제·복제·들어오는 연결 끊기 ---------- */
 var deleted = {};

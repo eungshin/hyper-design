@@ -5,7 +5,8 @@
          ↑/↓ = 칸의 첫/마지막 줄이면 앞/뒤 칸으로 · 빈 새 정책 줄에서 Backspace = 그 줄 지우기 · Esc = 취소 · Ctrl+Enter = 저장
    밖을 누르면 저장, 다른 카드 상자를 열면 열린 상자를 먼저 저장. 붙여넣기는 글만.
    HD.viewCaption.mount(ctx) → {open(cardEl, focus), close(save), isOpen()}  focus = {field: 'title'|'purpose'|'policy', index?}
-   ctx = {values(id) → {title, purpose, policies}(반영 대기 포함 지금 값), badge(cardEl) → 칩 Node|null, commit(id, changes), allowAdd, onClose()} */
+   ctx = {values(id) → {title, purpose, policies}(반영 대기 포함 지금 값), badge(cardEl) → 칩 Node|null, commit(id, changes), allowAdd, onClose(),
+          hint(id) → {title?, purpose?} 빈 칸 안내 글(선택 — 빈 레이아웃은 목적·메모의 몫을 여기서 말한다)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -114,7 +115,7 @@ function mount(ctx) {
     if (cur && !cur.box.contains(e.target)) close(true);
   }
 
-  function build(cardEl, v) {
+  function build(cardEl, v, hint) {
     var box = document.createElement('div');
     box.className = 'capbox'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', '카드 글 고치기');
     var head = document.createElement('div'); head.className = 'capttl';
@@ -123,9 +124,11 @@ function mount(ctx) {
     var title = document.createElement('div');
     title.dataset.f = 'title'; title.className = 'capt'; title.setAttribute('contenteditable', 'true'); title.setAttribute('aria-label', '제목');
     setText(title, v.title); head.appendChild(title);
+    if (hint.title) title.dataset.ph = hint.title;
     var purpose = document.createElement('div');
     purpose.dataset.f = 'purpose'; purpose.className = 'capd'; purpose.setAttribute('contenteditable', 'true'); purpose.setAttribute('aria-label', '설명');
     setText(purpose, v.purpose);
+    purpose.dataset.ph = hint.purpose || '설명 · Shift+Enter 줄바꿈';
     var list = document.createElement('ul'); list.dataset.f = 'policies'; list.className = 'capp';
     (v.policies || []).forEach(function (p) { list.appendChild(policyLi(p, false)); });
     var foot = document.createElement('div'); foot.className = 'capfoot'; foot.textContent = FOOT;
@@ -143,7 +146,7 @@ function mount(ctx) {
     if (!cardEl) return;
     if (cur) { if (cur.card === cardEl) { place(focus); return; } close(true); }
     var id = cardEl.dataset.id, v = ctx.values(id) || {title: '', purpose: '', policies: []};
-    cur = build(cardEl, v); cur.id = id;
+    cur = build(cardEl, v, (ctx.hint && ctx.hint(id)) || {}); cur.id = id;
     document.addEventListener('pointerdown', onOutside, true);
     place(focus);
   }
