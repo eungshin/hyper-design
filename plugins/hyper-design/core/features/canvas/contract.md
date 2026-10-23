@@ -64,9 +64,14 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 
 | 층 | 파일 | 무엇을 | 시간 |
 |---|---|---|---|
-| unit | `tests/test_canvas_modules.py` | 순수 모듈(node): 그래프·길찾기·태그 자리·색·리듀서·설정·카메라 계획·순수성·책임 게이트 | 약 1초 |
+| unit | `tests/test_canvas_modules.py` · `test_canvas_unit_*.py` | 순수 모듈(node)·I/O 없는 Python: 그래프·길찾기·태그 자리·색·리듀서·설정·카메라 계획·순수성·책임 게이트 | 약 5초(`-m unit`) |
+| slow | `test_canvas_unit_*.py` 안의 `@pytest.mark.slow`(build_ref git·실제 빌드 · `/api/watch` 서버) | 하위 프로세스·서버가 드는 것 — unit 에서 빠짐 | 약 7초(`-m slow`) |
 | 브라우저 | `test_canvas_baseline.py`(지금 입력 규칙 고정) · `test_canvas_v2.py` · `test_canvas_edit.py`(편집 기능) | DOM 연결·실제 조작 | 테스트당 1~17초 |
 | 도우미 | `test_canvas_helper.py` | `helper.py` 편집·적용·서버(브라우저 1개) | 약 11초 |
+
+unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 새 테스트는 `@pytest.mark.slow` 를 붙인다(전체 실행에서 돈다). `build_ref.py` 를 고치면 `-m slow`.
+
+**격리(serial)**: `-n` 에서만 가끔 깨지는 테스트는 `tests/conftest.py` 의 `SERIAL` 에 둔다 — `-n` 실행에서는 빠지고(고르지 않음), 전체 실행 뒤 한 번 `pytest tests -m serial`(-n 없이)로 따로 돌린다. 지금: `test_v2_no_vertical_through_cards` · `test_line_click_shows_end_handles_and_drag_retargets`(task 20: -n 4 세 번(276·288·288개)에서 재현되지 않아 원인 미확인 — 다시 깨지면 그때 핀 아래 요소·카드 상자를 잡는다). 원인을 찾아 고치면 `SERIAL` 에서 뺀다.
 
 브라우저 테스트는 영역 표시를 받는다(`tests/conftest.py`의 `BROWSER` 표 — 표에 없는 브라우저 테스트는 수집 단계에서 실패하니, 새 테스트는 표에 한 줄을 더한다):
 `input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(고르기 강조·화면 안 연결) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
@@ -110,6 +115,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 3. 커밋 직전: 위 표의 영역(`-m "unit or 영역"`). 실패하면 고친 뒤 실패한 것만(`--lf`) 다시.
 4. 번호 조각(2.5 · 2 · 2.2 …) 끝: 전체 한 번(약 9분). a·b·c 하위 조각에서는 돌리지 않는다. 실패하면 `--lf` 로 확인하고, 전체를 다시 돌리지 않는다.
    브라우저 테스트가 든 실행(영역·전체)은 `-n 4`(pytest-xdist, 일꾼마다 페이지를 따로 빌드 — test_canvas_edit.py 219초 → 73초)로 나눠 돌린다. 한 테스트만 고칠 때·`--lf` 는 나누지 않는다.
+   `-n` 전체 실행 뒤에는 `-m serial`(-n 없이)을 한 번 더 — 격리 테스트는 `-n` 실행에서 빠져 있다.
    전체 실행에는 `--durations=20` 을 붙여 느린 테스트 상위 목록을 남긴다(따로 프로파일링 실행을 하지 않는다). 큰 실행 전에는 바꾸거나 지운 선택자·id·함수 이름을 테스트에서 grep 해 `-k` 로 먼저 돌린다(전역 규칙 `~/.claude/ctx/testing.md` R54~R56).
 5. 스크린샷은 검문·눈 판정이 필요할 때만 따로 찍는다.
 6. 검토 비용 기록(`tests/tracking/`): 실행은 conftest 가 `runs.json` 에 자동으로 남긴다. 조각을 커밋할 때 `process.json` 에 한 항목(테스트 분·전체 수·게이트 걸림 진짜/잡음·잡은 버그·낭비와 고칠 점), 번호 조각 끝에 `python3 tests/tracking/review.py` 로 한도를 넘은 곳을 보고 규칙을 고친다.
