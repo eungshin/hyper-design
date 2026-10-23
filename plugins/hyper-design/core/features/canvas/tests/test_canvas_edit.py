@@ -2562,7 +2562,13 @@ def test_memo_popup_moves_resizes_and_remembers_place(dpage):
 
 def add_card_memo(pg, c, text):
     pg.keyboard.press("m")                           # 메모 도구로 그 카드 누르기 — 화면 전체 메모
-    pg.mouse.click(c["x"], c["y"])
+    x, y = c["x"], c["y"]
+    for _ in range(10):                              # 올리면 메모 핀(task 11)이 보인다 — 핀이 아닌 카드 자리를 누른다
+        pg.mouse.move(x, y)
+        if pg.evaluate("([x, y]) => !!document.elementFromPoint(x, y).closest('.cover')", [x, y]):
+            break
+        y += 30
+    pg.mouse.click(x, y)
     pg.wait_for_selector("#pop:not([hidden])")
     pg.fill("#pnote", text)
     pg.click("#padd")
