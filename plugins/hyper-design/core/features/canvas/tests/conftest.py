@@ -97,6 +97,8 @@ BROWSER = {
     "test_partly_pending_group_keeps_solid_line_and_marks_tag": ("tools", "links"),
     "test_align_panel_aligns_distributes_and_stacks": ("layers", "tools", "dock"),
     "test_layer_folders_group_rename_arrange_unfolder": ("layers", "tools"),
+    "test_user_tab_stays_and_blank_layout_click_selects": ("dock", "layers", "tools"),
+    "test_layer_folders_move_between_folders_and_blank_layouts": ("layers",),
     # test_canvas_helper.py — 7단계 로컬 도우미
     "test_helper_edit_html_ops": ("helper",),
     "test_helper_apply_backup_rebuild_and_refusals": ("helper",),

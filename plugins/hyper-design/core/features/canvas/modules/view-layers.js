@@ -2,8 +2,10 @@
    줄마다: 눈(숨김) · 이름(누르면 그 카드로 + 고르기, Shift/Ctrl = 고르기에 넣고 빼기) · 메모 수 · 잠금.
    폴더·줄(묶음) 줄: 접기 · 눈(그 아래 화면 모두) · 폴더 아이콘 · 이름(누르면 그 화면 모두 고르기) · 화면 수 ·
      올리면 [가로로 늘어놓기][세로로 늘어놓기], 사용자 폴더는 [폴더 풀기]도. 사용자 폴더 이름 두 번 누르기 = 이름 바꾸기.
-   화면 줄을 끌어 사용자 폴더 줄에 놓으면 그 폴더로, 줄(묶음) 줄에 놓으면 폴더에서 빼기. 폴더는 패널에서만 묶는다(판 카드는 안 움직임).
-   위: 이름 찾기 + 거르기 아이콘(숨긴 것만 · 잠긴 것만 · 메모 있는 것), 아래 막대: 폴더로 묶기 · 빈 레이아웃 · 숨기기 · 잠그기 · 삭제(고른 화면).
+   화면 줄을 끌어 사용자 폴더(머리 줄이든 그 안 화면 줄이든)에 놓으면 그 폴더로, 줄(묶음)에 놓으면 폴더에서 빼기 — 끈 줄이 고른 화면이면 고른 것 모두.
+   끄는 중 나무 위·아래 끝에 가면 저절로 스크롤. 폴더는 패널에서만 묶는다(판 카드는 안 움직임).
+   위: 이름 찾기 + 거르기 아이콘(숨긴 것만 · 잠긴 것만 · 메모 있는 것),
+   아래 막대: 폴더로 묶기 · 폴더로 옮기기(메뉴: 폴더 목록 · 폴더에서 빼기) · 빈 레이아웃 · 숨기기 · 잠그기 · 삭제(고른 화면).
    숨김·잠금·고르기·폴더 상태의 주인은 셸 — 여기는 의도만 보낸다.
    HD.viewLayers.mount(ctx) → {render(), only(f)} · HD.viewLayers.CSS = 셸에 붙일 폴더 모양(문자열)
    ctx = {$, esc, root, tree() → {groups, texts}, state() → {hidden, locked, memo}, picked() → [id],
@@ -25,6 +27,7 @@ var I = {
   fOpen: '<path d="M3 19V6h7l2 2h7v3"/><path d="M3 19l3-8h16l-3 8z"/>',
   fNew: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M12 11v5M9.5 13.5h5"/>',
   fUn: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M10 11.5l4 4M14 11.5l-4 4"/>',
+  fMove: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M9 13.5h6M12.5 11l2.5 2.5-2.5 2.5"/>',
   rowX: '<rect x="2" y="8" width="5" height="8" rx="1"/><rect x="9.5" y="8" width="5" height="8" rx="1"/><rect x="17" y="8" width="5" height="8" rx="1"/>',
   rowY: '<rect x="8" y="2" width="8" height="5" rx="1"/><rect x="8" y="9.5" width="8" height="5" rx="1"/><rect x="8" y="17" width="8" height="5" rx="1"/>'
 };
@@ -41,7 +44,8 @@ function mount(ctx) {
       '<button type="button" data-f="memo" aria-pressed="false" title="메모 있는 것">' + svg(I.memo) + '</button></span></div>' +
     '<div id="lyTree" role="tree" aria-label="레이어"></div>' +
     '<div id="lyBar" role="toolbar" aria-label="고른 화면">' +
-      (FD ? '<button type="button" data-act="folder" title="폴더로 묶기" aria-label="폴더로 묶기">' + svg(I.fNew) + '</button>' : '') +
+      (FD ? '<button type="button" data-act="folder" title="폴더로 묶기" aria-label="폴더로 묶기">' + svg(I.fNew) + '</button>' +
+            '<button type="button" data-act="move" title="폴더로 옮기기" aria-label="폴더로 옮기기" aria-haspopup="menu">' + svg(I.fMove) + '</button>' : '') +
       '<button type="button" data-act="layout" title="빈 레이아웃 (N)">' + svg(I.layout) + '</button>' +
       '<button type="button" data-act="hide" title="숨기기">' + svg(I.off) + '</button>' +
       '<button type="button" data-act="lock" title="잠그기 · 풀기">' + svg(I.lock) + '</button>' +
@@ -85,6 +89,7 @@ function mount(ctx) {
     tree.innerHTML = shown.length ? shown.map(function (x) { return rowHtml(x, picked); }).join('') : '<p class="dkp-empty">맞는 레이어가 없어요</p>';
     $$f().forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.f === only)); });
     var fb = bar.querySelector('[data-act="folder"]'); if (fb) fb.disabled = !ids.length;
+    var mb = bar.querySelector('[data-act="move"]'); if (mb) mb.disabled = !ids.length;
   }
   function $$f() { return Array.prototype.slice.call(fbar.querySelectorAll('button[data-f]')); }
   function kids(headId) { return list.filter(function (x) { return x.kind === 'screen' && (x.folder || x.row) === headId; }).map(function (x) { return x.id; }); }
@@ -141,18 +146,40 @@ function mount(ctx) {
     if (r) { e.preventDefault(); rename(r.dataset.ly); }
   });
 
-  // 끌어 옮기기(HTML5) — 화면 줄 → 사용자 폴더 줄(넣기) · 줄(묶음) 줄(빼기)
-  var dragId = null;
+  // 끌어 옮기기(HTML5) — 화면 줄 → 사용자 폴더(넣기) · 줄(묶음)(빼기). 놓는 곳은 머리 줄이든 그 안 화면 줄이든 같은 묶음
+  var dragId = null, dragIds = null;
   function clearDrop() { Array.prototype.forEach.call(tree.querySelectorAll('.ly-drop'), function (n) { n.classList.remove('ly-drop'); }); }
-  function target(e) { var r = e.target.closest && e.target.closest('[data-kind="folder"],[data-kind="row"]'); return r && FD && dragId ? r : null; }
+  function headEl(id) {
+    var heads = tree.querySelectorAll('[data-kind="folder"],[data-kind="row"]');
+    for (var i = 0; i < heads.length; i++) if (heads[i].dataset.ly === id) return heads[i];
+    return null;
+  }
+  function target(e) {                               // → 그 묶음의 머리 줄(폴더·줄)
+    if (!FD || !dragId) return null;
+    var r = e.target.closest && e.target.closest('[data-ly]'); if (!r) return null;
+    if (r.dataset.kind === 'folder' || r.dataset.kind === 'row') return r;
+    var x = item(r.dataset.ly); if (!x || x.kind !== 'screen') return null;
+    var h = x.folder || x.row; return h ? headEl(h) : null;
+  }
+  function moveTo(head, ids) {                        // head = 폴더 id(넣기) · 줄 id 또는 ''(빼기)
+    var f = fstate().folders.filter(function (g) { return g.id === head; })[0];
+    if (f) { var add = ids.filter(function (id) { return f.ids.indexOf(id) < 0; }); if (add.length) send({type: 'add', id: head, ids: add}); }
+    else { var out = ids.filter(function (id) { var x = item(id); return x && x.folder; }); if (out.length) send({type: 'take', ids: out}); }
+  }
+  function autoScroll(e) {                           // 끄는 중 나무 끝 가까이 = 그쪽으로 스크롤(긴 목록에서도 폴더에 닿게)
+    var r = tree.getBoundingClientRect(), edge = 28;
+    if (e.clientY < r.top + edge) tree.scrollTop -= 14; else if (e.clientY > r.bottom - edge) tree.scrollTop += 14;
+  }
   tree.addEventListener('dragstart', function (e) {
     var r = e.target.closest && e.target.closest('[data-kind="screen"]');
     if (!r) return;
     if (!FD) { e.preventDefault(); return; }   // 폴더가 없으면 끌 곳도 없다
     dragId = r.dataset.ly;
+    var pk = ctx.picked(); dragIds = pk.indexOf(dragId) >= 0 ? pk.slice() : [dragId];   // 고른 줄을 끌면 고른 것 모두
     try { e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
   });
   tree.addEventListener('dragover', function (e) {
+    if (dragId) autoScroll(e);
     var r = target(e); if (!r) return;
     e.preventDefault();
     try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
@@ -162,20 +189,42 @@ function mount(ctx) {
     var r = target(e); if (r && !r.contains(e.relatedTarget)) r.classList.remove('ly-drop');
   });
   tree.addEventListener('drop', function (e) {
-    var r = target(e), id = dragId; clearDrop(); dragId = null;
+    var r = target(e), ids = dragIds || []; clearDrop(); dragId = null; dragIds = null;
     if (!r) return;
     e.preventDefault();
-    var x = item(id); if (!x) return;
-    if (r.dataset.kind === 'folder') { if (x.folder !== r.dataset.ly) send({type: 'add', id: r.dataset.ly, ids: [id]}); }
-    else if (x.folder) send({type: 'take', ids: [id]});
+    moveTo(r.dataset.kind === 'folder' ? r.dataset.ly : '', ids);
   });
-  tree.addEventListener('dragend', function () { clearDrop(); dragId = null; });
+  tree.addEventListener('dragend', function () { clearDrop(); dragId = null; dragIds = null; });
+
+  // [폴더로 옮기기] 메뉴 — 끌지 않고 고른 화면을 폴더로(폴더 목록 · 폴더에서 빼기)
+  var menu = null;
+  function closeMenu() { if (menu) { menu.remove(); menu = null; document.removeEventListener('pointerdown', outside, true); } }
+  function outside(e) { if (menu && !menu.contains(e.target) && !(e.target.closest && e.target.closest('#lyBar [data-act="move"]'))) closeMenu(); }
+  function openMenu(btn) {
+    closeMenu();
+    var fs = fstate().folders;
+    menu = document.createElement('div'); menu.className = 'ly-menu'; menu.setAttribute('role', 'menu');
+    menu.innerHTML = fs.map(function (f) { return '<button type="button" role="menuitem" data-to="' + esc(f.id) + '">' + svg(I.fShut) + '<span>' + esc(f.name) + '</span></button>'; }).join('') +
+      (fs.length ? '<hr>' : '<p class="dkp-empty">폴더가 없어요 — 먼저 폴더로 묶기</p>') +
+      '<button type="button" role="menuitem" data-to="">' + svg(I.fUn) + '<span>폴더에서 빼기</span></button>';
+    document.body.appendChild(menu);
+    var b = btn.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, b.right - menu.offsetWidth)) + 'px';
+    menu.style.top = Math.max(8, b.top - menu.offsetHeight - 4) + 'px';
+    menu.addEventListener('click', function (e) {
+      var it = e.target.closest('[data-to]'); if (!it) return;
+      var ids = ctx.picked(); closeMenu(); moveTo(it.dataset.to, ids);
+    });
+    ['pointerdown', 'keydown', 'wheel'].forEach(function (ev) { menu.addEventListener(ev, function (e) { e.stopPropagation(); if (ev === 'keydown' && e.key === 'Escape') closeMenu(); }); });
+    document.addEventListener('pointerdown', outside, true);
+  }
 
   bar.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var ids = ctx.picked(), a = b.dataset.act;
     if (a === 'layout') { ctx.addLayout(); return; }
     if (!ids.length) return;
+    if (a === 'move') { if (menu) closeMenu(); else openMenu(b); return; }
     if (a === 'folder') {
       if (!FD) return;
       q.value = ''; only = null;   // 새 폴더가 거르기에 가리지 않게
@@ -202,7 +251,11 @@ var CSS =
   '.ly-r.screen[draggable="true"]{cursor:grab}\n' +
   '.ly-r.ly-drop{background:#E4E4E0;box-shadow:inset 0 0 0 1px #9a9a95}\n' +
   '.ly-rename{flex:1;min-width:0;height:22px;border:1px solid #9a9a95;border-radius:4px;padding:0 4px;font:inherit;font-weight:400}\n' +
-  '#lyBar button:disabled{opacity:.35;cursor:default}\n';
+  '#lyBar button:disabled{opacity:.35;cursor:default}\n' +
+  '.ly-menu{position:fixed;z-index:60;min-width:160px;max-height:50vh;overflow:auto;background:#fff;border:1px solid #d6d6d1;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:4px}\n' +
+  '.ly-menu button{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px;border:0;border-radius:5px;background:none;font:13px system-ui,-apple-system,sans-serif;color:#2b2b29;cursor:pointer;text-align:left}\n' +
+  '.ly-menu button:hover{background:#ecece8}.ly-menu svg{width:16px;height:16px;fill:none;stroke:#777;stroke-width:1.6;flex:none}\n' +
+  '.ly-menu hr{border:0;border-top:1px solid #eee;margin:4px 0}.ly-menu .dkp-empty{margin:4px 8px;font-size:12px}\n';
 
 HD.viewLayers = {mount: mount, CSS: CSS};
 })();

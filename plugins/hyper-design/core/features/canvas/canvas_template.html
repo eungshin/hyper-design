@@ -946,7 +946,7 @@ pane.addEventListener('click', function (e) {
     }, tool === 'text');
     return;
   }
-  if (mc && !e.shiftKey && (tool === 'memo' || mc.classList.contains('draft'))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }
+  if (mc && !e.shiftKey && (tool === 'memo' || (mc.classList.contains('draft') && e.detail >= 2))) { e.preventDefault(); e.stopPropagation(); openCardMemo(mc.dataset.id); return; }   // 빈 레이아웃: 한 번 = 고르기, 두 번 = 메모(10-24)
   var an = cl('.pres');
   if (an) { e.preventDefault(); e.stopPropagation(); openModal(an.dataset.file, an.dataset.title); return; }   // ▶ 보기 = 실제로 눌러 보기
   var c = cl('.cover');
@@ -1222,9 +1222,6 @@ VA = HD.viewAlign.mount({root: $('#pAlign'), $: $, esc: esc, key: 'hd-align-gap'
 $('#legend').addEventListener('click', function (e) {   // 범례 줄 Ctrl+클릭 = 그 대상으로 카메라(범례가 판 밖이라 판의 클릭 처리 대신)
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); }
 }, true);
-if (window.MutationObserver) new MutationObserver(function () {   // 연결 보기가 범례를 채우면 연결 탭을 앞으로
-  if (!$('#legend').hidden && !VD.isShown('links')) VD.activate('links');
-}).observe($('#legend'), {attributes: true, attributeFilter: ['hidden']});
 window.HDCanvas = {routeCurve: HD.route.routeCurve, camera: HD.camera, style: HD.lineStyle,
                    view: function () { return {z: z, tx: tx, ty: ty}; }};
 
@@ -1681,7 +1678,7 @@ function renderDrafts(ids) {                         // 메모의 빈 레이아�
       rowsEl.appendChild(c);
     }
     c.dataset.x = n.x; c.dataset.y = n.y;
-    var cv = $('.cover', c); cv.dataset.title = n.value; cv.setAttribute('aria-label', n.value + ' — 빈 레이아웃(누르면 메모)');
+    var cv = $('.cover', c); cv.dataset.title = n.value; cv.setAttribute('aria-label', n.value + ' — 빈 레이아웃(두 번 누르면 메모)');
     if (!$('input', $('.ftitle', c))) $('.ftitle', c).textContent = n.value;
     placeCard(c);
   });
@@ -1921,7 +1918,7 @@ var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: ci
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   var c = VN.render(NS.list(), ids), was = notesShown;
   notesShown = c;
-  if (VD) { if (was && c.memos > was.memos) VD.activate('notes'); else if (was && c.pending > was.pending) VD.activate('pending'); else VD.render(); }   // 새로 생긴 쪽 탭을 앞으로(D3), 아니면 탭 숫자만
+  if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)
   if (ORIG) { renderDrafts(ids); paintDeleted(ids); paintCardText(ids); sendAllPending(ids); }   // ORIG 전(시작 중)에는 아직 그릴 카드 글이 없다
   if (VL && VL.refresh) VL.refresh();
 }

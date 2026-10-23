@@ -685,7 +685,9 @@ def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
     assert n["screen"] == p["id"] and n["intent"] == "change" and q["id"] in n["note"], n
-    assert dpage.locator("#pend").is_visible(), "잇기는 기계적 편집 — 반영 대기 패널이 앞으로(E5)"
+    # 잇기는 기계적 편집 — 메모가 아니라 반영 대기 목록에(E5). 탭은 사용자가 고른 그대로(10-24: 저절로 앞으로 오지 않음)
+    dpage.click('#dock .dk-tab[data-p="pending"]')
+    assert dpage.locator("#pend").is_visible() and q["id"] in dpage.text_content("#plist"), "반영 대기 목록에 잇기"
     assert "트리거" in dpage.get_attribute("#undo", "title")
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
@@ -2409,6 +2411,84 @@ def test_layer_folders_group_rename_arrange_unfolder(dpage):
     assert dpage.evaluate(FOLDER_LINES_JS) == [] and dpage.evaluate(IN_FOLDER_JS) == []
     cards = dpage.evaluate("[...document.querySelectorAll('#rows .card:not(.del)')].map(c => c.dataset.id)")
     assert [l["id"] for l in layers(dpage) if l["kind"] == "screen"] == cards, "화면은 원래 줄 아래로"
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    assert not errs, errs
+
+
+ACTIVE_TABS_JS = "[...document.querySelectorAll('#dock .dk-tab.on')].map(t => t.dataset.p)"
+DROP_DRAFTS_JS = """Object.keys(localStorage).filter(k => k.startsWith('hd-notes:')).forEach(k => {
+    const l = JSON.parse(localStorage.getItem(k) || '[]'); localStorage.setItem(k, JSON.stringify(l.filter(n => n.edit !== 'new-screen'))); })"""
+
+
+def test_user_tab_stays_and_blank_layout_click_selects(dpage):
+    """사용자가 고른 도크 탭은 그대로 — 빈 레이아웃을 놓아 메모·반영 대기가 늘어도 다른 탭이 앞으로 오지 않는다(D3 를 바꿈, 10-24 피드백).
+    빈 레이아웃 카드는 한 번 누르면 고르기만(입력창 없음), 두 번 누르면 메모 입력."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    dpage.keyboard.press("Escape")
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    before = dpage.evaluate(ACTIVE_TABS_JS)
+    assert "layers" in before, before
+    dpage.click('#lyBar [data-act="layout"]')
+    dpage.wait_for_selector(".card.draft")
+    dpage.keyboard.press("Escape")
+    assert dpage.evaluate(ACTIVE_TABS_JS) == before, ("고른 탭이 그대로", before, dpage.evaluate(ACTIVE_TABS_JS))
+    did = dpage.evaluate("document.querySelector('.card.draft').dataset.id")
+    dpage.keyboard.press("v")
+    cv = dpage.locator(f'.card.draft[data-id="{did}"] .cover').bounding_box()
+    dpage.mouse.click(cv["x"] + cv["width"] / 2, cv["y"] + cv["height"] / 2)
+    dpage.wait_for_timeout(150)
+    assert dpage.evaluate("!['TEXTAREA', 'INPUT'].includes(document.activeElement.tagName)"), "한 번 누르기 = 입력창 없음"
+    assert dpage.evaluate(f"document.querySelector('.card.draft[data-id=\"{did}\"]').classList.contains('picked')"), "한 번 누르기 = 고르기"
+    dpage.mouse.dblclick(cv["x"] + cv["width"] / 2, cv["y"] + cv["height"] / 2)
+    dpage.wait_for_function("document.activeElement && document.activeElement.tagName === 'TEXTAREA'")
+    dpage.keyboard.press("Escape")
+    dpage.evaluate(DROP_DRAFTS_JS)
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    assert not errs, errs
+
+
+def test_layer_folders_move_between_folders_and_blank_layouts(dpage):
+    """H17 보강(10-24 피드백): 화면을 다른 폴더로 옮길 수 있다 — 폴더 안 화면 줄 위에 놓아도 그 폴더로 · 빈 레이아웃도 폴더에 ·
+    끌지 않고 [폴더로 옮기기] 메뉴로 고른 화면을 다른 폴더로 · '폴더에서 빼기'."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.evaluate(CLEAR_T7)
+    reload(dpage)
+    a, b = dpage.evaluate(MOVABLE_JS, 2)
+    dpage.keyboard.press("Escape")
+    dpage.click('#dock .dk-tab[data-p="layers"]')
+    dpage.click('#lyBar [data-act="layout"]')
+    dpage.wait_for_selector(".card.draft")
+    dpage.keyboard.press("Escape")
+    d = dpage.evaluate("document.querySelector('.card.draft').dataset.id")
+    for sid in (a, b):                                   # 폴더 둘: f1 = a, f2 = b
+        dpage.keyboard.press("Escape")
+        dpage.click(f'#lyTree [data-ly="{sid}"] .ly-name', modifiers=["Control"])
+        dpage.click('#lyBar [data-act="folder"]')
+        dpage.keyboard.press("Enter")
+    fold = lambda: {f["id"]: f["count"] for f in dpage.evaluate(FOLDER_LINES_JS)}
+    assert fold() == {"f1": "1", "f2": "1"}, fold()
+    # 빈 레이아웃 줄 → 폴더 f1 안 화면 줄(a) 위에 놓기 = f1 로
+    dpage.evaluate(DRAG_JS, [d, f'#lyTree [data-ly="{a}"]'])
+    assert fold() == {"f1": "2", "f2": "1"}, ("빈 레이아웃이 f1 로", fold())
+    # a 를 f2 안 화면 줄(b) 위에 놓기 = 다른 폴더로
+    dpage.evaluate(DRAG_JS, [a, f'#lyTree [data-ly="{b}"]'])
+    assert fold() == {"f1": "1", "f2": "2"}, ("a 가 f2 로", fold())
+    # 메뉴: 고른 b 를 f1 로
+    dpage.keyboard.press("Escape")
+    dpage.click(f'#lyTree [data-ly="{b}"] .ly-name', modifiers=["Control"])
+    dpage.click('#lyBar [data-act="move"]')
+    dpage.click('.ly-menu [data-to="f1"]')
+    assert fold() == {"f1": "2", "f2": "1"}, ("메뉴로 b 가 f1 로", fold())
+    dpage.click('#lyBar [data-act="move"]')
+    dpage.click('.ly-menu [data-to=""]')
+    assert fold() == {"f1": "1", "f2": "1"}, ("폴더에서 빼기", fold())
+    dpage.evaluate(DROP_DRAFTS_JS)
     dpage.evaluate(CLEAR_T7)
     reload(dpage)
     assert not errs, errs
