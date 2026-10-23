@@ -33,7 +33,8 @@ description: hyper-design 캔버스에서 '보내기'로 복사한 메모를 화
 - 답할 때 `<out>/screens/<screen>.html`·`<out>/screens.json`·`<out>/decisions.json`을 필요한 만큼만 읽는다. 전문 용어 금지.
 
 ### 3. 고치기 (`intent=change`)
-- 화면별로 묶는다. 고칠 화면 id를 모아 `python3 $SK/features/pack/pack.py <out> --mode revise --screens <id1,id2,…>` → `<out>/packs/plan.json`의 pack마다 하나씩.
+- 먼저 항목마다 `parts: existing | new`를 정한다. new = `<out>/components.css`·COMPONENTS에 없는 레이아웃 부품·클래스가 필요한 요청(블록 가운데 정렬·구분선·스크롤 목록 등). new는 screen-reviser에게 보내지 않는다 — 메인이 `components.css`를 `<out>/.hd-history/fix-components.css`로 복사해 두고, 디자인 토큰(`var(--…)`)만 써서 부품을 더한 뒤 화면 파일을 Edit.
+- existing은 화면별로 묶는다. 고칠 화면 id를 모아 `python3 $SK/features/pack/pack.py <out> --mode revise --screens <id1,id2,…>` → `<out>/packs/plan.json`의 pack마다 하나씩.
 - pack마다 서브에이전트 `hyper-design:screen-reviser`를 띄운다 — **한 메시지에 최대 5개, `model` 인자는 넣지 않는다**(정의 파일이 haiku로 정한다). 5개를 넘으면 다음 메시지에서 나머지.
 - 프롬프트 형식:
 
@@ -48,13 +49,15 @@ PACK=<pack 절대경로>
 - `hyper-design:screen-reviser`를 서브에이전트 종류로 쓸 수 없으면 일반 서브에이전트를 `model: "haiku"`로 띄우고, 프롬프트 맨 위에 `$SK/../agents/screen-reviser.md`의 본문(입력·순서·규칙·보고)을 그대로 붙인다.
 
 ### 4. 확인
-- 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/features/canvas/build_canvas.py <out>`.
+- 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/features/canvas/build_ref.py <out>`(커밋된 캔버스 코드로 빌드 — 작업 트리의 `build_canvas.py`를 다른 세션이 고치는 중이어도 깨지지 않는다).
+- 공용 CSS(`components.css`·`tokens.css`)를 고쳤으면 `python3 $SK/scripts/class_users.py <out> --css-old <out>/.hd-history/fix-components.css --css-new <out>/components.css`(클래스를 알면 `--classes a,b`)로 그 클래스를 쓰는 화면을 모두 찾아, 고친 화면과 함께 `python3 $SK/scripts/audit.py <out> --shots <out>/.shots` 캡처로 본다 — 고친 화면만 보지 않는다.
 - 빌드 뒤 캔버스 열기는 go 의 '캔버스 열기'와 같다(`helper.py <out> --no-open` 백그라운드 · `<out>/.hd-helper.json` 의 주소가 응답하면 다시 띄우지 않는다).
-- selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다.
+- selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다. `needs-part: <무엇>`은 3단계 분류가 틀린 것 — 메인이 new처럼 처리한다.
 
 ### 5. 마지막 메시지
-- 항목마다 한 줄: `<번호> · done` / `<번호> · answered` / `<번호> · not found (이유 한마디)`.
-- 안내 한 줄: "캔버스에서 '보낸 것 지우기'를 누르면 반영된 메모가 정리돼요." + 여는 주소(`http://127.0.0.1…?hd=…`)
+- 메모 닫기: `python3 $SK/features/hd/hd.py ls`가 되고 이 `<out>`이 목록에 있으면, 처리한 메모마다(번호는 `hd.py notes --out <out> --sent`에서 화면·글로 찾는다) `hd.py reply <screen>#<no> --out <out> --kind …`: 반영됨 `--what … --screens a,b --captured yes|no`(4단계 캡처) · 일부 `--done … --left …` · 대체됨 `--where …` · 질문 메모는 답변 `--text …` · 미루면 조용히 넘기지 않고 질문 `--question … --choice A --choice B`.
+- `hd`가 안 되면 항목마다 한 줄: `<번호> · done` / `<번호> · answered` / `<번호> · not found (이유 한마디)`.
+- 안내 한 줄 + 여는 주소(`http://127.0.0.1…?hd=…`): hd로 닫았으면 "메모마다 결과가 붙었어요.", 아니면 "캔버스에서 '보낸 것 완료로'를 누르면 반영된 메모가 정리돼요."
 - 마지막 줄: `[[DONE <out>/index.html]]` — 이 줄 없이 턴을 끝내면 미완성으로 처리된다.
 
 ## 참고

@@ -40,7 +40,7 @@ def test_frontmatter():
 
 def test_body_refs():
     _, body = _split()
-    for s in ("pack.py", "--mode revise", "hyper-design:screen-reviser", "selfcheck.py", "build_canvas.py"):
+    for s in ("pack.py", "--mode revise", "hyper-design:screen-reviser", "selfcheck.py", "build_ref.py", "class_users.py", "hd.py reply", "--captured"):
         assert s in body, s
     assert 'model: "opus"' not in body
     assert len(SKILL.read_text(encoding="utf-8").splitlines()) <= 80
