@@ -23,6 +23,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - `folders`(Model)·`layers`(Model, 폴더 줄)·`view-layers`(View) — 레이어 폴더(H17): 패널에서만 묶음(판 카드·화면 파일 그대로, 키 `hd-folders:`), 데이터 줄 = 고정 폴더, 폴더·줄의 [가로로/세로로 늘어놓기]는 정렬 패널 간격으로 셸 `arrangeCards`
 - `pop-place`(Model)·`view-pop-place`(View) — 메모 창(`#pop`) 틀(#223): 머리 줄 끌어 옮기기·오른쪽 아래 모서리 크기(가장 작게 260×160, 창 안으로). 한 번 옮기거나 키우면 다음부터 늘 그 자리(키 `hd-pop`, 모든 캔버스 공용), 머리 줄 두 번 누르기 = 자동 자리. 열린 동안 대상 카드에 `.memo-target` 테두리. 자동 자리 계산은 셸 `placePop`
 - `view-thread`(View) — 카드 메모 배지 → 그 화면 메모 묶음(#224, Word 메모처럼): 배지(`role=button`, `view-notes` 가 그림) 옆 `#thread` 에 요소·종류·글 전체, 줄마다 [고치기]·[지우기], 아래 [메모 추가]. 고치기·지우기는 메모 패널과 같은 셸 `editMemo`·`delMemo`(지우기 = 되돌리기 한 단계), 더하기 = `openCardMemo`. 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc·바깥 누르기 = 닫기, 메모가 바뀌면 `renderNotes` 가 `refresh`
+- `state-file`(Model)·`view-state-sync`(View) — 프로젝트 상태 파일(#228): 프로젝트별 키(`hd-notes:`·`hd-card-pos:`·`hd-edit-log:`·`hd-link-names:`·`hd-hidden:`·`hd-locked:`·`hd-folders:`·`hd-busy:`, 모두 `hashStr(KEYPATH)`)의 읽기·쓰기 주인은 `view-state-sync` 하나(셸·모듈은 `ST.getItem`·`ST.setItem` 을 받는다). 도우미로 열면 `<out>/.hd-canvas.json` 이 진실 원천이고 브라우저 저장소는 캐시: 시작 때 `window.__hdState`(동기) — 파일이 있으면 파일이 이기고 캐시를 덮음, 파일이 없고 브라우저에 값이 있으면 한 번 올림(rev 0 → 1). 쓰기는 300ms 모아 바뀐 키만 `PUT /api/state`, 닫을 때(`pagehide`) 마저 보냄. 409 = 이번 변경을 버리고 토스트 "다른 곳에서 바뀌어 다시 불러왔어요" 뒤 다시 불러오기. file://·토큰 없음·깨진 스냅숏(`[hd]` 경고) = 브라우저 저장소 그대로. 전역 설정 키(`hd-dock`·`hd-pop`·`hd-canvas-prefs`·`hd-themes`…)는 파일로 가지 않는다
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 오른쪽 패널 도크: 배치는 `dock.js`(키 `hd-dock`, 모든 캔버스 공용), 그리기·끌기는 `view-dock.js`. 패널(`#pLinks`·`#pShow`·`#pNotes`·`#pLayers`)은 옮겨 붙일 뿐 안의 id(`#legend`·`#notes`·`#hidl`)와 그 `hidden` 뜻은 그대로다
 - `edits.js` — 편집 메모 하나가 진실 원천: 반영 대기 선·빈 레이아웃·글자 미리보기·도우미가 바로 쓸 것은 모두 메모에서 계산한다. 요청문(`request`)에서 요청 글의 줄바꿈은 `요청: ` 글자 자리에 맞춰 들여 쓴 다음 줄로 남는다(한 줄 메모는 예전 그대로)
@@ -52,6 +53,8 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
 - `POST /api/watch {files}` → `{mtimes: {file: mtime|null}}`(out 밖·없는 파일 = null) — AI 수정 중 덮개가 끝을 아는 유일한 신호
 - 도우미로 열어도 저장 키는 file://로 열 때와 같다(`window.__hdKeyPath`). 도우미가 없거나 꺼져 있으면 '보내기'는 지금처럼 요청문을 복사한다
+- 프로젝트 상태 파일 `<out>/.hd-canvas.json` = `{"version":1, "rev":N, "updated":"<iso>", "state":{"notes":…, "card-pos":…, "edit-log":…, "link-names":…, "hidden":…, "locked":…, "folders":…, "busy":…}}`(값은 풀어 둔 JSON, 해시 없는 이름, 모르는 키는 그대로) — 터미널 에이전트(`hd`)가 읽는 곳. `index.html` 을 줄 때 `window.__hdState = {rev, state}` 를 끼워 넣는다
+- `GET /api/state` → `{rev, state}`(없으면 rev 0) · `PUT /api/state {rev, state:{바뀐 이름: 값|null(지움)}}` → rev 가 파일과 같으면 합쳐 `rev+1` 로 쓰고 `{rev}`, 다르면 `409 {rev, state}` · 깨진 JSON 400 · 2 MB 넘음 413. 둘 다 `X-HD-Token`. 쓰기는 임시 파일 + `os.replace`, 바로 앞 것 하나는 `.hd-canvas.json.bak`. 깨진 상태 파일은 `.hd-canvas.json.corrupt-<시각>` 으로 옮기고 한 줄 남긴 뒤 빈 상태(도우미는 멈추지 않는다). 점으로 시작하는 파일이라 정적 경로로는 내주지 않는다
 
 ## 테스트 층 (캔버스를 고치는 모든 세션이 따른다)
 
@@ -84,6 +87,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 | `canvas_template.html` 이동·확대·입력 | `input` |
 | `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
 | `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판의 선 하나뿐: 쌍마다 하나·줄 색·번호·태그·강조·자르기 맞춤·보이기/굵기/투명도/색) | `unit or flow or links or tools` |
+| `modules/state-file.js` · `view-state-sync.js`(프로젝트별 키 = 상태 파일 · 캐시 · 409) · `helper.py` `/api/state` | `unit or helper or notes` |
 | `modules/busy.js` · `view-busy.js`(AI 수정 중 덮개: 터미널로 넘긴 화면 · 화면 파일이 바뀌면 걷힘 · [걷기]) · `helper.py` `/api/watch` | `unit or helper or notes` |
 | `modules/line-ends.js` · `view-line-ends.js`(선 누르기 = 쌍 강조 + 도착 끝 손잡이 · 끌어 놓기 = 도착 바꾸기) | `unit or flow or tools` |
 | `modules/caption.js` · `view-caption.js`(카드 아래 글 한 상자: 두 번 누르기·글자 도구·카드 메뉴 이름/설명 → 바뀐 칸마다 반영 대기, 되돌리기 한 번 · 빈 레이아웃 이름·목적 = 셸 `editLayout`) | `unit or tools or notes` |
