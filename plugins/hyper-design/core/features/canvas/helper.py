@@ -29,6 +29,12 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   GET /api/projects                                           → `hd projects --json` 과 같은 줄 [{name, out, state: running|off|missing, url, pid, last_opened}]
   POST /api/open {name, agent?}                               → {name, out, url, pid, agent, reused} — `hd open` 과 같은 hd_client.open_project(브라우저 없음).
     agent 기본 = 이 도우미의 지금 agent · 모르는 이름·없어진 out 404 {error} · 빌드·띄우기 실패 500 {error}
+  POST /api/claim {screen, by?, note?}                       → {rev, screen, file} — `hd claim`: state.busy 에 cli 덮개 {via:'cli', since, file, mtime(지금 파일 시각), by?, note?}
+    를 늘 최신 파일에 넣고 rev+1(rev 를 받지 않는다 — /api/reply 와 같은 까닭: 쓰는 곳 하나·자물쇠 하나, CLI 가 409 를 다시 시도할 일이 없다). 모르는 화면 404 · 칸 오류 400
+  POST /api/release {screen}                                  → {rev, released: bool} — `hd release`: 그 덮개를 걷는다(없으면 released false, 쓰지 않음)
+  GET /api/files?since=N                                      → {seq, changed:[screen]} — 도우미가 1초마다 screens.json 에 적힌 화면 파일(out 안만) mtime 을 보고,
+    바뀔 때마다 seq+1. changed = since 보다 뒤에 바뀐 화면(since 없거나 -1 = 기준만, changed []). 캔버스는 그 카드만 다시 싣는다
+  예) curl -X POST -H "X-HD-Token: …" -d '{"screen":"home","note":"버튼 고치는 중"}' http://127.0.0.1:PORT/api/claim
   떠 있는 표지: ~/.hyper-design/active/<pid>.json = {pid, project, out, url, token, port, agent, started} (HD_HOME 으로 바꿈) — `hd ls` 가 읽는다. 정상 종료 때 지운다.
   시작할 때 out 이 프로젝트 목록(~/.hyper-design/projects.json, 링크만)에 없으면 넣는다 — 연 캔버스는 나중에 `hd open <이름>` 으로 다시 연다.
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
@@ -613,6 +619,113 @@ def state_inject(out):                               # 페이지에 끼워 넣�
     return "<script>window.__hdState=%s;</script>" % json.dumps(state_load(out), ensure_ascii=False).replace("<", "\\u003c")
 
 
+def claim_post(out, body, now_ms=None):
+    """POST /api/claim 본문 {screen, by?, note?} → (code, 답). 최신 상태 파일 state.busy 에 cli 덮개를 넣고 rev+1."""
+    if not isinstance(body, dict):
+        return 400, {"error": "{screen, by?, note?} 가 아니에요"}
+    sid, by, note = body.get("screen"), body.get("by"), body.get("note")
+    err = hd_model.claim_error(sid, by, note)
+    if err:
+        return 400, {"error": err}
+    try:
+        files = _screen_files(json.loads((pathlib.Path(out) / "screens.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return 500, {"error": "screens.json 을 읽지 못했어요: %s" % e}
+    if sid not in files:
+        return 404, {"error": "없는 화면: %s" % sid}
+    f = pathlib.Path(out).resolve() / files[sid]
+    mtime = f.stat().st_mtime if _inside(pathlib.Path(out).resolve(), f) and f.is_file() else None
+    cur = state_load(out)
+    busy, warns = hd_model.claim(cur["state"].get("busy"), sid, files[sid], int(now_ms if now_ms is not None else datetime.datetime.now().timestamp() * 1000),
+                                 mtime, by, note)
+    for w in warns:
+        print(w, file=sys.stderr, flush=True)
+    rev = _state_save(out, cur["rev"] + 1, dict(cur["state"], busy=busy))
+    return 200, {"rev": rev, "screen": sid, "file": files[sid]}
+
+
+def release_post(out, body):
+    """POST /api/release 본문 {screen} → (code, 답). 덮개가 있으면 걷고 rev+1, 없으면 released false(쓰지 않음)."""
+    if not isinstance(body, dict) or not isinstance(body.get("screen"), str) or not body["screen"]:
+        return 400, {"error": "screen: 화면 id 가 없어요"}
+    cur = state_load(out)
+    busy, gone, warns = hd_model.release(cur["state"].get("busy"), body["screen"])
+    for w in warns:
+        print(w, file=sys.stderr, flush=True)
+    if not gone:
+        return 200, {"rev": cur["rev"], "released": False}
+    return 200, {"rev": _state_save(out, cur["rev"] + 1, dict(cur["state"], busy=busy)), "released": True}
+
+
+# ---------------------------------------------------------------- 화면 파일 지켜보기(#254): 1초마다 mtime → 바뀐 화면마다 seq
+WATCH_EVERY = 1.0
+
+
+class FileWatch:
+    """화면 → mtime 을 받아 바뀐 화면을 seq 로 적는다. tick 은 I/O 가 없다(unit 테스트) — 파일을 보는 일은 scan()."""
+    def __init__(self):
+        self.seq, self.last, self.at = 0, None, {}       # at: 화면 → 마지막으로 바뀐 seq
+        self._lock = threading.Lock()
+
+    def tick(self, mtimes):
+        """mtimes = {화면: mtime|None} → 이번에 바뀐 화면 목록(처음 = 기준만, []). 생김·없어짐·시각 바뀜 = 바뀜."""
+        with self._lock:
+            prev, self.last = self.last, dict(mtimes)
+            if prev is None:
+                return []
+            changed = sorted(k for k in set(prev) | set(mtimes) if prev.get(k) != mtimes.get(k) and k in mtimes)
+            if changed:
+                self.seq += 1
+                for k in changed:
+                    self.at[k] = self.seq
+            return changed
+
+    def absorb(self, mtimes):
+        """도우미가 스스로 쓴 뒤(apply·delete·restore) — 지금 시각을 기준으로만 삼고 알리지 않는다(캔버스가 이미 그 카드를 다시 싣는다)."""
+        with self._lock:
+            self.last = dict(mtimes)
+
+    def changes(self, since):
+        """since 보다 뒤에 바뀐 화면 → {seq, changed}. since < 0 = 기준만."""
+        with self._lock:
+            if since is None or since < 0:
+                return {"seq": self.seq, "changed": []}
+            return {"seq": self.seq, "changed": sorted(k for k, s in self.at.items() if s > since)}
+
+
+def scan(out, cache):
+    """screens.json 에 적힌 화면 파일(out 안만) → {화면: mtime|None} | None(screens.json 을 못 읽음 — [hd] 한 줄). cache = {'sj': (mtime, files)} — screens.json 이 바뀔 때만 다시 읽는다."""
+    out = pathlib.Path(out)
+    sj = out / "screens.json"
+    try:
+        m = sj.stat().st_mtime
+        if cache.get("sj", (None,))[0] != m:
+            cache["sj"] = (m, _screen_files(json.loads(sj.read_text(encoding="utf-8"))))
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        if not cache.get("warned"):
+            print("[hd] 화면 지켜보기: screens.json 을 읽지 못했어요(%s)" % e, file=sys.stderr, flush=True)
+            cache["warned"] = True
+        return None                                   # 이번 차례는 건너뜀(쓰는 중인 screens.json 이 모든 카드를 '바뀜'으로 만들지 않게)
+    cache["warned"] = False
+    res = {}
+    for sid, rel in cache["sj"][1].items():
+        p = out / rel
+        try:
+            res[sid] = p.stat().st_mtime if _inside(out, p) and p.is_file() else None
+        except (OSError, ValueError):
+            res[sid] = None
+    return res
+
+
+def _watch_loop(srv, out, lock):
+    cache = {}
+    while not srv.watch_stop.wait(WATCH_EVERY if srv.watch.last is not None else 0):
+        with lock:                                   # 도우미가 쓰는 중(apply 의 쓰기~빌드)에는 보지 않는다 — 다 쓴 뒤 absorb 가 기준을 옮긴다
+            m = scan(out, cache)
+            if m is not None:
+                srv.watch.tick(m)
+
+
 # ---------------------------------------------------------------- 서버
 def keypath(out):                                    # file:// 로 열었을 때의 location.pathname — 캔버스 저장 키를 같게
     return urllib.parse.urlparse((pathlib.Path(out).resolve() / "index.html").as_uri()).path
@@ -645,9 +758,16 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path in ("/api/state", "/api/projects"):
+            if u.path in ("/api/state", "/api/projects", "/api/files"):
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
+                if u.path == "/api/files":
+                    q = urllib.parse.parse_qs(u.query).get("since", ["-1"])[0]
+                    try:
+                        since = int(q)
+                    except ValueError:
+                        return self._json(400, {"error": "since: 정수가 아니에요"})
+                    return self._json(200, self.server.watch.changes(since))
                 if u.path == "/api/projects":
                     return self._json(200, hd_client.project_rows())
                 with lock:
@@ -684,16 +804,21 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                 return self._json(200, build_canvas.index_data(out, json.loads((out / "screens.json").read_text(encoding="utf-8"))))
             if self.path in ("/api/apply", "/api/delete", "/api/restore"):
                 with lock:                                  # 쓰기는 한 번에 하나
-                    if self.path == "/api/apply":
-                        return self._json(200, apply_edits(out, body.get("edits") or []))
-                    if self.path == "/api/delete":
-                        return self._json(200, delete_screens(out, [str(i) for i in body.get("screens") or []]))
-                    r = restore(out, str(body.get("stamp") or ""))
+                    try:
+                        if self.path == "/api/apply":
+                            return self._json(200, apply_edits(out, body.get("edits") or []))
+                        if self.path == "/api/delete":
+                            return self._json(200, delete_screens(out, [str(i) for i in body.get("screens") or []]))
+                        r = restore(out, str(body.get("stamp") or ""))
+                    finally:
+                        m = scan(out, {})                   # 스스로 쓴 화면 파일은 '바뀜'으로 알리지 않는다(캔버스가 그 카드를 이미 다시 싣는다)
+                        if m is not None:
+                            self.server.watch.absorb(m)
                     code = {"changed-since": 409, "missing": 404}.get(r.get("reason"), 500 if "error" in r else 200)
                     return self._json(code, r)
-            if self.path == "/api/reply":
+            if self.path in ("/api/reply", "/api/claim", "/api/release"):
                 with lock:                                  # 상태 파일 쓰기는 /api/state 와 같은 자물쇠
-                    code, res = reply_post(out, body)
+                    code, res = {"/api/reply": reply_post, "/api/claim": claim_post, "/api/release": release_post}[self.path](out, body)
                 return self._json(code, res)
             if self.path == "/api/forward":
                 return self._json(200, forward(out, str(body.get("text") or ""), self.server.agent, paseo))
@@ -737,12 +862,20 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             return self._json(code, res)
 
     state_load(out)                                     # 시작할 때 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
-    srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+    srv = Server(("127.0.0.1", port), H)
+    srv.watch, srv.watch_stop = FileWatch(), threading.Event()
+    threading.Thread(target=_watch_loop, args=(srv, out, lock), daemon=True).start()   # server_close 가 멈춘다
     srv.token = token
     srv.agent = agent or None                           # /api/forward 가 보낼 곳 — /api/attach 로 바뀐다
     srv.marker = None                                   # main 이 표지 경로를 넣는다(attach 가 agent 를 고쳐 씀)
     srv.url = "http://127.0.0.1:%d/index.html?hd=%s" % (srv.server_address[1], token)
     return srv
+
+
+class Server(ThreadingHTTPServer):
+    def server_close(self):
+        self.watch_stop.set()
+        super().server_close()
 
 
 def attach_post(srv, body, lock):

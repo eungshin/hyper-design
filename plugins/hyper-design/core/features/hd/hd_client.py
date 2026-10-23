@@ -5,6 +5,7 @@
 프로젝트 목록 <HD_HOME>/projects.json 은 이 파일만 읽고 쓴다(임시 파일 + os.replace). 규칙은 hd_projects.
 도우미 띄우기(hd open): build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
   open_project 가 그 일 전부(브라우저 빼고) — hd open 과 도우미 POST /api/open 이 같이 쓴다.
+덮개: claim(POST /api/claim) · release(POST /api/release).
 왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · wait_pending(GET /api/state 2초마다).
 """
 import datetime, json, os, pathlib, signal, socket, subprocess, sys, time, urllib.error, urllib.request, webbrowser
@@ -371,6 +372,27 @@ def attach(m, agent):
     if code != 200:
         raise HdError("도우미가 거절했어요(%d): %s" % (code, res.get("error", "")))
     return res.get("agent")
+
+
+def claim(m, screen, by=None, note=None):
+    """POST /api/claim → 도우미 답 {rev, screen, file}. 거절되면 HdError."""
+    body = {"screen": screen}
+    if by:
+        body["by"] = by
+    if note is not None:
+        body["note"] = note
+    code, res = call(m, "/api/claim", body)
+    if code != 200:
+        raise HdError("도우미가 거절했어요(%d): %s" % (code, res.get("error", "")))
+    return res
+
+
+def release(m, screen):
+    """POST /api/release → {rev, released}. 거절되면 HdError."""
+    code, res = call(m, "/api/release", {"screen": screen})
+    if code != 200:
+        raise HdError("도우미가 거절했어요(%d): %s" % (code, res.get("error", "")))
+    return res
 
 
 def get_state(m, timeout=5):

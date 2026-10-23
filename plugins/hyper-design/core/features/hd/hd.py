@@ -14,6 +14,9 @@
   hd attach [--agent ID|none] [<name|path>]
                                           보내기 받을 Paseo 에이전트 바꾸기(다시 띄우지 않음, 기본 env PASEO_AGENT_ID, none = 떼기)
   hd wait [<name|path>] [--timeout S]     보낸(working) 메모가 생길 때까지 기다렸다가 hd notes 처럼 보여 줌 — 시간 넘으면 종료 코드 2
+  hd claim <screen> [<name|path>] [--note TEXT] [--by ID]
+                                          "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
+  hd release <screen> [<name|path>]       덮개 걷기
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -214,6 +217,33 @@ def cmd_wait(a):
             head + "\n" + M.format_rows(rs))
 
 
+def _claim_target(a):
+    m = pick_canvas(a.target)
+    ids = C.screen_ids(m["out"])
+    if ids is not None and a.screen not in ids:
+        raise C.HdError("없는 화면이에요: %s — 있는 화면: %s" % (a.screen, ", ".join(sorted(ids)) or "없음"))
+    return m
+
+
+def cmd_claim(a):
+    by = a.by if a.by is not None else os.environ.get("PASEO_AGENT_ID") or None
+    err = M.claim_error(a.screen, by, a.note)
+    if err:
+        raise C.HdError(err)
+    m = _claim_target(a)
+    res = C.claim(m, a.screen, by, a.note)
+    return (dict(res, project=m.get("project"), by=by, note=a.note),
+            "%s · %s 덮개 씌움%s (rev %s) — 파일이 바뀌거나 hd release %s 면 걷혀요" % (
+                m.get("project"), a.screen, " · " + a.note if a.note else "", res.get("rev"), a.screen))
+
+
+def cmd_release(a):
+    m = _claim_target(a)
+    res = C.release(m, a.screen)
+    return (dict(res, project=m.get("project"), screen=a.screen),
+            "%s · %s %s" % (m.get("project"), a.screen, "덮개 걷음 (rev %s)" % res.get("rev") if res.get("released") else "덮개가 없어요(그대로)"))
+
+
 def parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="기계용 JSON 출력")
@@ -261,6 +291,16 @@ def parser():
     w.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     w.add_argument("--timeout", type=float, default=600.0, help="초(기본 600)")
     w.set_defaults(fn=cmd_wait)
+    c = sub.add_parser("claim", parents=[common], help="이 화면을 고치는 중 — 캔버스 카드에 덮개")
+    c.add_argument("screen", help="화면 id")
+    c.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    c.add_argument("--note", help="하는 일 한 줄(덮개에 보임, 140자까지)")
+    c.add_argument("--by", help="누가(기본 env PASEO_AGENT_ID)")
+    c.set_defaults(fn=cmd_claim)
+    rl = sub.add_parser("release", parents=[common], help="덮개 걷기")
+    rl.add_argument("screen", help="화면 id")
+    rl.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    rl.set_defaults(fn=cmd_release)
     return ap
 
 

@@ -13,6 +13,8 @@ python $SK/features/hd/hd.py forget <name> [--json]
 python $SK/features/hd/hd.py stop [<name|path>] [--json]
 python $SK/features/hd/hd.py attach [--agent ID|none] [<name|path>] [--json]
 python $SK/features/hd/hd.py wait [<name|path>] [--timeout S] [--json]
+python $SK/features/hd/hd.py claim <screen> [<name|path>] [--note TEXT] [--by ID] [--json]
+python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
 ```
 설치(전역 R52): `~/.claude/tools/hd/hd.cmd`·`hd`(sh) 가 이 파일을 부르는 얇은 감싸개, 사용법은 `~/.claude/commands/hd.md`(필요할 때만 읽힘).
 
@@ -41,7 +43,10 @@ python $SK/features/hd/hd.py wait [<name|path>] [--timeout S] [--json]
 - `hd attach` — `POST /api/attach {agent}` → `/api/forward` 가 보낼 곳과 표지의 `agent` 를 바꾼다(다시 띄우지 않음, 같은 pid). `--agent` 기본 env `PASEO_AGENT_ID`, `none` = 떼기(대기열 파일로). id 규칙 `hd_model.agent_error`: 빈 글 아님 · 128자 이하 · 띄어쓰기 없음 — CLI 와 도우미(400)가 같은 함수
 - `hd wait` — 2초마다 `GET /api/state` → `hd_model.pending`(status `working` = 보냄+답 없음)이 하나라도 있으면 `hd notes` 처럼 보여 주고 0. 기본 600초, 넘으면 2. 도우미에 닿지 않으면 그 out 의 표지를 다시 읽어 새 도우미로 이어 간다(`[hd]` 경고 한 줄)
 - 도우미 `GET /api/projects` → `hd projects --json` 과 같은 줄(`hd_client.project_rows`) · `POST /api/open {name, agent?}` → `hd open` 과 같은 `hd_client.open_project`(브라우저 없음) → `{name, out, url, pid, agent, reused}`. agent 기본 = 그 도우미의 지금 agent. 모르는 이름·없어진 out 404 `{error}` · 빌드·띄우기 실패 500. 둘 다 `X-HD-Token`
-- 범위 밖(다음 물결): `hd claim`, 도우미가 화면 파일을 지켜보고 그 카드만 새로 그리기
+- `hd claim <screen>` (#254) — "이 화면 고치는 중": `POST /api/claim {screen, by?, note?}` → 도우미가 최신 상태 파일 `state.busy` 에 `{via:'cli', since(ms), file, mtime(지금 파일 시각), by?, note?}` 를 넣고 rev+1(rev 를 받지 않는다 — `/api/reply` 와 같음: 쓰는 곳·자물쇠 하나라 CLI 의 409 재시도가 필요 없다). 캔버스는 새로고침 없이 그 카드에 덮개, 파일이 바뀌면 걷힌다. `--by` 기본 env `PASEO_AGENT_ID`(규칙 `agent_error`), `--note` ≤140. 없는 화면 = 한 줄 오류·종료 코드 1(CLI 가 screens.json 으로 먼저, 도우미도 404). 예) `hd claim job --note "제목 줄이는 중"`
+- `hd release <screen>` — `POST /api/release {screen}` → `{rev, released}`(없으면 released false, 쓰지 않음). 예) `hd release job`
+- `--json`: `claim` → `{rev, screen, file, project, by, note}` · `release` → `{rev, released, project, screen}`
+- 도우미는 화면 파일을 1초마다 지켜본다(`GET /api/files?since=N` → `{seq, changed}`) — 캔버스는 바뀐 카드만 다시 싣는다(canvas `contract/busy.md`)
 
 ## 답 규칙 (tasks/PLAN-2026-10-23.md §3 — task A2 의 캔버스와 같은 계약)
 답 = `{kind, by, at, …칸, detail?}`. AI 종류: `반영됨 {what ≤140, screens ≥1, captured: bool}` · `일부 {done ≤140, left ≤140}` · `대체됨 {where ≤140}` · `답변 {text ≤280}`(질문 메모에만) · `질문 {question ≤140, choices 2–4개 각 ≤40}` · `detail ≤2000` 아무 종류에나 · `by` 1–40자(기본 `agent`). `보류` 없음(미루려면 질문). 사람 종류 `확인`·`다시` 는 캔버스만 — `hd`/도우미는 400. 모르는 칸도 400. 실패한 칸마다 한 줄 이유.
@@ -57,15 +62,15 @@ python $SK/features/hd/hd.py wait [<name|path>] [--timeout S] [--json]
 - CLI `hd.py` — argparse → Client → Model → 출력. 캔버스 고르기(하나면 그것, 여럿이면 목록과 함께 오류)만 한다
 
 조각 보고:
-- `hd_model` · 답 규칙·상태·번호·줄·기다릴 메모·에이전트 id·대상 고르기 · 상태 없음 · 메모 목록·답·note-seq·표지 목록 · `check_reply` `stamp` `status` `numbers` `find` `rows` `pick` `format_rows` `format_canvases` `project_name` `pending` `agent_error` `choose`
+- `hd_model` · 답 규칙·상태·번호·줄·기다릴 메모·에이전트 id·대상 고르기 · 상태 없음 · 메모 목록·답·note-seq·표지 목록 · `check_reply` `stamp` `status` `numbers` `find` `rows` `pick` `format_rows` `format_canvases` `project_name` `pending` `agent_error` `choose` · 덮개 `claim_error` `busy_items` `claim` `release`
 - `hd_projects` · 프로젝트 링크 규칙 · 상태 없음 · 목록 객체·경로 글·시각 글 · `slug` `key` `parse` `save` `touch` `forget` `find` `by_out` `ordered` `rows` `format_rows` `link_line` `ProjectError`
-- `hd_client` · 파일·HTTP 읽고 보내기 · `projects.json`(주인) · 표지·상태 파일은 helper 가 주인 · HD_HOME · out 경로 · 표지 · `markers` `running` `ping` `read_state` `screen_ids` `post_reply` `load_projects` `save_projects` `register` `serving` `build` `spawn_helper` `wait_serving` `open_browser` `open_project` `project_rows` `call` `stop` `kill_pid` `attach` `get_state` `wait_pending` `stale` `HdError` `NotFound` `TimedOut`
-- `hd` · 명령 풀이·캔버스 고르기·출력 · 상태 없음 · argv · `main` `resolve` `pick_canvas` `cmd_ls` `cmd_notes` `cmd_reply` `cmd_projects` `cmd_save` `cmd_open` `cmd_forget` `cmd_stop` `cmd_attach` `cmd_wait`
-- `canvas/helper.py` 추가분 · 표지 쓰기·지우기(주인) · `/api/reply`(상태 파일 쓰기는 기존 `_state_write` 하나로) · 시작 때 프로젝트 목록에 넣기(`hd_client.register`, 실패해도 한 줄 남기고 계속) · `write_marker` `reply_post` `hd_home` · 왕복 라우트 `/api/stop`(정상 종료) · `/api/attach`(`srv.agent` 하나가 보낼 곳의 주인, 표지 agent 고쳐 씀 `marker_agent`) · `GET /api/projects` · `/api/open`(`hd_client` 를 부를 뿐 — 복사 없음) · `attach_post` `open_post` `marker_agent`
+- `hd_client` · 파일·HTTP 읽고 보내기 · `projects.json`(주인) · 표지·상태 파일은 helper 가 주인 · HD_HOME · out 경로 · 표지 · `markers` `running` `ping` `read_state` `screen_ids` `post_reply` `load_projects` `save_projects` `register` `serving` `build` `spawn_helper` `wait_serving` `open_browser` `open_project` `project_rows` `call` `stop` `kill_pid` `attach` `get_state` `wait_pending` `claim` `release` `stale` `HdError` `NotFound` `TimedOut`
+- `hd` · 명령 풀이·캔버스 고르기·출력 · 상태 없음 · argv · `main` `resolve` `pick_canvas` `cmd_ls` `cmd_notes` `cmd_reply` `cmd_projects` `cmd_save` `cmd_open` `cmd_forget` `cmd_stop` `cmd_attach` `cmd_wait` `cmd_claim` `cmd_release`
+- `canvas/helper.py` 추가분 · 표지 쓰기·지우기(주인) · `/api/reply`(상태 파일 쓰기는 기존 `_state_write` 하나로) · 시작 때 프로젝트 목록에 넣기(`hd_client.register`, 실패해도 한 줄 남기고 계속) · `write_marker` `reply_post` `hd_home` · 왕복 라우트 `/api/stop`(정상 종료) · `/api/attach`(`srv.agent` 하나가 보낼 곳의 주인, 표지 agent 고쳐 씀 `marker_agent`) · `GET /api/projects` · `/api/open`(`hd_client` 를 부를 뿐 — 복사 없음) · `attach_post` `open_post` `marker_agent` · 덮개 `/api/claim`·`/api/release`(상태 파일 쓰기는 `_state_save` 하나) `claim_post` `release_post` · 화면 파일 지켜보기 `FileWatch`(seq·바뀐 화면, I/O 없음) `scan` `_watch_loop`(1초, `server_close` 가 멈춤) `GET /api/files`
 - `skills/open/SKILL.md` · 인자 없음 → `hd projects` 후 한 번 묻기 · 이름/경로 → `hd open` · 새로 → PRD 한 번 묻고 `/hyper-design:go` 로 넘긴 뒤 `hd save --out`
 
 ## 책임 게이트
 canvas `contract.md` 의 책임 게이트를 그대로 따른다(층 · 상태마다 주인 하나 · 오류 탐지: 실패는 한 줄로 알리고 종료 코드 1, 깨진 표지는 건너뜀, 깨진 상태 파일은 오류로 알림 · 새 Model 규칙은 unit 테스트).
 
 ## 테스트
-`python -m pytest plugins/hyper-design/core/features/hd/tests` — 브라우저 없음(약 60초). `test_hd_model.py`(fixture·순수성·번호·줄·says·범위) · `test_hd_projects.py`(목록 규칙·이름·깨진 파일·순수성) · `test_hd_helper_reply.py`(`/api/reply` 200/400/404/403 · 최신 파일에 붙임 · 표지 쓰기/지우기) · `test_hd_cli.py`(도우미 자식 프로세스 + `hd ls/notes/reply`) · `test_hd_roundtrip_model.py`(`pending`·`agent_error`·`choose`) · `test_hd_roundtrip.py`(stop 라우트·강제 종료·표지만 지움 · attach 로 보낼 곳 바뀜(같은 pid, 가짜 paseo) · wait 0/2·도우미 다시 떠도 이어감 · `/api/projects`·`/api/open` 200/404) · `test_hd_projects_cli.py`(`save → projects → open`(빌드·떼어 띄움·같은 도우미 다시 씀) `→ forget`, 도우미가 스스로 넣기, 없어진 out, 깨진 목록). 스킬은 `python -m pytest plugins/hyper-design/skills/open`. `helper.py` 를 고치면 이것과 canvas `-m "unit or helper"` 도.
+`python -m pytest plugins/hyper-design/core/features/hd/tests` — 브라우저 없음(약 60초). `test_hd_model.py`(fixture·순수성·번호·줄·says·범위) · `test_hd_projects.py`(목록 규칙·이름·깨진 파일·순수성) · `test_hd_helper_reply.py`(`/api/reply` 200/400/404/403 · 최신 파일에 붙임 · 표지 쓰기/지우기) · `test_hd_cli.py`(도우미 자식 프로세스 + `hd ls/notes/reply`) · `test_hd_roundtrip_model.py`(`pending`·`agent_error`·`choose`) · `test_hd_roundtrip.py`(stop 라우트·강제 종료·표지만 지움 · attach 로 보낼 곳 바뀜(같은 pid, 가짜 paseo) · wait 0/2·도우미 다시 떠도 이어감 · `/api/projects`·`/api/open` 200/404) · `test_hd_claim.py`(claim 규칙 · claim → busy · release → 지움 · 없는 화면 종료 1 · `/api/files` 가 바뀐 화면을 알림) · `test_hd_projects_cli.py`(`save → projects → open`(빌드·떼어 띄움·같은 도우미 다시 씀) `→ forget`, 도우미가 스스로 넣기, 없어진 out, 깨진 목록). 스킬은 `python -m pytest plugins/hyper-design/skills/open`. `helper.py` 를 고치면 이것과 canvas `-m "unit or helper"` 도.

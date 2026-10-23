@@ -308,3 +308,57 @@ def choose(alive, ref=None, keys=(), stale=(), key=str):
     if len(pool) > 1:
         return None, "캔버스가 여럿이에요 — 하나를 고르세요(이름 또는 out 경로): %s" % listing(pool)
     return pool[0], None
+
+
+# ---------------------------------------------------------------- 덮개(hd claim · release, #254) — 상태 파일 state.busy = canvas modules/busy.js 와 같은 모양
+BUSY_VIA = ("paseo", "queue", "cli")                 # canvas HD.busy.VIA 와 같게(drift 는 canvas unit 테스트가 본다)
+CLAIM_NOTE_MAX = 140
+
+
+def claim_error(screen, by=None, note=None):
+    """hd claim 인자 검사 → 한 줄 이유 | None."""
+    if not isinstance(screen, str) or not screen.strip():
+        return "screen: 화면 id 가 없어요"
+    if by is not None and agent_error(by):
+        return agent_error(by).replace("agent:", "by:", 1)
+    if note is not None and (not isinstance(note, str) or not note.strip()):
+        return "note: 빈 글이에요"
+    if note is not None and len(note) > CLAIM_NOTE_MAX:
+        return "note: %d자 넘음(%d자)" % (CLAIM_NOTE_MAX, len(note))
+    return None
+
+
+def busy_items(value):
+    """state.busy 값 → (항목 dict, 경고 목록). 없으면 빈 것 · 깨진 값·항목은 버리고 경고 한 줄씩(canvas busy.load 와 같은 규칙)."""
+    if value is None:
+        return {}, []
+    if not isinstance(value, dict) or value.get("v") != 1 or not isinstance(value.get("items"), dict):
+        return {}, ["[hd] 상태 파일의 busy 가 깨져 비웠어요"]
+    items, warns = {}, []
+    for k, it in value["items"].items():
+        if not isinstance(it, dict) or it.get("via") not in BUSY_VIA or not isinstance(it.get("file"), str) or not it["file"]:
+            warns.append("[hd] busy 항목이 깨져 건너뛰어요: %s" % k)
+            continue
+        items[k] = it
+    return items, warns
+
+
+def claim(value, screen, file, since, mtime=None, by=None, note=None):
+    """덮개 하나 씌우기 → (새 busy 값, 경고). cli 덮개 = {via:'cli', since(ms), file, mtime(기준 — 지금 파일 시각), by?, note?}."""
+    items, warns = busy_items(value)
+    it = {"via": "cli", "since": since, "file": file, "mtime": mtime}
+    if by:
+        it["by"] = by
+    if note:
+        it["note"] = note.strip()
+    items = dict(items, **{screen: it})
+    return {"v": 1, "items": items}, warns
+
+
+def release(value, screen):
+    """덮개 하나 걷기 → (새 busy 값, 걷었나, 경고)."""
+    items, warns = busy_items(value)
+    if screen not in items:
+        return {"v": 1, "items": items}, False, warns
+    items = {k: v for k, v in items.items() if k != screen}
+    return {"v": 1, "items": items}, True, warns
