@@ -686,12 +686,17 @@ function drawArrows() {                            // 판의 선(modules/view-li
 /* ---------- 카드 옮긴 자리(6A): 줄 배치는 그대로, 카드마다 옮긴 거리만 별도 키에 ---------- */
 // prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다). 없는 화면·다른 그룹으로 간 화면의 값은 버린다.
 var KEYPATH = window.__hdKeyPath || location.pathname;   // 도우미(helper.py)로 열면 file:// 때의 경로를 받아 저장 키를 같게
+// 프로젝트별 키(hd-notes:·hd-card-pos:… 이 해시) 읽기·쓰기는 모두 ST(modules/view-state-sync.js) — 도우미로 열면 <out>/.hd-canvas.json 이 진실 원천, 아니면 브라우저 저장소 그대로
+var stateReload = false;                             // 409 로 다시 불러올 때는 '보내지 않은 편집' 묻기를 건너뛴다(이번 변경은 버림)
+var ST = HD.viewStateSync.mount({hash: hashStr(KEYPATH), on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
+  snapshot: window.__hdState, storage: localStorage, toast: function (m) { toast(m, false, 4000); }, warn: function (m) { console.warn(m); },
+  reload: function () { stateReload = true; setTimeout(function () { location.reload(); }, 1200); }});
 var PKEY = 'hd-card-pos:' + hashStr(KEYPATH), cardPos = {};
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);         // 메모 목록 하나(modules/notes.js) — 바꾼 뒤 saveNotes() 가 저장하고 닿은 카드만 다시 그린다
-var NS = HD.notes.store(HD.notes.parse((function () { try { return localStorage.getItem(NKEY); } catch (e) { return null; } })()));
+var NS = HD.notes.store(HD.notes.parse((function () { try { return ST.getItem(NKEY); } catch (e) { return null; } })()));
 function groupOf(c) { var f = c.closest('.flow'), g = f ? $('.glabel', f) : null; return g ? g.textContent : ''; }
 function loadCardPos() {
-  var raw = {}; try { raw = JSON.parse(localStorage.getItem(PKEY) || '{}') || {}; } catch (e) { raw = {}; }
+  var raw = {}; try { raw = JSON.parse(ST.getItem(PKEY) || '{}') || {}; } catch (e) { raw = {}; }
   var live = {}, dirty = false;
   $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = groupOf(c); });
   Object.keys(raw).forEach(function (id) {
@@ -702,7 +707,7 @@ function loadCardPos() {
   if (dirty) saveCardPos();
   $$('.card', rowsEl).forEach(placeCard);
 }
-function saveCardPos() { try { localStorage.setItem(PKEY, JSON.stringify(cardPos)); } catch (e) {} }
+function saveCardPos() { try { ST.setItem(PKEY, JSON.stringify(cardPos)); } catch (e) {} }
 function placeCard(c) {
   var p = cardPos[c.dataset.id];
   if (c.classList.contains('draft')) { c.style.left = (+c.dataset.x + (p ? p.dx : 0)) + 'px'; c.style.top = (+c.dataset.y + (p ? p.dy : 0)) + 'px'; return; }   // 빈 레이아웃: 놓은 자리 + 옮긴 거리
@@ -761,7 +766,7 @@ function arrangeCards(ids, op) {                  // op = 정렬 패널 의도 {
 
 /* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8) — 되돌리기 50단계 · 줄 누르기 · 보낸 자리 앞은 되돌리지 않음 ---------- */
 var HI = HD.viewHistory.mount({$: $, esc: esc, list: $('#hlist'), undoBtn: $('#undo'), redoBtn: $('#redo'), toast: function (m) { toast(m); }, key: 'hd-edit-log:' + hashStr(KEYPATH),
-                               getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }});
+                               getItem: ST.getItem, setItem: ST.setItem});
 function record(op) { HI.record(op); if (VP) VP.refresh(); }   // 판이 바뀌면 나눈 칸 복사본도 다시             // op = {label, undo(), redo(), status?}
 function undo() { HI.undo(); }
 function redo() { HI.redo(); }
@@ -1091,11 +1096,11 @@ var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
 function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
 // 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
 var LNKEY = 'hd-link-names:' + hashStr(KEYPATH), linkNames = {};
-try { linkNames = JSON.parse(localStorage.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
+try { linkNames = JSON.parse(ST.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
 // 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버린다
 var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
 (function () {
-  var raw = []; try { raw = JSON.parse(localStorage.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
+  var raw = []; try { raw = JSON.parse(ST.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
   var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
   live['@intro'] = live['@foot'] = 1;                // 판 글도 레이어(H7)
   (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
@@ -1104,14 +1109,14 @@ var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
 })();
 // 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
 var LOCKKEY = 'hd-locked:' + hashStr(KEYPATH), locked = {};
-try { (JSON.parse(localStorage.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; }
+try { (JSON.parse(ST.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; }
 function lockGuard(ids) {                          // 잠긴 화면이 있으면 알리고 true
   var hit = ids.filter(function (id) { return locked[id]; }); if (!hit.length) return false;
   toast('잠긴 화면이에요 — 레이어 패널에서 풀어요'); return true;
 }
 function setName(from, to, v) {
   if (v) linkNames[from + '>' + to] = v; else delete linkNames[from + '>' + to];
-  try { localStorage.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {}
+  try { ST.setItem(LNKEY, JSON.stringify(linkNames)); } catch (e) {}
 }
 var names = {get: function (from, to) { return linkNames[from + '>' + to] || ''; },
              set: function (from, to, v) {
@@ -1208,8 +1213,8 @@ var VT = HD.viewTheme.mount({$: $, esc: esc, root: $('#pTheme'), bases: (P && P.
   apply: function (slug, vars) { if (!slug) return; curVars = vars || {}; setPalette(slug); try { localStorage.setItem(KEY, slug); } catch (e) {} }});
 // 레이어 폴더(modules/folders.js, H17) — 패널에서만 묶는다(판 카드는 안 움직임, 화면 파일에 안 씀). 키 hd-folders:, 없는 화면 id 는 시작·데이터 새로 받을 때 버린다
 (function () { var st = document.createElement('style'); st.id = 'hd-view-css'; st.textContent = HD.viewLayers.CSS + HD.viewAlign.CSS; document.head.appendChild(st); })();   // 폴더·정렬 패널 모양(모듈이 가진 CSS 한 번만)
-var FKEY = 'hd-folders:' + hashStr(KEYPATH), folders = HD.folders.load(function (k) { return localStorage.getItem(k); }, FKEY);
-function setFolders(n) { if (n === folders) return; folders = n; HD.folders.save(folders, function (k, v) { localStorage.setItem(k, v); }, FKEY); }
+var FKEY = 'hd-folders:' + hashStr(KEYPATH), folders = HD.folders.load(ST.getItem, FKEY);
+function setFolders(n) { if (n === folders) return; folders = n; HD.folders.save(folders, ST.setItem, FKEY); }
 function pruneFolders() { setFolders(HD.folders.reduce(folders, {type: 'prune', live: $$('.card', rowsEl).map(function (c) { return c.dataset.id; })})); }
 // 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
 var VA = null;
@@ -1251,7 +1256,7 @@ window.HDCanvas = {routeCurve: HD.route.routeCurve, camera: HD.camera, style: HD
 // 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
 var cmenu = $('#cmenu');
 function titleOf(id) { var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
-function saveHidden() { try { localStorage.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
+function saveHidden() { try { ST.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
 function setHidden(ids, on) {
   ids.forEach(function (id) {
     if (on) hidden[id] = 1; else delete hidden[id];
@@ -1276,7 +1281,7 @@ function renderHidden() {
 function openHidl() { closeCmenu(); VD.activate('layers'); LY.only('hidden'); }   // 레이어 패널을 '숨긴 것만'으로(H7)
 function setLocked(ids, on) {
   ids.forEach(function (id) { if (on) locked[id] = 1; else delete locked[id]; });
-  try { localStorage.setItem(LOCKKEY, JSON.stringify(Object.keys(locked))); } catch (e) {}
+  try { ST.setItem(LOCKKEY, JSON.stringify(Object.keys(locked))); } catch (e) {}
   if (LY) LY.render();
   if (VA) VA.render();
 }
@@ -1808,6 +1813,7 @@ function sendAllPending(ids) {                       // ids = 닿은 화면에�
   if (!modal.hidden && mscreen && (!ids || ids.indexOf(mscreen) >= 0)) sendPending(mframe, mscreen);
 }
 addEventListener('beforeunload', function (e) {     // 보내지 않은 편집이 있으면 새로고침·닫기 전에 묻는다(다시 빌드하면 화면 파일이 바뀌어도 메모는 남는다)
+  if (stateReload) return;
   if (NS.list().some(function (n) { return n.edit && !n.sent; })) { e.preventDefault(); e.returnValue = ''; }
 });
 
@@ -1824,7 +1830,7 @@ function popItem(dr, last) {
 }
 var notesSaveWarned = false, notesLinesKey = HD.notes.linesKey(NS.list());                         // 저장이 안 되면(저장 공간 꽉 참) 한 번 알린다 — 다시 되면 다음 실패도 알린다
 function saveNotes() {
-  try { localStorage.setItem(NKEY, JSON.stringify(NS.list())); notesSaveWarned = false; }
+  try { ST.setItem(NKEY, JSON.stringify(NS.list())); notesSaveWarned = false; }
   catch (e) { if (!notesSaveWarned) { notesSaveWarned = true; toast('메모를 저장하지 못했어요 — 브라우저 저장 공간이 꽉 찼어요. 새로고침하면 보내지 않은 편집이 사라질 수 있어요', false, 9000); } }
   renderNotes(NS.commit()); drawPins(); if (LY) LY.render();   // 지난 저장 뒤 메모가 바뀐 화면 카드만 다시
   var lk = HD.notes.linesKey(NS.list()); if (lk !== notesLinesKey) { notesLinesKey = lk; scheduleArrows(); }   // 선을 바꾸는 편집이 바뀌었을 때만 늘 그리는 선도
@@ -2010,7 +2016,7 @@ var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id)
     ids.forEach(function (id) { var c = VL.cardEl(id), f = c && $('.phone iframe', c), b = c && $('.cover', c); if (f && b) { f.removeAttribute('src'); f.setAttribute('data-src', b.dataset.file + '?v=' + v); } });
     scheduleVisible();
   },
-  getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
+  getItem: ST.getItem, setItem: ST.setItem,
   key: 'hd-busy:' + hashStr(KEYPATH), toast: function (m) { toast(m); }}) : null;
 var sending = false;                                 // 보내는 중에는 다시 보내지 않는다(두 번 누르기 = AI 에게 같은 요청 두 번 · S1)
 function sendDone() { sending = false; $('#nsend').disabled = !NS.list().length; }

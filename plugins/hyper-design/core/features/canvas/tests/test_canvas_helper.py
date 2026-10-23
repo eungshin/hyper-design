@@ -536,3 +536,62 @@ def test_helper_state_corrupt_file_on_start_is_moved_aside(out, capfd):   # #228
         assert urllib.request.urlopen(srv.url, timeout=10).status == 200, "도우미는 그대로 페이지를 준다"
     finally:
         srv.shutdown(); srv.server_close()
+
+
+def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228 — 도우미로 열면 메모가 <out>/.hd-canvas.json 에 · 다른 브라우저(빈 저장소)에서도 그대로 · 다른 곳에서 바뀌면 알리고 다시 불러옴
+    from test_canvas_edit import fit_view, visible_cover
+    srv = _serve(out)
+    f = out / ".hd-canvas.json"
+    errors = []
+
+    def state():
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+
+    def open_fresh():
+        c = browser.new_context(viewport={"width": 1440, "height": 1000})
+        pg = c.new_page()
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        pg.on("dialog", lambda d: d.accept())
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        return c, pg
+    c1 = c2 = None
+    try:
+        c1, pg = open_fresh()
+        fit_view(pg)
+        pg.keyboard.press("m")
+        cov = visible_cover(pg)
+        pg.mouse.click(cov["x"], cov["y"])
+        pg.wait_for_selector("#pop:not([hidden])")
+        pg.fill("#pnote", "파일에 남는 메모")
+        pg.click("#padd")
+        import time
+        t0 = time.time()
+        while time.time() - t0 < 5 and not any(n.get("note") == "파일에 남는 메모" for n in (state().get("state") or {}).get("notes") or []):
+            time.sleep(0.1)
+        doc = state()
+        assert [n["note"] for n in doc["state"]["notes"]] == ["파일에 남는 메모"] and doc["state"]["notes"][0]["screen"] == cov["id"], doc
+        assert doc["rev"] >= 1 and doc["version"] == 1
+        assert "hd-dock" not in json.dumps(doc) and "dock" not in doc["state"], "전역 설정 키는 파일로 가지 않는다"
+        c1.close(); c1 = None
+
+        c2, pg = open_fresh()                                        # 다른 브라우저 = 빈 저장소
+        assert pg.evaluate("Object.keys(window.__hdState.state)").count("notes") == 1
+        assert pg.locator("#nlist li").count() == 1 and "파일에 남는 메모" in pg.text_content("#nlist"), "파일 상태로 메모가 보인다"
+        assert "파일에 남는 메모" in pg.evaluate("localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:')))"), "파일이 이기고 캐시에도 쓴다"
+
+        rev = state()["rev"]                                         # 다른 곳(터미널 에이전트)에서 바뀜 → 이 페이지의 다음 쓰기 = 409
+        code, _ = _req(srv.url.split("/index.html")[0] + "/api/state", "PUT", {"rev": rev, "state": {"hidden": ["job"]}}, srv.token)
+        assert code == 200
+        pg.evaluate("window.__hdStay = 1")
+        pg.click('#nlist li button[data-act="del"]')
+        pg.wait_for_function("document.getElementById('toast').textContent.indexOf('다른 곳에서 바뀌어 다시 불러왔어요') >= 0", timeout=5000)
+        pg.wait_for_function("window.__hdStay === undefined && window.__hdReady !== undefined", timeout=10000)
+        assert pg.locator("#nlist li").count() == 1, "이번 변경(지우기)은 버리고 파일 상태로 다시"
+        assert state()["state"]["hidden"] == ["job"] and len(state()["state"]["notes"]) == 1, "다른 곳의 변경을 덮어쓰지 않는다"
+    finally:
+        for c in (c1, c2):
+            if c:
+                c.close()
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors

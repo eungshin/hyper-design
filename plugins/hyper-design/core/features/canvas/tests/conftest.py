@@ -121,6 +121,7 @@ BROWSER = {
     "test_helper_written_edit_is_not_requeued_when_reload_fails": ("helper", "tools"),
     "test_helper_state_file_put_rev_conflict_and_limits": ("helper",),
     "test_helper_state_corrupt_file_on_start_is_moved_aside": ("helper",),
+    "test_helper_memo_lives_in_state_file_across_browsers": ("helper", "notes"),
     # test_canvas_v2.py
     "test_arrow_toggle_persists": ("flow",),
     "test_shift_click_focus": ("links",),
