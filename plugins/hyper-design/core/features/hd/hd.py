@@ -10,6 +10,10 @@
   hd open <name|path> [--agent ID] [--no-open]
                                           떠 있으면 그 주소, 아니면 build_ref.py 로 빌드 후 helper.py 를 떼어 띄운다
   hd forget <name>                        링크만 지운다(파일은 그대로)
+  hd stop [<name|path>]                   도우미 끄기(POST /api/stop, 답이 없으면 pid 강제 종료) — 링크는 그대로
+  hd attach [--agent ID|none] [<name|path>]
+                                          보내기 받을 Paseo 에이전트 바꾸기(다시 띄우지 않음, 기본 env PASEO_AGENT_ID, none = 떼기)
+  hd wait [<name|path>] [--timeout S]     보낸(working) 메모가 생길 때까지 기다렸다가 hd notes 처럼 보여 줌 — 시간 넘으면 종료 코드 2
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -117,8 +121,7 @@ def cmd_reply(a):
 
 
 def cmd_projects(a):
-    reg = C.load_projects()
-    rs = P.rows(reg, C.running(), C.exists_map(reg))
+    rs = C.project_rows()
     return rs, P.format_rows(rs)
 
 
@@ -144,38 +147,15 @@ def cmd_save(a):
 
 
 def cmd_open(a):
-    reg = C.load_projects()
-    e = P.find(reg, a.target)
-    if e is None and C.is_out(a.target):
-        o = C.abs_out(a.target)
-        reg, e, _ = P.save(reg, o, C.now(), default_name=C.project_from(o))
-        C.save_projects(reg)
-    if e is None:
-        raise C.HdError("모르는 프로젝트예요: %s — hd projects 로 이름을 보거나 out 경로를 주세요" % a.target)
-    o = pathlib.Path(e["out"])
-    if not C.is_out(o):
-        raise C.HdError("'%s' 의 out 폴더가 없어요(없음): %s — 링크만 지우려면 hd forget %s" % (e["name"], o, e["name"]))
     agent = a.agent or os.environ.get("PASEO_AGENT_ID") or None
-    m = C.serving(o)
-    reused = m is not None
-    if not reused:
-        code, tail = C.build(o)
-        if code != 0:
-            if not (o / "index.html").is_file():
-                raise C.HdError("빌드 실패(build_ref.py %d): %s" % (code, " / ".join(tail.splitlines())))
-            C.warn("빌드 실패(%d) — 있던 index.html 로 띄워요: %s" % (code, tail.splitlines()[-1] if tail else ""))
-        proc, log = C.spawn_helper(o, agent)
-        m = C.wait_serving(o, proc)
-        if m is None:
-            raise C.HdError("도우미가 %d초 안에 뜨지 않았어요 — 로그 %s: %s" % (C.START_WAIT, log, " / ".join(C.log_tail(log).splitlines())))
-    C.save_projects(P.touch(C.load_projects(), e["out"], C.now()))   # 도우미가 그 사이 목록을 썼을 수 있어 다시 읽는다
+    e, m, reused = C.open_project(a.target, agent)
     if not a.no_open:
         C.open_browser(m["url"])
     data = {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
     how = "이미 떠 있음" if reused else "새로 띄움"
     note = ""
     if reused and agent and m.get("agent") != agent:
-        note = " · 떠 있는 도우미는 %s 로 보내요(바꾸려면 그 도우미를 끄고 다시 open)" % (m.get("agent") or "대기열 파일")
+        note = " · 떠 있는 도우미는 %s 로 보내요(바꾸려면 hd attach --agent %s %s)" % (m.get("agent") or "대기열 파일", agent, e["name"])
     return data, "%s · %s · %s · pid %s · 보내기 → %s%s" % (e["name"], m["url"], how, m.get("pid"), m.get("agent") or "대기열 파일", note)
 
 
@@ -185,6 +165,53 @@ def cmd_forget(a):
         raise C.HdError("저장한 프로젝트에 '%s' 이 없어요 — hd projects" % a.name)
     C.save_projects(reg)
     return hit, "링크를 지웠어요: %s (파일은 그대로)" % P.link_line(hit)
+
+
+def pick_canvas(ref, stale_ok=False):
+    """이름(표지 project 또는 저장한 이름) | out 경로 | None → 표지. stale_ok 면 응답 없는 표지도 고른다(hd stop)."""
+    keys = set()
+    if ref is not None:
+        keys.add(P.key(C.abs_out(ref)))
+        e = P.find(C.load_projects(), ref)
+        if e:
+            keys.add(P.key(C.abs_out(e["out"])))
+    m, err = M.choose(C.running(), ref, keys, C.stale() if stale_ok and ref is not None else (), key=lambda o: P.key(C.abs_out(o)))
+    if err:
+        raise C.HdError(err)
+    return m
+
+
+STOP_WORD = {"route": "도우미가 스스로 껐어요", "kill": "답이 없어 pid 를 강제로 껐어요", "gone": "프로세스가 이미 없어 표지만 지웠어요",
+             "other": "그 pid 는 다른 프로그램이라 끄지 않고 표지만 지웠어요"}
+
+
+def cmd_stop(a):
+    m = pick_canvas(a.target, stale_ok=True)
+    how = C.stop(m)
+    return ({"project": m.get("project"), "out": m["out"], "pid": m.get("pid"), "port": m.get("port"), "how": how},
+            "%s · pid %s · %s (링크는 그대로)" % (m.get("project"), m.get("pid"), STOP_WORD[how]))
+
+
+def cmd_attach(a):
+    agent = a.agent if a.agent is not None else os.environ.get("PASEO_AGENT_ID")
+    if agent is None:
+        raise C.HdError("보낼 에이전트가 없어요 — --agent ID 를 주거나(PASEO_AGENT_ID 도 없음), 떼려면 --agent none")
+    agent = None if agent == "none" else agent
+    err = M.agent_error(agent)
+    if err:
+        raise C.HdError(err)
+    m = pick_canvas(a.target)
+    got = C.attach(m, agent)
+    return ({"project": m.get("project"), "out": m["out"], "pid": m.get("pid"), "agent": got, "was": m.get("agent")},
+            "%s · 보내기 → %s (전: %s)" % (m.get("project"), got or "대기열 파일", m.get("agent") or "대기열 파일"))
+
+
+def cmd_wait(a):
+    m = pick_canvas(a.target)
+    m, st, rs = C.wait_pending(m, a.timeout)
+    head = "%s · rev %s · working · %d개" % (m.get("project"), st["rev"], len(rs))
+    return ({"project": m.get("project"), "out": m["out"], "rev": st["rev"], "helper": True, "which": "working", "notes": rs},
+            head + "\n" + M.format_rows(rs))
 
 
 def parser():
@@ -223,6 +250,17 @@ def parser():
     f = sub.add_parser("forget", parents=[common], help="링크만 지움(파일은 그대로)")
     f.add_argument("name")
     f.set_defaults(fn=cmd_forget)
+    s = sub.add_parser("stop", parents=[common], help="도우미 끄기(링크는 그대로)")
+    s.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    s.set_defaults(fn=cmd_stop)
+    t = sub.add_parser("attach", parents=[common], help="보내기 받을 Paseo 에이전트 바꾸기(다시 띄우지 않음)")
+    t.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    t.add_argument("--agent", help="에이전트 id(기본 env PASEO_AGENT_ID) · none = 떼기(대기열 파일로)")
+    t.set_defaults(fn=cmd_attach)
+    w = sub.add_parser("wait", parents=[common], help="보낸 메모가 생길 때까지 기다림(시간 넘으면 종료 코드 2)")
+    w.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    w.add_argument("--timeout", type=float, default=600.0, help="초(기본 600)")
+    w.set_defaults(fn=cmd_wait)
     return ap
 
 
@@ -239,7 +277,7 @@ def main(argv=None):
         if a.json:
             print(json.dumps({"error": str(e)}, ensure_ascii=False))
         print("hd: %s" % e, file=sys.stderr)
-        return 1
+        return getattr(e, "code", 1)
     print(json.dumps(data, ensure_ascii=False, indent=1) if a.json else text)
     return 0
 

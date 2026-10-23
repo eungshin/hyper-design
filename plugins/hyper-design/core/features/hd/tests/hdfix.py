@@ -34,12 +34,16 @@ def env(home):
     return dict(os.environ, HD_HOME=str(home), PYTHONIOENCODING="utf-8")
 
 
-def start_helper(out, home, agent=None):
-    """도우미 자식 프로세스 → (proc, url). 표지는 url 을 찍기 전에 쓰인다."""
+def start_helper(out, home, agent=None, extra_env=None):
+    """도우미 자식 프로세스 → (proc, url). 표지는 url 을 찍기 전에 쓰인다. extra_env = 더할 환경 변수(예: HD_PASEO_CMD)."""
     args = [sys.executable, str(HELPER), str(out), "--no-open"] + (["--paseo-agent", agent] if agent else [])
     flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+    e = env(home)
+    for k in ("PASEO_AGENT_ID", "HD_PASEO_AGENT", "HD_PASEO_CMD"):   # 테스트 도우미가 실제 에이전트로 보내지 않게
+        e.pop(k, None)
+    e.update(extra_env or {})
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                         env=env(home), creationflags=flags)
+                         env=e, creationflags=flags)
     url = p.stdout.readline().strip()
     assert url.startswith("http://127.0.0.1:"), (url, p.stderr.read() if p.poll() is not None else "")
     return p, url

@@ -23,6 +23,12 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413(2 MB 넘음)
   POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
     — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
+  POST /api/stop {}                                           → {stopping:true} 를 답한 뒤 서버를 정상 종료(표지·.hd-helper.json 지움) — `hd stop`
+  POST /api/attach {agent: id|null}                           → {agent} — /api/forward 가 보낼 Paseo 에이전트를 바꾸고 표지의 agent 를 고쳐 씀(다시 띄우지 않음).
+    id = 빈 글 아님·128자 이하·띄어쓰기 없음(hd_model.agent_error), 아니면 400 · null = 떼기(대기열 파일로) — `hd attach`
+  GET /api/projects                                           → `hd projects --json` 과 같은 줄 [{name, out, state: running|off|missing, url, pid, last_opened}]
+  POST /api/open {name, agent?}                               → {name, out, url, pid, agent, reused} — `hd open` 과 같은 hd_client.open_project(브라우저 없음).
+    agent 기본 = 이 도우미의 지금 agent · 모르는 이름·없어진 out 404 {error} · 빌드·띄우기 실패 500 {error}
   떠 있는 표지: ~/.hyper-design/active/<pid>.json = {pid, project, out, url, token, port, agent, started} (HD_HOME 으로 바꿈) — `hd ls` 가 읽는다. 정상 종료 때 지운다.
   시작할 때 out 이 프로젝트 목록(~/.hyper-design/projects.json, 링크만)에 없으면 넣는다 — 연 캔버스는 나중에 `hd open <이름>` 으로 다시 연다.
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
@@ -616,8 +622,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     out = pathlib.Path(out).resolve()
     token = token or secrets.token_urlsafe(18)
     lock = threading.Lock()
-    inject = ('<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;window.__hdAgent=%s;</script>'
-              % (json.dumps(True), json.dumps(keypath(out)), json.dumps(out.as_posix()), json.dumps(agent or None)))
+    head = '<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;' % (json.dumps(True), json.dumps(keypath(out)),
+                                                                                     json.dumps(out.as_posix()))
 
     class H(SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):
@@ -639,9 +645,11 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path == "/api/state":
+            if u.path in ("/api/state", "/api/projects"):
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
+                if u.path == "/api/projects":
+                    return self._json(200, hd_client.project_rows())
                 with lock:
                     return self._json(200, state_load(out))
             parts = [p for p in u.path.split("/") if p]
@@ -650,6 +658,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if u.path in ("/", "/index.html"):
                 with lock:
                     snap = state_inject(out)
+                inject = head + "window.__hdAgent=%s;</script>" % json.dumps(self.server.agent)   # attach 로 바뀔 수 있어 줄 때마다
                 b = (out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject + snap, 1).encode("utf-8")
                 self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
@@ -687,7 +696,17 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     code, res = reply_post(out, body)
                 return self._json(code, res)
             if self.path == "/api/forward":
-                return self._json(200, forward(out, str(body.get("text") or ""), agent, paseo))
+                return self._json(200, forward(out, str(body.get("text") or ""), self.server.agent, paseo))
+            if self.path == "/api/stop":
+                self._json(200, {"stopping": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()   # serve_forever 를 돌리는 쪽이 정리(표지 지움)
+                return None
+            if self.path == "/api/attach":
+                code, res = attach_post(self.server, body, lock)
+                return self._json(code, res)
+            if self.path == "/api/open":
+                code, res = open_post(body, self.server.agent)
+                return self._json(code, res)
             if self.path == "/api/watch":
                 return self._json(200, watch(out, body.get("files") if isinstance(body, dict) else None))
             return self._json(404, {"error": "모르는 주소"})
@@ -720,8 +739,51 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     state_load(out)                                     # 시작할 때 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)
     srv.token = token
+    srv.agent = agent or None                           # /api/forward 가 보낼 곳 — /api/attach 로 바뀐다
+    srv.marker = None                                   # main 이 표지 경로를 넣는다(attach 가 agent 를 고쳐 씀)
     srv.url = "http://127.0.0.1:%d/index.html?hd=%s" % (srv.server_address[1], token)
     return srv
+
+
+def attach_post(srv, body, lock):
+    """POST /api/attach 본문 {agent: id|null} → (code, 답). 받은 agent 를 서버에 두고 표지의 agent 를 고쳐 쓴다."""
+    if not isinstance(body, dict) or "agent" not in body:
+        return 400, {"error": "agent: 없어요({agent: id 또는 null})"}
+    err = hd_model.agent_error(body["agent"])
+    if err:
+        return 400, {"error": err}
+    with lock:
+        srv.agent = body["agent"]
+        if srv.marker is not None:
+            marker_agent(srv.marker, srv.agent)
+    print("[hd] 보내기 → %s" % (srv.agent or "대기열 파일"), file=sys.stderr, flush=True)
+    return 200, {"agent": srv.agent}
+
+
+def open_post(body, agent=None):
+    """POST /api/open 본문 {name, agent?} → (code, 답). hd open 과 같은 hd_client.open_project(브라우저 없음)."""
+    if not isinstance(body, dict) or not isinstance(body.get("name"), str) or not body["name"].strip():
+        return 400, {"error": "name: 프로젝트 이름 또는 out 경로가 없어요"}
+    a = body.get("agent", agent)
+    if hd_model.agent_error(a):
+        return 400, {"error": hd_model.agent_error(a)}
+    try:
+        e, m, reused = hd_client.open_project(body["name"], a)
+    except hd_client.NotFound as x:
+        return 404, {"error": str(x)}
+    except hd_client.HdError as x:
+        return 500, {"error": str(x)}
+    return 200, {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+
+
+def marker_agent(path, agent):
+    """표지의 agent 칸만 고쳐 쓴다(임시 파일 + os.replace)."""
+    p = pathlib.Path(path)
+    d = json.loads(p.read_text(encoding="utf-8"))
+    d["agent"] = agent or None
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def hd_home():
@@ -757,6 +819,7 @@ def main(argv=None):
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)
     srv = make_server(out, a.port, a.paseo_agent, a.paseo_cmd)
     marker = write_marker(out, srv, a.paseo_agent)
+    srv.marker = marker
     atexit.register(lambda: marker.unlink(missing_ok=True))
     try:
         hd_client.register(out)                     # 목록에 없을 때만 씀(링크 하나, 복사 없음)
@@ -776,6 +839,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     finally:
+        srv.server_close()
         run.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
 

@@ -4,8 +4,10 @@
 상태 파일은 읽기만 한다 — 쓰기는 늘 도우미(POST /api/reply)로(쓰는 곳 하나).
 프로젝트 목록 <HD_HOME>/projects.json 은 이 파일만 읽고 쓴다(임시 파일 + os.replace). 규칙은 hd_projects.
 도우미 띄우기(hd open): build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
+  open_project 가 그 일 전부(브라우저 빼고) — hd open 과 도우미 POST /api/open 이 같이 쓴다.
+왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · wait_pending(GET /api/state 2초마다).
 """
-import datetime, json, os, pathlib, subprocess, sys, time, urllib.error, urllib.request, webbrowser
+import datetime, json, os, pathlib, signal, socket, subprocess, sys, time, urllib.error, urllib.request, webbrowser
 
 import hd_model
 import hd_projects as P
@@ -76,9 +78,10 @@ def screen_ids(out):
         return None
 
 
-def post_reply(m, body, timeout=10):
-    """POST /api/reply → (code, 답 객체). 닿지 않으면 HdError."""
-    req = urllib.request.Request(_base(m) + "/api/reply", data=json.dumps(body, ensure_ascii=False).encode("utf-8"), method="POST",
+def call(m, path, body=None, method="POST", timeout=10):
+    """도우미 API 하나 → (code, 답 객체). 닿지 않으면 HdError."""
+    data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(_base(m) + path, data=data, method=method,
                                  headers={"X-HD-Token": m["token"], "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -90,6 +93,11 @@ def post_reply(m, body, timeout=10):
             return e.code, {"error": "HTTP %d" % e.code}
     except (OSError, ValueError) as e:
         raise HdError("도우미에 닿지 않아요(%s): %s" % (e, _base(m)))
+
+
+def post_reply(m, body, timeout=10):
+    """POST /api/reply → (code, 답 객체). 닿지 않으면 HdError."""
+    return call(m, "/api/reply", body, timeout=timeout)
 
 
 # ---------------------------------------------------------------- 프로젝트 목록 (링크만)
@@ -223,3 +231,173 @@ def log_tail(log, n=5):
 
 def open_browser(url):
     webbrowser.open(url)
+
+
+class NotFound(HdError):
+    """없는 프로젝트·out — 도우미는 404 로 돌려준다."""
+
+
+class TimedOut(HdError):
+    """hd wait 시간 넘음 — 종료 코드 2."""
+    code = 2
+
+
+def open_project(target, agent=None):
+    """이름 | out 경로 → (항목, 표지, reused). 떠 있으면 그 도우미, 아니면 빌드 후 떼어 띄움. 브라우저는 열지 않는다.
+    모르는 이름·없어진 out → NotFound, 빌드·띄우기 실패 → HdError. hd open 과 도우미 POST /api/open 이 같이 쓴다."""
+    reg = load_projects()
+    e = P.find(reg, target)
+    if e is None and is_out(target):
+        o = abs_out(target)
+        reg, e, _ = P.save(reg, o, now(), default_name=project_from(o))
+        save_projects(reg)
+    if e is None:
+        raise NotFound("모르는 프로젝트예요: %s — hd projects 로 이름을 보거나 out 경로를 주세요" % target)
+    o = pathlib.Path(e["out"])
+    if not is_out(o):
+        raise NotFound("'%s' 의 out 폴더가 없어요(없음): %s — 링크만 지우려면 hd forget %s" % (e["name"], o, e["name"]))
+    m = serving(o)
+    reused = m is not None
+    if not reused:
+        code, tail = build(o)
+        if code != 0:
+            if not (o / "index.html").is_file():
+                raise HdError("빌드 실패(build_ref.py %d): %s" % (code, " / ".join(tail.splitlines())))
+            warn("빌드 실패(%d) — 있던 index.html 로 띄워요: %s" % (code, tail.splitlines()[-1] if tail else ""))
+        proc, log = spawn_helper(o, agent)
+        m = wait_serving(o, proc)
+        if m is None:
+            raise HdError("도우미가 %d초 안에 뜨지 않았어요 — 로그 %s: %s" % (START_WAIT, log, " / ".join(log_tail(log).splitlines())))
+    save_projects(P.touch(load_projects(), e["out"], now()))   # 도우미가 그 사이 목록을 썼을 수 있어 다시 읽는다
+    return e, m, reused
+
+
+def project_rows():
+    """hd projects --json 과 같은 줄 객체(도우미 GET /api/projects 도 이것)."""
+    reg = load_projects()
+    return P.rows(reg, running(), exists_map(reg))
+
+
+# ---------------------------------------------------------------- 왕복: stop · attach · wait
+STOP_WAIT = 5.0
+POLL = 2.0
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def stale():
+    """응답 없는 표지(강제 종료로 남았거나 멈춘 도우미)."""
+    return [m for m in markers() if not ping(m)]
+
+
+def marker_path(m):
+    return home() / "active" / ("%d.json" % int(m["pid"]))
+
+
+def port_open(port, timeout=0.3):
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _sys32(name):
+    return str(pathlib.Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / name)
+
+
+def _image(pid):
+    """pid → 실행 파일 이름(소문자) | None(프로세스 없음)."""
+    if sys.platform == "win32":
+        r = subprocess.run([_sys32("tasklist.exe"), "/FI", "PID eq %d" % pid, "/FO", "CSV", "/NH"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
+        lines = (r.stdout or "").strip().splitlines()
+        return lines[0].split('","')[0].strip('"').lower() if lines and lines[0].startswith('"') else None
+    try:
+        return pathlib.Path("/proc/%d/comm" % pid).read_text().strip().lower()
+    except OSError:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return None
+        return "python?"                                  # /proc 없음(macOS) — 살아 있으니 python 으로 본다
+
+
+def kill_pid(pid):
+    """pid 강제 종료 → 'kill' | 'gone'(이미 없음) | 'other'(python 이 아님 — 다른 프로그램이 그 번호를 받았으니 죽이지 않는다)."""
+    img = _image(pid)
+    if img is None:
+        return "gone"
+    if "python" not in img:
+        return "other"
+    if sys.platform == "win32":
+        r = subprocess.run([_sys32("taskkill.exe"), "/PID", str(pid), "/F"], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", creationflags=NO_WINDOW)
+        if r.returncode != 0 and _image(pid) is not None:
+            raise HdError("pid %d 를 끄지 못했어요: %s" % (pid, ((r.stdout or "") + (r.stderr or "")).strip()))
+    else:
+        os.kill(pid, signal.SIGKILL)
+    return "kill"
+
+
+def _gone(m):
+    return not marker_path(m).exists() and not port_open(m["port"])
+
+
+def stop(m, wait=STOP_WAIT):
+    """도우미 끄기 → 'route'(POST /api/stop 으로 스스로 끔) | 'kill'(답이 없어 pid 강제 종료) |
+    'gone'(프로세스가 이미 없어 표지만 지움) | 'other'(그 pid 를 다른 프로그램이 씀 — 표지만 지움). 프로젝트 목록은 건드리지 않는다."""
+    try:
+        code, _ = call(m, "/api/stop", {}, timeout=2)
+    except HdError:
+        code = None
+    if code == 200:
+        end = time.time() + wait
+        while time.time() < end:
+            if _gone(m):
+                return "route"
+            time.sleep(0.1)
+    how = kill_pid(int(m["pid"]))
+    if how == "kill":
+        end = time.time() + wait
+        while time.time() < end and _image(int(m["pid"])) is not None:
+            time.sleep(0.1)
+    marker_path(m).unlink(missing_ok=True)
+    return how
+
+
+def attach(m, agent):
+    """POST /api/attach {agent} → 도우미가 받은 agent. 거절되면 HdError."""
+    code, res = call(m, "/api/attach", {"agent": agent})
+    if code != 200:
+        raise HdError("도우미가 거절했어요(%d): %s" % (code, res.get("error", "")))
+    return res.get("agent")
+
+
+def get_state(m, timeout=5):
+    code, res = call(m, "/api/state", method="GET", timeout=timeout)
+    if code != 200 or not isinstance(res, dict) or not isinstance(res.get("state"), dict):
+        raise HdError("상태를 읽지 못했어요(%s): %s" % (code, _base(m)))
+    return res
+
+
+def wait_pending(m, timeout, poll=POLL):
+    """working 메모가 생길 때까지 poll 초마다 GET /api/state → (표지, {rev, state}, 줄 객체). 시간 넘으면 TimedOut.
+    도우미에 닿지 않으면 그 out 의 표지를 다시 읽어 이어 간다(다시 뜬 도우미) — [hd] 경고는 한 줄만."""
+    out, end, warned = m["out"], time.time() + timeout, False
+    while True:
+        try:
+            st = get_state(m)
+            rs = hd_model.pending(st["state"])
+            if rs:
+                return m, st, rs
+        except HdError:
+            if not warned:
+                warn("도우미에 닿지 않아요 — 표지를 다시 읽으며 기다려요(%s)" % out); warned = True
+            again = serving(out)
+            if again and again.get("token") != m.get("token"):
+                m = again
+                continue
+        left = end - time.time()
+        if left <= 0:
+            raise TimedOut("%g초 동안 보낸 메모가 없어요(%s)" % (timeout, out))
+        time.sleep(min(poll, left))

@@ -261,3 +261,50 @@ def format_canvases(cs):
     if not cs:
         return "(떠 있는 캔버스 없음)"
     return "\n".join("%s · %s · %s · 열린 메모 %s" % (c["project"], c["url"], c.get("agent") or "-", c.get("open", "?")) for c in cs)
+
+
+# ---------------------------------------------------------------- 왕복(round-trip): wait · attach · stop/attach/wait 대상 고르기
+AGENT_MAX = 128
+
+
+def pending(state):
+    """상태 파일의 state({notes, note-seq}) → 기다리는 메모 줄 객체(status == working: 보냄 + 답 없음). hd wait 가 쓴다."""
+    st = state if isinstance(state, dict) else {}
+    notes = st.get("notes") if isinstance(st.get("notes"), list) else []
+    return [r for r in rows(notes, st.get("note-seq")) if r["status"] == "working"]
+
+
+def agent_error(agent):
+    """보내기 받을 에이전트 id 검사 → 한 줄 이유 | None(통과). None = 떼기(대기열 파일로)."""
+    if agent is None:
+        return None
+    if not isinstance(agent, str) or agent == "":
+        return "agent: 빈 글이 아닌 id 또는 null 이어야 해요"
+    if len(agent) > AGENT_MAX:
+        return "agent: %d자 넘음(%d자)" % (AGENT_MAX, len(agent))
+    if any(c.isspace() for c in agent):
+        return "agent: 띄어쓰기·줄바꿈 없는 id 여야 해요"
+    return None
+
+
+def listing(ms):
+    return "; ".join("%s (%s)" % (m.get("project"), m.get("out")) for m in ms) or "없음"
+
+
+def choose(alive, ref=None, keys=(), stale=(), key=str):
+    """대상 캔버스 고르기 → (표지, None) | (None, 한 줄 이유).
+    ref 없음 → 살아 있는 것이 하나뿐일 때만. ref 있음 → project 이름이 같거나 key(out) 이 keys 안에 있는 살아 있는 것,
+    없으면 stale(응답 없는 표지) 중에서. 여럿이면 목록과 함께 이유."""
+    def hit(m):
+        return isinstance(m, dict) and (m.get("project") == ref or key(m.get("out") or "") in keys)
+    if ref is None:
+        pool = [m for m in alive if isinstance(m, dict)]
+        if not pool:
+            return None, "떠 있는 캔버스가 없어요"
+    else:
+        pool = [m for m in alive if hit(m)] or [m for m in stale if hit(m)]
+        if not pool:
+            return None, "'%s' 캔버스가 떠 있지 않아요 — 떠 있는 것: %s" % (ref, listing(alive))
+    if len(pool) > 1:
+        return None, "캔버스가 여럿이에요 — 하나를 고르세요(이름 또는 out 경로): %s" % listing(pool)
+    return pool[0], None
