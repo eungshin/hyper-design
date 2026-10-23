@@ -19,6 +19,10 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
   /api/forward {text}                                         → {via:'paseo'|'queue', agent?, path?}
   /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
+  GET /api/state                                              → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0)
+  PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413(2 MB 넘음)
+  상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
+  index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 """
 import argparse, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, subprocess, sys, threading, urllib.parse, webbrowser
 from html.parser import HTMLParser
@@ -486,6 +490,66 @@ def watch(out, files):
     return {"mtimes": mtimes}
 
 
+# ---------------------------------------------------------------- 프로젝트 상태 파일(#228): <out>/.hd-canvas.json 이 캔버스 프로젝트별 키의 진실 원천
+STATE_FILE = ".hd-canvas.json"
+STATE_MAX = 2 * 1024 * 1024                          # PUT 본문 한도(넘으면 413)
+
+
+def _state_ok(doc):
+    return isinstance(doc, dict) and type(doc.get("rev")) is int and doc["rev"] >= 0 and isinstance(doc.get("state"), dict)
+
+
+def state_load(out):
+    """상태 파일 → {rev, state}. 없으면 {rev:0, state:{}}. 깨졌으면 .hd-canvas.json.corrupt-<시각> 으로 옮기고 한 줄 남긴 뒤 빈 상태(도우미는 멈추지 않는다)."""
+    p = pathlib.Path(out) / STATE_FILE
+    if not p.is_file():
+        return {"rev": 0, "state": {}}
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        doc = None
+    if _state_ok(doc):
+        return {"rev": doc["rev"], "state": doc["state"]}
+    bad = p.with_name(STATE_FILE + ".corrupt-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
+    try:
+        os.replace(p, bad)
+        print("[hd] 깨진 상태 파일을 옮기고 빈 상태로 시작해요: " + bad.name, file=sys.stderr, flush=True)
+    except OSError as e:
+        print("[hd] 깨진 상태 파일을 옮기지 못했어요(빈 상태로 시작): %s" % e, file=sys.stderr, flush=True)
+    return {"rev": 0, "state": {}}
+
+
+def _state_write(out, doc):                          # 같은 폴더 임시 파일 → os.replace(원자적), 바로 앞 것 하나는 .bak
+    p = pathlib.Path(out) / STATE_FILE
+    tmp = p.with_name(STATE_FILE + ".tmp-%d" % os.getpid())
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8", newline="")
+    if p.is_file():
+        shutil.copy2(p, p.with_name(STATE_FILE + ".bak"))
+    os.replace(tmp, p)
+
+
+def state_put(out, body):
+    """PUT 본문 {rev, state:{이름: 값 | null(지움)}} → (code, 답). rev 가 파일과 같을 때만 합쳐 rev+1 로 쓴다 · 다르면 409 {rev, state}."""
+    if not isinstance(body, dict) or type(body.get("rev")) is not int or not isinstance(body.get("state"), dict):
+        return 400, {"error": "{rev: 정수, state: {}} 가 아니에요"}
+    cur = state_load(out)
+    if body["rev"] != cur["rev"]:
+        return 409, cur
+    state = dict(cur["state"])
+    for k, v in body["state"].items():
+        if v is None:
+            state.pop(k, None)
+        else:
+            state[k] = v
+    rev = cur["rev"] + 1
+    _state_write(out, {"version": 1, "rev": rev, "updated": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state})
+    return 200, {"rev": rev}
+
+
+def state_inject(out):                               # 페이지에 끼워 넣을 동기 스냅숏(window.__hdState) — </script> 가 끊지 않게 < 는 <
+    return "<script>window.__hdState=%s;</script>" % json.dumps(state_load(out), ensure_ascii=False).replace("<", "\\u003c")
+
+
 # ---------------------------------------------------------------- 서버
 def keypath(out):                                    # file:// 로 열었을 때의 location.pathname — 캔버스 저장 키를 같게
     return urllib.parse.urlparse((pathlib.Path(out).resolve() / "index.html").as_uri()).path
@@ -518,11 +582,18 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
+            if u.path == "/api/state":
+                if self.headers.get("X-HD-Token") != token:
+                    return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
+                with lock:
+                    return self._json(200, state_load(out))
             parts = [p for p in u.path.split("/") if p]
-            if any(p.startswith(".") for p in parts):      # 원본 기록·대기열은 내주지 않는다
+            if any(p.startswith(".") for p in parts):      # 원본 기록·대기열·상태 파일은 내주지 않는다
                 return self.send_error(404)
             if u.path in ("/", "/index.html"):
-                b = (out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject, 1).encode("utf-8")
+                with lock:
+                    snap = state_inject(out)
+                b = (out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject + snap, 1).encode("utf-8")
                 self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
                 return
@@ -560,6 +631,32 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                 return self._json(200, watch(out, body.get("files") if isinstance(body, dict) else None))
             return self._json(404, {"error": "모르는 주소"})
 
+        def do_PUT(self):                               # /api/state 만 — 한도를 넘어도 본문은 다 읽고 답한다(위 do_POST 와 같은 이유)
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = 0
+            if n > STATE_MAX:
+                while n > 0:
+                    chunk = self.rfile.read(min(n, 65536))
+                    if not chunk:
+                        break
+                    n -= len(chunk)
+                return self._json(413, {"error": "상태가 너무 커요(2 MB 넘음)"})
+            raw = self.rfile.read(n)
+            if not self._host_ok() or self.headers.get("X-HD-Token") != token:
+                return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
+            if self.path != "/api/state":
+                return self._json(404, {"error": "모르는 주소"})
+            try:
+                body = json.loads(raw or b"null")
+            except ValueError:
+                return self._json(400, {"error": "JSON 이 아니에요"})
+            with lock:                                  # 쓰기는 한 번에 하나(rev 비교와 쓰기 사이에 끼어들지 않게)
+                code, res = state_put(out, body)
+            return self._json(code, res)
+
+    state_load(out)                                     # 시작할 때 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)
     srv.token = token
     srv.url = "http://127.0.0.1:%d/index.html?hd=%s" % (srv.server_address[1], token)

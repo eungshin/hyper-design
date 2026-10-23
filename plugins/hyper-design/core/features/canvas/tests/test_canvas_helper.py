@@ -475,3 +475,64 @@ def test_helper_written_edit_is_not_requeued_when_reload_fails(ctx, out):   # S2
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def _req(url, method, body=None, token=None, raw=None):
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+    req = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    if token:
+        req.add_header("X-HD-Token", token)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read())
+        except ValueError:
+            return e.code, None
+
+
+def test_helper_state_file_put_rev_conflict_and_limits(out):   # #228 — rev 가 맞을 때만 rev+1 로 쓰고 .bak · 다르면 409 · 2 MB 넘으면 413 · 깨진 JSON 400
+    srv = _serve(out)
+    api = srv.url.split("/index.html")[0] + "/api/state"
+    f = out / ".hd-canvas.json"
+    try:
+        assert _req(api, "GET")[0] == 403, "토큰 없으면 거절"
+        assert _req(api, "GET", token=srv.token) == (200, {"rev": 0, "state": {}}), "파일이 없으면 rev 0"
+        assert _req(api, "PUT", {"rev": 0, "state": {"notes": [{"id": "n1"}]}})[0] == 403
+        assert _req(api, "PUT", {"rev": 0, "state": {"notes": [{"id": "n1"}], "future": {"x": 1}}}, srv.token) == (200, {"rev": 1})
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        assert doc["version"] == 1 and doc["rev"] == 1 and doc["updated"] and doc["state"] == {"notes": [{"id": "n1"}], "future": {"x": 1}}, "값은 풀어 둔 JSON"
+        assert _req(api, "PUT", {"rev": 1, "state": {"hidden": ["job"], "notes": None}}, srv.token) == (200, {"rev": 2})
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        assert doc["state"] == {"future": {"x": 1}, "hidden": ["job"]}, "바뀐 키만 합치고 null = 지움, 모르는 키는 그대로"
+        assert json.loads((out / ".hd-canvas.json.bak").read_text(encoding="utf-8"))["rev"] == 1, "앞 것 하나를 .bak 으로"
+        code, res = _req(api, "PUT", {"rev": 1, "state": {"hidden": []}}, srv.token)
+        assert code == 409 and res == {"rev": 2, "state": doc["state"]}, "rev 가 다르면 409 + 지금 상태"
+        assert json.loads(f.read_text(encoding="utf-8"))["rev"] == 2, "거절하면 파일 그대로"
+        assert _req(api, "PUT", token=srv.token, raw=b"{nope")[0] == 400
+        assert _req(api, "PUT", {"rev": "2", "state": {}}, srv.token)[0] == 400
+        big = json.dumps({"rev": 2, "state": {"notes": "x" * (2 * 1024 * 1024)}}).encode()
+        assert _req(api, "PUT", token=srv.token, raw=big)[0] == 413, "2 MB 넘으면 413"
+        assert _req(api, "GET", token=srv.token)[1]["rev"] == 2
+        assert not list(out.glob(".hd-canvas.json.tmp-*")), "임시 파일이 남지 않는다"
+        page = urllib.request.urlopen(srv.url, timeout=10).read().decode("utf-8")
+        assert 'window.__hdState={"rev": 2' in page, "index.html 에 상태 스냅숏을 끼워 넣는다"
+        with pytest.raises(urllib.error.HTTPError):
+            urllib.request.urlopen(srv.url.split("/index.html")[0] + "/.hd-canvas.json", timeout=5)
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
+def test_helper_state_corrupt_file_on_start_is_moved_aside(out, capfd):   # #228 — 깨진 상태 파일: 옮기고 한 줄 남기고 빈 상태로 · 도우미는 뜬다
+    (out / ".hd-canvas.json").write_text('{"rev": 3, "state": {"notes": [', encoding="utf-8")
+    srv = _serve(out)
+    try:
+        bad = list(out.glob(".hd-canvas.json.corrupt-*"))
+        assert len(bad) == 1 and bad[0].read_text(encoding="utf-8").startswith('{"rev": 3'), "깨진 파일은 지우지 않고 옮긴다"
+        assert not (out / ".hd-canvas.json").exists()
+        assert "[hd]" in capfd.readouterr().err, "한 줄 남긴다"
+        assert _req(srv.url.split("/index.html")[0] + "/api/state", "GET", token=srv.token) == (200, {"rev": 0, "state": {}})
+        assert urllib.request.urlopen(srv.url, timeout=10).status == 200, "도우미는 그대로 페이지를 준다"
+    finally:
+        srv.shutdown(); srv.server_close()
