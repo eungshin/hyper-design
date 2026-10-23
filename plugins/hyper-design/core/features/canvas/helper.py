@@ -4,7 +4,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
 - 127.0.0.1 에만 열고, 실행마다 새 토큰을 만든다. 출력한 주소(…/index.html?hd=<토큰>)로 캔버스를 열면 '보내기'가 도우미를 쓴다.
 - 쓰는 곳은 <out> 안뿐이다. 쓰기 전에 원본을 <out>/.hd-history/<시각>/ 에 남기고, 쓴 뒤 build_canvas.py 로 캔버스를 다시 만든다(실패하면 원본으로 되돌림).
-- 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 카드 이름(title) · 설명(purpose) · 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
+- 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 카드 이름(title) · 설명(purpose) · 정책 목록(policies, task 31) · 옛 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
   나머지 메모(질문, 새 화면, 도착 없는 트리거 지정 등)는 요청문 그대로 <out>/.hd-queue/<시각>.txt 대기열 파일에 쓰고,
   --paseo-agent 가 있으면 그 파일을 `paseo send <agent> --prompt-file … --no-wait` 로 그 에이전트 터미널에 넣는다
   (없으면 터미널에서 /hyper-design:fix 에 그 내용을 붙여 넣는다).
@@ -14,7 +14,8 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
 API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localhost 의 그 포트만)
   /api/apply   {edits:[{id, screen, edit, path, value?, to?}]} → {applied:[id], failed:[{id, reason}], stamp, changed:[screen]}
-    edit: text(value — 요소 안 글·인라인 자식 전부를 바꿈, 안에 블록 자식이면 거절) · remove(요소 통째로, html·body·화면 뿌리 거절) · title · purpose · policy · link · reason = 한국어
+    edit: text(value — 요소 안 글·인라인 자식 전부를 바꿈, 안에 블록 자식이면 거절) · remove(요소 통째로, html·body·화면 뿌리 거절) · title · purpose
+      · policies(value = [글] — 화면의 policies 를 통째로 바꿈, 글 목록·50줄·줄마다 500자 아니면 거절) · policy(옛 메모: index, op delete) · link · reason = 한국어
   /api/delete  {screens:[id]}                                 → {deleted:[id], cut:[{screen, path, to}], failed, stamp, changed:[screen]}
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
   /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
@@ -379,6 +380,22 @@ class _Writes:
         return None
 
 
+POLICY_MAX_LINES, POLICY_MAX_CHARS = 50, 500
+
+
+def _policies(v):
+    """policies 편집 값 검사 — 글 목록, 50줄 이하, 줄마다 500자 이하. 앞뒤 빈칸을 자르고 빈 줄은 버린다. 아니면 ValueError(한국어)."""
+    if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+        raise ValueError("정책 줄은 글 목록이어야 해요")
+    v = [x.strip() for x in v if x.strip()]
+    if len(v) > POLICY_MAX_LINES:
+        raise ValueError("정책 줄이 %d줄을 넘어요(%d줄)" % (POLICY_MAX_LINES, len(v)))
+    for i, x in enumerate(v):
+        if len(x) > POLICY_MAX_CHARS:
+            raise ValueError("정책 %d번째 줄이 %d자를 넘어요" % (i + 1, POLICY_MAX_CHARS))
+    return v
+
+
 def apply_edits(out, edits, stamp=None):
     out = pathlib.Path(out).resolve()
     sj = out / "screens.json"
@@ -390,6 +407,9 @@ def apply_edits(out, edits, stamp=None):
         try:
             if sid not in files:
                 raise ValueError("없는 화면: %s" % sid)
+            if kind == "policies":                  # 정책 목록 통째로(task 31)
+                json_ops.append((eid, sid, "policies", _policies(e.get("value"))))
+                continue
             if kind in ("title", "purpose", "policy"):
                 if kind == "policy" and not isinstance(e.get("index"), int):
                     raise ValueError("정책 줄 번호가 없어요")
@@ -441,6 +461,8 @@ def apply_edits(out, edits, stamp=None):
                     drop.setdefault(sid, set()).add(kind[1])
                 else:
                     pol[kind[1]] = v
+            elif kind == "policies":                # 목록 통째로 — 앞선 옛 줄 지우기는 이 목록에 닿지 않는다
+                by[sid]["policies"] = list(v); drop.pop(sid, None)
             else:
                 by[sid][kind] = v
             applied.append(eid); changed.add(sid)

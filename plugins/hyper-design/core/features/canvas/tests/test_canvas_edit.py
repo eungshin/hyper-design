@@ -447,6 +447,12 @@ def bring_into_view(pg, sel):
     pg.wait_for_timeout(250)
 
 
+def pick_card(pg, sid):
+    """그 카드를 고른다(누르기) — 판의 카드 아래 글은 고른 카드만 설명·정책을 보인다(task 31)."""
+    pg.evaluate(CLICK, sid)
+    pg.wait_for_function("(id) => document.querySelector('.card[data-id=\"' + id + '\"]').classList.contains('picked')", arg=sid, timeout=3000)
+
+
 def tag_sel(frm, to):
     return f'#rows .alabel[data-from="{frm}"][data-to="{to}"]'
 
@@ -823,6 +829,7 @@ def test_dblclick_title_and_desc_queue_pending_edits(dpage):
     assert dpage.locator('.card[data-id="job"] .pchip').is_visible()
     dpage.keyboard.press("0")
     zoom_to(dpage, "job", 200)
+    pick_card(dpage, "job")                          # 설명은 고른 카드에만 보인다(task 31)
     bring_into_view(dpage, d_sel)
     dpage.dblclick(d_sel)                            # 설명을 두 번 누르면 같은 상자, 글자 자리는 설명에
     assert dpage.locator('.card[data-id="job"] .capbox [data-f="purpose"]').is_visible()
@@ -1168,21 +1175,23 @@ def test_text_tool_edits_policy_line(dpage):
     fit_view(dpage)
     __import__("test_canvas_v2").zoom_to(dpage, "job", 200)
     sel = '.card[data-id="job"] ul.pol li'
+    pick_card(dpage, "job")                          # 정책 줄은 고른 카드에만 보인다(task 31)
     bring_into_view(dpage, sel + ':first-child')
-    old = dpage.locator(sel).first.text_content()
+    olds = [t.strip() for t in dpage.locator(sel).all_text_contents()]
+    old = olds[0]
     n0 = len(notes_of(dpage))
     dpage.keyboard.press("e")
-    dpage.locator(sel).first.click()                 # H16: 글자 도구로 한 번 누르면 카드 글 상자, 글자 자리는 그 정책 줄
-    li = dpage.locator('.card[data-id="job"] .capbox ul[data-f="policies"] > li').first
-    assert li.is_visible() and li.text_content() == old
-    assert dpage.evaluate("document.activeElement === document.querySelector('.card[data-id=\"job\"] .capbox ul[data-f=\"policies\"] > li')")
-    dpage.keyboard.press("Control+a")
-    dpage.keyboard.type("새 정책 문장")
+    dpage.locator(sel).first.click()                 # H16: 글자 도구로 한 번 누르면 카드 글 상자, 글자 자리는 그 정책 줄(정책 메모의 그 줄 끝)
+    note = dpage.locator('.card[data-id="job"] .capbox [data-f="policies"]')
+    assert note.is_visible() and [ln.strip() for ln in note.inner_text().split("\n") if ln.strip()] == olds
+    assert dpage.evaluate("document.activeElement === document.querySelector('.card[data-id=\"job\"] .capbox [data-f=\"policies\"]')")
+    dpage.keyboard.type(" 더함")                     # 글자 자리 = 첫 줄 끝
     dpage.keyboard.press("Control+Enter")
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
-    assert n["edit"] == "policy" and n["index"] == 0 and "policies[0]" in n["path"], n
-    assert dpage.locator(sel).first.text_content() == "새 정책 문장" and "pend" in dpage.locator(sel).first.get_attribute("class")
+    assert n["edit"] == "policies" and n["value"] == [old + " 더함"] + olds[1:] and n["path"].endswith("> policies"), n
+    pick_card(dpage, "job")
+    assert dpage.locator(sel).first.text_content() == old + " 더함" and "pend" in dpage.locator(sel).first.get_attribute("class")
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
     assert dpage.locator(sel).first.text_content() == old
@@ -1197,6 +1206,7 @@ def test_caption_one_box_edits_all_fields(dpage):
     __import__("test_canvas_v2").zoom_to(dpage, "job", 200)
     card = '.card[data-id="job"]'
     t_sel, d_sel, p_sel = card + ' .ftitle', card + ' .fdesc', card + ' ul.pol li'
+    pick_card(dpage, "job")                          # 설명·정책은 고른 카드에만 보인다(task 31)
     bring_into_view(dpage, d_sel)
     old_desc = dpage.text_content(d_sel)
     old_pol = dpage.locator(p_sel).first.text_content()
@@ -1204,17 +1214,17 @@ def test_caption_one_box_edits_all_fields(dpage):
     dpage.dblclick(d_sel)
     box = dpage.locator(card + ' .capbox')
     assert box.is_visible()
-    ttl, desc, pols = box.locator('[data-f="title"]'), box.locator('[data-f="purpose"]'), box.locator('ul[data-f="policies"] > li')
+    ttl, desc, pols = box.locator('[data-f="title"]'), box.locator('[data-f="purpose"]'), box.locator('[data-f="policies"]')
     old_title = ttl.text_content()
+    old_pols = [t.strip() for t in dpage.locator(p_sel).all_text_contents()]
     assert old_title and dpage.text_content(t_sel).endswith(old_title)
-    assert desc.text_content() == old_desc and pols.count() == len(dpage.locator(p_sel).all_text_contents())
-    assert pols.first.text_content() == old_pol
+    assert desc.text_content() == old_desc and [ln.strip() for ln in pols.inner_text().split("\n") if ln.strip()] == old_pols, "정책 = 한 칸의 글, 한 줄에 하나"
     assert not dpage.locator(t_sel).is_visible() and not dpage.locator(d_sel).is_visible(), "상자가 카드 아래 글 자리를 대신한다"
     assert "Esc 취소" in box.locator(".capfoot").text_content()
     ttl.click()
     dpage.keyboard.press("Control+a")
     dpage.keyboard.type("한 상자 제목")
-    pols.first.click()
+    pols.click()
     dpage.keyboard.press("Control+a")
     dpage.keyboard.type("한 상자 정책")
     ESHOTS.mkdir(parents=True, exist_ok=True)
@@ -1236,15 +1246,17 @@ def test_caption_one_box_edits_all_fields(dpage):
     assert others, "다른 카드 화면이 실려 있어야 hd-pending 을 셀 수 있다"
     assert {"muts": dpage.evaluate("window.__otherCards.muts"), "pend": sum(f.evaluate("window.__pend") for f in others)} == {"muts": 0, "pend": 0}, "저장은 고친 카드만 다시 그린다"
     ns = notes_of(dpage)[-2:]
-    assert sorted((n["edit"], n.get("index")) for n in ns) == [("policy", 0), ("title", None)], ns
+    assert sorted(n["edit"] for n in ns) == ["policies", "title"], ns
+    assert next(n for n in ns if n["edit"] == "policies")["value"] == ["한 상자 정책"], ns
     assert all(n["screen"] == "job" and "screens.json" in n["path"] for n in ns), ns
     assert dpage.text_content(t_sel).endswith("한 상자 제목") and "pend" in dpage.get_attribute(t_sel, "class")
-    assert dpage.locator(p_sel).first.text_content() == "한 상자 정책" and "pend" in dpage.locator(p_sel).first.get_attribute("class")
+    assert [t.strip() for t in dpage.locator(p_sel).all_text_contents()] == ["한 상자 정책"] and "pend" in dpage.locator(p_sel).first.get_attribute("class")
     assert dpage.text_content(d_sel) == old_desc and "pend" not in dpage.get_attribute(d_sel, "class"), "안 바꾼 칸은 편집이 아니다"
     dpage.keyboard.press("Control+z")                # 한 번 되돌리면 두 칸 다
     wait_notes(dpage, n0)
     assert dpage.text_content(t_sel).endswith(old_title) and "pend" not in dpage.get_attribute(t_sel, "class")
-    assert dpage.locator(p_sel).first.text_content() == old_pol
+    assert [t.strip() for t in dpage.locator(p_sel).all_text_contents()] == old_pols and old_pols[0] == old_pol
+    pick_card(dpage, "job")                          # 밖을 눌러 저장하면 고르기도 풀린다 — 설명을 다시 누르려면 고른다
     dpage.dblclick(d_sel)                            # 다시 열고 Esc = 버리기
     assert box.is_visible()
     dpage.keyboard.press("Control+a")
@@ -1253,14 +1265,15 @@ def test_caption_one_box_edits_all_fields(dpage):
     assert not box.count()
     dpage.wait_for_timeout(200)
     assert len(notes_of(dpage)) == n0 and dpage.text_content(d_sel) == old_desc
-    dpage.dblclick(d_sel)                            # #243: 정책 줄을 비우고 닫으면 그 줄 지우기 반영 대기
-    pols.first.click()
+    pick_card(dpage, "job")
+    dpage.dblclick(d_sel)                            # #243: 정책을 다 비우고 닫으면 빈 목록 반영 대기
+    pols.click()
     dpage.keyboard.press("Control+a")
     dpage.keyboard.press("Backspace")
     dpage.mouse.click(e["x"], e["y"])
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
-    assert (n["edit"], n.get("index"), n.get("value")) == ("policy", 0, ""), n
+    assert (n["edit"], n.get("value")) == ("policies", []), n
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
 
@@ -2756,10 +2769,12 @@ def test_shift_enter_in_card_caption(dpage):
     assert box.locator('[data-f="title"]').text_content() == title0 and box.locator('[data-f="title"] br').count() == 0, "제목에는 줄을 넣지 않는다"
     dpage.keyboard.press("Shift+Enter")
     assert dpage.evaluate("document.activeElement.dataset.f") == "purpose" and box.locator('[data-f="purpose"] br').count() >= 1, "설명에서는 줄바꿈"
-    assert box.locator('ul[data-f="policies"] > li').count() >= 2, "고정본 job 화면에는 정책 줄이 둘 이상"
-    box.locator('ul[data-f="policies"] > li').first.click()
+    note = box.locator('[data-f="policies"]')
+    brs = note.locator("br").count()
+    assert brs >= 1, "고정본 job 화면에는 정책 줄이 둘 이상"
+    note.click()
     dpage.keyboard.press("Shift+Enter")
-    assert dpage.evaluate("document.activeElement === document.querySelector('" + card + " .capbox ul[data-f=\"policies\"] > li:nth-child(2)')"), "정책 줄 Shift+Enter = Enter(다음 줄)"
+    assert dpage.evaluate("document.activeElement.dataset.f") == "policies" and note.locator("br").count() > brs, "정책 메모 Shift+Enter = Enter = 새 줄(칸은 그대로)"
     dpage.keyboard.press("Escape")
     assert not box.count() and len(notes_of(dpage)) == n0
     assert not errs, errs

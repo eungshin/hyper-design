@@ -11,6 +11,7 @@
 - 요소 지우기(`edit:'remove'`): 요소 메뉴 '요소 지우기'(Del) · 고른 요소에서 Delete · 고치기 칸(판·크게 보기)의 [요소 지우기]. `instantOf` — 도우미가 있으면 바로 파일에(`/api/apply`, 되돌리기 = 되살리기), 없으면 반영 대기이고 요청문은 `요청: 요소 지우기 — …`(`say.remove()`; 화면 삭제 글귀는 `say.removeScreen(label)`). 도우미는 시작 태그부터 닫는 태그 끝까지 지운다(void·`/>` = 시작 태그만) · html·head·body·화면 뿌리(body/맨 위의 유일한 요소)·닫는 태그 없는 요소는 거절. 거절 까닭은 토스트로
 - 미리보기 `preview(notes, screen)` → `hd-pending` 항목 `{path, text}` · `{path, remove:true}`(숨김). 화면은 안의 마디를 떼어 두었다가 다음 호출에서 그대로 되돌린다
 - 한 화면에 편집 여럿 = 원문 위치 뒤에서부터. 같은 요소 두 글자 고치기 = 나중 것 · 겹치는 자리(안팎)는 나중 편집이 실패(앞 것은 씀)
+- 정책 목록(`edit:'policies'`, task 31): `value` = 줄 목록 전체(path `screens.json > screens[id=…] > policies`), 바로 쓸 수 있는 편집(`directOf`) — 보내면 도우미가 그 목록으로 통째로 바꾸고, 도우미가 거절하면(글 목록·50줄·500자) 다른 바로 쓰기 편집처럼 요청문으로 넘어간다. 요청문 글귀 `say.field('policies', 목록)` = `정책 줄 바꾸기: ① … ② … (screens.json의 policies 전체)`(빈 목록 = `정책 줄 모두 지우기 …`), fix 스킬 형식 그대로. 옛 `policy`(index) 메모는 읽고 쓰기만 그대로 둔다
 - 소스 위치(task 27 → 30): 고른 요소의 `src`(앱 카드)는 메모 대상에 남고, 요청문에 `   소스: <file>:<line>`(요청 줄 다음, src 가 있는 항목만)
 
 ## 고치면 돌릴 것

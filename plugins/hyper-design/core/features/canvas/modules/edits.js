@@ -1,7 +1,7 @@
 /* Model — 편집 메모(화면 파일을 바꾸는 편집). DOM·저장소·메시지를 쓰지 않는다.
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
-     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · title · purpose · policy(index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
+     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
 (function () {
@@ -51,7 +51,7 @@ function pendingLink(notes, from, path, to) {
 
 // 도우미(helper.py)가 화면 파일에 바로 쓸 수 있는 편집
 function directOf(n) {
-  return n.edit === 'text' || n.edit === 'remove' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' ||
+  return n.edit === 'text' || n.edit === 'remove' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' || n.edit === 'policies' ||
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 
@@ -140,7 +140,8 @@ function tally(notes) {
 }
 
 // 요청문 글귀 — label = '"제목"(id)' 처럼 사람이 읽는 화면 이름(View 가 만들어 넘긴다)
-var FIELD = {title: '화면 이름', purpose: '화면 설명', policy: '정책 줄'};
+var FIELD = {title: '화면 이름', purpose: '화면 설명', policy: '정책 줄', policies: '정책 줄'};
+function circled(i) { return i < 20 ? String.fromCharCode(0x2460 + i) : '(' + (i + 1) + ')'; }   // ① … ⑳, 그 뒤 (21)
 var say = {
   link: function (to) { return '이 요소를 누르면 ' + to + ' 화면으로 가게 연결'; },
   retarget: function (from, to) { return '도착 바꾸기: 지금 ' + from + ' → ' + to + ' 화면으로 가게'; },
@@ -149,6 +150,10 @@ var say = {
   trigger: function () { return '트리거 지정: 이 요소를 다른 화면으로 가는 버튼으로(도착은 아직 정하지 않음)'; },
   text: function (v) { return v === '' ? '글자 비우기 — 요소는 그대로 두고 안의 글만 지우기' : '글자를 "' + v + '"(으)로 바꾸기'; },
   field: function (field, v, index, old) {          // v '' = 지우기(#243): 정책 줄 = 그 줄 지우기 · 설명 = 비우기 (old = 원래 글, 있으면 따옴표로)
+    if (field === 'policies') {                      // 정책 목록 통째로(task 31) — 새 목록 전체를 한 줄로
+      var at2 = ' (screens.json의 policies 전체)';
+      return (v && v.length ? '정책 줄 바꾸기: ' + v.map(function (l, i) { return circled(i) + ' ' + flat(l); }).join(' ') : '정책 줄 모두 지우기') + at2;
+    }
     var at = ' (screens.json의 ' + (field === 'policy' ? 'policies[' + index + ']' : field) + ')';
     if (v === '' && field === 'policy') return '정책 ' + (index + 1) + '번째 줄 ' + (old ? '"' + old + '" ' : '') + '지우기' + at;
     if (v === '' && field === 'purpose') return FIELD[field] + ' 비우기' + at;

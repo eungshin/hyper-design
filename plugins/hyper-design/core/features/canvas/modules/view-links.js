@@ -83,7 +83,8 @@ function mount(ctx) {
     var c = cardEl(id); if (!c) return;
     var ph = $('.phone', c), fr = $('iframe', ph);
     xpId = id;
-    c.style.height = c.offsetHeight + 'px'; c.classList.add('xp');
+    c.style.height = getComputedStyle(c).height;   // 소수 높이 그대로(offsetHeight 는 반올림 — 카드 높이가 줄에서 가장 크면 아래 줄이 1px 밀린다, task 31)
+    c.classList.add('xp');
     fr.style.height = h + 'px';
     void ph.offsetHeight;
     ph.style.height = h + 'px';

@@ -1,7 +1,7 @@
 """카드 글 상자에서 지우기(#243, task 15) — caption.diff 의 지우기 편집 · say 글귀 · helper 가 정책 줄을 지우고 설명을 비운다.
 
-Model(node): 비운 정책 줄 = {field:'policy', index, op:'delete', value:''} (원래 번호 그대로), 비운 설명 = '' 편집, 비운 제목 = 편집 없음,
-빈 새 줄 = 버림. 도우미(브라우저·HTTP·빌드 없음, apply_edits 직접): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
+Model(node): 비운 정책 줄 = 목록에서 빠짐(task 31 — {field:'policies'} 목록 하나), 비운 설명 = '' 편집, 비운 제목 = 편집 없음,
+빈 새 줄 = 버림. say 의 옛 정책 줄(policy) 글귀는 옛 반영 대기 메모 때문에 그대로. 도우미(브라우저·HTTP·빌드 없음, apply_edits 직접): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
 """
 import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
@@ -21,7 +21,7 @@ const b = {title: '홈', purpose: '설명 글', policies: ['하나', '둘', '셋
 out.twoPol = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['', '둘', '  \n ']});
 out.purpose = C.diff(b, {title: '홈', purpose: ' \n ', policies: ['하나', '둘', '셋']});
 out.title = C.diff(b, {title: '  ', purpose: '설명 글', policies: ['하나', '둘', '셋']});
-out.newEmpty = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['하나', '둘', '셋', ' ']}, {allowAdd: true});
+out.newEmpty = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['하나', '둘', '셋', ' ']});
 out.emptyStays = C.diff({title: '홈', purpose: '', policies: ['']}, {title: '홈', purpose: '', policies: ['']});
 out.mixed = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['새 하나', '', '셋']});
 out.sayDel = S.field('policy', '', 1, '둘');
@@ -46,11 +46,10 @@ def js():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_cleared_policy_lines_become_deletes_with_original_indexes(js):
-    assert js["twoPol"] == [{"field": "policy", "index": 0, "op": "delete", "value": "", "old": "하나"},
-                            {"field": "policy", "index": 2, "op": "delete", "value": "", "old": "셋"}], js["twoPol"]
-    assert js["mixed"] == [{"field": "policy", "index": 0, "value": "새 하나", "old": "하나"},
-                           {"field": "policy", "index": 1, "op": "delete", "value": "", "old": "둘"}], js["mixed"]
+def test_cleared_policy_lines_drop_out_of_the_one_list(js):
+    old = ["하나", "둘", "셋"]
+    assert js["twoPol"] == [{"field": "policies", "value": ["둘"], "old": old}], js["twoPol"]
+    assert js["mixed"] == [{"field": "policies", "value": ["새 하나", "셋"], "old": old}], js["mixed"]
 
 
 def test_cleared_purpose_is_an_empty_edit(js):

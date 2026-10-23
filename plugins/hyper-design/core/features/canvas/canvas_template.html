@@ -355,7 +355,11 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 #toast[hidden]{display:none}
 .ftitle.pend,.fdesc.pend{background:#FFF4D6;border-radius:6px;box-shadow:0 0 0 3px #FFF4D6;white-space:pre-line}
 /* 카드 아래 글 한 상자(H16, modules/view-caption.js) — 여는 동안 그 카드의 제목·설명·정책 줄은 숨긴다 */
-.card.capopen>.ftitle,.card.capopen>.fdesc,.card.capopen>.pol,.card.capopen>.more{display:none}
+.card.capopen>.ftitle,.card.capopen>.fdesc,.card.capopen>.cbody,.card.capopen>.capmark{display:none}
+/* 판의 카드 아래 글 = 제목만, 고르면 설명·정책(task 31 — 무엇을 보일지 caption.shown, 그리기 viewCaption.fold) · 접힌 카드의 반영 대기 = 작은 표시 */
+.card.capfold-d>.cbody>.fdesc,.card.capfold-p>.cbody>.pol,.card.capfold-p>.cbody>.more,.cbody:empty{display:none}
+.card:not(.capfold-d)>.cbody{position:absolute;left:0;right:0;z-index:6;background:#fff;border:1px solid #e3e3e0;border-radius:8px;padding:2px 12px 10px;box-shadow:0 4px 14px rgba(0,0,0,.08)}  /* 펼친 읽기 보기는 판 배치를 밀지 않는다 — top 없음 = 제목 바로 아래(키운 긴 화면이면 그 아래) */
+.capmark{display:inline-block;margin-top:4px;font-size:13px;color:#8a6d1f;background:#FFF4D6;border-radius:6px;padding:1px 7px}
 .capbox{margin-top:16px;border:1.5px solid #2b2b29;border-radius:8px;background:#fff;padding:12px 14px 6px;box-shadow:0 2px 10px rgba(0,0,0,.08);cursor:text}
 .capbox [contenteditable="true"]{outline:none}
 .capttl{display:flex;align-items:baseline;border-bottom:1px solid #eee;padding-bottom:6px}
@@ -365,8 +369,7 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 .capbox [data-ph]:empty::before{content:attr(data-ph);color:#aaa;font-weight:400;pointer-events:none}
 .card.draft .fdesc{white-space:pre-line}
 .card.draft .fdesc:empty{display:none}
-.capp{margin:8px 0 0;padding-left:22px;font-size:17px;line-height:1.5;color:#444}
-.capp li{min-height:1.5em}
+.capp{margin:8px 0 0;font-size:17px;line-height:1.5;color:#444;min-height:1.5em;border-top:1px dashed #eee;padding-top:6px}
 .capfoot{border-top:1px solid #eee;margin-top:8px;padding-top:6px;font-size:11.5px;color:#8a8a85}
 .pchip{position:absolute;left:8px;top:8px;z-index:3;background:var(--ui-pending);color:#fff;border-radius:999px;padding:2px 9px;font-size:13px;font-weight:700;pointer-events:none}
 #tedit{position:fixed;z-index:36;background:#fff;border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.22);padding:0 0 4px}
@@ -668,20 +671,22 @@ if (dc && ((dc.items || []).length || dc.core)) {
 $('#intro').innerHTML = '<p class="hint">끌어서 둘러보고, 화면을 누르면 크게 보고 직접 눌러볼 수 있어요 · 점선은 주요 흐름' + (D.stage === 'go' && D.pending ? ' · 오류·확인·빈 화면 같은 상태 ' + D.pending + '개는 <b>/hyper-design:max</b>로 더할 수 있어요' : '') + '</p><div class="intro-grid">' + intro + '</div>';
 $('#intro').style.marginLeft = LEFT + 'px';
 
+function polHtml(pol, cls) {                        // 카드 아래 정책 줄: 앞 셋은 목록, 나머지는 '정책 N개 더' 접기 · cls(i) = 줄마다 덧붙일 클래스(반영 대기)
+  var li = function (p, i) { var c = cls ? cls(i) : ''; return '<li' + (c ? ' class="' + c + '"' : '') + '>' + esc(p) + '</li>'; };
+  var shown = pol.slice(0, 3).map(li).join('');
+  return (shown ? '<ul class="pol">' + shown + '</ul>' : '') + (pol.length > 3 ? '<details class="more"><summary>정책 ' + (pol.length - 3) + '개 더</summary><ul class="pol">' +
+    pol.slice(3).map(function (p, i) { return li(p, i + 3); }).join('') + '</ul></details>' : '');
+}
 var html = '<svg class="ar" id="ar" width="1" height="1"><defs><marker id="hd-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs></svg>';
 (D.rows || []).forEach(function (row) {
   html += '<div class="flow"><div class="glabel">' + esc(row.group) + '</div><div class="cards">';
   row.screens.forEach(function (s) {
-    var pol = s.policies || [];
-    var shown = pol.slice(0, 3).map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('');
-    var more = pol.length > 3 ? '<details class="more"><summary>정책 ' + (pol.length - 3) + '개 더</summary><ul class="pol">' +
-      pol.slice(3).map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul></details>' : '';
     html += '<div class="card" data-id="' + esc(s.id) + '"><div class="phone"><iframe scrolling="no" tabindex="-1" title="' + esc(s.title) +
       '" data-src="' + esc(s.file) + '"></iframe><button class="cover" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
       '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="pres" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
       '" title="실제로 눌러 보기(두 번 눌러도 같아요)" aria-label="' + esc(s.title) + ' 크게 보기">보기</button>' +
       '<div class="ftitle">' + (s.state ? '<span class="state">상태</span>' : '') + esc(s.title) + '</div>' +
-      (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + (shown ? '<ul class="pol">' + shown + '</ul>' : '') + more + '</div>';
+      '<div class="cbody">' + (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + polHtml(s.policies || []) + '</div></div>';
   });
   html += '</div></div>';
 });
@@ -1615,37 +1620,51 @@ function paintCardText(ids) {
       el.classList.toggle('pend', v != null);
       if (v != null) el.title = '반영 대기 · 원래: ' + o[fs[0]]; else el.removeAttribute('title');
     });
-    $$('.pol li', c).forEach(function (li, i) {        // 정책 줄(screens.json policies[i])
-      if ($('input', li)) return;
-      var v = pendingOf(id, 'policy', i);
-      li.classList.toggle('del', v === ''); li.textContent = v ? v : (o.policies[i] || li.textContent);   // 비운 줄 = 지우기 대기(취소선)
-      li.classList.toggle('pend', v != null);
-      if (v != null) li.title = '반영 대기 · 원래: ' + o.policies[i]; else li.removeAttribute('title');
-    });
+    var pp = polPending(id), pol = pp || o.policies;   // 정책 = 반영 대기 목록 하나(task 31) 또는 원래 목록
+    var cls = pp ? function (i) { return pol[i] === o.policies[i] ? '' : 'pend'; } : null;
+    var key = JSON.stringify([pol, pp ? pol.map(function (x, i) { return cls(i); }) : 0]);
+    if (c.dataset.polKey !== key) {                  // 바뀐 때만 다시(다른 칸 그리기가 정책 줄을 건드리지 않게)
+      var open = !!$('details.more[open]', c);
+      var body = $(':scope > .cbody', c), d = body && $(':scope > .fdesc', body);
+      if (body) { $$(':scope > .pol, :scope > .more', body).forEach(function (x) { x.remove(); }); body.insertAdjacentHTML(d ? 'beforeend' : 'afterbegin', polHtml(pol, cls)); }
+      if (open && $('details.more', c)) $('details.more', c).open = true;
+      c.dataset.polKey = key;
+    }
+  });
+  foldCards(ids);
+}
+function polPending(id) { return HD.caption.pending(NS.list(), id, (ORIG[id] || {}).policies || []); }   // 그 화면의 반영 대기 정책 목록(없으면 null)
+// 판의 카드 아래 글 접기(task 31): 고르지 않은 카드 = 제목만(+ 반영 대기 표시) · 고른 카드·빈 레이아웃 = 다 — 보일 칸 = caption.shown, 그리기 = CAP.fold
+function foldCards(ids) {
+  if (!SL || !CAP) return;                           // 셸이 다 붙기 전(처음 그리기) — SL 을 붙인 뒤 한 번 부른다
+  var on = {}; SL.ids().forEach(function (x) { on[x] = 1; });
+  cardsOf(ids).forEach(function (c) {
+    var id = c.dataset.id;
+    CAP.fold(c, HD.caption.shown({selected: !!on[id], blank: !ORIG[id], pending: {purpose: pendingOf(id, 'purpose') != null, policies: polPending(id) != null}}));
   });
 }
 // 카드 아래 글 한 상자(H16) — 제목·설명·정책 줄을 한 상자에서. 그리기·글쇠 = modules/view-caption.js, 비교 = modules/caption.js
-// 바뀐 칸마다 편집 메모 하나(title·purpose·policy[i]) → 한 번의 addEdits = 되돌리기 한 번. 비운 정책 줄 = 지우기(op:delete, #243), 더하기는 막는다(allowAdd:false)
+// 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 addEdits = 되돌리기 한 번
 var CAP = HD.viewCaption.mount({
   values: function (id) {
     var o = ORIG[id];
     if (!o) { var dn = layoutOf(id); return dn ? {title: dn.value, purpose: dn.purpose || '', policies: []} : null; }   // 빈 레이아웃 = 그 메모의 이름·목적
     var t = pendingOf(id, 'title'), d = pendingOf(id, 'purpose');
     return {title: t != null ? t : o.title, purpose: d != null ? d : o.purpose,
-            policies: o.policies.map(function (x, i) { var v = pendingOf(id, 'policy', i); return v != null ? v : x; })};
+            policies: polPending(id) || o.policies.slice()};
   },
   badge: function (c) { return $('.ftitle .state', c); },
   commit: function (id, changes) {
     if (!ORIG[id]) { editLayout(id, changes); return; }
     var list = changes.map(function (ch) {
-      var pol = ch.field === 'policy', path = 'screens.json > screens[id=' + id + '] > ' + (pol ? 'policies[' + ch.index + ']' : ch.field);
-      var n = editNote(id, {path: path, text: ch.old, rect: null}, HD.edits.say.field(ch.field, ch.value, ch.index, ch.old));
-      n.edit = ch.field; n.value = ch.value; if (pol) n.index = ch.index; if (ch.op) n.op = ch.op;   // op:'delete' = 비운 정책 줄(#243)
+      var path = 'screens.json > screens[id=' + id + '] > ' + ch.field, old = Array.isArray(ch.old) ? ch.old.join(' · ') : ch.old;
+      var n = editNote(id, {path: path, text: old, rect: null}, HD.edits.say.field(ch.field, ch.value, null, ch.old));
+      n.edit = ch.field; n.value = ch.value;           // policies = 줄 목록 통째로
       return n;
     });
     addEdits('카드 글', list);
   },
-  allowAdd: false,
+  hasPolicies: function (id) { return !!ORIG[id]; },   // 빈 레이아웃은 이름·목적만(#225)
   toast: function (m) { toast(m); },
   hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로) · Shift+Enter 줄바꿈'}; },
   onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(c ? [c.dataset.id] : null); }
@@ -1805,9 +1824,11 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (VA) VA.render();
   if (PN && st.ids.length) PN.focus(null);          // 다른 카드를 고르면 막 메모를 단 카드의 핀 보이기는 끝
   placeSelbar();
+  foldCards();                                      // 고른 카드만 설명·정책을 펼친다(task 31)
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
 }});
+foldCards();                                         // 처음: 고르지 않은 카드는 제목만(task 31)
 function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 한 장일 때만
   var bar = $('#selbar'); if (!bar || !SL) return;
   var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
@@ -2149,6 +2170,8 @@ function sendList(list) {
       window.__hdAgent ? 'AI 에이전트에게 보내지 못해 ' + r.left.length + '건을 대기열 파일에만 저장했어요' :
       'AI 터미널이 연결돼 있지 않아요 — ' + r.left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요. 받게 하려면 터미널 에이전트에 hd 명령(hd notes)으로 읽게 하거나 도우미를 --paseo-agent <id> 로 다시 띄우세요';
     var said = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai;
+    var refused = ((r.res && r.res.failed) || []).filter(function (f) { return f.reason; })[0];   // 도우미가 거절한 바로 쓰기(예: 정책 줄 500자 넘음) — 까닭을 말한다(그 편집은 요청문으로 넘어갔다)
+    if (refused) said = '파일에 쓰지 못함: ' + refused.reason + (said ? ' · ' + said : '');
     toast($('#nmsg').textContent = (warn ? warn + (said ? ' · ' : '') : '') + said, false, ai || warn ? 9000 : 0);
     window.__hdLastHelper = {apply: r.res, forward: r.fw};
     if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
