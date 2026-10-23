@@ -1901,6 +1901,7 @@ function adoptExternal(names) {
   }
   if (names.indexOf('notes') >= 0) NS.set(HD.annotation.adopt(NS.list(), HD.notes.parse(ST.getItem(NKEY))));
   saveNotes(true);
+  if (PR) PR.check();                                // 빈 레이아웃에 온 반영됨·대체됨 답 — 그 화면이 있으면 승격
 }
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
 function outDir() {
@@ -2084,6 +2085,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     paintCardText(); drawArrows(); scheduleVisible();
     pruneFolders(); if (LY) LY.render();
     if (VB) VB.render();
+    if (PR) PR.check();
   }});
 // AI 수정 중 덮개 View(modules/view-busy.js · 상태 modules/busy.js, Q2b) — 터미널로 넘긴 화면에 덮개, 그 화면 파일이 바뀌면 걷고 그 카드만 다시(도우미로 열었을 때만)
 var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id); },
@@ -2180,6 +2182,10 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
   }}});
 PP = FT.popPlace || null;
+// 빈 레이아웃 승격(modules/view-promote.js, #241 R2) — 카드 자리·폴더의 주인은 셸이라 읽기/쓰기만 넘긴다. 붙지 못했으면 승격 없이(빈 카드가 남음, [hd] 알림)
+var PR = FT.promote ? FT.promote.attach({group: function (id) { var c = VL.cardEl(id); return c ? groupOf(c) : ''; },
+  pos: {get: function () { return cardPos; }, set: function (m) { cardPos = m; saveCardPos(); $$('.card', rowsEl).forEach(placeCard); drawArrows(); }},
+  folders: {get: function () { return folders; }, set: function (f) { setFolders(f); if (LY) LY.render(); }}}) : null;
 renderNotes();
 
 /* ---------- 시작 ---------- */
@@ -2192,6 +2198,7 @@ renderNotes();
 })();
 loadCardPos();
 pruneFolders(); LY.render();                       // 빈 레이아웃 카드까지 그린 뒤에 없는 화면 id 를 버린다
+if (PR) PR.check();                                // AI 가 답한 빈 레이아웃이 있고 그 화면이 이제 데이터에 있으면 그 자리로(새로고침 뒤)
 drawArrows();
 home();
 loadVisible();
