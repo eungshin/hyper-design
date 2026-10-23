@@ -58,6 +58,7 @@ def fit_view(pg):
     pg.wait_for_timeout(120)
 
 
+@pytest.mark.area("input")
 def test_wheel_pans_ctrl_wheel_zooms(bpage):
     fit_view(bpage)
     p = empty_point(bpage)
@@ -72,6 +73,7 @@ def test_wheel_pans_ctrl_wheel_zooms(bpage):
     assert cam(bpage)[1] > z1, "Ctrl+휠 위로 = 확대"
 
 
+@pytest.mark.area("input", "modal")
 def test_left_drag_pans_even_from_a_card(bpage):
     fit_view(bpage)
     for start in (empty_point(bpage), cover_center(bpage)):
@@ -86,6 +88,7 @@ def test_left_drag_pans_even_from_a_card(bpage):
         assert not modal_open(bpage), "끌기 끝의 클릭은 크게 보기를 열지 않는다"
 
 
+@pytest.mark.area("input")
 def test_right_button_menu_middle_pans(bpage):
     """4단계에서 좁힌 규칙: 오른쪽 = 메뉴(끌어도 판은 그대로), 가운데 = 화면 이동(카드 위에서도, 크게 보기 안 열림)."""
     fit_view(bpage)
@@ -116,6 +119,7 @@ def test_right_button_menu_middle_pans(bpage):
     bpage.wait_for_timeout(120)
 
 
+@pytest.mark.area("input", "modal", "links")
 def test_dblclick_opens_modal_and_esc_order(bpage):
     """재작업 S3: 마우스 한 번 = 크게 보기 아님(판 위에서 고른다), 두 번 = 크게 보기."""
     fit_view(bpage)
@@ -137,6 +141,7 @@ def test_dblclick_opens_modal_and_esc_order(bpage):
     assert not bpage.evaluate("document.getElementById('rows').classList.contains('focusing')"), "다음 Esc = 연결 보기 끝"
 
 
+@pytest.mark.area("modal")
 def test_p_picks_only_inside_modal(bpage):
     fit_view(bpage)
     bpage.keyboard.press("p")
@@ -158,6 +163,7 @@ def test_p_picks_only_inside_modal(bpage):
     assert not modal_open(bpage)
 
 
+@pytest.mark.area("input")
 def test_typing_guard_blocks_shortcuts(bpage):
     fit_view(bpage)
     tool0 = bpage.evaluate("[...document.querySelectorAll('#tools [aria-pressed=\"true\"]')].map(b => b.dataset.tool)")
@@ -171,6 +177,7 @@ def test_typing_guard_blocks_shortcuts(bpage):
     bpage.evaluate("document.getElementById('hd-test-input').remove()")
 
 
+@pytest.mark.area("notes")
 def test_notes_roundtrip_same_key(bpage):
     """메모는 hd-notes:<hash(pathname)> 한 키에 저장되고, 새로고침 뒤 같은 키·같은 내용으로 다시 그려진다."""
     import re

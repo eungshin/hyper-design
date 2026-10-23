@@ -1,8 +1,10 @@
 """캔버스 테스트 영역 표시(marker) — 고친 곳에 맞는 테스트만 골라 돌리려고(contract.md '테스트 층').
 
 test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저 없음, 수 초) — 단 `@pytest.mark.slow`(git·하위 프로세스 빌드 같은 I/O)는 unit 에서 빠진다.
-브라우저 테스트는 아래 표에서 영역을 받는다. SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
-표에 없는 브라우저 테스트가 생기면 수집 단계에서 실패한다 — 새 테스트는 여기에 한 줄을 더한다.
+브라우저 테스트는 테스트 파일 안에서 영역을 받는다 — 테스트마다 `@pytest.mark.area("tools", "notes")`(파일 전체면 `pytestmark = pytest.mark.area(...)`).
+여기서는 그 표시를 `-m` 으로 고를 수 있는 영역 표시(`tools`·`notes`…)로 바꿔 단다. 영역 표시가 없거나 AREAS 에 없는 영역을 쓴
+브라우저 테스트는 수집 단계에서 실패한다. 여기를 고칠 일은 새 영역(AREAS 한 줄)뿐이다.
+SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
 """
 import json, time
 from pathlib import Path
@@ -22,140 +24,6 @@ AREAS = {
     "theme": "테마 패널: 테마 고르기·복제·색 네 칸·대비 경고·이름/삭제(hd-themes)",
     "menu": "위쪽 보기 메뉴(배율 칩)·창 메뉴·Tab 패널 모두 숨기기",
     "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
-}
-
-BROWSER = {
-    # test_canvas_baseline.py — 0단계 고정
-    "test_wheel_pans_ctrl_wheel_zooms": ("input",),
-    "test_left_drag_pans_even_from_a_card": ("input", "modal"),
-    "test_right_button_menu_middle_pans": ("input",),
-    "test_dblclick_opens_modal_and_esc_order": ("input", "modal", "links"),
-    "test_p_picks_only_inside_modal": ("modal",),
-    "test_typing_guard_blocks_shortcuts": ("input",),
-    "test_notes_roundtrip_same_key": ("notes",),
-    # test_canvas_edit.py — 편집 기능
-    "test_notes_panel_in_dock_scrolls": ("notes", "dock"),
-    "test_dock_merge_split_float_resize_collapse_persist": ("dock",),
-    "test_dock_tabs_fit_when_many": ("dock",),
-    "test_dock_width_drag_once_per_frame_and_tab_switch_keeps_nodes": ("dock",),
-    "test_toolbar_default_hand_and_keys": ("tools", "input"),
-    "test_move_tool_moves_card_and_persists": ("tools", "flow"),
-    "test_drag_redraws_only_the_lines": ("flow", "tools", "links"),
-    "test_line_click_shows_end_handles_and_drag_retargets": ("flow", "tools"),
-    "test_fit_includes_moved_card_and_drops_stale": ("tools", "input"),
-    "test_card_drag_has_no_long_tasks": ("tools",),
-    "test_moved_card_paints_above_its_new_neighbours": ("tools",),
-    "test_tag_rename_keeps_button_text": ("links",),
-    "test_context_menu_by_target": ("input", "tools"),
-    "test_hide_screen_and_hidden_list": ("tools", "flow"),
-    "test_undo_redo_card_moves": ("tools",),
-    "test_link_menu_rename_undo_and_go": ("links", "motion"),
-    "test_trigger_drag_to_card_adds_link_note_and_undo": ("tools", "notes"),
-    "test_knife_right_drag_cuts_link_into_note": ("tools", "links", "notes"),
-    "test_trigger_tool_shows_sockets_and_socket_drag_changes_target": ("tools", "links"),
-    "test_element_menu_via_hit_at": ("tools", "input"),
-    "test_hit_at_without_palette_says_cannot_edit": ("tools",),
-    "test_dblclick_title_and_desc_queue_pending_edits": ("tools", "notes"),
-    "test_dblclick_screen_text_edits_with_preview": ("tools", "modal", "notes"),
-    "test_element_menu_edit_text": ("tools",),
-    "test_cut_hides_line_at_once_with_live_mark_and_toast_undo": ("tools", "links"),
-    "test_socket_drag_draws_pending_line_at_once": ("tools", "links"),
-    "test_toolbar_has_add_group": ("tools",),
-    "test_layout_tool_drops_blank_card_and_undo": ("tools", "notes"),
-    "test_empty_drop_makes_layout_and_links_it": ("tools", "links"),
-    "test_empty_right_click_layout_here": ("tools", "input"),
-    "test_memo_tool_opens_card_memo": ("tools", "notes"),
-    "test_modal_pins_follow_navigated_screen": ("modal", "notes"),
-    "test_element_tools_outline_hovered_element_by_kind": ("tools",),
-    "test_pres_button_and_modal_dblclick_edits_text": ("modal", "notes"),
-    "test_annotate_tool_notes_an_element_on_the_board": ("tools", "notes"),
-    "test_text_tool_edits_policy_line": ("tools", "notes"),
-    "test_caption_one_box_edits_all_fields": ("tools", "notes"),
-    "test_trigger_tool_click_selects_element_with_its_socket": ("tools",),
-    "test_trigger_click_on_card_shows_its_links_like_shift_click": ("tools", "links"),
-    "test_cutting_a_pending_line_cancels_that_edit": ("tools", "links"),
-    "test_trigger_drag_can_reach_a_far_card_in_another_row": ("tools", "input"),
-    "test_click_selects_and_shows_links_shift_adds": ("input", "links"),
-    "test_trigger_drag_esc_cancels_and_deleted_card_refuses": ("tools",),
-    "test_all_lines_visible_without_clicking": ("links", "flow"),
-    "test_line_controls_show_width_opacity_persist": ("links", "dock"),
-    "test_trigger_link_draws_dashed_line_without_clicking": ("tools", "links"),
-    "test_click_keeps_the_same_lines_and_numbers_buttons": ("links", "flow"),
-    "test_shift_select_keeps_every_picked_card_bright": ("links", "input", "tools"),
-    "test_link_panel_trash_and_rename": ("links", "tools"),
-    "test_memo_pending_history_panels": ("notes", "dock", "tools"),
-    "test_view_and_window_menus": ("menu", "dock", "tools", "motion"),
-    "test_split_view_left_right_and_sync": ("menu", "input"),
-    "test_layers_panel_tree_hide_lock_search": ("layers", "dock", "tools"),
-    "test_modal_header_has_no_gap_and_no_text_close": ("modal",),
-    "test_header_compact_and_stable_on_modal": ("menu", "modal"),
-    "test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons": ("modal", "tools"),
-    "test_theme_panel_switch_copy_edit_contrast_delete": ("theme", "dock", "menu"),
-    "test_pick_cards_selection_bar_delete_and_del_key": ("tools", "notes"),
-    "test_card_menu_full_items_duplicate_and_cut_incoming": ("tools", "links"),
-    "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards": ("tools", "input"),
-    "test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element": ("tools",),
-    "test_partly_pending_group_keeps_solid_line_and_marks_tag": ("tools", "links"),
-    "test_align_panel_aligns_distributes_and_stacks": ("layers", "tools", "dock"),
-    "test_layer_folders_group_rename_arrange_unfolder": ("layers", "tools"),
-    "test_user_tab_stays_and_blank_layout_click_selects": ("dock", "layers", "tools"),
-    "test_layer_folders_move_between_folders_and_blank_layouts": ("layers",),
-    "test_memo_popup_moves_resizes_and_remembers_place": ("notes",),
-    "test_badge_opens_that_screens_memos_like_comments": ("notes",),
-    "test_blank_layout_caption_has_name_and_multiline_purpose": ("tools",),
-    "test_shift_enter_in_card_caption": ("tools",),
-    # test_canvas_annotations.py — task 11 메모 핀·번호·다시 찾기·완료
-    "test_board_pin_numbers_thread_and_done": ("notes",),
-    "test_pins_reanchor_after_screen_changes": ("notes",),
-    "test_answered_memo_has_no_pin_and_leaves_badge": ("notes",),
-    # test_canvas_replies_live.py — task 16 AI 답이 살아서 옴 · 결정 필요 · 받는 곳 없음
-    "test_agent_reply_shows_live_without_reload": ("notes", "helper"),
-    "test_question_reply_surfaces_and_choice_sends_follow_up": ("notes", "helper"),
-    "test_decide_chip_filters_memo_panel_to_decide_only": ("notes", "helper"),
-    # test_canvas_send_composition.py — task 17 한 번 보내기가 말하는 것(범위 · 빈 레이아웃 + 메모 한 항목)
-    "test_scope_all_screens_reaches_the_queue_and_layout_memo_rides_with_layout": ("notes",),
-    # test_canvas_helper.py — 7단계 로컬 도우미
-    "test_helper_edit_html_ops": ("helper",),
-    "test_helper_apply_backup_rebuild_and_refusals": ("helper",),
-    "test_helper_delete_cuts_incoming_and_restore_is_byte_exact": ("helper",),
-    "test_helper_restore_refuses_when_files_changed_since": ("helper",),
-    "test_helper_server_delete_restore_data": ("helper",),
-    "test_helper_server_reads_the_body_before_refusing": ("helper",),
-    "test_helper_canvas_writes_delete_and_link_without_reload": ("helper", "tools"),
-    "test_file_mode_chip": ("helper",),
-    "test_helper_server_applies_from_canvas_and_falls_back_to_copy": ("helper", "notes"),
-    "test_helper_canvas_busy_overlay_lifts_on_file_change": ("helper", "notes"),
-    "test_helper_send_double_click_sends_once": ("helper", "notes"),
-    "test_card_reload_posts_pending_once_per_load": ("helper", "notes"),
-    "test_copy_failure_keeps_notes_unsent_and_storage_failure_warns": ("notes",),
-    "test_helper_redo_failure_tells_the_user": ("helper",),
-    "test_helper_written_edit_is_not_requeued_when_reload_fails": ("helper", "tools"),
-    "test_helper_state_file_put_rev_conflict_and_limits": ("helper",),
-    "test_helper_state_corrupt_file_on_start_is_moved_aside": ("helper",),
-    "test_helper_memo_lives_in_state_file_across_browsers": ("helper", "notes"),
-    # test_canvas_v2.py
-    "test_arrow_toggle_persists": ("flow",),
-    "test_shift_click_focus": ("links",),
-    "test_pick_note_pin_persists": ("notes", "modal"),
-    "test_send_format": ("notes",),
-    "test_clear_sent": ("notes",),
-    "test_multi_select_note": ("notes", "modal"),
-    "test_gym_link_colors": ("links",),
-    "test_gym_zoom_floor_and_fit": ("input",),
-    "test_gym_annotate_button": ("modal",),
-    "test_gym_shortcut_hint": ("input",),
-    "test_v2_label_positions": ("flow", "links"),
-    "test_v2_route_shapes": ("flow",),
-    "test_v2_exit_focus": ("links",),
-    "test_v2_expand_tall_screen": ("links",),
-    "test_v2_base_curves_shot": ("flow",),
-    "test_v2_no_vertical_through_cards": ("flow", "links"),
-    "test_v3_same_target_merge": ("links",),
-    "test_v3_main_flow_dashed": ("flow",),
-    "test_v3_ctrl_click_camera": ("motion",),
-    "test_v3_reduced_motion_jumps": ("motion",),
-    "test_v3_reduce_motion": ("motion", "dock"),
-    "test_v3_line_style": ("links",),
 }
 
 
@@ -180,6 +48,7 @@ def pytest_configure(config):
         config.option.dist = "loadgroup"
     config.addinivalue_line("markers", "unit: 순수 함수(node) — 늘 같이 돌린다")
     config.addinivalue_line("markers", "slow: unit 파일 안의 I/O 테스트(git·빌드 하위 프로세스) — unit 에 들지 않는다")
+    config.addinivalue_line("markers", "area(*names): 브라우저 테스트의 영역(AREAS) — conftest 가 같은 이름의 표시로 바꿔 단다")
     config.addinivalue_line("markers", "serial: -n 에서 가끔 깨지는 격리 테스트 — -n 실행에서 빠지고 `-m serial`(-n 없이)로 따로")
     for name, what in AREAS.items():
         config.addinivalue_line("markers", f"{name}: {what}")
@@ -187,7 +56,7 @@ def pytest_configure(config):
 
 @pytest.hookimpl(tryfirst=True)                     # xdist 가 묶음 이름(xdist_group)을 읽기 전에 표시를 단다
 def pytest_collection_modifyitems(config, items):
-    missing = []
+    missing, unknown = [], []
     for it in items:
         if it.fspath.basename == "test_canvas_modules.py" or it.fspath.basename.startswith("test_canvas_unit_"):   # 브라우저 없는 테스트 파일
             if not it.get_closest_marker("slow"):
@@ -195,9 +64,13 @@ def pytest_collection_modifyitems(config, items):
             continue
         if not it.fspath.basename.startswith("test_canvas_"):
             continue
-        areas = BROWSER.get(it.originalname or it.name)
+        areas = [a for m in it.iter_markers("area") for a in m.args]
         if not areas:
             missing.append(it.nodeid)
+            continue
+        bad = [a for a in areas if a not in AREAS]
+        if bad:
+            unknown.append(f"{it.nodeid} {bad}")
             continue
         for a in areas:
             it.add_marker(getattr(pytest.mark, a))
@@ -207,7 +80,9 @@ def pytest_collection_modifyitems(config, items):
         if shared:
             it.add_marker(pytest.mark.xdist_group(it.fspath.purebasename + ":" + shared[0]))
     if missing:
-        raise pytest.UsageError("영역 표(tests/conftest.py BROWSER)에 없는 브라우저 테스트: " + ", ".join(missing))
+        raise pytest.UsageError("영역 표시(@pytest.mark.area(...))가 없는 브라우저 테스트: " + ", ".join(missing))
+    if unknown:
+        raise pytest.UsageError("AREAS(tests/conftest.py)에 없는 영역: " + ", ".join(unknown))
     if _xdist_on(config):                             # -n: 격리 테스트는 빼고(주·일꾼이 같은 목록을 갖게 둘 다에서)
         out = [it for it in items if it.get_closest_marker("serial")]
         if out:

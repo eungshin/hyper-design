@@ -44,6 +44,7 @@ def seed_notes(pg, n):
 
 
 # ---------------------------------------------------------------- 메모 패널(오른쪽 도크) + 긴 목록 스크롤
+@pytest.mark.area("notes", "dock")
 def test_notes_panel_in_dock_scrolls(epage):
     key = seed_notes(epage, 18)
     epage.wait_for_selector("#notes:not([hidden])")
@@ -85,6 +86,7 @@ def dock_state(pg):
     return pg.evaluate("JSON.parse(localStorage.getItem('hd-dock') || 'null')")
 
 
+@pytest.mark.area("dock")
 def test_dock_merge_split_float_resize_collapse_persist(epage):
     epage.evaluate("localStorage.removeItem('hd-dock')")
     reload(epage)
@@ -147,6 +149,7 @@ TABS_FIT_JS = """() => [...document.querySelectorAll('#dock .dk-tabs')].map(t =>
 })"""
 
 
+@pytest.mark.area("dock")
 def test_dock_tabs_fit_when_many(epage):
     """탭이 많아도(테마까지 켜서 한 묶음에 5개) 탭 줄 밖으로 잘리지 않는다 — 고른 탭과 ＋·» 단추도 다 보인다."""
     epage.evaluate("localStorage.removeItem('hd-dock')")
@@ -178,6 +181,7 @@ WIDTH_DRAG_JS = """async () => {
 }"""
 
 
+@pytest.mark.area("dock")
 def test_dock_width_drag_once_per_frame_and_tab_switch_keeps_nodes(epage):
     """도크 너비 끌기: 판 너비(--dockw)는 한 프레임에 한 번만 바뀌고 놓은 너비로 끝난다(P4).
     탭 바꾸기는 다른 묶음을 다시 만들지 않는다 — 다른 묶음의 탭 줄 노드가 그대로다."""
@@ -229,6 +233,7 @@ def drag(pg, p, dx, dy):
     pg.wait_for_timeout(150)
 
 
+@pytest.mark.area("tools", "input")
 def test_toolbar_default_hand_and_keys(epage):
     epage.click("#zoom"); epage.click("#fit")
     assert epage.locator("#tools").is_visible()
@@ -250,6 +255,7 @@ def test_toolbar_default_hand_and_keys(epage):
     epage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "flow")
 def test_move_tool_moves_card_and_persists(epage):
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
@@ -293,6 +299,7 @@ def test_move_tool_moves_card_and_persists(epage):
     epage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "input")
 def test_fit_includes_moved_card_and_drops_stale(epage):
     epage.click("#zoom"); epage.click("#fit")          # 옮긴 자리 키를 이 테스트가 직접 만든다(앞 테스트에 기대지 않게)
     epage.wait_for_timeout(150)
@@ -319,6 +326,7 @@ def test_fit_includes_moved_card_and_drops_stale(epage):
     reload(epage)
 
 
+@pytest.mark.area("tools")
 def test_card_drag_has_no_long_tasks(epage):
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
@@ -339,6 +347,7 @@ def test_card_drag_has_no_long_tasks(epage):
     reload(epage)
 
 
+@pytest.mark.area("tools")
 def test_moved_card_paints_above_its_new_neighbours(epage):
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
@@ -447,6 +456,7 @@ def tag_text(pg, frm, to):
     return pg.text_content(tag_sel(frm, to)).split(" ", 1)[-1]
 
 
+@pytest.mark.area("links")
 def test_tag_rename_keeps_button_text(dpage):
     """E20: 선 태그(번호 + 이름)를 두 번 눌러 이름 바꾸기 — 버튼 글·연결 패널은 그대로, hd-link-names 별도 키, 새로고침 뒤에도."""
     focus_dayfine(dpage, "job")
@@ -500,6 +510,7 @@ def pick(pg, label):
     pg.wait_for_timeout(150)
 
 
+@pytest.mark.area("input", "tools")
 def test_context_menu_by_target(epage):
     from test_canvas_baseline import empty_point
     epage.click("#zoom"); epage.click("#fit")
@@ -542,6 +553,7 @@ def test_context_menu_by_target(epage):
         epage.wait_for_timeout(150)
 
 
+@pytest.mark.area("tools", "flow")
 def test_hide_screen_and_hidden_list(epage):
     from test_canvas_baseline import empty_point
     epage.click("#zoom"); epage.click("#fit")
@@ -578,6 +590,7 @@ def test_hide_screen_and_hidden_list(epage):
     assert epage.evaluate("(k) => localStorage.getItem(k)", keys[0]) == "[]"
 
 
+@pytest.mark.area("tools")
 def test_undo_redo_card_moves(epage):
     epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")   # 앞 테스트가 옮겨 둔 카드 없이(-n 에서 순서가 바뀌어도)
     reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다(50단계 상한은 unit: test_history_model_caps_undo_at_50)
@@ -622,6 +635,7 @@ def test_undo_redo_card_moves(epage):
     reload(epage)
 
 
+@pytest.mark.area("links", "motion")
 def test_link_menu_rename_undo_and_go(dpage):
     focus_dayfine(dpage, "job")
     to = dpage.evaluate("[...document.querySelectorAll('#rows .alabel.on')].find(n => n.dataset.from === 'job').dataset.to")
@@ -673,6 +687,7 @@ def fit_view(pg):
     pg.wait_for_timeout(200)
 
 
+@pytest.mark.area("tools", "notes")
 def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
     from test_canvas_baseline import empty_point
     fit_view(dpage)
@@ -704,6 +719,7 @@ def test_trigger_drag_to_card_adds_link_note_and_undo(dpage):
     dpage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "links", "notes")
 def test_knife_right_drag_cuts_link_into_note(dpage):
     """E20: 늘 보이는 선을 오른쪽 끌기로 가로지르면 그 쌍의 화면 안 링크 전부 끊기 메모(되돌리기 한 번에)."""
     focus_dayfine(dpage, "job")
@@ -721,6 +737,7 @@ def test_knife_right_drag_cuts_link_into_note(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "links")
 def test_trigger_tool_shows_sockets_and_socket_drag_changes_target(dpage):
     focus_dayfine(dpage, "job")
     assert dpage.evaluate("[...document.querySelectorAll('.sock')].every(s => getComputedStyle(s).display === 'none')"), "손 도구에서는 소켓을 숨긴다"
@@ -743,6 +760,7 @@ def test_trigger_tool_shows_sockets_and_socket_drag_changes_target(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "input")
 def test_element_menu_via_hit_at(dpage):
     fit_view(dpage)
     c = visible_cover(dpage)
@@ -754,6 +772,7 @@ def test_element_menu_via_hit_at(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools")
 def test_hit_at_without_palette_says_cannot_edit(dpage):
     fit_view(dpage)
     p = visible_cover(dpage)
@@ -776,6 +795,7 @@ def unsent_guard(pg):
     return pg.evaluate("(() => { const e = new Event('beforeunload', {cancelable: true}); dispatchEvent(e); return e.defaultPrevented; })()")
 
 
+@pytest.mark.area("tools", "notes")
 def test_dblclick_title_and_desc_queue_pending_edits(dpage):
     dpage.on("dialog", lambda d: d.accept())         # 새로고침 전 확인 창은 받아들인다
     fit_view(dpage)
@@ -827,6 +847,7 @@ def test_dblclick_title_and_desc_queue_pending_edits(dpage):
     assert dpage.text_content(t_sel) == old and not unsent_guard(dpage)
 
 
+@pytest.mark.area("tools", "modal", "notes")
 def test_dblclick_screen_text_edits_with_preview(dpage):
     fit_view(dpage)
     zoom_to = __import__("test_canvas_v2").zoom_to
@@ -868,6 +889,7 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     dpage.wait_for_timeout(200)
 
 
+@pytest.mark.area("tools")
 def test_element_menu_edit_text(dpage):
     fit_view(dpage)
     c = visible_cover(dpage)
@@ -886,6 +908,7 @@ def lk_to(pg, to, frm="job"):
         .map(p => p.getAttribute('class'))""", [frm, to])
 
 
+@pytest.mark.area("tools", "links")
 def test_cut_hides_line_at_once_with_live_mark_and_toast_undo(dpage):
     focus_dayfine(dpage, "job")
     sx, sy = ln_mid(dpage, "job", "language")
@@ -903,6 +926,7 @@ def test_cut_hides_line_at_once_with_live_mark_and_toast_undo(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "links")
 def test_socket_drag_draws_pending_line_at_once(dpage):
     focus_dayfine(dpage, "job")
     dpage.keyboard.press("l")
@@ -929,12 +953,14 @@ def drafts(pg):
     return pg.evaluate("[...document.querySelectorAll('#rows .card.draft')].map(c => ({id: c.dataset.id, vis: c.offsetWidth > 0}))")
 
 
+@pytest.mark.area("tools")
 def test_toolbar_has_add_group(dpage):
     tools = dpage.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => b.dataset.tool)")
     assert tools == ["hand", "move", "trigger", "knife", "annotate", "text", "layout", "memo"], tools
     assert dpage.evaluate("document.querySelectorAll('#tools hr').length") >= 2, "도구 / 추가 / 보기 세 묶음"
 
 
+@pytest.mark.area("tools", "notes")
 def test_layout_tool_drops_blank_card_and_undo(dpage):
     from test_canvas_baseline import empty_point
     fit_view(dpage)
@@ -957,6 +983,7 @@ def test_layout_tool_drops_blank_card_and_undo(dpage):
     dpage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "links")
 def test_empty_drop_makes_layout_and_links_it(dpage):
     from test_canvas_baseline import empty_point
     focus_dayfine(dpage, "job")
@@ -978,6 +1005,7 @@ def test_empty_drop_makes_layout_and_links_it(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "input")
 def test_empty_right_click_layout_here(dpage):
     from test_canvas_baseline import empty_point
     fit_view(dpage)
@@ -992,6 +1020,7 @@ def test_empty_right_click_layout_here(dpage):
     assert drafts(dpage) == []
 
 
+@pytest.mark.area("tools", "notes")
 def test_memo_tool_opens_card_memo(dpage):
     fit_view(dpage)
     n0 = len(notes_of(dpage))
@@ -1015,6 +1044,7 @@ def test_memo_tool_opens_card_memo(dpage):
 
 
 # ---------------------------------------------------------------- 재작업 S0~S7 (docs/eungshin/canvas-edit-rework-2026-10-20.md)
+@pytest.mark.area("modal", "notes")
 def test_modal_pins_follow_navigated_screen(dpage):
     """S0 버그: 크게 보기 안에서 다른 화면으로 넘어가면 그 화면의 번호만 보인다."""
     from test_canvas_v2 import open_screen
@@ -1054,6 +1084,7 @@ def elbox(pg):
         const r = b.getBoundingClientRect(); return {kind: b.dataset.kind, label: b.dataset.label, x: r.left, y: r.top, w: r.width, h: r.height}; })()""")
 
 
+@pytest.mark.area("tools")
 def test_element_tools_outline_hovered_element_by_kind(dpage):
     """S2: 트리거 도구에서 카드 안 요소에 마우스를 올리면 종류별 테두리(글자·버튼/링크)."""
     fit_view(dpage)
@@ -1075,6 +1106,7 @@ def test_element_tools_outline_hovered_element_by_kind(dpage):
     assert elbox(dpage) is None, "손 도구에서는 테두리 없음"
 
 
+@pytest.mark.area("modal", "notes")
 def test_pres_button_and_modal_dblclick_edits_text(dpage):
     """S3: 카드 위 [▶ 보기] = 실제로 눌러 보는 크게 보기. 그 안에서 글자를 두 번 누르면 그 자리에서 고친다."""
     fit_view(dpage)
@@ -1105,6 +1137,7 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     dpage.wait_for_timeout(200)
 
 
+@pytest.mark.area("tools", "notes")
 def test_annotate_tool_notes_an_element_on_the_board(dpage):
     """S4: 주석 도구(P) — 크게 보기 없이 판 위 카드 안 요소를 누르면 그 요소에 메모."""
     fit_view(dpage)
@@ -1129,6 +1162,7 @@ def test_annotate_tool_notes_an_element_on_the_board(dpage):
     reload(dpage)
 
 
+@pytest.mark.area("tools", "notes")
 def test_text_tool_edits_policy_line(dpage):
     """S5 + 버그 F7: 글자 도구로 카드 아래 정책(•) 줄을 한 번 눌러 고친다 → screens.json policies[i] 메모 · 반영 대기."""
     fit_view(dpage)
@@ -1155,6 +1189,7 @@ def test_text_tool_edits_policy_line(dpage):
     dpage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "notes")
 def test_caption_one_box_edits_all_fields(dpage):
     """H16: 카드 아래 글(제목·설명·정책 줄)은 한 상자에서 고친다 — 바뀐 칸마다 반영 대기 편집, 되돌리기는 한 번에, Esc 는 버린다."""
     from test_canvas_baseline import empty_point
@@ -1230,6 +1265,7 @@ def test_caption_one_box_edits_all_fields(dpage):
     wait_notes(dpage, n0)
 
 
+@pytest.mark.area("tools")
 def test_trigger_tool_click_selects_element_with_its_socket(dpage):
     """S6: 트리거 도구에서 요소를 누르면 그 요소가 골라지고(테두리 고정 + 소켓) 그 소켓을 끌어 잇는다."""
     fit_view(dpage)
@@ -1266,6 +1302,7 @@ def selbar(pg):
     return pg.evaluate("(() => { const b = document.getElementById('selbar'); return b && !b.hidden ? [...b.querySelectorAll('button')].filter(x => !x.hidden).map(x => x.getAttribute('aria-label')) : null; })()")
 
 
+@pytest.mark.area("tools", "notes")
 def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     """S7: 카드 누르기 = 고르기 · 이동 도구 Ctrl+클릭 = 여러 장 · 선택 막대(메모·숨기기·삭제) · Del."""
     from test_canvas_baseline import empty_point
@@ -1304,6 +1341,7 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "links")
 def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     """S7: 카드 우클릭 = 크게 보기·연결 보기·이름·설명·메모·복제·들어오는 연결 끊기·숨기기·삭제."""
     fit_view(dpage)
@@ -1335,6 +1373,7 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "input")
 def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
     """스크린샷에서 찾은 버그: 글자 고치기 칸을 Esc 로 닫은 뒤 단축키가 먹혀야 하고, 작게 볼 때 선택 막대가 카드 바로 위에 붙어야 한다."""
     fit_view(dpage)
@@ -1359,12 +1398,14 @@ def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools")
 def test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element(dpage):
     """재검증 C6: 메모(M) = 화면 전체, 주석(P) = 요소 하나 — 툴팁 첫 줄에서 바로 구분."""
     tips = dpage.evaluate("Object.fromEntries([...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.dataset.tip.split('|')[0]]))")
     assert "화면 전체" in tips["memo"] and "요소" in tips["annotate"], tips
 
 
+@pytest.mark.area("tools", "links")
 def test_partly_pending_group_keeps_solid_line_and_marks_tag(dpage):
     """기존 연결과 같은 도착으로 합쳐진 반영 대기는 선을 점선으로 만들지 않는다(점선 = 반영 대기로만 있는 쌍)."""
     focus_dayfine(dpage, "job")
@@ -1389,6 +1430,7 @@ def sel_sock(pg):
     return pg.evaluate("(() => { const s = document.querySelector('.sock.selsock'); if (!s) return null; const r = s.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()")
 
 
+@pytest.mark.area("tools", "links")
 def test_trigger_click_on_card_shows_its_links_like_shift_click(dpage):
     """E3: 트리거 도구로 카드(요소)를 누르면 Shift+클릭처럼 그 화면의 연결 보기가 켜지고, 고른 요소와 소켓은 남는다."""
     fit_view(dpage)
@@ -1407,6 +1449,7 @@ def test_trigger_click_on_card_shows_its_links_like_shift_click(dpage):
     dpage.keyboard.press("h")
 
 
+@pytest.mark.area("tools", "links")
 def test_cutting_a_pending_line_cancels_that_edit(dpage):
     """E4: 아직 반영 안 된(점선) 연결을 자르면 '연결 끊기' 메모가 아니라 그 편집이 취소된다. 되돌리기 = 점선이 돌아온다."""
     focus_dayfine(dpage, "job")
@@ -1435,6 +1478,7 @@ def test_cutting_a_pending_line_cancels_that_edit(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("tools", "input")
 def test_trigger_drag_can_reach_a_far_card_in_another_row(dpage):
     """E6: 크게 확대해 둔 채 도착 없는 요소에서 끌기 시작 → 판 가장자리에 대면 판이 따라 움직이고, 끄는 중 Ctrl+휠로 줄여도
     끄는 선은 그 요소에 붙어 있으며, 다른 줄의 먼 카드에 놓으면 이어진다."""
@@ -1495,6 +1539,7 @@ def sel_state(pg):
         focusing: document.getElementById('rows').classList.contains('focusing')})""")
 
 
+@pytest.mark.area("input", "links")
 def test_click_selects_and_shows_links_shift_adds(dpage):
     """E15: 카드 누르기 = 그 카드 고르기 + 그 화면 연결 강조(예전 Shift+클릭). Shift+클릭 = 여러 장 고르기. 빈 판 = 모두 풀기."""
     fit_view(dpage)
@@ -1522,6 +1567,7 @@ def test_click_selects_and_shows_links_shift_adds(dpage):
     assert "Shift" in dpage.text_content("#khint") and "누르면 연결" in dpage.text_content("#khint")
 
 
+@pytest.mark.area("tools")
 def test_trigger_drag_esc_cancels_and_deleted_card_refuses(dpage):
     """E11: 트리거를 끄는 중 Esc = 취소(아무것도 남지 않음). E18: 삭제 대기 카드에 놓으면 잇지 않고 알린다."""
     fit_view(dpage)
@@ -1564,6 +1610,7 @@ def lines(pg):
     return pg.evaluate(LINES_JS)
 
 
+@pytest.mark.area("links", "flow")
 def test_all_lines_visible_without_clicking(dpage):
     """E7·D6b: 아무것도 누르지 않아도 모든 화면 연결이 판에 보인다(출발 줄마다 한 색, 양방향은 선 하나, 점선 없음).
     D9: [주요 흐름] 버튼·표시 패널 체크·A 키는 없다."""
@@ -1595,6 +1642,7 @@ def test_all_lines_visible_without_clicking(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("links", "dock")
 def test_line_controls_show_width_opacity_persist(dpage):
     """E7: 표시 패널에서 전체 선 보이기/숨기기 · 굵기 · 투명도 — 새로고침 뒤에도 그대로."""
     fit_view(dpage)
@@ -1620,6 +1668,7 @@ def test_line_controls_show_width_opacity_persist(dpage):
     assert all(l["shown"] for l in lines(dpage))
 
 
+@pytest.mark.area("tools", "links")
 def test_trigger_link_draws_dashed_line_without_clicking(dpage):
     """E7·E14: 트리거로 다른 화면에 이으면 아무것도 누르지 않아도 판에 반영 대기 점선이 바로 보인다(투명도와 상관없이 진하게). 되돌리면 사라진다."""
     fit_view(dpage)
@@ -1651,6 +1700,7 @@ LN_OF_JS = """(id) => [...document.querySelectorAll('#ar path.ln')].filter(p => 
                 on: p.classList.contains('on'), op: +getComputedStyle(p).opacity}))"""
 
 
+@pytest.mark.area("links", "flow")
 def test_click_keeps_the_same_lines_and_numbers_buttons(dpage):
     """E20 A: 카드를 누르면 새 선을 그리지 않는다 — 그 카드의 늘 보이는 선이 같은 색·같은 길로 진해지고, 나머지는 흐려진다.
     화면 안 출발 버튼은 그 선과 같은 색 테두리 + 번호, 선 태그에도 같은 번호."""
@@ -1688,6 +1738,7 @@ def test_click_keeps_the_same_lines_and_numbers_buttons(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("flow", "tools", "links")
 def test_drag_redraws_only_the_lines(dpage):
     """P1: 고른 카드를 끄는 동안 선만 따라온다 — 화면 안 버튼 표시(hd-links-paint)는 놓을 때 한 번만 다시 보낸다."""
     focus_dayfine(dpage, "job")
@@ -1722,6 +1773,7 @@ def test_drag_redraws_only_the_lines(dpage):
     dpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("links", "input", "tools")
 def test_shift_select_keeps_every_picked_card_bright(dpage):
     """E21: Shift 로 여러 장 고르면 고른 카드 모두 또렷하고 그 카드들의 선이 진하다(두 번째 카드가 흐려지지 않는다)."""
     fit_view(dpage)
@@ -1740,6 +1792,7 @@ def test_shift_select_keeps_every_picked_card_bright(dpage):
 
 
 # ---------------------------------------------------------------- 조각 2.5c 연결 패널 (E13, rework §8-3)
+@pytest.mark.area("links", "tools")
 def test_link_panel_trash_and_rename(dpage):
     """E13: 연결 패널 = 고른 화면의 연결(선과 같은 번호). 줄마다 휴지통 = 그 연결 하나 끊기(되돌리기), 이름 = 선 태그 이름(hd-link-names)."""
     focus_dayfine(dpage, "job")
@@ -1775,6 +1828,7 @@ HIST_JS = """[...document.querySelectorAll('#hlist li[data-i]')].map(li => ({i: 
     status: (li.querySelector('.hs') || {}).textContent || '', undone: li.classList.contains('undone'), lock: li.classList.contains('lock')}))"""
 
 
+@pytest.mark.area("notes", "dock", "tools")
 def test_memo_pending_history_panels(dpage):
     """E5: 기계적 편집(끊기)은 반영 대기 패널, AI 요청(메모)은 메모 패널 — 탭에 배지 수. E16: 보내기는 한 자리(#nsend).
     E2·E8: 기록 패널 = 시간줄 하나 — 줄마다 상태, 줄을 누르면 그 단계로, 보낸 뒤는 경계선 아래로 되돌릴 수 없다."""
@@ -1823,6 +1877,7 @@ def test_memo_pending_history_panels(dpage):
     dpage.wait_for_timeout(150)
 
 
+@pytest.mark.area("helper")
 def test_file_mode_chip(epage):                                            # 2.2 E9 — 파일로 열면 바로 쓰기가 안 된다고 위쪽 줄에 늘 보인다
     assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨"
     assert "도우미" not in epage.text_content("header"), "화면 글에 '도우미' 말을 쓰지 않는다"
@@ -1833,6 +1888,7 @@ def zoom_of(pg):
     return round(float(pg.evaluate("document.getElementById('stage').dataset.zoom")), 3)
 
 
+@pytest.mark.area("menu", "dock", "tools", "motion")
 def test_view_and_window_menus(dpage):
     """H1·H2: 배율 칩 `72% ▾` = 보기 메뉴(전체 보기 0 · 100% 1 · 확대 · 축소 · 고른 화면에 맞추기) — 따로 있던 [전체 보기]·[전환] 버튼 없음.
     H4·H11: [창 ▾] = 도구 막대·패널마다·판 아래 안내 켜고 끄기(체크) + 작업 영역 되돌리기, Tab = 패널 모두 숨기기.
@@ -1931,6 +1987,7 @@ def card_spot(pg, sid):
 TRANSLATE_JS = r"(sel) => { const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(document.querySelector(sel).style.transform); return [+m[1], +m[2]]; }"
 
 
+@pytest.mark.area("menu", "input")
 def test_split_view_left_right_and_sync(dpage):
     """H2·H3(조각 6, 범위 A): 보기 메뉴 → 좌우로 나누기 = 오른쪽 칸(보기 전용 판 복사본, 따로 이동·배율, 작은 배율 칩).
     동시 스크롤은 나눴을 때만 — 켜면 한 칸을 움직일 때 다른 칸도 같은 만큼. 나누지 않기 = 칸이 사라지고 판이 다시 넓어짐."""
@@ -1986,6 +2043,7 @@ def test_split_view_left_right_and_sync(dpage):
     dpage.keyboard.press("0")
     assert not errs, errs
 
+@pytest.mark.area("layers", "dock", "tools")
 def test_layers_panel_tree_hide_lock_search(dpage):
     """H6: 레이어 패널 = 줄(묶음, 접기) 아래 화면 — 줄마다 눈(숨김)·이름·잠금·메모 수, 위 검색(화면·줄 이름) + 거르기 아이콘,
     누르면 그 카드로, 아래 막대(빈 레이아웃·숨기기·잠그기·삭제). H7: 숨긴 화면 패널은 없애고 판 글(소개·끝 글)도 레이어 —
@@ -2064,6 +2122,7 @@ def test_layers_panel_tree_hide_lock_search(dpage):
 
 
 # ---------------------------------------------------------------- 크게 보기 위쪽 줄 (G7 · 사용자 10-22 → H15 사용자 10-23)
+@pytest.mark.area("modal")
 def test_modal_header_has_no_gap_and_no_text_close(dpage):
     """크게 보기: 덮개는 위쪽 줄 아래부터 — 도크 위에 빈 칸이 남지 않는다. 위쪽 줄은 그대로(탭 보임, H15),
     화면 제목과 닫기 아이콘(×)은 그 창 위 제목 막대. 글자 [닫기] 버튼은 없고, 바깥(덮개)을 누르거나 × · Esc 로 닫힌다."""
@@ -2099,6 +2158,7 @@ HEADER_JS = """() => { const hd = document.querySelector('.hd'), r = hd.getBound
   return {box: [r.left, r.top, r.width, r.height], kids}; }"""
 
 
+@pytest.mark.area("menu", "modal")
 def test_header_compact_and_stable_on_modal(dpage):
     """H15: 위쪽 줄은 32px 한 줄(포토샵·블렌더식). 카드를 크게 봐도 위쪽 줄은 그대로 — 크기·보이는 것 모두 같다.
     화면 제목은 크게 보기 창 위 제목 막대(#mtitle, 화면 위), × 를 누르면 닫힌다."""
@@ -2131,6 +2191,7 @@ def test_header_compact_and_stable_on_modal(dpage):
 TOOLS_JS = """() => [...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.getAttribute('aria-pressed'), b.getAttribute('aria-disabled')])"""
 
 
+@pytest.mark.area("modal", "tools")
 def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     """G8: 선택 막대 = 아이콘 + 툴팁(이름·키). G5: 크게 보기에서도 왼쪽 도구 막대가 남는다 — 쓸 수 있는 도구는 손(눌러 보기)·주석뿐.
     G6: 화면 위 [주석 달기] 버튼은 없애고 왼쪽 주석 도구 하나로(P 도 같음). 닫으면 판의 도구로 돌아온다."""
@@ -2183,6 +2244,7 @@ def frame_text_color(pg, want="#EEEEEE"):
     return v
 
 
+@pytest.mark.area("theme", "dock", "menu")
 def test_theme_panel_switch_copy_edit_contrast_delete(dpage):
     """H10: 위쪽 색 팔레트는 없애고 테마 패널(창 메뉴로 켬, 기본은 닫힘). H12: '+ 새 테마' = 지금 테마 복제 → 색 네 칸(주 색·글자·바탕·강조)
     고치면 판의 화면에 바로, 글자 대비 4.5:1 미만이면 경고. 기본 테마는 자물쇠(복제해서 고침). H14: 이름 바꾸기·복제·삭제(기본은 복제만, 삭제는 되돌리기)."""
@@ -2242,6 +2304,7 @@ def ln_ends(pg):
         return {from: c.dataset.from, to: c.dataset.to, x: r.left + r.width / 2, y: r.top + r.height / 2}; })""")
 
 
+@pytest.mark.area("flow", "tools")
 def test_line_click_shows_end_handles_and_drag_retargets(dpage):
     fit_view(dpage)
     dpage.keyboard.press("h")
@@ -2306,6 +2369,7 @@ def shift_pick(pg, ids):
         pg.evaluate("([id, sh]) => document.querySelector('.card[data-id=\"' + id + '\"] .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, detail: 1, shiftKey: sh}))", [sid, i > 0])
 
 
+@pytest.mark.area("layers", "tools", "dock")
 def test_align_panel_aligns_distributes_and_stacks(dpage):
     """H18: Shift 로 고른 카드 셋 → 정렬 패널(도크 '정렬' 탭) 위 맞추기 = 위 끝이 같게, Ctrl+Z 한 번에 셋 다 제자리 ·
     가로 간격 같게 = 이웃 카드 사이 빈칸이 같게(처음·끝 그대로) · 간격 40 + 가로로 늘어놓기 = 정확히 40px · 새로고침 뒤에도 그 자리."""
@@ -2363,6 +2427,7 @@ DRAG_JS = """([c, h]) => { const dt = new DataTransfer(), s = document.querySele
     t.dispatchEvent(new DragEvent('drop', {bubbles: true, cancelable: true, dataTransfer: dt})); }"""
 
 
+@pytest.mark.area("layers", "tools")
 def test_layer_folders_group_rename_arrange_unfolder(dpage):
     """H17: 레이어 패널에서 화면 줄 둘을 Ctrl/Shift+클릭 → [폴더로 묶기] = 맨 위에 폴더 줄(폴더 아이콘·화면 수 2), 바로 이름 바꾸기 →
     새로고침 뒤에도 · 폴더 [세로로 늘어놓기] = 그 카드 둘이 정렬 패널 간격으로 한 열 · 화면 줄을 폴더 줄에 끌어 놓으면 폴더에 ·
@@ -2432,6 +2497,7 @@ DROP_DRAFTS_JS = """Object.keys(localStorage).filter(k => k.startsWith('hd-notes
     const l = JSON.parse(localStorage.getItem(k) || '[]'); localStorage.setItem(k, JSON.stringify(l.filter(n => n.edit !== 'new-screen'))); })"""
 
 
+@pytest.mark.area("dock", "layers", "tools")
 def test_user_tab_stays_and_blank_layout_click_selects(dpage):
     """사용자가 고른 도크 탭은 그대로 — 빈 레이아웃을 놓아 메모·반영 대기가 늘어도 다른 탭이 앞으로 오지 않는다(D3 를 바꿈, 10-24 피드백).
     빈 레이아웃 카드는 한 번 누르면 고르기만(입력창 없음), 두 번 누르면 메모 입력."""
@@ -2463,6 +2529,7 @@ def test_user_tab_stays_and_blank_layout_click_selects(dpage):
     assert not errs, errs
 
 
+@pytest.mark.area("layers")
 def test_layer_folders_move_between_folders_and_blank_layouts(dpage):
     """H17 보강(10-24 피드백): 화면을 다른 폴더로 옮길 수 있다 — 폴더 안 화면 줄 위에 놓아도 그 폴더로 · 빈 레이아웃도 폴더에 ·
     끌지 않고 [폴더로 옮기기] 메뉴로 고른 화면을 다른 폴더로 · '폴더에서 빼기'."""
@@ -2519,6 +2586,7 @@ def open_card_memo(pg):
     return c["id"]
 
 
+@pytest.mark.area("notes")
 def test_memo_popup_moves_resizes_and_remembers_place(dpage):
     """#223: 메모 창은 머리 줄을 끌어 옮기고 모서리로 크기를 바꾼다 — 다음에 열어도 그 자리(hd-pop), 머리 줄 두 번 누르기 = 자동 자리.
     열린 동안 대상 카드에 테두리, 닫으면 없어진다."""
@@ -2576,6 +2644,7 @@ def add_card_memo(pg, c, text):
     pg.keyboard.press("h")
 
 
+@pytest.mark.area("notes")
 def test_badge_opens_that_screens_memos_like_comments(dpage):
     """#224: 카드 메모 배지를 누르면 그 화면 메모 묶음 — 줄마다 요소·종류·글, [지우기]는 메모 패널과 같이(되돌리기 됨), [메모 추가] = 메모 창.
     배지 누르기는 카드를 고르지 않는다."""
@@ -2633,6 +2702,7 @@ def drop_layout(pg):
     return pg.evaluate("document.querySelector('.card.draft').dataset.id")
 
 
+@pytest.mark.area("tools")
 def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
     """#225: 빈 레이아웃 카드 아래 글 = 이름(한 줄) + 목적(여러 줄, Shift+Enter 줄바꿈) — 메모 안(n.value·n.purpose)에 남고,
     보내는 요청문에 목적이 첫째 브리프로 줄바꿈째 들어간다. 되돌리기 한 번."""
@@ -2665,6 +2735,7 @@ def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
     assert not errs, errs
 
 
+@pytest.mark.area("tools")
 def test_shift_enter_in_card_caption(dpage):
     """#226: 카드 아래 글 상자에서 Shift+Enter — 제목 = 설명으로 넘어감(줄을 넣지 않음), 설명 = 줄바꿈(안내 글에 적힘), 정책 줄 = Enter 와 같이 다음 줄로."""
     errs = []

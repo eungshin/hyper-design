@@ -61,6 +61,7 @@ def queued(pg):
     return q[0].read_text(encoding="utf-8")
 
 
+@pytest.mark.area("notes")
 def test_scope_all_screens_reaches_the_queue_and_layout_memo_rides_with_layout(live):
     pg = live
     fit_view(pg)

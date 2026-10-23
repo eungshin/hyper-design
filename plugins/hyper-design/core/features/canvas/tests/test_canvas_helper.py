@@ -36,6 +36,7 @@ def out():
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+@pytest.mark.area("helper")
 def test_helper_edit_html_ops():
     s = helper.edit_html(SAMPLE, [("section.block:nth-of-type(1) > h1.title:nth-of-type(1)", "text", "바뀐 <제목>")])
     assert '<h1 class="title">바뀐 &lt;제목&gt;</h1>' in s, "글자만 바꾸고 태그는 그대로(이스케이프)"
@@ -52,6 +53,7 @@ def test_helper_edit_html_ops():
         helper.edit_html(SAMPLE, [("p:nth-of-type(1)", "cut", None)])     # 끊을 연결 없음
 
 
+@pytest.mark.area("helper")
 def test_helper_apply_backup_rebuild_and_refusals(out):
     job = out / "screens" / "job.html"
     before = job.read_text(encoding="utf-8")
@@ -97,6 +99,7 @@ def _links_to(out, sid):
                   if any(l["to"] == sid for l in build_canvas.screen_links(out, {"id": s["id"], "file": s.get("file") or "screens/%s.html" % s["id"]}, ids)))
 
 
+@pytest.mark.area("helper")
 def test_helper_delete_cuts_incoming_and_restore_is_byte_exact(out):   # 2.2 D3·D4 — 바로 삭제 · 오는 연결도 끊김 · 되살리기
     before = _snapshot(out)
     assert _links_to(out, "keys") == ["try-copy", "try-ocr", "try-search"]
@@ -116,6 +119,7 @@ def test_helper_delete_cuts_incoming_and_restore_is_byte_exact(out):   # 2.2 D3�
     assert _snapshot(out) == before, "되살리기 = 바이트 그대로"
 
 
+@pytest.mark.area("helper")
 def test_helper_restore_refuses_when_files_changed_since(out):        # 2.2 D4 — 그 뒤에 바뀐 파일은 덮지 않는다
     res = helper.apply_edits(out, [{"id": "c", "screen": "job", "edit": "link", "op": "link", "to": "usage",
                                     "path": "div.btns:nth-of-type(1) > a.btn:nth-of-type(1)"}], stamp="a1")
@@ -128,6 +132,7 @@ def test_helper_restore_refuses_when_files_changed_since(out):        # 2.2 D4 �
     assert helper.restore(out, "nope").get("error"), "없는 기록"
 
 
+@pytest.mark.area("helper")
 def test_helper_server_delete_restore_data(out):                      # 2.2 API — /api/delete · /api/restore(409) · /api/data
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -160,6 +165,7 @@ def _post(url, body, token=None, host=None):
         return e.code, None
 
 
+@pytest.mark.area("helper")
 def test_helper_server_reads_the_body_before_refusing(out):
     """거절(403)도 요청 본문을 다 읽은 뒤에 답한다 — 안 읽고 닫으면 Windows 가 연결을 RST 로 끊어
     클라이언트가 403 대신 ConnectionAbortedError(10053)를 받는다(-n 4 에서 가끔 보이던 흔들림의 원인)."""
@@ -195,6 +201,7 @@ def test_helper_server_reads_the_body_before_refusing(out):
         srv.shutdown(); srv.server_close()
 
 
+@pytest.mark.area("helper", "notes")
 def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
     srv = helper.make_server(out, 0)
     th = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -249,6 +256,7 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
     pg.close()
 
 
+@pytest.mark.area("helper", "tools")
 def test_helper_canvas_writes_delete_and_link_without_reload(ctx, out):   # 2.2 — 바로 삭제·오는 연결 끊김·되돌리기 = 되살리기 · 잇기 바로 씀 · 새로고침 없음
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -285,6 +293,7 @@ def test_helper_canvas_writes_delete_and_link_without_reload(ctx, out):   # 2.2 
     pg.close()
 
 
+@pytest.mark.area("helper", "notes")
 def test_helper_canvas_busy_overlay_lifts_on_file_change(ctx, out):   # Q2b — 터미널로 넘긴 화면에 덮개 · 새로고침해도 남음 · 파일이 바뀌면 걷힘 · [걷기]
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -341,6 +350,7 @@ def _serve(out):
     return srv
 
 
+@pytest.mark.area("helper", "notes")
 def test_helper_send_double_click_sends_once(ctx, out):   # S1 — 보내기를 두 번 눌러도 AI 에게는 한 번
     srv = _serve(out)
     pg = ctx.new_page()
@@ -364,6 +374,7 @@ def test_helper_send_double_click_sends_once(ctx, out):   # S1 — 보내기를 
     pg.close()
 
 
+@pytest.mark.area("helper", "notes")
 def test_card_reload_posts_pending_once_per_load(ctx, out):   # S4 — 카드를 여러 번 다시 실어도 실을 때마다 메시지는 한 번
     srv = _serve(out)
     pg = ctx.new_page()
@@ -392,6 +403,7 @@ def test_card_reload_posts_pending_once_per_load(ctx, out):   # S4 — 카드를
     pg.close()
 
 
+@pytest.mark.area("notes")
 def test_copy_failure_keeps_notes_unsent_and_storage_failure_warns(ctx, out):   # S3 · S7 — 복사가 안 되면 '보냄'이 아니다 · 저장이 안 되면 알린다
     pg = ctx.new_page()
     errors = []
@@ -416,6 +428,7 @@ def test_copy_failure_keeps_notes_unsent_and_storage_failure_warns(ctx, out):   
     assert not errors, errors
 
 
+@pytest.mark.area("helper")
 def test_helper_redo_failure_tells_the_user(ctx, out):   # S5 — 다시 하기가 파일에 못 쓰면 알린다
     srv = _serve(out)
     pg = ctx.new_page()
@@ -442,6 +455,7 @@ def test_helper_redo_failure_tells_the_user(ctx, out):   # S5 — 다시 하기�
     pg.close()
 
 
+@pytest.mark.area("helper", "tools")
 def test_helper_written_edit_is_not_requeued_when_reload_fails(ctx, out):   # S2 — 파일에 쓴 편집은 판 다시 불러오기가 실패해도 반영 대기로 돌아가지 않는다
     srv = _serve(out)
     pg = ctx.new_page()
@@ -492,6 +506,7 @@ def _req(url, method, body=None, token=None, raw=None):
             return e.code, None
 
 
+@pytest.mark.area("helper")
 def test_helper_state_file_put_rev_conflict_and_limits(out):   # #228 — rev 가 맞을 때만 rev+1 로 쓰고 .bak · 다르면 409 · 2 MB 넘으면 413 · 깨진 JSON 400
     srv = _serve(out)
     api = srv.url.split("/index.html")[0] + "/api/state"
@@ -524,6 +539,7 @@ def test_helper_state_file_put_rev_conflict_and_limits(out):   # #228 — rev �
         srv.shutdown(); srv.server_close()
 
 
+@pytest.mark.area("helper")
 def test_helper_state_corrupt_file_on_start_is_moved_aside(out, capfd):   # #228 — 깨진 상태 파일: 옮기고 한 줄 남기고 빈 상태로 · 도우미는 뜬다
     (out / ".hd-canvas.json").write_text('{"rev": 3, "state": {"notes": [', encoding="utf-8")
     srv = _serve(out)
@@ -538,6 +554,7 @@ def test_helper_state_corrupt_file_on_start_is_moved_aside(out, capfd):   # #228
         srv.shutdown(); srv.server_close()
 
 
+@pytest.mark.area("helper", "notes")
 def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228 — 도우미로 열면 메모가 <out>/.hd-canvas.json 에 · 다른 브라우저(빈 저장소)에서도 그대로 · 다른 곳에서 바뀌면 알리고 다시 불러옴
     from test_canvas_edit import fit_view, visible_cover
     srv = _serve(out)

@@ -77,6 +77,7 @@ def visible_paths(pg):
     return pg.evaluate("[...document.querySelectorAll('#rows path.ln')].filter(p => getComputedStyle(p).display !== 'none').length")
 
 
+@pytest.mark.area("flow")
 def test_arrow_toggle_persists(page):
     """E7: 판에 늘 그리는 선 — 표시 패널의 보이기 버튼으로 끄고 켜며, 새로고침 뒤에도 그대로. [주요 흐름] 버튼·A 키는 없다(D9)."""
     total = page.locator("#rows path.ln").count()
@@ -96,6 +97,7 @@ def test_arrow_toggle_persists(page):
     assert visible_paths(page) == total
 
 
+@pytest.mark.area("links")
 def test_shift_click_focus(page):
     page.click("#zoom"); page.click("#fit")
     page.wait_for_timeout(200)
@@ -133,6 +135,7 @@ def open_screen(pg, sid):
     return fr
 
 
+@pytest.mark.area("notes", "modal")
 def test_pick_note_pin_persists(page):
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
@@ -163,6 +166,7 @@ def test_pick_note_pin_persists(page):
     page.keyboard.press("Escape")
 
 
+@pytest.mark.area("notes")
 def test_send_format(page):
     page.wait_for_selector("#notes:not([hidden])")
     page.click("#nsend")
@@ -181,6 +185,7 @@ def test_send_format(page):
     assert "복사했어요" in page.text_content("#nmsg")
 
 
+@pytest.mark.area("notes")
 def test_clear_sent(page):
     """[보낸 것 완료로]: 보낸 메모를 지우지 않고 완료(답 '확인')로 — 목록·배지에서 빠지고 기록은 메모 안에 남는다."""
     assert page.is_visible("#nclear") and page.text_content("#nclear") == "보낸 것 완료로"
@@ -193,6 +198,7 @@ def test_clear_sent(page):
     assert ns and all(n["replies"][-1]["kind"] == "확인" and n["replies"][-1]["by"] == "user" for n in ns), ns
 
 
+@pytest.mark.area("notes", "modal")
 def test_multi_select_note(page):
     """주석 달기에서 Shift+클릭 2개 → 요소 2개 · 핀 번호 하나가 두 곳 · 보내기는 한 항목 + 다른 곳 줄(task 17 R6, 머리 형식 그대로)."""
     # 메모 없이 시작 — 영역(-m)으로 골라 돌리면 앞 테스트(test_pick_note_pin_persists)의 메모를 지우는 test_clear_sent 가 빠진다
@@ -293,6 +299,7 @@ def zoom_to(pg, sid, min_h=420):
     return pg.locator(f'.card[data-id="{sid}"] .phone').bounding_box()
 
 
+@pytest.mark.area("links")
 def test_gym_link_colors(gpage, gym_out):
     """E20 A: 카드를 누르면 화면 안 출발 버튼마다 그 선과 같은 색 테두리 + 번호 — 같은 도착 = 같은 번호. Esc = 모두 지움."""
     sid = "pass" if len(link_targets(gym_out, "pass")) >= 2 else next(
@@ -322,6 +329,7 @@ def test_gym_link_colors(gpage, gym_out):
     assert outl.count() == 0
 
 
+@pytest.mark.area("input")
 def test_gym_zoom_floor_and_fit(gpage):
     gpage.click("#zoom"); gpage.click("#fit")
     gpage.wait_for_timeout(150)
@@ -343,6 +351,7 @@ def test_gym_zoom_floor_and_fit(gpage):
     gpage.screenshot(path=str(GSHOTS / "b-zoomed-out.png"))
 
 
+@pytest.mark.area("modal")
 def test_gym_annotate_button(gpage):
     sid = gpage.evaluate("document.querySelector('#rows .card').dataset.id")
     gpage.evaluate("""(id) => document.querySelector('.card[data-id="' + id + '"] .cover')
@@ -373,6 +382,7 @@ def test_gym_annotate_button(gpage):
     gpage.wait_for_timeout(150)
 
 
+@pytest.mark.area("input")
 def test_gym_shortcut_hint(gpage):
     hint = gpage.locator("#khint")
     assert hint.is_visible()
@@ -399,6 +409,7 @@ LABEL_GEOM_JS = """() => [...document.querySelectorAll('#rows .alabel')].map(n =
 })"""
 
 
+@pytest.mark.area("flow", "links")
 def test_v2_label_positions(gpage):
     """회귀(0efa322): .alabel 의 style 따옴표가 깨져 모든 이름표가 판 원점에 쌓였다."""
     labels = gpage.evaluate(LABEL_GEOM_JS)
@@ -472,6 +483,7 @@ def check_route(d, max_q=3):
     return cmds
 
 
+@pytest.mark.area("flow")
 def test_v2_route_shapes(gpage):
     cases = gpage.evaluate("""() => {
         const R = window.HDCanvas.routeCurve, s = {x: 400, y: 500, dir: 'right'};
@@ -496,6 +508,7 @@ def test_v2_route_shapes(gpage):
         assert stroke.lower() == fill.lower(), (stroke, fill)
 
 
+@pytest.mark.area("links")
 def test_v2_exit_focus(gpage):
     """빈 판 누르기 · Esc = 고르기 풀기(강조·연결 패널도 꺼짐). 두 번 누르기(키보드 detail 0) = 크게 보기."""
     zoom_to(gpage, "pass", 380)
@@ -524,6 +537,7 @@ def test_v2_exit_focus(gpage):
     gpage.wait_for_timeout(150)
 
 
+@pytest.mark.area("links")
 def test_v2_expand_tall_screen(gpage, gym_out):
     sid = "renew"
     assert link_targets(gym_out, sid)
@@ -541,6 +555,7 @@ def test_v2_expand_tall_screen(gpage, gym_out):
     assert gpage.evaluate(f"""document.querySelector('.card[data-id="{sid}"] .phone').offsetHeight""") == 812
 
 
+@pytest.mark.area("flow")
 def test_v2_base_curves_shot(gpage):
     gpage.keyboard.press("0")
     gpage.wait_for_timeout(300)
@@ -587,6 +602,7 @@ def assert_no_vertical_in_cards(pg, sel):
     return len(paths)
 
 
+@pytest.mark.area("flow", "links")
 def test_v2_no_vertical_through_cards(gpage, gym_out):
     gpage.keyboard.press("Escape")
     assert assert_no_vertical_in_cards(gpage, "#rows path.ln") > 0
@@ -603,6 +619,7 @@ def focus_all(pg, sid):
     pg.wait_for_timeout(900)                               # 긴 화면은 펼친 뒤 다시 그린다
 
 
+@pytest.mark.area("links")
 def test_v3_same_target_merge(gpage, gym_out):
     """같은 도착으로 가는 버튼 여럿 = 연결 패널 한 줄 · 화면 안 테두리는 버튼마다, 번호는 같다."""
     focus_all(gpage, "home")
@@ -626,6 +643,7 @@ def pointer_off_board(pg):
     pg.wait_for_function("!document.getElementById('rows').classList.contains('lnhov')", timeout=3000)
 
 
+@pytest.mark.area("flow")
 def test_v3_main_flow_dashed(gpage):
     """2.5b(E7·E14·D9): 판에 늘 그리는 선은 실선(점선 = 반영 대기뿐), [주요 흐름] 버튼·범례 체크·A 키 없음, 태그는 평소 숨김.
     고르면(E20) 선은 그대로 다 보이고, 그 카드 선이 아닌 것만 흐리게(.18)."""
@@ -678,6 +696,7 @@ def centred(pg, sid, tol=8):
     return abs(dx) <= tol and abs(dy) <= tol
 
 
+@pytest.mark.area("motion")
 def test_v3_ctrl_click_camera(gpage, gym_out):
     """S4: 카드 안 링크 Ctrl+클릭 → 화면은 이동하지 않고, 카메라가 대상 카드 가운데로(8px) · 그 쌍의 선만 강조. 연결 패널 줄 Ctrl+클릭도. Esc 는 바로 멈춤."""
     want = link_targets(gym_out, "pass")
@@ -716,6 +735,7 @@ def test_v3_ctrl_click_camera(gpage, gym_out):
     assert not centred(gpage, want[0])
 
 
+@pytest.mark.area("motion")
 def test_v3_reduced_motion_jumps(gpage):
     """S4: prefers-reduced-motion: reduce → 카메라는 끝 상태로 바로."""
     gpage.emulate_media(reduced_motion="reduce")
@@ -731,6 +751,7 @@ def test_v3_reduced_motion_jumps(gpage):
         gpage.keyboard.press("Escape")
 
 
+@pytest.mark.area("motion", "dock")
 def test_v3_reduce_motion(gpage):
     """G4: 전환 메뉴는 없앰 — '움직임 줄이기'는 표시 패널 체크 하나(#mvOff), 새로고침 뒤에도, 카메라는 바로."""
     errs = []
@@ -762,6 +783,7 @@ def set_width(pg, w):
     pg.evaluate("(w) => { const i = document.getElementById('lgW'); i.value = String(w); i.dispatchEvent(new Event('input', {bubbles: true})); }", w)
 
 
+@pytest.mark.area("links")
 def test_v3_line_style(gpage):
     """S5·E20: 색 드롭다운(진하게 = 줄 색이 그 팔레트에서) · 랜덤(누를 때마다 다름, 메뉴 그대로) · 밖 클릭 닫기 · 굵기 · 새로고침 유지 · 설명 글 없음."""
     gpage.keyboard.press("Escape")

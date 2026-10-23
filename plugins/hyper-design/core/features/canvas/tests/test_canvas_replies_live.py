@@ -83,6 +83,7 @@ def file_notes(pg):
     return json.loads((pg.out / ".hd-canvas.json").read_text(encoding="utf-8"))["state"]["notes"]
 
 
+@pytest.mark.area("notes", "helper")
 def test_agent_reply_shows_live_without_reload(live):
     """(a) 반영됨 → ~3초 안에 핀·배지 수가 빠지고 묶음 '완료' 에 답 줄, 페이지는 그대로(표지가 남음). (c) 칩 '받는 곳 없음'."""
     pg = live
@@ -105,6 +106,7 @@ def test_agent_reply_shows_live_without_reload(live):
     pg.keyboard.press("Escape")
 
 
+@pytest.mark.area("notes", "helper")
 def test_question_reply_surfaces_and_choice_sends_follow_up(live):
     """(b) 질문 → '결정 필요 1'·배지 강조색 · 고르기 = 질문 메모 완료(확인 + answer) + 새 메모 '질문 "…" → 파랑' 를 대기열로 보냄."""
     pg = live
@@ -139,6 +141,7 @@ ASKED = dict(memo("m2", 2, T_LEAD, "안내 글 색"), replies=[{"kind": "질문"
 
 
 @pytest.mark.parametrize("live", [[memo("m1", 1, T_BTN, "버튼을 더 크게"), ASKED]], indirect=True, ids=["asked"])
+@pytest.mark.area("notes", "helper")
 def test_decide_chip_filters_memo_panel_to_decide_only(live):
     """#232: 위쪽 '결정 필요' 누르기 = 메모 패널을 결정 필요 메모만으로(#ndec 눌림) · #ndec 다시 누르기 = 모두."""
     pg = live

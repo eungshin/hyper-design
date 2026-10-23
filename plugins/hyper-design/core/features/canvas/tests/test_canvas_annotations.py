@@ -81,6 +81,7 @@ def annotate_button(pg, note):
     return ph, (x, y)
 
 
+@pytest.mark.area("notes")
 def test_board_pin_numbers_thread_and_done(apage):
     """(a) 카드 요소에 메모 → 그 요소 자리에 핀 1(다시 불러오지 않고 바로) · 핀 누르기 = 그 메모로 열린 묶음(카드 고르기 아님).
     (b) 1 을 지우고 더하면 2. 완료 → 핀·배지 수가 빠지고 '완료' 묶음 · 다시 열기 → 핀이 돌아온다."""
@@ -128,6 +129,7 @@ def test_board_pin_numbers_thread_and_done(apage):
     pg.keyboard.press("Escape")
 
 
+@pytest.mark.area("notes")
 def test_pins_reanchor_after_screen_changes(apage):
     """(c) 화면 파일이 바뀌어 요소가 내려가도(글 그대로) 다시 불러오면 핀이 따라간다 · 글이 바뀌면 핀은 없고 묶음 줄에 '대상이 바뀌었어요'."""
     pg = apage
@@ -154,6 +156,7 @@ def test_pins_reanchor_after_screen_changes(apage):
     write_pay(pg.out)
 
 
+@pytest.mark.area("notes")
 def test_answered_memo_has_no_pin_and_leaves_badge(apage):
     """(d) 반영됨 답이 달린 메모(상태 파일에 끼워 넣음) → 핀 없음, 배지 수에서 빠짐. 배율로 화면이 실제의 60% 이상이면 고르지 않아도 핀이 보인다."""
     pg = apage
