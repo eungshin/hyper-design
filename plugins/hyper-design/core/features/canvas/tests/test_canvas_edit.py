@@ -2103,6 +2103,7 @@ def test_header_compact_and_stable_on_modal(dpage):
     """H15: 위쪽 줄은 32px 한 줄(포토샵·블렌더식). 카드를 크게 봐도 위쪽 줄은 그대로 — 크기·보이는 것 모두 같다.
     화면 제목은 크게 보기 창 위 제목 막대(#mtitle, 화면 위), × 를 누르면 닫힌다."""
     dpage.keyboard.press("Escape")
+    dpage.click('#tools [data-tool="hand"]')         # 두 번 누르기 = 크게 보기는 손 도구에서(앞 테스트가 남긴 도구와 상관없이)
     dpage.click("#zoom"); dpage.click("#fit")
     dpage.keyboard.press("Escape")
     h0 = dpage.evaluate(HEADER_JS)
@@ -2116,7 +2117,7 @@ def test_header_compact_and_stable_on_modal(dpage):
     assert h1 == h0, (h0, h1)
     t = dpage.evaluate("""() => { const t = document.getElementById('mtitle'), f = document.getElementById('mframe');
       return {text: t.textContent.trim(), inModal: !!t.closest('#modal'), above: t.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 1,
-              h: t.closest('.mbar').getBoundingClientRect().height}; }""")
+              h: t.closest('.mbar').offsetHeight}; }""")   # 배치 높이 — 여는 움직임(scale) 중이어도 같다(getBoundingClientRect 는 24.96 으로 가끔 깨짐)
     assert t["text"] and t["text"] in title or title in t["text"], (t, title)
     assert t["inModal"] and t["above"] and abs(t["h"] - 26) < 1, t
     ESHOTS.mkdir(parents=True, exist_ok=True)
@@ -2555,7 +2556,8 @@ def test_memo_popup_moves_resizes_and_remembers_place(dpage):
     back = dpage.evaluate(POP_BOX_JS)
     assert (back["x"], back["y"], back["w"]) == (auto["x"], auto["y"], auto["w"]), (auto, back)
     dpage.keyboard.press("Escape")
-    dpage.keyboard.press("h")
+    dpage.wait_for_selector("#pop", state="hidden")
+    dpage.click('#tools [data-tool="hand"]')         # 메모 도구를 남기지 않는다(머리 줄 두 번 누르기 뒤에는 h 키가 도구로 안 감)
     assert not errs, errs
 
 
@@ -2667,6 +2669,7 @@ def test_shift_enter_in_card_caption(dpage):
     """#226: 카드 아래 글 상자에서 Shift+Enter — 제목 = 설명으로 넘어감(줄을 넣지 않음), 설명 = 줄바꿈(안내 글에 적힘), 정책 줄 = Enter 와 같이 다음 줄로."""
     errs = []
     dpage.on("pageerror", lambda e: errs.append(str(e)))
+    dpage.click('#tools [data-tool="hand"]')         # 앞 테스트가 남긴 도구와 상관없이(메모 도구면 정책 줄 누르기가 메모 창을 연다)
     fit_view(dpage)
     __import__("test_canvas_v2").zoom_to(dpage, "job", 200)
     card = '.card[data-id="job"]'
