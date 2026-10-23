@@ -24,6 +24,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
     — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
   떠 있는 표지: ~/.hyper-design/active/<pid>.json = {pid, project, out, url, token, port, agent, started} (HD_HOME 으로 바꿈) — `hd ls` 가 읽는다. 정상 종료 때 지운다.
+  시작할 때 out 이 프로젝트 목록(~/.hyper-design/projects.json, 링크만)에 없으면 넣는다 — 연 캔버스는 나중에 `hd open <이름>` 으로 다시 연다.
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
   index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 """
@@ -35,6 +36,7 @@ import build_canvas
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402  — 답 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
+import hd_client  # noqa: E402  — 프로젝트 목록(링크) 쓰기는 CLI 와 같은 Client 하나로
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
@@ -756,6 +758,10 @@ def main(argv=None):
     srv = make_server(out, a.port, a.paseo_agent, a.paseo_cmd)
     marker = write_marker(out, srv, a.paseo_agent)
     atexit.register(lambda: marker.unlink(missing_ok=True))
+    try:
+        hd_client.register(out)                     # 목록에 없을 때만 씀(링크 하나, 복사 없음)
+    except (OSError, ValueError) as e:
+        print("[hd] 프로젝트 목록에 넣지 못했어요(%s) — 캔버스는 그대로 떠요" % e, file=sys.stderr, flush=True)
     for name in ("SIGTERM", "SIGBREAK"):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), _stop)

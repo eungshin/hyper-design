@@ -107,3 +107,25 @@ def test_model_is_pure():
         elif isinstance(node, ast.Name) and node.id in ("os", "urllib", "pathlib", "io", "socket", "subprocess", "datetime", "time"):
             bad.append(node.id)
     assert bad == [], "hd_model.py 는 I/O 를 쓰지 않는다: %s" % bad
+
+
+def test_says_starts_with_canvas_wording_and_adds_terminal_extras():
+    # 앞부분 = canvas annotation.says(같은 말), 뒤 = 캔버스가 툴팁·단추로 보여 주는 것
+    assert M.says({"kind": "반영됨", "what": "a", "screens": ["home", "list"], "captured": True}) == "반영됨 — a · home, list · 캡처 확인함"
+    assert M.says({"kind": "일부", "done": "d", "left": "l"}) == "일부 — d · 남은 것 l"
+    assert M.says({"kind": "대체됨", "where": "w"}) == "대체됨 → w"
+    assert M.says({"kind": "질문", "question": "q", "choices": ["x", "y"]}) == "질문 — q (x / y)"
+    assert M.says({"kind": "확인", "answer": "x"}) == "완료함 — 고름: x" and M.says({"kind": "다시"}) == "다시 엶"
+
+
+def test_scope_shown_when_not_element():
+    notes = [{"id": "a", "screen": "s", "no": 1, "sent": True, "intent": "change", "note": "x", "path": "h1", "text": "", "scope": "all"},
+             {"id": "b", "screen": "s", "no": 2, "sent": True, "intent": "change", "note": "y", "path": "", "text": "", "scope": "screen"},
+             {"id": "c", "screen": "s", "no": 3, "sent": True, "intent": "change", "note": "z", "path": "p", "text": ""},
+             {"id": "d", "screen": "s", "no": 4, "sent": True, "intent": "change", "note": "w", "path": "p", "text": "", "scope": "element"}]
+    rs = M.rows(notes)
+    assert [r["scope"] for r in rs] == ["all", "screen", "element", "element"]
+    lines = M.format_rows(rs).splitlines()
+    assert lines[0] == "s #1 · working · change · h1 · 범위: 모든 화면 · x"
+    assert lines[1] == "s #2 · working · change · (화면 전체) · 범위: 이 화면 · y"
+    assert "범위" not in lines[2] and "범위" not in lines[3]

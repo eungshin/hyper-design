@@ -5,14 +5,20 @@
                                           메모: screen #no · status · intent · target · text (답은 들여 쓴 줄)
   hd reply <screen>#<no>|<note-id> --kind 반영됨 --what … --screens a,b --captured yes|no
            (일부: --done --left · 대체됨: --where · 답변: --text · 질문: --question --choice X --choice Y · 모두: --detail --by NAME)
+  hd projects                             저장한 프로젝트(링크): name · out · url|꺼짐|없음 · 연 때
+  hd save [--name N] [--out PATH]         링크 넣기·고치기(기본 out = 떠 있는 캔버스 하나) — 복사하지 않는다
+  hd open <name|path> [--agent ID] [--no-open]
+                                          떠 있으면 그 주소, 아니면 build_ref.py 로 빌드 후 helper.py 를 떼어 띄운다
+  hd forget <name>                        링크만 지운다(파일은 그대로)
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
-import argparse, json, pathlib, sys
+import argparse, json, os, pathlib, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import hd_client as C  # noqa: E402
 import hd_model as M  # noqa: E402
+import hd_projects as P  # noqa: E402
 
 HELPER = HERE.parent / "canvas" / "helper.py"
 
@@ -110,6 +116,77 @@ def cmd_reply(a):
     return res, "%s → %s (rev %s)" % (label, res.get("status"), res.get("rev"))
 
 
+def cmd_projects(a):
+    reg = C.load_projects()
+    rs = P.rows(reg, C.running(), C.exists_map(reg))
+    return rs, P.format_rows(rs)
+
+
+def cmd_save(a):
+    if a.out:
+        o = pathlib.Path(C.abs_out(a.out))
+        if not C.is_out(o):
+            raise C.HdError("screens.json 이 있는 out 폴더가 아니에요: %s" % o)
+    else:
+        alive = C.running()
+        if len(alive) != 1:
+            raise C.HdError(("떠 있는 캔버스가 없어요" if not alive else "캔버스가 여럿이에요(%s)" % _listing(alive)) + " — --out PATH 로 고르세요")
+        o = pathlib.Path(C.abs_out(alive[0]["out"]))
+    reg = C.load_projects()
+    old = P.by_out(reg, str(o))
+    try:
+        reg, e, added = P.save(reg, str(o), C.now(), a.name, default_name=C.project_from(o))
+    except P.ProjectError as x:
+        raise C.HdError(str(x))
+    C.save_projects(reg)
+    how = "새로 저장" if added else ("이름 바꿈, 전: %s" % old["name"] if old["name"] != e["name"] else "이미 있음")
+    return dict(e, added=added), "%s (%s)" % (P.link_line(e), how)
+
+
+def cmd_open(a):
+    reg = C.load_projects()
+    e = P.find(reg, a.target)
+    if e is None and C.is_out(a.target):
+        o = C.abs_out(a.target)
+        reg, e, _ = P.save(reg, o, C.now(), default_name=C.project_from(o))
+        C.save_projects(reg)
+    if e is None:
+        raise C.HdError("모르는 프로젝트예요: %s — hd projects 로 이름을 보거나 out 경로를 주세요" % a.target)
+    o = pathlib.Path(e["out"])
+    if not C.is_out(o):
+        raise C.HdError("'%s' 의 out 폴더가 없어요(없음): %s — 링크만 지우려면 hd forget %s" % (e["name"], o, e["name"]))
+    agent = a.agent or os.environ.get("PASEO_AGENT_ID") or None
+    m = C.serving(o)
+    reused = m is not None
+    if not reused:
+        code, tail = C.build(o)
+        if code != 0:
+            if not (o / "index.html").is_file():
+                raise C.HdError("빌드 실패(build_ref.py %d): %s" % (code, " / ".join(tail.splitlines())))
+            C.warn("빌드 실패(%d) — 있던 index.html 로 띄워요: %s" % (code, tail.splitlines()[-1] if tail else ""))
+        proc, log = C.spawn_helper(o, agent)
+        m = C.wait_serving(o, proc)
+        if m is None:
+            raise C.HdError("도우미가 %d초 안에 뜨지 않았어요 — 로그 %s: %s" % (C.START_WAIT, log, " / ".join(C.log_tail(log).splitlines())))
+    C.save_projects(P.touch(C.load_projects(), e["out"], C.now()))   # 도우미가 그 사이 목록을 썼을 수 있어 다시 읽는다
+    if not a.no_open:
+        C.open_browser(m["url"])
+    data = {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+    how = "이미 떠 있음" if reused else "새로 띄움"
+    note = ""
+    if reused and agent and m.get("agent") != agent:
+        note = " · 떠 있는 도우미는 %s 로 보내요(바꾸려면 그 도우미를 끄고 다시 open)" % (m.get("agent") or "대기열 파일")
+    return data, "%s · %s · %s · pid %s · 보내기 → %s%s" % (e["name"], m["url"], how, m.get("pid"), m.get("agent") or "대기열 파일", note)
+
+
+def cmd_forget(a):
+    reg, hit = P.forget(C.load_projects(), a.name)
+    if hit is None:
+        raise C.HdError("저장한 프로젝트에 '%s' 이 없어요 — hd projects" % a.name)
+    C.save_projects(reg)
+    return hit, "링크를 지웠어요: %s (파일은 그대로)" % P.link_line(hit)
+
+
 def parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="기계용 JSON 출력")
@@ -134,6 +211,18 @@ def parser():
     r.add_argument("--captured", choices=("yes", "no"))
     r.add_argument("--choice", action="append", help="질문의 고를 것(2–4번)")
     r.set_defaults(fn=cmd_reply)
+    sub.add_parser("projects", parents=[common], help="저장한 프로젝트(링크)").set_defaults(fn=cmd_projects)
+    v = sub.add_parser("save", parents=[common], help="프로젝트 링크 넣기·고치기")
+    v.add_argument("--name"); v.add_argument("--out")
+    v.set_defaults(fn=cmd_save)
+    o = sub.add_parser("open", parents=[common], help="프로젝트 열기(떠 있으면 그 주소, 아니면 빌드 후 도우미 띄움)")
+    o.add_argument("target", help="이름 또는 out 경로")
+    o.add_argument("--agent", help="보내기 받을 Paseo 에이전트(기본 env PASEO_AGENT_ID)")
+    o.add_argument("--no-open", action="store_true", help="브라우저를 열지 않음")
+    o.set_defaults(fn=cmd_open)
+    f = sub.add_parser("forget", parents=[common], help="링크만 지움(파일은 그대로)")
+    f.add_argument("name")
+    f.set_defaults(fn=cmd_forget)
     return ap
 
 

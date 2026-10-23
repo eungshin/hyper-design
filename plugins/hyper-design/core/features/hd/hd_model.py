@@ -181,7 +181,7 @@ def rows(notes, seq=None):
             continue
         path, quote, k = target(n)
         out.append({"id": n.get("id"), "screen": n.get("screen"), "no": no, "status": status(n), "intent": n.get("intent"),
-                    "sent": bool(n.get("sent")), "edit": n.get("edit"), "target": {"path": path, "quote": quote, "count": k},
+                    "sent": bool(n.get("sent")), "edit": n.get("edit"), "scope": n.get("scope") or "element", "target": {"path": path, "quote": quote, "count": k},
                     "text": n.get("note") or "", "replies": replies(n)})
     return out
 
@@ -200,25 +200,37 @@ def _cut(s, n):
 
 
 def says(r):
-    """답 한 줄(사람이 읽는 글) — annotation.says 와 같은 말."""
+    """답 한 줄(사람이 읽는 글). 앞부분은 canvas annotation.says 와 같은 말이고, 캔버스가 따로 보여 주는 것을 터미널에선 뒤에 붙인다:
+    반영됨 → ' · 캡처 확인함|안 봄'(캔버스는 annotation.tip 툴팁) · 질문 → ' (a / b)'(캔버스는 고를 것 단추)."""
     if not isinstance(r, dict):
         return ""
     k = r.get("kind")
+    lst = lambda a: ", ".join(str(x) for x in a) if isinstance(a, list) else ""
     if k == "반영됨":
-        return "반영됨 — %s [%s · 캡처 %s]" % (r.get("what", ""), ",".join(r.get("screens") or []), "확인" if r.get("captured") else "안 봄")
+        return "반영됨 — %s%s · 캡처 %s" % (r.get("what", ""), " · " + lst(r.get("screens")) if lst(r.get("screens")) else "",
+                                          "확인함" if r.get("captured") else "안 봄")
     if k == "일부":
-        return "일부 반영 — %s · 남음: %s" % (r.get("done", ""), r.get("left", ""))
+        return "일부 — %s · 남은 것 %s" % (r.get("done", ""), r.get("left", ""))
     if k == "대체됨":
-        return "다른 곳에서 반영 — %s" % r.get("where", "")
+        return "대체됨 → %s" % r.get("where", "")
     if k == "답변":
         return "답변 — %s" % r.get("text", "")
     if k == "질문":
-        return "질문 — %s (%s)" % (r.get("question", ""), " / ".join(r.get("choices") or []))
+        ch = r.get("choices") if isinstance(r.get("choices"), list) else []
+        return "질문 — %s%s" % (r.get("question", ""), " (%s)" % " / ".join(str(c) for c in ch) if ch else "")
     if k == "확인":
-        return "완료로 표시함" + (" — 고름: %s" % r["answer"] if _str(r.get("answer")) else "")
+        return "완료함" + (" — 고름: %s" % r["answer"] if _str(r.get("answer")) else "")
     if k == "다시":
-        return "다시 열었음"
+        return "다시 엶"
     return str(k or "")
+
+
+SCOPES = {"screen": "이 화면", "all": "모든 화면"}   # n.scope(canvas R7) — 없거나 element 면 요소 메모(표시 안 함)
+
+
+def scope_word(scope):
+    """n.scope → '이 화면' | '모든 화면' | None(element·없음·모르는 값)."""
+    return SCOPES.get(scope) if isinstance(scope, str) else None
 
 
 def format_rows(rs):
@@ -231,8 +243,9 @@ def format_rows(rs):
             tgt += ' "%s"' % _cut(t["quote"], QUOTE_MAX)
         if t["count"] > 1:
             tgt += " +%d" % (t["count"] - 1)
-        lines.append("%s #%s · %s · %s · %s · %s" % (r["screen"], r["no"], r["status"], r["intent"] or "-", tgt.strip() or "(화면 전체)",
-                                                    " ".join(str(r["text"]).split())))
+        sw = scope_word(r.get("scope"))
+        lines.append("%s #%s · %s · %s · %s%s · %s" % (r["screen"], r["no"], r["status"], r["intent"] or "-", tgt.strip() or "(화면 전체)",
+                                                      " · 범위: " + sw if sw else "", " ".join(str(r["text"]).split())))
         for x in r["replies"]:
             lines.append("    ↳ %s  (%s %s)" % (says(x), x.get("by", "?") if isinstance(x, dict) else "?", x.get("at", "") if isinstance(x, dict) else ""))
     return "\n".join(lines) if lines else "(메모 없음)"
