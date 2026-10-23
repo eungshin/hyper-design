@@ -191,7 +191,7 @@ def test_clear_sent(page):
     assert page.is_visible("#nclear") and page.text_content("#nclear") == "보낸 것 완료로"
     page.click("#nclear")
     assert page.evaluate("document.querySelectorAll('#nlist li').length") == 0
-    assert page.is_hidden("#notes")
+    assert page.text_content("#nsent").endswith("(1)")   # 완료한 메모는 지운 것이 아니라 숨김(task 29) — 보낸 메모 보기로 다시 볼 수 있다
     reload(page)
     assert page.locator(".nbadge").count() == 0
     ns = page.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))))")
