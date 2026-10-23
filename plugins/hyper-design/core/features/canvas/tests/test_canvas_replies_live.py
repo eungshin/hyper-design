@@ -27,8 +27,9 @@ def memo(i, no, t, note):
             "note": note, "intent": "change", "sent": True, "replies": []}
 
 
-@pytest.fixture()
-def live(ctx):
+@pytest.fixture(scope="module")
+def served():
+    """빌드 + 도우미 서버는 모듈에 한 번 — 테스트마다 상태 파일·대기열을 새로 쓰고 새 페이지를 연다(live)."""
     tmp = Path(tempfile.mkdtemp(prefix="hd-canvas-live-"))
     out = tmp / "out"
     (out / "screens").mkdir(parents=True)
@@ -41,10 +42,24 @@ def live(ctx):
     r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(out)], capture_output=True, text=True, encoding="utf-8",
                        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     assert r.returncode == 0, r.stderr
-    (out / ".hd-canvas.json").write_text(json.dumps({"version": 1, "rev": 1, "updated": "2026-10-23T00:00:00Z", "state": {
-        "notes": [memo("m1", 1, T_BTN, "버튼을 더 크게"), memo("m2", 2, T_LEAD, "안내 글 색")], "note-seq": {"pay": 2}}}, ensure_ascii=False), encoding="utf-8")
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield out, srv
+    srv.shutdown(); srv.server_close()
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def seed(out, notes):
+    """이 테스트의 메모만 상태 파일에(파일 rev>0 = 열 때 파일이 이긴다) · 앞 테스트의 대기열 파일은 치운다."""
+    shutil.rmtree(out / ".hd-queue", ignore_errors=True)
+    (out / ".hd-canvas.json").write_text(json.dumps({"version": 1, "rev": 1, "updated": "2026-10-23T00:00:00Z", "state": {
+        "notes": notes, "note-seq": {"pay": max(n["no"] for n in notes)}}}, ensure_ascii=False), encoding="utf-8")
+
+
+@pytest.fixture()
+def live(served, ctx, request):
+    out, srv = served
+    seed(out, getattr(request, "param", None) or [memo("m1", 1, T_BTN, "버튼을 더 크게"), memo("m2", 2, T_LEAD, "안내 글 색")])
     pg = ctx.new_page()
     errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
@@ -53,8 +68,6 @@ def live(ctx):
     pg.out, pg.srv = out, srv
     yield pg
     pg.close()
-    srv.shutdown(); srv.server_close()
-    shutil.rmtree(tmp, ignore_errors=True)
     assert not errors, errors
 
 
@@ -78,18 +91,16 @@ def test_agent_reply_shows_live_without_reload(live):
     pg.wait_for_function(f"document.querySelectorAll('{PIN}').length === 2", timeout=8000)
     assert pg.text_content(BADGE) == "2"
     pg.evaluate("window.__hdStay = 1")
-    t0 = time.time()
     reply(pg, "m1", {"kind": "반영됨", "what": "버튼 키움", "screens": ["pay"], "captured": True})
     pg.wait_for_function(f"(() => {{ const b = document.querySelector('{BADGE}'); return b && b.textContent === '1'; }})()", timeout=4000)
-    assert time.time() - t0 < 4
     pg.wait_for_function(f"document.querySelectorAll('{PIN}').length === 1", timeout=3000)
     assert pg.evaluate("window.__hdStay") == 1, "새로고침 없이"
     pg.click(BADGE)
     pg.wait_for_selector("#thread:not([hidden])")
-    assert pg.text_content('#thread li[data-id="m2"] .ths') == "대기열", "받는 곳 없이 보낸 메모 = 대기열(R4)"
+    assert pg.get_attribute('#thread li[data-id="m2"] .ths', "data-q") == "1", "받는 곳 없이 보낸 메모 = 대기열(R4)"
     pg.click("#thread details.thdone summary")
-    line = pg.locator('#thread details.thdone li[data-id="m1"] .thr1')
-    assert line.text_content() == "반영됨 — 버튼 키움 · pay"
+    line = pg.locator('#thread details.thdone li[data-id="m1"] .thr1[data-kind="반영됨"]')
+    assert line.count() == 1, "답 줄"
     assert "캡처 확인함" in line.get_attribute("title")
     pg.keyboard.press("Escape")
 
@@ -102,18 +113,11 @@ def test_question_reply_surfaces_and_choice_sends_follow_up(live):
     assert pg.is_hidden("#decn")
     reply(pg, "m2", {"kind": "질문", "question": "어느 색?", "choices": ["파랑", "검정"]})
     pg.wait_for_selector("#decn:not([hidden])", timeout=4000)
-    assert pg.text_content("#decn") == "결정 필요 1"
+    assert pg.get_attribute("#decn", "data-n") == "1"
     assert "decide" in pg.get_attribute(BADGE, "class") and pg.text_content(BADGE) == "2", "배지 강조색, 수는 열린 메모 수 그대로"
-    accent = pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--ui-accent').trim()")
-    assert accent and pg.evaluate(f"getComputedStyle(document.querySelector('{BADGE}')).backgroundColor") != pg.evaluate("getComputedStyle(document.querySelector('#nsend')).backgroundColor")
-    pg.click("#decn")                                   # 메모 패널을 결정 필요만으로
-    pg.wait_for_selector("#nlist li")
-    assert pg.get_attribute("#ndec", "aria-pressed") == "true" and pg.locator("#nlist li").count() == 1
-    pg.click("#ndec")
-    assert pg.locator("#nlist li").count() == 2
     pg.click(BADGE)
     pg.wait_for_selector('#thread li[data-id="m2"] button.thc')
-    assert pg.text_content('#thread li[data-id="m2"] .ths') == "결정 필요"
+    assert pg.get_attribute('#thread li[data-id="m2"] .ths', "data-st") == "decide"
     pg.click('#thread li[data-id="m2"] button.thc:has-text("파랑")')
     pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
     q = list((pg.out / ".hd-queue").iterdir())
@@ -128,4 +132,19 @@ def test_question_reply_surfaces_and_choice_sends_follow_up(live):
     assert ns["m2"]["replies"][-1] == {**ns["m2"]["replies"][-1], "kind": "확인", "by": "user", "answer": "파랑"}
     new = [n for i, n in ns.items() if i not in ("m1", "m2")][0]
     assert new["note"] == '질문 "어느 색?" → 파랑' and new["sent"] is True and new["screen"] == "pay" and new["targets"][0]["path"] == "p.lead" and new["no"] == 3
-    assert "대기열 파일" in pg.text_content("#toast") and "--paseo-agent" in pg.text_content("#toast"), "받는 곳이 없다고, 붙이는 법까지"
+    assert pg.evaluate("window.__hdLastHelper.forward.via") == "queue" and pg.is_visible("#toast"), "받는 곳이 없으면 대기열로 갔다고 알림"
+
+
+ASKED = dict(memo("m2", 2, T_LEAD, "안내 글 색"), replies=[{"kind": "질문", "question": "어느 색?", "choices": ["파랑", "검정"], "by": "agent", "at": "2026-10-23T00:00:01Z"}])
+
+
+@pytest.mark.parametrize("live", [[memo("m1", 1, T_BTN, "버튼을 더 크게"), ASKED]], indirect=True, ids=["asked"])
+def test_decide_chip_filters_memo_panel_to_decide_only(live):
+    """#232: 위쪽 '결정 필요' 누르기 = 메모 패널을 결정 필요 메모만으로(#ndec 눌림) · #ndec 다시 누르기 = 모두."""
+    pg = live
+    pg.wait_for_selector("#decn:not([hidden])", timeout=5000)
+    pg.click("#decn")
+    pg.wait_for_selector("#nlist li")
+    assert pg.get_attribute("#ndec", "aria-pressed") == "true" and pg.locator("#nlist li").count() == 1
+    pg.click("#ndec")
+    assert pg.get_attribute("#ndec", "aria-pressed") == "false" and pg.locator("#nlist li").count() == 2

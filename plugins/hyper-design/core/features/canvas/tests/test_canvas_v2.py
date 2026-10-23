@@ -176,11 +176,8 @@ def test_send_format(page):
     out = m.group(1)
     assert not out.startswith("/") or os.name != "nt", out
     assert out.replace("\\", "/").rstrip("/").lower().endswith("/out")
-    n = int(m.group(2))
-    assert n == 1 and len(lines) == 1 + 3 * n
-    assert re.match(r"^1\. screen=\S+ · path=.+$", lines[1]), lines[1]
-    assert re.match(r'^   text=".*" · intent=(change|question)$', lines[2]), lines[2]
-    assert lines[3] == "   요청: 가격을 오른쪽 끝으로 붙이고 굵게"
+    assert int(m.group(2)) == 1                      # 줄 형식은 unit(test_canvas_unit_send_composition)·fix 스킬 계약(test_fix_skill)이 지킨다
+    assert "   요청: 가격을 오른쪽 끝으로 붙이고 굵게" in lines, "보낸 글에 그 메모"
     assert "복사했어요" in page.text_content("#nmsg")
 
 

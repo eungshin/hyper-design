@@ -48,7 +48,7 @@ function mount(ctx) {
   function row(n) {
     var st = A.status(n), open = st !== 'done';
     return '<li data-id="' + esc(n.id) + '" data-no="' + esc(n.no) + '"' + (n.sent && open ? ' class="sent"' : '') + '><div class="thl"><span class="thn">#' + esc(n.no) + '</span><span class="the">' + esc(label(n)) + '</span>' +
-      '<span class="ths" data-st="' + st + '">' + esc(A.label(n, ctx.queued())) + '</span>' + (A.scopeWord(n) ? '<span class="thsc">' + esc(A.scopeWord(n)) + '</span>' : '') +
+      '<span class="ths" data-st="' + st + '"' + (st === 'working' && ctx.queued() ? ' data-q="1"' : '') + '>' + esc(A.label(n, ctx.queued())) + '</span>' + (A.scopeWord(n) ? '<span class="thsc">' + esc(A.scopeWord(n)) + '</span>' : '') +
       '<span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span></div>' +
       (open && ctx.lost(n) ? '<div class="thlost">대상이 바뀌었어요</div>' : '') +
       '<div class="tht">' + esc(n.note || '') + '</div>' + reps(n) + choices(n) +

@@ -41,7 +41,7 @@ function mount(ctx) {
     sp.memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; if (A.status(n) === 'decide') dec[n.screen] = 1; });
     if (!nd) only = false;
     $('#notes').hidden = !sp.memos.length && !open.some(function (n) { return n.sent; }); $('#pend').hidden = !sp.pending.length;   // 보낸 것이 있으면 '보낸 것 완료로' 때문에 연다
-    var dn = $('#decn'); dn.hidden = !nd; dn.textContent = '결정 필요 ' + nd;
+    var dn = $('#decn'); dn.hidden = !nd; dn.textContent = '결정 필요 ' + nd; dn.dataset.n = String(nd);
     var tg = $('#ndec'); tg.hidden = !nd; tg.setAttribute('aria-pressed', String(only));
     $('#nlist').innerHTML = (only ? sp.memos.filter(function (n) { return A.status(n) === 'decide'; }) : sp.memos).map(memoRow).join('');
     $('#plist').innerHTML = sp.pending.map(pendRow).join('');

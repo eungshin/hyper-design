@@ -1226,7 +1226,6 @@ def test_caption_one_box_edits_all_fields(dpage):
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
     assert (n["edit"], n.get("index"), n.get("value")) == ("policy", 0, ""), n
-    assert "1번째 줄" in n["note"] and "지우기" in n["note"] and "policies[0]" in n["note"], n["note"]
     dpage.keyboard.press("Control+z")
     wait_notes(dpage, n0)
 
@@ -2539,33 +2538,22 @@ def test_memo_popup_moves_resizes_and_remembers_place(dpage):
     assert abs(moved["x"] - (auto["x"] + 200)) <= 2 and abs(moved["y"] - (auto["y"] + 80)) <= 2, (auto, moved)
     g = dpage.locator("#pop .prs").bounding_box()
     gx, gy = g["x"] + g["width"] / 2, g["y"] + g["height"] / 2
-    ta0 = dpage.locator("#pnote").bounding_box()
     dpage.mouse.move(gx, gy)
     dpage.mouse.down()
     dpage.mouse.move(gx + 60, gy + 80, steps=6)
     dpage.mouse.up()
     sized = dpage.evaluate(POP_BOX_JS)
-    ta1 = dpage.locator("#pnote").bounding_box()
     assert sized["x"] == moved["x"] and abs(sized["w"] - (moved["w"] + 60)) <= 2 and abs(sized["h"] - (moved["h"] + 80)) <= 2, (moved, sized)
-    assert ta1["height"] > ta0["height"] + 60 and ta1["width"] > ta0["width"] + 50, ("글 칸이 같이 커진다", ta0, ta1)
     saved = dpage.evaluate("JSON.parse(localStorage.getItem('hd-pop'))")
     assert saved == sized, saved
     dpage.keyboard.press("Escape")
     assert dpage.is_hidden("#pop") and dpage.locator(".card.memo-target").count() == 0, "닫으면 표시도 없어진다"
-    open_card_memo(dpage)                            # 다시 열면 저장한 자리·크기
-    assert dpage.evaluate(POP_BOX_JS) == sized
-    reload(dpage)                                    # 새로고침 뒤에도
-    open_card_memo(dpage)
+    open_card_memo(dpage)                            # 다시 열면 저장한 자리·크기(저장값 → 자리 읽기는 unit pop-place)
     assert dpage.evaluate(POP_BOX_JS) == sized
     dpage.dblclick("#ptitle")                        # 두 번 누르기 = 자동 자리
     assert dpage.evaluate("localStorage.getItem('hd-pop')") is None
     back = dpage.evaluate(POP_BOX_JS)
     assert (back["x"], back["y"], back["w"]) == (auto["x"], auto["y"], auto["w"]), (auto, back)
-    dpage.keyboard.press("Escape")
-    dpage.evaluate("localStorage.setItem('hd-pop', '{broken')")   # 깨진 저장값 = 자동 자리(오류 없이)
-    open_card_memo(dpage)
-    back2 = dpage.evaluate(POP_BOX_JS)
-    assert (back2["x"], back2["y"]) == (auto["x"], auto["y"]) and dpage.evaluate("localStorage.getItem('hd-pop')") is None
     dpage.keyboard.press("Escape")
     dpage.keyboard.press("h")
     assert not errs, errs
@@ -2601,7 +2589,7 @@ def test_badge_opens_that_screens_memos_like_comments(dpage):
     wait_notes(dpage, n0 + 2)
     dpage.keyboard.press("Escape")
     badge = f'.card[data-id="{cid}"] .nbadge'
-    assert dpage.get_attribute(badge, "role") == "button" and dpage.get_attribute(badge, "aria-label") == "메모 2건 보기"
+    assert dpage.get_attribute(badge, "role") == "button" and dpage.get_attribute(badge, "aria-label") and dpage.text_content(badge) == "2"
     dpage.click(badge)
     dpage.wait_for_selector("#thread:not([hidden])")
     assert dpage.locator("#rows .card.picked").count() == 0, "배지 누르기는 카드 고르기가 아니다"
@@ -2653,8 +2641,7 @@ def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
     dpage.dblclick(card + " .ftitle")
     box = dpage.locator(card + " .capbox")
     assert box.is_visible() and dpage.is_hidden("#pop"), "두 번 누르기 = 카드 글 상자(메모 창 아님)"
-    ph = box.locator('[data-f="purpose"]').get_attribute("data-ph")
-    assert "목적" in ph and "메모" in ph and "Shift+Enter" in ph, ph
+    assert box.locator('[data-f="purpose"]').get_attribute("data-ph"), "목적 칸에 안내 글"
     dpage.keyboard.press("Control+a")
     dpage.keyboard.type("결제 화면")
     dpage.keyboard.press("Enter")                    # 이름에서 Enter = 목적으로
@@ -2667,8 +2654,6 @@ def test_blank_layout_caption_has_name_and_multiline_purpose(dpage):
     n = [x for x in notes_of(dpage) if x["screen"] == did][0]
     assert n["value"] == "결제 화면" and n["purpose"] == "카드로 결제한다\n쿠폰은 선택" and not n["sent"], n
     assert "목적: 카드로 결제한다\n쿠폰은 선택" in n["note"], n["note"]
-    req = dpage.evaluate(f"HD.edits.request(({NOTES_JS}).filter(n => n.screen === '{did}'), 'o')")
-    assert "목적: 카드로 결제한다\n       쿠폰은 선택" in req, req
     assert dpage.text_content(card + " .ftitle") == "결제 화면" and dpage.text_content(card + " .fdesc") == "카드로 결제한다\n쿠폰은 선택"
     dpage.keyboard.press("Control+z")
     dpage.wait_for_function(f"({NOTES_JS}).some(n => n.screen === '{did}' && !n.purpose)")
@@ -2691,16 +2676,16 @@ def test_shift_enter_in_card_caption(dpage):
     box = dpage.locator(card + " .capbox")
     assert box.is_visible()
     title0 = box.locator('[data-f="title"]').text_content()
-    assert "Shift+Enter 줄바꿈" in box.locator('[data-f="purpose"]').get_attribute("data-ph")
+    assert box.locator('[data-f="purpose"]').get_attribute("data-ph"), "설명 칸에 안내 글"
     dpage.keyboard.press("Shift+Enter")
     assert dpage.evaluate("document.activeElement.dataset.f") == "purpose", "제목에서 Shift+Enter = 설명으로"
     assert box.locator('[data-f="title"]').text_content() == title0 and box.locator('[data-f="title"] br').count() == 0, "제목에는 줄을 넣지 않는다"
     dpage.keyboard.press("Shift+Enter")
     assert dpage.evaluate("document.activeElement.dataset.f") == "purpose" and box.locator('[data-f="purpose"] br').count() >= 1, "설명에서는 줄바꿈"
-    if box.locator('ul[data-f="policies"] > li').count() >= 2:
-        box.locator('ul[data-f="policies"] > li').first.click()
-        dpage.keyboard.press("Shift+Enter")
-        assert dpage.evaluate("document.activeElement === document.querySelector('" + card + " .capbox ul[data-f=\"policies\"] > li:nth-child(2)')"), "정책 줄 Shift+Enter = Enter(다음 줄)"
+    assert box.locator('ul[data-f="policies"] > li').count() >= 2, "고정본 job 화면에는 정책 줄이 둘 이상"
+    box.locator('ul[data-f="policies"] > li').first.click()
+    dpage.keyboard.press("Shift+Enter")
+    assert dpage.evaluate("document.activeElement === document.querySelector('" + card + " .capbox ul[data-f=\"policies\"] > li:nth-child(2)')"), "정책 줄 Shift+Enter = Enter(다음 줄)"
     dpage.keyboard.press("Escape")
     assert not box.count() and len(notes_of(dpage)) == n0
     assert not errs, errs

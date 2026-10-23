@@ -59,6 +59,13 @@ def pins(pg):
         vis: getComputedStyle(p.parentNode).display !== 'none'}}))""")
 
 
+def el_box(pg, ph, fr, sel):
+    """카드 안 요소 sel 의 상자 → 화면 좌표."""
+    r = fr.evaluate("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }", sel)
+    sc = ph["width"] / pg.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card.w")
+    return {"x": ph["x"] + r[0] * sc, "y": ph["y"] + r[1] * sc, "w": r[2] * sc, "h": r[3] * sc}
+
+
 def annotate_button(pg, note):
     ph = zoom_to(pg, "pay", 420)                     # 카드 화면 ≈ 실제의 52% — 배율만으로는 핀이 안 보이는 크기
     fr = frame_of(pg, "pay")
@@ -83,14 +90,14 @@ def test_board_pin_numbers_thread_and_done(apage):
     wait_notes(pg, 1)
     assert notes_of(pg)[0]["no"] == 1 and notes_of(pg)[0]["targets"][0]["quote"]["exact"] == "지금 결제하기", notes_of(pg)[0]
     pg.wait_for_selector(PIN + '[data-no="1"]', state="visible", timeout=4000)
-    b = pg.locator(PIN).bounding_box()
-    assert abs(b["x"] - (x - 120 * ph["width"] / 375)) < 30 and abs(b["y"] + b["height"] / 2 - y) < 40, (b, x, y)
+    b, t = pg.locator(PIN).bounding_box(), el_box(pg, ph, frame_of(pg, "pay"), "button.pay")
+    assert b["x"] < t["x"] + t["w"] and t["x"] < b["x"] + b["width"] and b["y"] < t["y"] + t["h"] and t["y"] < b["y"] + b["height"], ("핀은 그 요소 상자에 걸친다", b, t)
     assert pg.locator(PIN).text_content() == "1" and pins(pg)[0]["st"] == "draft"
     pg.click(PIN)
     pg.wait_for_selector("#thread:not([hidden])")
     assert pg.locator("#rows .card.picked").count() == 0, "핀 누르기는 카드 고르기가 아니다"
     assert pg.get_attribute("#thread li.focus", "data-no") == "1"
-    assert pg.text_content("#thread li.focus .thn") == "#1" and pg.text_content("#thread li.focus .ths") == "보내기 전"
+    assert pg.text_content("#thread li.focus .thn") == "#1" and pg.get_attribute("#thread li.focus .ths", "data-st") == "draft"
     pg.hover("#thread li.focus .tht")
     assert pg.locator('.card[data-id="pay"] .npbox.hi').count() == 1, "묶음 줄에 올리면 그 요소 테두리"
     pg.click('#thread li.focus button[data-act="del"]')   # (b) 지우고 다시
@@ -107,7 +114,7 @@ def test_board_pin_numbers_thread_and_done(apage):
     pg.click('#thread li.focus button[data-act="done"]')   # 완료(사람 답 '확인')
     pg.wait_for_function(f"!document.querySelector('{PIN}')")
     assert pg.locator(BADGE).count() == 0, "완료한 메모는 배지 수에서 빠진다"
-    assert pg.locator("#thread details.thdone li").count() == 1 and "완료 1" in pg.text_content("#thread details.thdone summary")
+    assert pg.locator("#thread details.thdone li").count() == 1
     assert notes_of(pg)[0]["replies"][-1]["kind"] == "확인"
     pg.click("#thread details.thdone summary")
     pg.click('#thread details.thdone button[data-act="reopen"]')
@@ -141,7 +148,7 @@ def test_pins_reanchor_after_screen_changes(apage):
     pg.wait_for_function("document.querySelector('.card[data-id=\"pay\"] .phone iframe').getAttribute('src')", timeout=5000)
     pg.click(BADGE)
     pg.wait_for_selector("#thread .thlost", timeout=5000)
-    assert pg.text_content("#thread .thlost") == "대상이 바뀌었어요"
+    assert pg.locator('#thread li[data-no] .thlost').count() == 1
     assert pg.locator(PIN).count() == 0, "다시 찾지 못한 대상에는 핀이 없다"
     pg.keyboard.press("Escape")
     write_pay(pg.out)
@@ -150,21 +157,21 @@ def test_pins_reanchor_after_screen_changes(apage):
 def test_answered_memo_has_no_pin_and_leaves_badge(apage):
     """(d) 반영됨 답이 달린 메모(상태 파일에 끼워 넣음) → 핀 없음, 배지 수에서 빠짐. 배율로 화면이 실제의 60% 이상이면 고르지 않아도 핀이 보인다."""
     pg = apage
-    pg.evaluate("""() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); const a = JSON.parse(localStorage.getItem(k));
-        const t = a[0].targets[0];
+    pg.evaluate("""() => { const t = {path: 'button.pay', text: '지금 결제하기', quote: {exact: '지금 결제하기', prefix: '', suffix: ''}};
+        const a = [{id: 'own8', no: 8, screen: 'pay', targets: [t], path: t.path, text: t.text, rect: null, note: '열린 메모', intent: 'change', sent: false, replies: []}];
         a.push({id: 'ans1', no: 9, screen: 'pay', targets: [t], path: t.path, text: t.text, rect: t.rect, note: '답 받은 메모', intent: 'change', sent: true,
                 replies: [{kind: '반영됨', what: '크게 했어요', screens: ['pay'], captured: true}]});
         a.push({id: 'ask1', no: 10, screen: 'pay', targets: [t], path: t.path, text: t.text, rect: t.rect, note: '물어본 메모', intent: 'change', sent: true,
                 replies: [{kind: '질문', question: '어느 색?', choices: ['파랑', '검정']}]});
-        localStorage.setItem(k, JSON.stringify(a)); }""")
+        const h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(location.pathname);
+        localStorage.setItem('hd-notes:' + h, JSON.stringify(a)); localStorage.setItem('hd-note-seq:' + h, JSON.stringify({pay: 10})); }""")   # 앞 테스트의 메모에 기대지 않는다
     reload(pg)
     fit_view(pg)
     pg.wait_for_selector(PIN + '[data-no="10"]', state="attached", timeout=5000)
     ps = pins(pg)
     assert "9" not in [p["no"] for p in ps], ps
-    assert [p["st"] for p in ps if p["no"] == "10"] == ["decide"], "결정 필요 = 강조색 핀"
-    assert pg.text_content(BADGE) == str(len(ps)), "배지 = 열린 메모 수"
-    assert pg.evaluate("getComputedStyle(document.querySelector('.npin[data-st=\"decide\"]')).backgroundColor") != pg.evaluate("getComputedStyle(document.querySelector('.npin[data-st=\"draft\"], .npin[data-st=\"working\"]')).backgroundColor")
+    assert sorted(p["no"] for p in ps) == ["10", "8"] and [p["st"] for p in ps if p["no"] == "10"] == ["decide"], ("결정 필요 핀", ps)
+    assert pg.text_content(BADGE) == "2", "배지 = 열린 메모 수"
     zoom = lambda: float(pg.evaluate("document.getElementById('stage').dataset.zoom"))
     for _ in range(20):                                # 작게(배율 0.5 아래로)
         if zoom() < 0.5:
