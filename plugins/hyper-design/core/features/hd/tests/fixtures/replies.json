@@ -1,0 +1,715 @@
+[
+ {
+  "name": "unsent, no reply",
+  "note_intent": "change",
+  "sent": false,
+  "from": "any",
+  "replies": [],
+  "valid": true,
+  "status": "draft"
+ },
+ {
+  "name": "sent, no reply",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [],
+  "valid": true,
+  "status": "working"
+ },
+ {
+  "name": "반영됨 good",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "반영됨 what 140",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "반영됨 what 141",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": false,
+  "reason": "what"
+ },
+ {
+  "name": "반영됨 what blank",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "  ",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": false,
+  "reason": "what"
+ },
+ {
+  "name": "반영됨 screens empty",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [],
+    "captured": true
+   }
+  ],
+  "valid": false,
+  "reason": "screens"
+ },
+ {
+  "name": "반영됨 screens not list",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": "a",
+    "captured": true
+   }
+  ],
+  "valid": false,
+  "reason": "screens"
+ },
+ {
+  "name": "반영됨 captured missing",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "captured"
+ },
+ {
+  "name": "반영됨 captured string",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": "yes"
+   }
+  ],
+  "valid": false,
+  "reason": "captured"
+ },
+ {
+  "name": "반영됨 extra field",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true,
+    "note": "x"
+   }
+  ],
+  "valid": false,
+  "reason": "note"
+ },
+ {
+  "name": "일부 good",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "일부",
+    "done": "제목만 바꿈",
+    "left": "색은 질문 필요"
+   }
+  ],
+  "valid": true,
+  "status": "partial"
+ },
+ {
+  "name": "일부 left 141",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "일부",
+    "done": "a",
+    "left": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "left"
+ },
+ {
+  "name": "일부 done missing",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "일부",
+    "left": "b"
+   }
+  ],
+  "valid": false,
+  "reason": "done"
+ },
+ {
+  "name": "대체됨 good",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "대체됨",
+    "where": "tokens.css --accent"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "대체됨 where 141",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "대체됨",
+    "where": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "where"
+ },
+ {
+  "name": "답변 on question",
+  "note_intent": "question",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "답변",
+    "text": "네, 같은 토큰을 씁니다"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "답변 text 280",
+  "note_intent": "question",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "답변",
+    "text": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "답변 text 281",
+  "note_intent": "question",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "답변",
+    "text": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "text"
+ },
+ {
+  "name": "답변 on change memo",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "답변",
+    "text": "네"
+   }
+  ],
+  "valid": false,
+  "reason": "답변은 질문 메모에만"
+ },
+ {
+  "name": "질문 2 choices",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   }
+  ],
+  "valid": true,
+  "status": "decide"
+ },
+ {
+  "name": "질문 4 choices",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B",
+     "C",
+     "D"
+    ]
+   }
+  ],
+  "valid": true,
+  "status": "decide"
+ },
+ {
+  "name": "질문 1 choice",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A"
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "choices"
+ },
+ {
+  "name": "질문 5 choices",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B",
+     "C",
+     "D",
+     "E"
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "choices"
+ },
+ {
+  "name": "질문 choice 40",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+     "B"
+    ]
+   }
+  ],
+  "valid": true,
+  "status": "decide"
+ },
+ {
+  "name": "질문 choice 41",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+     "B"
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "choices"
+ },
+ {
+  "name": "질문 blank choice",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     " "
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "choices"
+ },
+ {
+  "name": "질문 question 141",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+    "choices": [
+     "A",
+     "B"
+    ]
+   }
+  ],
+  "valid": false,
+  "reason": "question"
+ },
+ {
+  "name": "보류 is not a kind",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "보류",
+    "why": "later"
+   }
+  ],
+  "valid": false,
+  "reason": "kind"
+ },
+ {
+  "name": "detail 2000",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true,
+    "detail": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "detail 2001",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true,
+    "detail": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "detail"
+ },
+ {
+  "name": "by short name",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true,
+    "by": "codex"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "by 41",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true,
+    "by": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
+   }
+  ],
+  "valid": false,
+  "reason": "by"
+ },
+ {
+  "name": "user 확인 on canvas",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   },
+   {
+    "kind": "확인",
+    "by": "user"
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "user 다시 reopens",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   },
+   {
+    "kind": "다시",
+    "by": "user"
+   }
+  ],
+  "valid": true,
+  "status": "draft"
+ },
+ {
+  "name": "agent cannot post 확인",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "확인"
+   }
+  ],
+  "valid": false,
+  "reason": "사람만"
+ },
+ {
+  "name": "agent cannot post 다시",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "다시"
+   }
+  ],
+  "valid": false,
+  "reason": "사람만"
+ },
+ {
+  "name": "질문 then 반영됨",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   },
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": true,
+  "status": "done"
+ },
+ {
+  "name": "일부 then 질문",
+  "note_intent": "change",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "일부",
+    "done": "a",
+    "left": "b"
+   },
+   {
+    "kind": "질문",
+    "question": "어느 쪽으로?",
+    "choices": [
+     "A",
+     "B"
+    ]
+   }
+  ],
+  "valid": true,
+  "status": "decide"
+ },
+ {
+  "name": "반영됨 then 일부",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   },
+   {
+    "kind": "일부",
+    "done": "a",
+    "left": "b"
+   }
+  ],
+  "valid": true,
+  "status": "partial"
+ },
+ {
+  "name": "unsent with reply stays draft",
+  "note_intent": "change",
+  "sent": false,
+  "from": "any",
+  "replies": [
+   {
+    "kind": "반영됨",
+    "what": "버튼 문구 '다음'→'계속' (try-copy)",
+    "screens": [
+     "try-copy"
+    ],
+    "captured": true
+   }
+  ],
+  "valid": true,
+  "status": "draft"
+ },
+ {
+  "name": "not an object",
+  "note_intent": "change",
+  "sent": true,
+  "from": "any",
+  "replies": [
+   "반영됨"
+  ],
+  "valid": false,
+  "reason": "reply"
+ }
+]
