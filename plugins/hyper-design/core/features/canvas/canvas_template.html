@@ -169,7 +169,20 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #rows.focusing path.ln{opacity:.18}
 #rows.focusing path.ln.on{opacity:1}
 #rows.focusing .alabel.on{display:block}
-.nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0}
+.nbadge:hover,.nbadge:focus-visible,.nbadge[aria-expanded="true"]{outline:3px solid var(--ui-mark);outline-offset:2px}
+#thread{position:fixed;z-index:39;width:320px;max-height:min(60vh,520px);display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-size:13.5px}
+#thread[hidden]{display:none}
+#thread .thh{padding:10px 12px 6px;font-weight:700;font-size:14px;border-bottom:1px solid #eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#thread .thlist{list-style:none;margin:0;padding:4px 0;overflow:auto;flex:1 1 auto}
+#thread .thlist li{padding:8px 12px;border-bottom:1px solid #f1f1ee}
+#thread .thlist li.sent{opacity:.6}
+#thread .thl{display:flex;gap:8px;justify-content:space-between;color:#777;font-size:12px}
+#thread .the{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#thread .thi{flex:none;font-weight:600}
+#thread .tht{margin-top:3px;white-space:pre-wrap;word-break:break-word;color:#1c1c1c}
+#thread .tha{display:flex;gap:6px;margin-top:6px}
+#thread .thf{padding:8px 12px;border-top:1px solid #eee;display:flex;justify-content:flex-end}
 /* 연결 패널(고른 화면의 연결): 도착마다 한 줄 — 점 = 선 색 + 번호 */
 #legend[hidden]{display:none}
 #legend .lgt{margin:0 0 8px;font-size:13px;font-weight:700;color:#1c1c1c}
@@ -1033,6 +1046,7 @@ addEventListener('keydown', function (e) {
   if (drag && drag.trig) { drag.trig = null; drag.off = true; EP.stop(); clearGhost(); return; }   // 트리거 끄는 중 = 잇기 취소(E11) — 놓을 때까지 판도 움직이지 않는다
   if (pickT) { endPick(); return; }
   if (!tedit.hidden) { closeTedit(false); return; }
+  if (TH && TH.close()) return;                      // 카드 메모 묶음(#224)
   if (!pop.hidden) { hidePop(); return; }
   if (!modal.hidden) { closeModal(); return; }
   if (selEl) { unselectEl(); return; }               // 판 위: 고른 요소 → 고른 카드 순으로 푼다
@@ -1916,21 +1930,34 @@ function drawPins() {
   });
   layer.innerHTML = h;
 }
+function editMemo(id) {                             // 메모 고치기 — 메모 패널·카드 메모 묶음(#224)이 같이 쓴다
+  var n = NS.find(id); if (!n) { toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
+  editing = id; draft = null;
+  var ts = tgts(n);
+  showPop({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
+           rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent);
+}
+function delMemo(id) {                              // 메모 지우기·편집 빼기 — 메모 패널·카드 메모 묶음이 같이 쓴다, 되돌리기 한 단계(제자리로)
+  var at = -1; NS.list().forEach(function (x, i) { if (x.id === id) at = i; });
+  if (at < 0) { toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
+  var n = NS.list()[at];
+  var drop = function () { NS.remove(function (x) { return x.id === id; }); if (editing === id) hidePop(); saveNotes(); };
+  drop();
+  record({label: n.edit ? '편집 빼기' : '메모 지우기', redo: drop,
+          undo: function () { var l = NS.list().slice(); l.splice(Math.min(at, l.length), 0, n); NS.set(l); saveNotes(); }});
+}
 var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5)
-                             del: function (id) { NS.remove(function (x) { return x.id === id; }); if (editing === id) hidePop(); saveNotes(); },
-                             edit: function (id) {
-                               var n = NS.find(id); if (!n) return;
-                               editing = id; draft = null;
-                               var ts = tgts(n);
-                               showPop({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
-                                        rect: n.screen === mscreen ? ts[0].rect : null}, n.note, n.intent);
-                             }});
+                             del: delMemo, edit: editMemo});
+// 카드 메모 배지 → 그 화면 메모 묶음(modules/view-thread.js, #224) — 고치기·지우기는 메모 패널과 같은 함수, [메모 추가] = 화면 전체 메모
+var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { return NS.list(); }, title: function (id) { return titleOf(id); },
+                              edit: editMemo, del: delMemo, add: function (id) { openCardMemo(id); }});
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   var c = VN.render(NS.list(), ids), was = notesShown;
   notesShown = c;
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)
   if (ORIG) { renderDrafts(ids); paintDeleted(ids); paintCardText(ids); sendAllPending(ids); }   // ORIG 전(시작 중)에는 아직 그릴 카드 글이 없다
   if (VL && VL.refresh) VL.refresh();
+  if (TH) TH.refresh();
 }
 function copyText(t) {                              // → Promise<복사됐나>
   function fallback() {

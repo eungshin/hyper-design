@@ -25,6 +25,10 @@ function mount(ctx) {
     if (!k) { if (b) b.remove(); return; }
     if (!b) { b = document.createElement('span'); b.className = cls; $('.phone', c).appendChild(b); }
     b.textContent = text; if (title) b.title = title;
+    if (cls === 'nbadge') {                           // 누르면 그 화면 메모 묶음(view-thread, #224)
+      b.setAttribute('role', 'button'); b.tabIndex = 0; b.setAttribute('aria-haspopup', 'dialog');
+      b.setAttribute('aria-label', '메모 ' + k + '건 보기'); b.title = '메모 ' + k + '건 — 눌러서 보기';
+    }
   }
   function render(notes, ids) {
     var sp = E.split(notes), memo = {}, pend = E.tally(notes);

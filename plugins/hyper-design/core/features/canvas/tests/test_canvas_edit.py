@@ -2558,3 +2558,58 @@ def test_memo_popup_moves_resizes_and_remembers_place(dpage):
     dpage.keyboard.press("Escape")
     dpage.keyboard.press("h")
     assert not errs, errs
+
+
+def add_card_memo(pg, c, text):
+    pg.keyboard.press("m")                           # 메모 도구로 그 카드 누르기 — 화면 전체 메모
+    pg.mouse.click(c["x"], c["y"])
+    pg.wait_for_selector("#pop:not([hidden])")
+    pg.fill("#pnote", text)
+    pg.click("#padd")
+    pg.keyboard.press("h")
+
+
+def test_badge_opens_that_screens_memos_like_comments(dpage):
+    """#224: 카드 메모 배지를 누르면 그 화면 메모 묶음 — 줄마다 요소·종류·글, [지우기]는 메모 패널과 같이(되돌리기 됨), [메모 추가] = 메모 창.
+    배지 누르기는 카드를 고르지 않는다."""
+    errs = []
+    dpage.on("pageerror", lambda e: errs.append(str(e)))
+    fit_view(dpage)
+    dpage.keyboard.press("h")
+    c = visible_cover(dpage)
+    cid = c["id"]
+    n0 = len(notes_of(dpage))
+    add_card_memo(dpage, c, "첫 메모\n둘째 줄")
+    add_card_memo(dpage, c, "두 번째 메모")
+    wait_notes(dpage, n0 + 2)
+    dpage.keyboard.press("Escape")
+    badge = f'.card[data-id="{cid}"] .nbadge'
+    assert dpage.get_attribute(badge, "role") == "button" and dpage.get_attribute(badge, "aria-label") == "메모 2건 보기"
+    dpage.click(badge)
+    dpage.wait_for_selector("#thread:not([hidden])")
+    assert dpage.locator("#rows .card.picked").count() == 0, "배지 누르기는 카드 고르기가 아니다"
+    rows = lambda: dpage.evaluate("[...document.querySelectorAll('#thread .thlist li')].map(li => ({id: li.dataset.id, e: li.querySelector('.the').textContent, i: li.querySelector('.thi').textContent, t: li.querySelector('.tht').textContent}))")
+    mine = [n for n in notes_of(dpage) if n["screen"] == cid and not n.get("edit")]
+    assert [(r["id"], r["t"]) for r in rows()] == [(n["id"], n["note"]) for n in mine], rows()
+    assert rows()[-1]["t"] == "두 번째 메모" and rows()[0]["t"] == "첫 메모\n둘째 줄", "오래된 것부터, 글 전체"
+    assert all(r["e"] == "화면 전체" and r["i"] == "바꾸기" for r in rows()[-2:]), rows()
+    gone = rows()[-1]["id"]
+    dpage.click(f'#thread li[data-id="{gone}"] button[data-act="del"]')
+    wait_notes(dpage, n0 + 1)
+    assert gone not in [r["id"] for r in rows()] and dpage.text_content(badge) == "1", "지우면 목록·배지가 바로"
+    dpage.keyboard.press("Escape")
+    assert dpage.is_hidden("#thread"), "Esc = 닫기"
+    dpage.keyboard.press("Control+z")
+    wait_notes(dpage, n0 + 2)
+    assert notes_of(dpage)[-1]["id"] == gone, "지우기는 되돌리기 한 단계(제자리로)"
+    dpage.click(badge)
+    dpage.wait_for_selector("#thread:not([hidden])")
+    dpage.click('#thread button[data-act="add"]')
+    dpage.wait_for_selector("#pop:not([hidden])")
+    assert dpage.is_hidden("#thread") and "화면 전체" in dpage.text_content("#ptitle")
+    assert dpage.evaluate("[...document.querySelectorAll('.card.memo-target')].map(c => c.dataset.id)") == [cid]
+    dpage.keyboard.press("Escape")
+    dpage.evaluate(f"""(() => {{ const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:'));
+        localStorage.setItem(k, JSON.stringify(JSON.parse(localStorage.getItem(k)).slice(0, {n0}))); }})()""")
+    reload(dpage)
+    assert not errs, errs
