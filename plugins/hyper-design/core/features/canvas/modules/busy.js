@@ -1,4 +1,4 @@
-/* Model — "AI 수정 중" 덮개 상태(Q2b, D14 · #254 hd claim)와 화면 파일이 바뀐 카드 중 무엇을 다시 실을지. DOM·저장소를 쓰지 않는다(저장은 넘겨받은 getItem/setItem 으로).
+/* Model — "AI 수정 중" 상태 칩 상태(Q2b, D14 · #254 hd claim)와 화면 파일이 바뀐 카드 중 무엇을 다시 실을지. DOM·저장소를 쓰지 않는다(저장은 넘겨받은 getItem/setItem 으로).
    상태 = {v: 1, items: {<화면 id>: {via: 'paseo'|'queue'|'cli', since: ms, file: out 기준 화면 파일, mtime: 기준 시각|null, by?, note?}}}
    via 'cli' = 터미널 에이전트가 `hd claim` 으로 직접 씌운 덮개(도우미가 상태 파일에 씀 — by = 에이전트 id, note = 하는 일 한 줄).
    끝 신호 = 화면 파일 mtime 이 덮개를 씌울 때 잡은 기준(mtime)보다 커짐. 기준이 null 이면 걷히지 않는다(손으로 걷기).
@@ -8,14 +8,17 @@
      seen{mtimes:{file: number|null}}       기준보다 새 mtime 인 것 걷기
      lift{id}                               하나 걷기
    load(getItem, key, warn?) → 상태(깨졌거나 판이 다르면 initial(), warn 이 있으면 '[hd] …' 한 줄) · save(state, setItem, key) 던지지 않음 · files(state) → 겹치지 않는 파일 목록
-   label(item) → 덮개 글(cli: by·note 가 있으면 그것까지)
+   label(item) → 상태 글 전체(cli: by·note 가 있으면 그것까지)
+   look(item) → {kind: 'working'|'queued', text, title} — 상태 칩 모양(화면을 가리지 않는 작은 칩, task 37).
+     paseo·cli = working(도는 표시 + 짧은 글, cli 는 label 을 MAX 자로 줄임) · queue = queued("대기열", 아무도 읽지 않음) · title = label 전체 + 걷히는 때
    refresh(changed, opt) → {cards:[id], modal: bool} — 도우미가 알린 바뀐 화면 중 다시 실을 것.
      opt = {known: [id](판에 있는 카드), busy: 상태(덮개가 있는 카드는 걷는 길이 다시 싣는다), skip: {id: 그때까지 ms}(방금 판이 스스로 쓴·다시 실은 것), now: ms, modal: 크게 보기 화면 id|null}
-   HD.busy = {VIA, initial, reduce, load, save, files, label, refresh} */
+   HD.busy = {VIA, MAX, initial, reduce, load, save, files, label, look, refresh} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var VIA = ['paseo', 'queue', 'cli'];
+var MAX = 24;                                          // 칩 글 최대 글자(넘으면 … — 전체는 title)
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
 
 function initial() { return {v: 1, items: {}}; }
@@ -94,6 +97,15 @@ function label(it) {
   return 'AI 수정 중';
 }
 
+function look(it) {
+  if (!it) return null;
+  var full = label(it);
+  if (it.via === 'queue') return {kind: 'queued', text: '대기열', title: full + ' — AI 터미널이 받지 않아 대기열 파일에만 있어요(× = 지우기)'};
+  var t = full.replace(/\s+/g, ' ').trim(), cut = Array.from(t);
+  if (cut.length > MAX) t = cut.slice(0, MAX - 1).join('').trim() + '…';
+  return {kind: 'working', text: t, title: full + ' — 화면 파일이 바뀌면 사라져요(× = 지우기)'};
+}
+
 function refresh(changed, opt) {
   opt = opt || {};
   var known = {}, cards = [], skip = opt.skip || {}, now = num(opt.now) ? opt.now : 0, items = (opt.busy && opt.busy.items) || {};
@@ -109,5 +121,5 @@ function refresh(changed, opt) {
   return {cards: cards, modal: modal};
 }
 
-HD.busy = {VIA: VIA, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, refresh: refresh};
+HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh};
 })();

@@ -1,7 +1,8 @@
-/* View — 화면 파일 보기: "AI 수정 중" 덮개 그리기(Q2b, D14 · #254)와 도우미가 알린 바뀐 화면 카드만 다시 싣기. 규칙은 modules/busy.js(Model).
-   덮개 = 카드 .phone 안 <div class="busy" data-via="paseo|queue|cli" role="status">: Paseo → 도는 표시 + "AI 수정 중",
-   대기열 → "대기열에 있음" + [걷기] · cli(hd claim) → 도는 표시 + 누가·무엇(HD.busy.label) + [걷기]. 화면 파일이 바뀌면 걷고 그 카드만 다시 부른다.
-   덮개가 하나라도 있는 동안만 ctx.watch 를 2000ms 마다 부른다. 상태는 ctx.key 로 저장해 새로 고쳐도 남는다.
+/* View — 화면 파일 보기: "AI 수정 중" 상태 칩 그리기(Q2b, D14 · #254 · task 37)와 도우미가 알린 바뀐 화면 카드만 다시 싣기. 규칙은 modules/busy.js(Model).
+   화면을 가리지 않는다: 칩 = 카드 .phone 오른쪽 위 <div class="busy bchip" data-via data-kind="working|queued" role="status" title=전체 글>
+   (도는 표시 또는 점 + HD.busy.look 의 짧은 글 + [×](data-act=lift, 걷기)) · working 이면 .phone[data-busy=working] 에 강조 테두리, queued 는 칩만.
+   크게 보기가 그 화면이면 같은 칩을 #modal .mbar 에(덮개 없음). 칩 모양 CSS 는 여기서 <style id="hd-busy-css"> 로 넣는다(템플릿 .busy 덮개 규칙을 덮어씀).
+   화면 파일이 바뀌면 걷고 그 카드만 다시 부른다. 칩이 하나라도 있는 동안만 ctx.watch 를 2000ms 마다 부른다. 상태는 ctx.key 로 저장해 새로 고쳐도 남는다.
    adopt() = 상태 파일에서 busy 가 바뀜(hd claim·release, view-state-sync onExternal) → 다시 읽어 그리기(새로고침 없음).
    ctx.files 가 있으면 1000ms 마다(보일 때만) 도우미의 바뀐 화면 목록을 받아 HD.busy.refresh 로 고른 카드만 ctx.reload,
    크게 보기가 그 화면이면 ctx.reloadModal. wrote(ids) = 판이 방금 스스로 쓴·다시 실은 화면(5초 동안 다시 싣지 않음).
@@ -12,10 +13,32 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var EVERY = 2000, FILES_EVERY = 1000, SKIP_MS = 5000;
+var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--ts,1));right:calc(8px * var(--ts,1));z-index:4;display:inline-flex;flex-direction:row;align-items:center;justify-content:flex-start;' +
+  'gap:calc(5px * var(--ts,1));box-sizing:border-box;height:calc(20px * var(--ts,1));max-width:calc(100% - 16px * var(--ts,1));padding:0 calc(2px * var(--ts,1)) 0 calc(8px * var(--ts,1));' +
+  'border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(255,255,255,.95);color:#2b2b29;box-shadow:0 1px 4px rgba(0,0,0,.14);' +
+  'font:600 calc(11px * var(--ts,1))/1 system-ui,sans-serif;white-space:nowrap;pointer-events:auto;cursor:default}' +
+  '.busy.bchip[data-kind=queued]{background:rgba(241,241,238,.95);color:#6b6b66;font-weight:500}' +
+  '.busy.bchip .busy-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0;text-align:left}' +
+  '.busy.bchip .bspin{flex:none;box-sizing:border-box;width:calc(10px * var(--ts,1));height:calc(10px * var(--ts,1));border:calc(1.5px * var(--ts,1)) solid #d6d6d1;' +
+  'border-top-color:var(--ui-accent,#c2590a);border-radius:50%;animation:hd-bchip-spin .9s linear infinite}' +
+  '.busy.bchip .bdot{flex:none;width:calc(6px * var(--ts,1));height:calc(6px * var(--ts,1));border-radius:50%;background:#a3a39d}' +
+  '.busy.bchip [data-act=lift]{flex:none;display:grid;place-items:center;width:calc(16px * var(--ts,1));height:calc(16px * var(--ts,1));padding:0;margin:0;border:0;border-radius:50%;' +
+  'background:transparent;color:inherit;font:inherit;font-size:calc(13px * var(--ts,1));line-height:1;cursor:pointer;pointer-events:auto}' +
+  '.busy.bchip [data-act=lift]:hover,.busy.bchip [data-act=lift]:focus-visible{background:rgba(0,0,0,.09)}' +
+  '@keyframes hd-bchip-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.busy.bchip .bspin{animation:none}}' +
+  '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--ts,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
+  '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}';
+
+function style() {
+  if (typeof document === 'undefined' || document.getElementById('hd-busy-css')) return;
+  var css = document.createElement('style'); css.id = 'hd-busy-css'; css.textContent = CSS;
+  document.head.appendChild(css);
+}
 
 function mount(ctx) {
   var B = HD.busy, warn = ctx.warn || function (m) { console.warn(m); };
-  var st = B.load(ctx.getItem, ctx.key, warn), els = {}, timer = 0, skip = {};
+  var st = B.load(ctx.getItem, ctx.key, warn), els = {}, timer = 0, skip = {}, mel = null;
 
   function dispatch(a) {
     var n = B.reduce(st, a);
@@ -24,31 +47,49 @@ function mount(ctx) {
   }
   function ids() { return Object.keys(st.items); }
 
-  function draw(id, it) {                             // 카드 하나에 덮개(이미 맞게 있으면 그대로)
-    var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card), el = els[id], text = B.label(it);
-    if (!host) { if (el) { el.remove(); delete els[id]; } return; }
-    if (el && el.parentNode === host && el.getAttribute('data-via') === it.via && el.getAttribute('data-label') === text) return;
-    if (el) el.remove();
-    el = document.createElement('div');
-    el.className = 'busy'; el.setAttribute('data-via', it.via); el.setAttribute('data-id', id); el.setAttribute('data-label', text); el.setAttribute('role', 'status');
-    if (it.via !== 'queue') {
-      var sp = document.createElement('span'); sp.className = 'busy-spin'; sp.setAttribute('aria-hidden', 'true'); el.appendChild(sp);
-    }
-    var tx = document.createElement('span'); tx.className = 'busy-txt';
-    tx.textContent = text;
-    el.appendChild(tx);
-    if (it.via !== 'paseo') {
-      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-act', 'lift'); b.textContent = '걷기';
-      b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-      b.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); lift(id); });
-      el.appendChild(b);
-    }
-    host.appendChild(el); els[id] = el;
+  function chip(id, it) {                             // 칩 하나 — 점/도는 표시 + 짧은 글 + [×]
+    var lk = B.look(it), el = document.createElement('div');
+    el.className = 'busy bchip'; el.setAttribute('data-via', it.via); el.setAttribute('data-kind', lk.kind); el.setAttribute('data-id', id);
+    el.setAttribute('data-label', B.label(it)); el.setAttribute('role', 'status'); el.title = lk.title;
+    var dot = document.createElement('span'); dot.className = lk.kind === 'working' ? 'bspin' : 'bdot'; dot.setAttribute('aria-hidden', 'true'); el.appendChild(dot);
+    var tx = document.createElement('span'); tx.className = 'busy-txt'; tx.textContent = lk.text; el.appendChild(tx);
+    var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-act', 'lift'); b.setAttribute('aria-label', '걷기'); b.title = '걷기(지우기)'; b.textContent = '×';
+    b.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); lift(id); });
+    el.appendChild(b);
+    el.addEventListener('pointerdown', function (e) { e.stopPropagation(); });   // 칩은 자기 누르기만(카드 끌기·고르기로 새지 않게)
+    return el;
   }
-  function render() {                                 // 지금 상태대로 덮개 그리기·지우기(여러 번 불러도 같음)
+  function same(el, host, it, id) {
+    return !!el && el.parentNode === host && el.getAttribute('data-id') === String(id) && el.getAttribute('data-via') === it.via && el.getAttribute('data-label') === B.label(it);
+  }
+  function unmark(el) { var h = el && el.parentNode; if (h && h.removeAttribute) h.removeAttribute('data-busy'); }
+
+  function draw(id, it) {                             // 카드 하나에 칩(이미 맞게 있으면 그대로) — 화면은 가리지 않는다
+    var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card), el = els[id];
+    if (!host) { if (el) { unmark(el); el.remove(); delete els[id]; } return; }
+    if (!same(el, host, it, id)) {
+      if (el) { unmark(el); el.remove(); }
+      el = chip(id, it); host.appendChild(el); els[id] = el;
+    }
+    if (B.look(it).kind === 'working') host.setAttribute('data-busy', 'working'); else host.removeAttribute('data-busy');
+  }
+  function drawModal() {                              // 크게 보기 제목 막대에 같은 칩(그 화면이 바쁠 때만, 덮개 없음)
+    if (typeof document === 'undefined') return;
+    var bar = document.querySelector('#modal .mbar'), box = document.getElementById('modal');
+    var id = ctx.modalScreen ? ctx.modalScreen() : null;
+    var it = id != null && box && !box.hidden && has(st.items, id) ? st.items[id] : null;
+    if (!bar || !it) { if (mel) { mel.remove(); mel = null; } return; }
+    if (same(mel, bar, it, id)) return;
+    if (mel) mel.remove();
+    mel = chip(id, it);
+    var t = bar.querySelector('#mtitle');
+    bar.insertBefore(mel, t ? t.nextSibling : bar.firstChild);
+  }
+  function render() {                                 // 지금 상태대로 칩 그리기·지우기(여러 번 불러도 같음)
     var k;
-    for (k in els) if (!Object.prototype.hasOwnProperty.call(st.items, k)) { els[k].remove(); delete els[k]; }
+    for (k in els) if (!has(st.items, k)) { unmark(els[k]); els[k].remove(); delete els[k]; }
     for (k in st.items) draw(k, st.items[k]);
+    drawModal();
   }
   function wrote(list) { var until = Date.now() + SKIP_MS; (list || []).forEach(function (id) { skip[id] = until; }); }
 
@@ -60,7 +101,7 @@ function mount(ctx) {
       var m = (r && r.mtimes) || {};
       dispatch({type: 'baseline', mtimes: m});        // 기준을 못 잡았던 것은 여기서 잡는다
       dispatch({type: 'seen', mtimes: m});
-      var gone = before.filter(function (id) { return !Object.prototype.hasOwnProperty.call(st.items, id); });
+      var gone = before.filter(function (id) { return !has(st.items, id); });
       if (gone.length) { render(); wrote(gone); ctx.reload(gone); }
     }, function () { /* 도우미가 잠깐 안 되면 다음 차례에 다시 */ }).then(schedule, schedule);
   }
@@ -101,15 +142,20 @@ function mount(ctx) {
                                                      modal: ctx.modalScreen ? ctx.modalScreen() : null});
       if (t.cards.length) { wrote(t.cards); ctx.reload(t.cards); }
       if (t.modal && ctx.reloadModal) ctx.reloadModal();
-      if (r.changed.some(function (id) { return Object.prototype.hasOwnProperty.call(st.items, id); })) poll();   // 덮개 카드 = 걷는 길을 바로
+      if (r.changed.some(function (id) { return has(st.items, id); })) poll();   // 칩 카드 = 걷는 길을 바로
     }, function (e) {
       if (!fwarned) { fwarned = true; warn('[hd] 바뀐 화면 파일을 받지 못했어요(다시 시도): ' + (e && e.message || e)); }
     }).then(fnext, fnext);
   }
   function fnext() { clearTimeout(ftimer); ftimer = setTimeout(fpoll, FILES_EVERY); }
 
-  render(); schedule();
+  style(); render(); schedule();
   if (ctx.files) fpoll();
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {   // 크게 보기를 열고·닫고·화면을 바꿀 때 칩도 따라
+    var box = document.getElementById('modal'), title = document.getElementById('mtitle'), ob = new MutationObserver(drawModal);
+    if (box) ob.observe(box, {attributes: true, attributeFilter: ['hidden']});
+    if (title) ob.observe(title, {childList: true, characterData: true, subtree: true});
+  }
   return {mark: mark, render: render, lift: lift, adopt: adopt, wrote: wrote};
 }
 

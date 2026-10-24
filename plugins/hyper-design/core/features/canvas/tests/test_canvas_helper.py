@@ -293,15 +293,20 @@ def test_helper_canvas_writes_delete_and_link_without_reload(ctx, out):   # 2.2 
     pg.close()
 
 
+UNCOVERED = """(id) => { const p = document.querySelector('.card[data-id="' + id + '"] .phone'), r = p.getBoundingClientRect();
+  const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return !!e && !e.closest('.busy') && !!e.closest('.card[data-id="' + id + '"]'); }"""
+
+
 @pytest.mark.area("helper", "notes")
-def test_helper_canvas_busy_overlay_lifts_on_file_change(ctx, out):   # Q2b — 터미널로 넘긴 화면에 덮개 · 새로고침해도 남음 · 파일이 바뀌면 걷힘 · [걷기]
+def test_helper_canvas_busy_chip_never_hides_screen(ctx, out):   # Q2b · task 37 — 넘긴 화면엔 작은 상태 칩(덮개 아님) · 새로고침해도 남음 · 파일이 바뀌면 걷힘 · [×]
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     pg = ctx.new_page()
     errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.on("dialog", lambda d: d.accept())
-    busy = '.card[data-id="job"] .busy'
+    busy, work = '.card[data-id="job"] .busy', '.card[data-id="language"] .busy'
     try:
         pg.goto(srv.url)
         pg.wait_for_function("window.__hdReady !== undefined")
@@ -310,28 +315,45 @@ def test_helper_canvas_busy_overlay_lifts_on_file_change(ctx, out):   # Q2b — 
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined")
         assert pg.locator(busy).count() == 0
-        pg.click("#nsend")
+        pg.click("#nsend")                                     # AI 터미널 없음 → 대기열
         pg.wait_for_selector(busy)
-        assert pg.get_attribute(busy, "data-via") == "queue" and pg.get_attribute(busy, "role") == "status"
-        assert pg.text_content(busy + " .busy-txt") == "대기열에 있음" and pg.locator(busy + " [data-act=lift]").text_content() == "걷기"
+        assert pg.get_attribute(busy, "data-via") == "queue" and pg.get_attribute(busy, "data-kind") == "queued" and pg.get_attribute(busy, "role") == "status"
+        assert pg.text_content(busy + " .busy-txt") == "대기열" and pg.get_attribute(busy, "title").startswith("대기열에 있음")
+        assert pg.get_attribute(busy + " [data-act=lift]", "aria-label") == "걷기"
         assert pg.locator(".busy").count() == 1, "넘긴 화면에만"
         from test_canvas_v2 import zoom_to
-        zoom_to(pg, "job", 420)
-        from test_canvas_edit import ESHOTS
-        ESHOTS.mkdir(parents=True, exist_ok=True)
-        pg.screenshot(path=str(ESHOTS / "q2b-busy.png"))
+        ph = zoom_to(pg, "job", 420)
+        assert pg.evaluate(UNCOVERED, "job"), "대기열 칩이 화면을 가리지 않는다(카드 가운데 = 카드)"
+        assert pg.get_attribute('.card[data-id="job"] .phone', "data-busy") is None, "대기열은 테두리도 없다"
+        cb = pg.locator(busy).bounding_box()
+        assert cb["height"] <= 22 and cb["width"] < ph["width"] / 2, "작은 칩"
+        assert cb["y"] - ph["y"] < ph["height"] * 0.1 and (ph["x"] + ph["width"]) - (cb["x"] + cb["width"]) < ph["width"] * 0.15, "카드 오른쪽 위"
+
+        assert _post(srv.url.split("/index.html")[0] + "/api/claim", {"screen": "language", "by": "agent-3", "note": "색 맞춤"}, srv.token)[0] == 200
+        pg.wait_for_selector(work + '[data-kind="working"]', timeout=8000)
+        assert pg.text_content(work + " .busy-txt") == "agent-3 수정 중 · 색 맞춤"
+        assert pg.get_attribute('.card[data-id="language"] .phone', "data-busy") == "working", "일하는 중 = 테두리"
+        assert pg.evaluate(UNCOVERED, "job"), "일하는 칩도 가리지 않는다"
+        shots = pathlib.Path(os.environ.get("TEMP", tempfile.gettempdir())) / "claude"
+        shots.mkdir(parents=True, exist_ok=True)
+        zoom_to(pg, "job", 260)                                # 두 칩이 한 화면에
+        pg.screenshot(path=str(shots / "t37-busy-chips.png"))
+        zoom_to(pg, "language", 420)
+        assert pg.evaluate(UNCOVERED, "language")
+
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined")
-        pg.wait_for_selector(busy + '[data-via="queue"]')       # 새로고침해도 남는다
+        pg.wait_for_selector(busy + '[data-kind="queued"]')    # 새로고침해도 남는다
         pg.wait_for_function("Object.keys(localStorage).some(k => k.startsWith('hd-busy:') && /\"mtime\":[0-9]/.test(localStorage.getItem(k)))", timeout=5000)
         f = out / "screens" / "job.html"
         f.write_text(f.read_text(encoding="utf-8") + "\n<!-- AI 가 고침 -->\n", encoding="utf-8")
         pg.wait_for_selector(busy, state="detached", timeout=6000)  # 화면 파일이 바뀌면 걷힌다
         assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "그 카드만 다시 싣는다"
-        pg.click("#nsend")                                       # 다시 넘김 → [걷기] = 손으로 바로 걷기
-        pg.wait_for_selector(busy)
-        pg.locator(busy + " [data-act=lift]").click()
-        assert pg.locator(busy).count() == 0
+        zoom_to(pg, "language", 420)
+        pg.locator(work + " [data-act=lift]").click()            # [×] = 손으로 바로 걷기 · 테두리도
+        pg.wait_for_selector(work, state="detached", timeout=4000)
+        assert pg.get_attribute('.card[data-id="language"] .phone', "data-busy") is None
+        assert pg.evaluate("document.querySelector('#modal').hidden"), "칩 누르기는 카드를 열지 않는다"
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors

@@ -37,6 +37,8 @@ out.warns = warns.slice();
 const based = B.reduce(B.reduce(L, {type: 'mark', screens: [{id: 'n', file: 'screens/n.html'}], via: 'cli', now: 3}), {type: 'baseline', mtimes: {'screens/n.html': 5, 'screens/h.html': 99}});
 out.baseKeepsBy = based.items.h;
 out.liftCli = Object.keys(B.reduce(L, {type: 'seen', mtimes: {'screens/h.html': 11}}).items);
+out.looks = [B.look({via: 'paseo'}), B.look({via: 'queue'}), B.look(L.items.h), B.look({via: 'cli', by: 'a', note: '아주 긴 설명이 들어가서 칩에 다 들어가지 않는 경우를 봅니다'}), B.look({via: 'cli', note: '  두  칸   '}), B.look(null)];
+out.max = B.MAX;
 out.labels = [B.label(L.items.h), B.label({via: 'cli'}), B.label({via: 'cli', note: '정리'}), B.label({via: 'paseo'}), B.label({via: 'queue'})];
 warns.length = 0;
 out.brokenWarn = [B.load(() => '{x', 'K', m => warns.push(m)), warns.slice()];
@@ -80,6 +82,18 @@ def test_busy_accepts_cli_and_keeps_old_vias():
 def test_busy_label_says_who_and_what():
     out = run_js()
     assert out["labels"] == ["agent-7 수정 중 · 버튼 고치는 중", "AI 수정 중", "AI 수정 중 · 정리", "AI 수정 중", "대기열에 있음"]
+
+
+def test_busy_look_is_a_small_chip_per_via():   # task 37 — 화면을 가리지 않는 칩: 바쁨(working) · 대기열(queued)
+    paseo, queue, cli, long_, spaced, none = run_js()["looks"]
+    mx = run_js()["max"]
+    assert paseo["kind"] == "working" and paseo["text"] == "AI 수정 중" and paseo["title"].startswith("AI 수정 중")
+    assert queue["kind"] == "queued" and queue["text"] == "대기열" and queue["title"].startswith("대기열에 있음"), "대기열 = 짧은 글 · 전체는 title"
+    assert cli == {"kind": "working", "text": "agent-7 수정 중 · 버튼 고치는 중", "title": cli["title"]} and cli["title"].startswith("agent-7 수정 중 · 버튼 고치는 중")
+    assert long_["kind"] == "working" and len(long_["text"]) <= mx and long_["text"].endswith("…"), "긴 글은 칩 길이로 줄이고"
+    assert "아주 긴 설명이 들어가서 칩에 다 들어가지 않는 경우를 봅니다" in long_["title"], "전체는 title 에"
+    assert spaced["text"] == "AI 수정 중 · 두 칸", "칸은 하나로·앞뒤 자름"
+    assert none is None
 
 
 def test_busy_broken_value_warns_and_resets():
