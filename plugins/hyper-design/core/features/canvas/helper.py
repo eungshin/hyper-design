@@ -1059,7 +1059,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     threading.Thread(target=_watch_loop, args=(srv, out, lock), daemon=True).start()   # server_close 가 멈춘다
     srv.token = token
     srv.agent = agent or None                           # /api/forward 가 보낼 곳 — /api/attach 로 바뀐다
-    srv.home_ctx = home_api.Ctx(hub=False, agent=lambda: srv.agent, port=home_client.hub_port)
+    srv.home_ctx = home_api.Ctx(hub=False, agent=lambda: srv.agent, port=home_client.hub_port, picker=home_client.pick_folder)   # 폴더 열기 — 캔버스 선택 창도
     srv.marker = None                                   # main 이 표지 경로를 넣는다(attach 가 agent 를 고쳐 씀)
     srv.agents_cache, srv.agents_lock = None, threading.Lock()   # GET /api/agents 5초 캐시
     srv.repo = project_repo(out)

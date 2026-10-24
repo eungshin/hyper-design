@@ -7,7 +7,7 @@ route(method, path, body, ctx) → (code, 답 객체) | None(이 모듈 주소�
   POST /api/project {name, title?, starred?, trashed?} → {row} (휴지통에 넣으면 탭에서 뺌)
   POST /api/forget {name}       → {ok} — 휴지통에 든 링크만(파일은 그대로)
   POST /api/reveal {name}       → {ok} — out 폴더를 탐색기로
-  POST /api/pick-folder         → {name} | {cancel:true} — 허브만(ctx.picker)
+  POST /api/pick-folder         → {name} | {cancel:true} — 허브와 캔버스 도우미(ctx.picker = 이 PC 의 폴더 고르기 창)
   GET  /api/tabs · PUT /api/tabs {tabs} → {tabs}
   GET  /api/home                → {url} — 도우미만(허브를 띄우거나 그 주소)
 오류 = {error: 한국어 한 줄} + 4xx/5xx. I/O 는 hd_client · home_client, 규칙은 hd_projects · home_model.
@@ -211,7 +211,7 @@ def _route(method, path, body, ctx):
         return forget_post(body)
     if path == "/api/reveal":
         return reveal_post(body)
-    if path == "/api/pick-folder" and ctx.hub and ctx.picker:
+    if path == "/api/pick-folder" and ctx.picker:
         return pick_post(ctx)
     return None
 

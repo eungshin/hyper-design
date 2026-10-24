@@ -21,7 +21,7 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 - `POST /api/project {name, title?, starred?, trashed?: bool}` → `{row}` · 모르는 이름 404 · 틀린 값·바꿀 칸 없음 400
 - `POST /api/forget {name}` → `{ok}` — 휴지통에 든 것만(아니면 409), 링크만(파일 그대로)
 - `POST /api/reveal {name}` → `{ok}` — 탐색기로 out 폴더 · 폴더 없음 404
-- `POST /api/pick-folder`(허브만) → `{name}` | `{cancel:true}` | 400 `{error}`(캔버스 아님 — 그 폴더나 그 아래 `out/` 에 index.html · .hd-canvas.json · screens.json 이 없음). 휴지통에 있던 것이면 꺼냄
+- `POST /api/pick-folder`(허브·캔버스 도우미 — 이 PC 의 폴더 고르기 창) → `{name}` | `{cancel:true}` | 400 `{error}`(캔버스 아님 — 그 폴더나 그 아래 `out/` 에 index.html · .hd-canvas.json · screens.json 이 없음). 휴지통에 있던 것이면 꺼냄
 - `GET /api/tabs` · `PUT /api/tabs {tabs}` → `{tabs}` · 글 목록이 아니면 400
 - `GET /api/home`(도우미만) → `{url}` — 허브가 답하지 않으면 `hd.py home --no-browser` 를 떼어 띄우고 10초까지 기다림, 실패 500
 - 허브 주소 = `http://127.0.0.1:<port>/?hd=<token>` · 페이지 `<head>` 에 `window.__hdHub=true; window.__hdToken="…"`

@@ -87,7 +87,6 @@ def test_helper_serves_same_routes_and_home_spawns_hub(tmp_path):
         code, res = call(base, token, "/api/project", {"name": "proj-a", "title": "프로젝트 A"})
         assert code == 200 and res["row"]["title"] == "프로젝트 A"
         assert call(base, token, "/api/forget", {"name": "proj-a"})[0] == 409
-        assert call(base, token, "/api/pick-folder", {})[0] == 404, "폴더 고르기는 허브만"
         assert call(base, token, "/api/state", {"rev": 0, "state": {}}, method="PUT")[0] in (200, 409), "PUT /api/state 그대로"
         code, res = call(base, token, "/api/home")                      # 허브가 없으니 떼어 띄운다
         assert code == 200 and "/?hd=" in res["url"], res
