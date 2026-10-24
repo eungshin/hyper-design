@@ -188,10 +188,10 @@ def test_send_format(page):
 @pytest.mark.area("notes")
 def test_clear_sent(page):
     """[보낸 것 완료로]: 보낸 메모를 지우지 않고 완료(답 '확인')로 — 목록·배지에서 빠지고 기록은 메모 안에 남는다."""
-    assert page.is_visible("#nclear") and page.text_content("#nclear") == "보낸 것 완료로"
+    assert page.is_visible("#nclear") and page.get_attribute("#nclear", "aria-label") == page.get_attribute("#nclear", "title") == "보낸 것 완료로"
     page.click("#nclear")
     assert page.evaluate("document.querySelectorAll('#nlist li').length") == 0
-    assert page.text_content("#nsent").endswith("(1)")   # 완료한 메모는 지운 것이 아니라 숨김(task 29) — 보낸 메모 보기로 다시 볼 수 있다
+    assert page.get_attribute("#nsent .ncb", "data-n") == "1"   # 완료한 메모는 지운 것이 아니라 숨김(task 29) — 보낸 메모 보기로 다시 볼 수 있다
     reload(page)
     assert page.locator(".nbadge").count() == 0
     ns = page.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))))")

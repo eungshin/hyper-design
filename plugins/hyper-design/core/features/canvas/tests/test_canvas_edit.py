@@ -49,6 +49,8 @@ def test_notes_panel_in_dock_scrolls(epage):
     key = seed_notes(epage, 18)
     epage.wait_for_selector("#notes:not([hidden])")
     assert epage.evaluate("!!document.getElementById('notes').closest('#dock')"), "메모 목록은 오른쪽 도크 안"
+    tb, nt = epage.locator("#notes .ntool").bounding_box(), epage.locator("#nlist li:first-child .nt").bounding_box()   # task 32: 막대는 한 줄, 메모 글이 먼저
+    assert tb["height"] <= 32 and 0 <= nt["y"] - (tb["y"] + tb["height"]) <= 40, (tb, nt)
     body = "document.getElementById('notes').closest('.dk-body')"
     assert epage.evaluate(f"(() => {{ const l = {body}; return l.scrollHeight > l.clientHeight + 20; }})()")
     cam0 = epage.evaluate("document.getElementById('stage').style.transform")

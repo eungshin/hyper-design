@@ -498,20 +498,32 @@ body.split-lr #khint{display:none}
 #notes{display:flex;flex-direction:column;flex:1;font-size:14px}
 #notes[hidden]{display:none}
 #notes ol{list-style:none;margin:0;padding:0 8px}
-#notes li{padding:8px 6px;border-top:1px solid #eee}
+#notes li{position:relative;padding:8px 6px;border-top:1px solid #eee}
+#notes li > div:first-child{padding-right:54px}          /* 고치기·지우기 아이콘 자리 — 올려도 글이 밀리지 않게 */
 #notes li.sent{opacity:.55}
-#notes .nfilt{display:flex;justify-content:flex-end;padding:6px 12px 0}
-#notes .nfilt:has(#ndec[hidden]){display:none}
-#notes #ndec{min-height:26px;font-size:12px;padding:0 8px}
-#notes #ndec[aria-pressed="true"]{color:var(--ui-accent);font-weight:700}
+#notes .ntool{display:flex;align-items:center;gap:2px;height:28px;padding:2px 10px 0 14px;flex:none}   /* task 32: 한 줄 아이콘 막대 — 메모 글이 먼저 읽히게 */
+#notes .ncnt{margin-right:auto;font-size:11.5px;color:#888;font-variant-numeric:tabular-nums}
+#notes .nib{position:relative;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:none;color:#5f5f5a;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none}
+#notes .nib[hidden]{display:none}
+#notes .nib:hover:not(:disabled){background:#f0f0ec;color:#1c1c1c}
+#notes .nib:focus-visible{outline:2px solid var(--ui-mark);outline-offset:1px}
+#notes .nib:disabled{opacity:.35;cursor:default}
+#notes .nib[aria-pressed="true"]{background:#ECECE8;color:#1c1c1c}
+#notes .nib svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
+#notes .nib .ncb{position:absolute;top:-1px;right:-3px;min-width:13px;height:13px;padding:0 3px;box-sizing:border-box;border-radius:7px;background:var(--ui-badge-soft);color:var(--ui-on-badge-soft);font-size:9.5px;font-weight:700;line-height:13px;text-align:center;font-variant-numeric:tabular-nums}
+#notes .nib .ncb[hidden]{display:none}
+#notes .nib .ndot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--ui-accent)}
+#notes #ndec[aria-pressed="true"]{color:var(--ui-accent)}
 #notes .ndst{margin-left:6px;color:var(--ui-accent);font-size:12px;font-weight:700}
 #notes .nn{font-weight:700;color:var(--ui-badge);margin-right:4px}
 #notes .ns{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:#777}
 #notes .nt{color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #notes .nnote{margin:2px 0}
-#notes .nact{display:flex;gap:6px;margin-top:4px}
-#notes .nact .nbtn{min-height:30px;font-size:12px;padding:0 8px}
+#notes .nact{position:absolute;top:4px;right:4px;display:flex;gap:2px;opacity:0;transition:opacity .12s}
+#notes li:hover .nact,#notes li:focus-within .nact{opacity:1}
+@media (hover:none){#notes .nact{opacity:1}}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
+#notes .nfoot:has(.nmsg:empty){display:none}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
 /* hd-motion */
 </style>
@@ -581,10 +593,11 @@ body.split-lr #khint{display:none}
   </div>
   <div class="dkp" id="pNotes" data-panel="notes">
     <div id="notes" hidden aria-label="메모 목록">
-      <div class="nfilt"><button type="button" class="nbtn" id="ndec" aria-pressed="false" hidden>결정 필요만</button></div>
+      <div class="ntool" role="toolbar" aria-label="메모 도구"><span class="ncnt" id="ncnt"></span>
+        <button type="button" class="nib" id="ndec" aria-pressed="false" title="결정 필요만" aria-label="결정 필요만" hidden><svg viewBox="0 0 24 24"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/></svg><span class="ndot"></span></button>
+        <button type="button" class="nib" id="nclear" title="보낸 것 완료로" aria-label="보낸 것 완료로" hidden><svg viewBox="0 0 24 24"><path d="M2.5 12.5l4 4 8-9"/><path d="M11 15.5l1 1 9-10"/></svg></button></div>
       <ol id="nlist"></ol>
       <div class="nfoot">
-        <button class="nbtn" id="nclear" hidden>보낸 것 완료로</button>
         <div class="nmsg" id="nmsg"></div>
       </div>
     </div>

@@ -221,7 +221,7 @@ def test_sent_memo_hidden_until_show_sent(apage):
     zoom_to(pg, "pay", 0.7 * 812)                    # 화면이 실제의 60% 이상 = 핀이 늘 보임
     pg.wait_for_selector(PIN + '[data-no="1"]', state="attached", timeout=5000)
     assert sorted(p["no"] for p in pins(pg)) == ["1", "2"] and pg.text_content(BADGE) == "2"
-    assert pg.get_attribute("#nsent", "aria-pressed") == "false" and pg.is_disabled("#nsent") and pg.text_content("#nsent") == "보낸 메모 보기 (0)", "0 이면 꺼진 단추(자리 유지)"
+    assert pg.get_attribute("#nsent", "aria-pressed") == "false" and pg.is_disabled("#nsent") and pg.get_attribute("#nsent", "aria-label") == "보낸 메모 보기 (0)"         and pg.get_attribute("#nsent .ncb", "data-n") == "0", "0 이면 꺼진 단추(자리 유지)"
     pg.click("#nsend")
     pg.wait_for_function("document.getElementById('nmsg').textContent.indexOf('복사') >= 0", timeout=5000)
     assert {n["id"]: n["sent"] for n in notes_of(pg)} == {"m1": True, "q1": True}
@@ -230,7 +230,7 @@ def test_sent_memo_hidden_until_show_sent(apage):
     assert pg.text_content(BADGE) == "1", "배지 수 = 보이는 메모"
     pg.click('#dock .dk-tab[data-p="notes"]')
     assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["q1"], "목록에서 보낸 메모가 빠진다"
-    assert pg.text_content("#nsent") == "보낸 메모 보기 (1)" and not pg.is_disabled("#nsent")
+    assert pg.get_attribute("#nsent", "aria-label") == "보낸 메모 보기 (1)" and pg.get_attribute("#nsent .ncb", "data-n") == "1" and not pg.is_disabled("#nsent")
     show_sent(pg, True)
     assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["m1", "q1"]
     assert "nhid" in pg.get_attribute('#nlist li[data-id="m1"]', "class") and pg.text_content('#nlist li[data-id="m1"] .nsst') == "AI 작업 중", "흐리게 + 상태 말"

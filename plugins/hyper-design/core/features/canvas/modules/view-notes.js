@@ -2,8 +2,9 @@
    나누기는 HD.edits.split(Model). 완료한 메모(HD.annotation.isOpen 이 아님)는 목록·배지 수·보내기 건수에서 빠진다(카드 메모 묶음의 '완료' 묶음에만). 보내기는 한 자리(#nsend, 위쪽 줄 배율 오른쪽 — 둘 다 보낸다, E16): 여기선 그 버튼의 건수·켜짐만.
    '결정 필요'(#232, 강조색 하나): 위쪽 줄 #decn '결정 필요 N'(0 이면 숨김, 누르면 메모 패널을 그것만으로 열기) · 메모 패널 단추 #ndec '결정 필요만'(거르기) ·
    결정 필요 메모가 있는 카드 배지에 .decide(강조색 — 수는 그대로 열린 메모 수). 거르기 상태 = 켜짐 하나(저장하지 않음, 결정 필요가 0 이 되면 꺼짐).
-   보낸 메모 숨기기(task 29): 목록·카드 배지 수는 HD.annotation.visible(n, 켜짐)인 메모만 — 보낸 뒤 AI 차례·완료한 메모는 숨김. 이 View 가 #nlist 위에 단추 #nsent '보낸 메모 보기 (N)'(N = 숨김이 될 메모 수,
-     0 이면 꺼진 단추로 자리 유지)를 그린다. 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 hd-show-sent:<해시>('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
+   보낸 메모 숨기기(task 29): 목록·카드 배지 수는 HD.annotation.visible(n, 켜짐)인 메모만 — 보낸 뒤 AI 차례·완료한 메모는 숨김. 이 View 가 메모 막대(.ntool, task 32 — 한 줄 아이콘:
+     #ncnt '메모 N' · #nsent · #ndec · #nclear) 안에 눈 아이콘 #nsent '보낸 메모 보기 (N)'(title·aria-label, 수 배지 .ncb[data-n] — N = 숨김이 될 메모 수, 0 이면 꺼진 단추로 자리 유지)를 그린다.
+     줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(올리거나 포커스일 때 보임, 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 hd-show-sent:<해시>('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
      다른 View(핀·묶음)는 document.documentElement.dataset.hdShowSent('1'|'0')를 읽고 바뀌면 document 의 'hd-show-sent' 이벤트(의도)로 다시 그린다.
    HD.viewNotes.mount(ctx) → {render(notes, ids?) → {memos, pending, decide}, filter(on), showSent(on?) → 켜짐}   ids = 메모가 바뀐 화면 — 카드 배지는 그 카드만(없으면 전부)
    ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id), showNotes()(메모 패널을 앞으로), storage?, hash?(없으면 localStorage · 셸 hashStr 과 같은 해시)} */
@@ -26,12 +27,16 @@ function mount(ctx) {
   }
   function publish() { document.documentElement.dataset.hdShowSent = shown ? '1' : '0'; }
   publish();
-  var bar = document.createElement('div'); bar.className = 'nsentbar';
-  bar.innerHTML = '<button type="button" class="nbtn" id="nsent" aria-pressed="false" disabled>보낸 메모 보기 (0)</button>';
-  $('#nlist').parentNode.insertBefore(bar, $('#nlist'));
+  var ICON = {
+    eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+    del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>'};
+  var sbtn = document.createElement('button');        // 보낸 메모 보기 — 메모 막대(템플릿 .ntool)의 #ndec 앞
+  sbtn.type = 'button'; sbtn.className = 'nib'; sbtn.id = 'nsent'; sbtn.setAttribute('aria-pressed', 'false'); sbtn.disabled = true;
+  sbtn.innerHTML = ICON.eye + '<span class="ncb" data-n="0" hidden>0</span>';
+  $('#ndec').parentNode.insertBefore(sbtn, $('#ndec'));
   var css = document.createElement('style'); css.id = 'hd-sent-css';
-  css.textContent = '#notes .nsentbar{display:flex;justify-content:flex-end;padding:6px 12px 0}#notes .nsentbar .nbtn[aria-pressed="true"]{font-weight:700}' +
-    '#notes li.nhid{opacity:.55}#notes .nsst{margin-left:6px;color:#888;font-size:12px}';
+  css.textContent = '#notes li.nhid{opacity:.55}#notes .nsst{margin-left:6px;color:#888;font-size:12px}';
   document.head.appendChild(css);
 
   function targets(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
@@ -41,7 +46,8 @@ function mount(ctx) {
     return '<li data-id="' + esc(n.id) + '"' + (cls ? ' class="' + cls.slice(1) + '"' : '') + '><div><span class="nn">' + ctx.circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
       ' · ' + esc(n.intent) + (k > 1 ? ' · ' + k + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span>' + (st === 'decide' ? '<span class="ndst">결정 필요</span>' : '') +
       (hid ? '<span class="nsst" data-st="' + st + '">' + esc(A.LABEL[st]) + '</span>' : '') + '</div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
-      '<div class="nact"><button class="nbtn" data-act="edit">고치기</button><button class="nbtn" data-act="del">지우기</button></div></li>';
+      '<div class="nact"><button type="button" class="nib" data-act="edit" title="고치기" aria-label="고치기">' + ICON.edit + '</button>' +
+      '<button type="button" class="nib" data-act="del" title="지우기" aria-label="지우기">' + ICON.del + '</button></div></li>';
   }
   function pendRow(n) {
     return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div class="ns">' + esc(ctx.title(n.screen)) + (n.sent ? ' · 보냄' : '') + '</div>' +
@@ -67,7 +73,10 @@ function mount(ctx) {
     sp.memos.forEach(function (n) { if (A.status(n) === 'decide') dec[n.screen] = 1; });
     if (!nd) only = false;
     $('#notes').hidden = !vis.length && !nh && !open.some(function (n) { return n.sent; }); $('#pend').hidden = !sp.pending.length;   // 보낸 것이 있으면 '보낸 것 완료로'·'보낸 메모 보기' 때문에 연다
-    var sb = $('#nsent'); sb.textContent = '보낸 메모 보기 (' + nh + ')'; sb.disabled = !nh && !shown; sb.setAttribute('aria-pressed', String(shown));   // 0 이면 꺼진 단추(자리 유지) — 켜져 있으면 끌 수 있게 둔다
+    var sb = $('#nsent'), cb = $('.ncb', sb), sl = '보낸 메모 보기 (' + nh + ')';
+    sb.title = sl; sb.setAttribute('aria-label', sl); cb.textContent = String(nh); cb.dataset.n = String(nh); cb.hidden = !nh;
+    sb.disabled = !nh && !shown; sb.setAttribute('aria-pressed', String(shown));   // 0 이면 꺼진 단추(자리 유지) — 켜져 있으면 끌 수 있게 둔다
+    $('#ncnt').textContent = '메모 ' + vis.length;
     var dn = $('#decn'); dn.hidden = !nd; dn.textContent = '결정 필요 ' + nd; dn.dataset.n = String(nd);
     var tg = $('#ndec'); tg.hidden = !nd; tg.setAttribute('aria-pressed', String(only));
     $('#nlist').innerHTML = (only ? vis.filter(function (n) { return A.status(n) === 'decide'; }) : vis).map(memoRow).join('');
