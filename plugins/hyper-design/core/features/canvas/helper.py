@@ -34,6 +34,10 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   POST /api/claim {screen, by?, note?}                       → {rev, screen, file} — `hd claim`: state.busy 에 cli 덮개 {via:'cli', since, file, mtime(지금 파일 시각), by?, note?}
     를 늘 최신 파일에 넣고 rev+1(rev 를 받지 않는다 — /api/reply 와 같은 까닭: 쓰는 곳 하나·자물쇠 하나, CLI 가 409 를 다시 시도할 일이 없다). 모르는 화면 404 · 칸 오류 400
   POST /api/release {screen}                                  → {rev, released: bool} — `hd release`: 그 덮개를 걷는다(없으면 released false, 쓰지 않음)
+  GET /api/agents[?auto=1]                                    → {agents:[{id, name, status, cwd, provider}], current: 지금 보낼 곳 id|null, repo: 저장소 뿌리|null, error?}
+    auto=1(캔버스가 열 때) = 이미 붙어 있거나 repo 를 모르면 paseo 를 띄우지 않고 {agents:[], skipped:true}
+    — `paseo ls -g --json`(읽기만, UTF-8 로 풂, 보관된 것 뺌, 5초 캐시). Paseo 가 없으면 200 {agents:[], error:'Paseo 를 찾을 수 없어요'}.
+    repo = app.json 의 repo, 아니면 out 위 .git 폴더. 캔버스가 고르면 POST /api/attach(아래) — 줄 차례·제안은 modules/agents.js(#214)
   GET /api/files?since=N                                      → {seq, changed:[screen]} — 도우미가 1초마다 screens.json 에 적힌 화면 파일(out 안만) mtime 을 보고,
     바뀔 때마다 seq+1. changed = since 보다 뒤에 바뀐 화면(since 없거나 -1 = 기준만, changed []). 캔버스는 그 카드만 다시 싣는다
   예) curl -X POST -H "X-HD-Token: …" -d '{"screen":"home","note":"버튼 고치는 중"}' http://127.0.0.1:PORT/api/claim
@@ -42,7 +46,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
   index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 """
-import argparse, atexit, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, signal, subprocess, sys, threading, urllib.parse, webbrowser
+import argparse, atexit, datetime, hashlib, html, json, os, pathlib, re, secrets, shutil, signal, subprocess, sys, threading, time, urllib.parse, webbrowser
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -555,6 +559,16 @@ def restore(out, stamp):
     return {"restored": sorted(files), "changed": m.get("changed") or []}
 
 
+def _paseo_cmd(paseo=None):
+    """Paseo CLI 경로 — 넘긴 것(--paseo-cmd·HD_PASEO_CMD, 테스트의 가짜) > 설치 위치(PASEO_DEFAULT) > PATH. 없으면 None."""
+    return paseo or (str(PASEO_DEFAULT) if PASEO_DEFAULT.exists() else shutil.which("paseo"))
+
+
+def _paseo_args(cmd, rest):
+    args = [cmd] + rest
+    return ["cmd", "/c"] + args if cmd.lower().endswith((".cmd", ".bat")) else args
+
+
 def forward(out, text, agent=None, paseo=None):
     """결정형이 아닌 메모 → 터미널. 늘 대기열 파일에 쓰고, Paseo 에이전트가 있으면 그 파일을 paseo send 로 넘긴다."""
     q = pathlib.Path(out).resolve() / ".hd-queue"
@@ -562,11 +576,9 @@ def forward(out, text, agent=None, paseo=None):
     p = q / (datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".txt")
     p.write_text(text, encoding="utf-8")
     if agent:
-        cmd = paseo or (str(PASEO_DEFAULT) if PASEO_DEFAULT.exists() else shutil.which("paseo"))
+        cmd = _paseo_cmd(paseo)
         if cmd:
-            args = [cmd, "send", agent, "--prompt-file", str(p), "--no-wait"]
-            if cmd.lower().endswith((".cmd", ".bat")):
-                args = ["cmd", "/c"] + args
+            args = _paseo_args(cmd, ["send", agent, "--prompt-file", str(p), "--no-wait"])
             try:
                 r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
                 if r.returncode == 0:
@@ -574,6 +586,71 @@ def forward(out, text, agent=None, paseo=None):
             except (OSError, subprocess.TimeoutExpired):
                 pass
     return {"via": "queue", "path": str(p)}
+
+
+# ---------------------------------------------------------------- 보낼 곳 고르기(#214): Paseo 에이전트 목록 · 프로젝트 저장소
+AGENTS_TTL = 5.0                                     # GET /api/agents 답을 이만큼(초) 다시 쓴다 — 메뉴를 열 때마다 paseo 를 띄우지 않게
+NO_PASEO = "Paseo 를 찾을 수 없어요"
+
+
+def list_agents(paseo=None):
+    """`paseo ls -g --json`(읽기만) → {agents:[{id, name, status, cwd, provider}]} | {agents:[], error:한국어}.
+    보관(archived)된 것은 뺀다. 출력은 바이트로 받아 UTF-8 로 푼다(Windows 기본 코드 페이지로 풀면 한글 이름이 깨진다)."""
+    cmd = _paseo_cmd(paseo)
+    if not cmd or (("/" in cmd or "\\" in cmd) and not pathlib.Path(cmd).exists()):
+        return {"agents": [], "error": NO_PASEO}
+    try:
+        r = subprocess.run(_paseo_args(cmd, ["ls", "-g", "--json"]), capture_output=True, timeout=30, creationflags=NO_WINDOW,
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8", NO_COLOR="1"))
+    except FileNotFoundError:
+        return {"agents": [], "error": NO_PASEO}
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"agents": [], "error": "Paseo 목록을 읽지 못했어요: %s" % e}
+    if r.returncode != 0:
+        why = r.stderr.decode("utf-8", "replace").strip().splitlines()
+        return {"agents": [], "error": "Paseo 목록을 읽지 못했어요" + (": " + why[-1][:200] if why else " (종료 코드 %d)" % r.returncode)}
+    try:
+        rows = json.loads(r.stdout.decode("utf-8"))
+    except ValueError:
+        return {"agents": [], "error": "Paseo 목록이 JSON 이 아니에요"}
+    if not isinstance(rows, list):
+        return {"agents": [], "error": "Paseo 목록이 목록이 아니에요"}
+    agents = []
+    for a in rows:
+        if not isinstance(a, dict) or not isinstance(a.get("id"), str) or not a["id"]:
+            continue
+        if a.get("archived") or a.get("status") == "archived" or a.get("archivedAt"):
+            continue
+        agents.append({k: (a.get(k) if isinstance(a.get(k), str) else None) for k in ("id", "name", "status", "cwd", "provider")})
+    return {"agents": agents}
+
+
+def project_repo(out):
+    """이 캔버스의 저장소 뿌리 — 앱 프로젝트면 app.json 의 repo, 아니면 out 위로 처음 만나는 .git 이 있는 폴더. 없으면 None."""
+    out = pathlib.Path(out).resolve()
+    try:
+        app = json.loads((out / "app.json").read_text(encoding="utf-8"))
+        if isinstance(app, dict) and isinstance(app.get("repo"), str) and app["repo"]:
+            return str(pathlib.Path(app["repo"]))
+    except (OSError, ValueError):
+        pass                                          # app.json 이 없거나 깨짐 = 정적 프로젝트로 본다
+    for d in [out] + list(out.parents):
+        if (d / ".git").exists():
+            return str(d)
+    return None
+
+
+def agents_get(srv, paseo, now=None, auto=False):
+    """GET /api/agents[?auto=1] → {agents, current, repo, error?}. paseo 목록은 AGENTS_TTL 동안 다시 쓴다(current 는 늘 지금 값).
+    auto = 캔버스가 열 때 자동으로 고를지 묻는 것 — 이미 붙어 있거나 저장소를 모르면 paseo 를 띄우지 않고 {agents:[], skipped:true}."""
+    if auto and (srv.agent or not srv.repo):
+        return {"agents": [], "current": srv.agent, "repo": srv.repo, "skipped": True}
+    t = time.monotonic() if now is None else now
+    with srv.agents_lock:
+        hit = srv.agents_cache
+        if hit is None or t - hit[0] >= AGENTS_TTL:
+            hit = srv.agents_cache = (t, list_agents(paseo))
+    return dict(hit[1], current=srv.agent, repo=srv.repo)
 
 
 def watch(out, files):
@@ -831,7 +908,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path in ("/api/state", "/api/projects", "/api/files"):
+            if u.path in ("/api/state", "/api/projects", "/api/files", "/api/agents"):
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
                 if u.path == "/api/files":
@@ -843,6 +920,9 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     return self._json(200, self.server.watch.changes(since))
                 if u.path == "/api/projects":
                     return self._json(200, hd_client.project_rows())
+                if u.path == "/api/agents":
+                    auto = urllib.parse.parse_qs(u.query).get("auto", [""])[0] == "1"
+                    return self._json(200, agents_get(self.server, paseo, auto=auto))
                 with lock:
                     return self._json(200, state_load(out))
             parts = [p for p in u.path.split("/") if p]
@@ -941,6 +1021,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     srv.token = token
     srv.agent = agent or None                           # /api/forward 가 보낼 곳 — /api/attach 로 바뀐다
     srv.marker = None                                   # main 이 표지 경로를 넣는다(attach 가 agent 를 고쳐 씀)
+    srv.agents_cache, srv.agents_lock = None, threading.Lock()   # GET /api/agents 5초 캐시
+    srv.repo = project_repo(out)
     srv.url = "http://127.0.0.1:%d/index.html?hd=%s" % (srv.server_address[1], token)
     return srv
 
