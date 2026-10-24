@@ -1080,24 +1080,40 @@ pane.addEventListener('click', function (e) {
   if (!e.shiftKey && !cl('.card, .alabel')) SL.dispatch({type: 'clear'});   // 빈 판을 그냥 누르면 고르기 풀기(강조도 꺼짐)
 }, true);
 
-/* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) ---------- */
-var visT = 0;
+/* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) · 라이브 상한(modules/live-cap.js, contract/board-motion.md) ---------- */
+var visT = 0, seenAt = {};
+function boardSrc(u) {                             // 판 위 카드 = 판 모드(palette.js 가 움직임을 멈춤) — 크게 보기(#mframe)는 붙이지 않는다
+  var i = u.indexOf('#'), h = i < 0 ? '' : u.slice(i); u = i < 0 ? u : u.slice(0, i);
+  return u + (u.indexOf('?') < 0 ? '?' : '&') + 'hd-mode=board' + h;
+}
+function loadCard(f) { var s = f.getAttribute('data-src'); f.dataset.live = s; f.removeAttribute('data-src'); f.src = boardSrc(s); }
 function loadVisible() {
   var pr = pane.getBoundingClientRect();
   if (!pr.width || pane.hidden) return;
-  $$('.phone iframe[data-src]', rowsEl).forEach(function (f) {
-    var r = f.parentNode.getBoundingClientRect();
-    if (r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
-      if (!f.dataset.wired) {                     // 다시 실을 때(data-src 다시 붙임)마다 듣는 이를 더하지 않는다 — 실을 때마다 메시지 한 번
-        f.dataset.wired = '1';
-        f.addEventListener('load', function () { var c = f.closest('.card'); sendTo(f); if (c) { sendPending(f, c.dataset.id); if (PN) PN.locate(c.dataset.id, f); } });   // 메모 자리 다시 찾기(hd-locate)
+  var now = Date.now(), loaded = [], vis = [], frames = {};
+  $$('.card', rowsEl).forEach(function (c) {
+    var f = $('.phone iframe', c); if (!f) return;
+    var id = c.dataset.id, r = f.parentNode.getBoundingClientRect();
+    if (r.width && r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
+      vis.push(id); seenAt[id] = now;
+      if (f.hasAttribute('data-src')) {
+        if (!f.dataset.wired) {                   // 다시 실을 때(data-src 다시 붙임)마다 듣는 이를 더하지 않는다 — 실을 때마다 메시지 한 번
+          f.dataset.wired = '1';
+          f.addEventListener('load', function () { if (f.hasAttribute('data-src')) return;   // 내린 카드(about:blank)
+            var c = f.closest('.card'); sendTo(f); if (c) { sendPending(f, c.dataset.id); if (PN) PN.locate(c.dataset.id, f); } });   // 메모 자리 다시 찾기(hd-locate)
+        }
+        loadCard(f);
       }
-      f.src =f.getAttribute('data-src'); f.removeAttribute('data-src');
     }
+    if (!f.hasAttribute('data-src') && f.dataset.live) { loaded.push(id); frames[id] = f; }
   });
+  HD.liveCap.unload({loaded: loaded, visible: vis, lastSeen: seenAt, selected: SL ? SL.ids() : [], modal: modal.hidden ? null : mscreen, now: now,
+                     K: HD.liveCap.K, idle: HD.liveCap.IDLE})
+    .forEach(function (id) { var f = frames[id]; f.setAttribute('data-src', f.dataset.live); f.src = 'about:blank'; });   // 내리기 = 틀·제목·핀은 그대로, 다시 보이면 위에서 다시 싣는다
 }
 function scheduleVisible() { clearTimeout(visT); visT = setTimeout(loadVisible, 100); }
 addEventListener('resize', scheduleVisible);
+setInterval(loadVisible, 5000);                     // 가만히 있어도 화면 밖 15초 지난 카드를 내린다
 
 /* ---------- 크게 보기 ---------- */
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
@@ -1490,7 +1506,7 @@ function askHit(card, cx, cy, quiet, cb, leaf) {    // cb(null) = 1.5초 안에 
   w.t = setTimeout(function () { var i = hitWait.indexOf(w); if (i < 0) return; hitWait.splice(i, 1); if (!quiet) toast('이 화면은 편집할 수 없어요'); cb(null); }, 1500);
   hitWait.push(w);
   var ask = function () { try { f.contentWindow.postMessage({type: 'hd-hit-at', x: (cx - r.left) / s, y: (cy - r.top) / s, leaf: !!leaf}, '*'); } catch (e) {} };
-  if (f.hasAttribute('data-src')) { f.addEventListener('load', ask, {once: true}); f.src = f.getAttribute('data-src'); f.removeAttribute('data-src'); }
+  if (f.hasAttribute('data-src')) { f.addEventListener('load', ask, {once: true}); loadCard(f); }
   else ask();
 }
 addEventListener('message', function (e) {

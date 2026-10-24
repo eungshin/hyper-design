@@ -22,7 +22,29 @@
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
    소스 위치(앱 카드, Svelte 개발 서버): 요소나 그 조상에 __svelte_meta.loc 이 있으면 hd-picked·hd-hit·hd-dbl 답과 hd-located 항목에
-   src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다. */
+   src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다.
+   판 모드(?hd-mode=board — 캔버스 판 위 카드만, 크게 보기는 아님): 화면 스크립트보다 먼저 reduced-motion 을 켜고 움직임을 멈춘다
+   (유한 = 끝 상태, 무한 = 한 번 뒤 멈춤 · load 뒤 WAAPI 도). contract/board-motion.md */
+(function () {
+  if (new URLSearchParams(location.search).get('hd-mode') !== 'board') return;
+  var mm = window.matchMedia;
+  if (mm) window.matchMedia = function (q) {        // 앱의 reduced-motion 경로를 켠다(다른 질의는 그대로)
+    var m = /prefers-reduced-motion\s*:\s*(reduce|no-preference)/.exec(String(q));
+    return mm.call(window, m ? (m[1] === 'reduce' ? 'all' : 'not all') : q);
+  };
+  var st = document.createElement('style'); st.setAttribute('data-hd-board', '');
+  st.textContent = '*,*::before,*::after{transition-duration:0s!important;transition-delay:0s!important;animation-duration:1ms!important;' +
+    'animation-delay:-1ms!important;animation-iteration-count:1!important}';
+  (document.head || document.documentElement).appendChild(st);
+  function still() {
+    if (!document.getAnimations) return;
+    document.getAnimations().forEach(function (a) {
+      try { var t = a.effect && a.effect.getComputedTiming(); if (t && t.endTime === Infinity) a.pause(); else a.finish(); }
+      catch (e) { console.warn('[hd] 판 모드: 움직임을 멈추지 못함 — ' + e); }
+    });
+  }
+  addEventListener('load', function () { still(); setTimeout(still, 500); });   // 늦게 붙는 컴포넌트까지 한 번 더
+})();
 (function () {
   var KEY = 'hd-palette';
   function apply(slug) {

@@ -150,3 +150,41 @@ def test_out_folder_is_a_normal_relaunchable_project(live):
     screens = json.loads((out / "screens.json").read_text(encoding="utf-8"))["screens"]
     assert {s["id"] for s in screens} >= set(app["stages"])
     assert (out / "index.html").is_file() and (out / "palette.js").is_file()
+
+
+
+# 판 모드(task 35, canvas/contract/board-motion.md): 지금 무대들은 가만히 있을 때 도는 애니메이션이 0개(19개 무대 실측) —
+# 그래서 같은 무한 CSS 애니메이션 하나를 두 곳에 붙여 본다: 판 카드에서는 멈추고, 크게 보기에서는 돈다.
+SPIN = """() => new Promise((res) => {
+  const st = document.createElement('style'); st.textContent = '@keyframes hdspin{to{transform:rotate(1turn)}} .hd-spin{animation:hdspin 1s linear infinite}';
+  const el = document.createElement('div'); el.className = 'hd-spin'; document.head.appendChild(st); document.body.appendChild(el);
+  setTimeout(() => { const a = document.getAnimations();
+    res({infinite: a.filter((x) => x.playState === 'running' && x.effect.getComputedTiming().endTime === Infinity).length,
+         reduced: matchMedia('(prefers-reduced-motion: reduce)').matches}); }, 300); })"""
+
+
+def test_board_card_is_still_large_view_is_live(live):
+    pg = live["browser"].new_page(viewport={"width": 1400, "height": 900})
+    pg.goto(live["canvas"])
+    stage = "/hd-stage/word-header.html"
+    deadline, fr = time.time() + 20, None
+    while time.time() < deadline and not fr:
+        fr = next((f for f in pg.frames if stage in f.url and "hd-mode=board" in f.url), None)
+        if not fr:
+            pg.wait_for_timeout(200)
+    assert fr, [f.url for f in pg.frames]
+    fr.wait_for_function("document.querySelectorAll('#hd-stage-root *').length > 0", timeout=20000)
+    board = fr.evaluate(SPIN)
+    assert board == {"infinite": 0, "reduced": True}, board
+    pg.evaluate("(s) => [...document.querySelectorAll('.card .pres')].find((b) => b.dataset.file.includes(s)).click()", stage)
+    pg.wait_for_function("document.getElementById('mframe').getAttribute('src')", timeout=5000)
+    assert "hd-mode" not in pg.get_attribute("#mframe", "src")
+    deadline, mf = time.time() + 20, None
+    while time.time() < deadline and not mf:
+        mf = next((f for f in pg.frames if stage in f.url and "hd-mode" not in f.url), None)
+        if not mf:
+            pg.wait_for_timeout(200)
+    assert mf, [f.url for f in pg.frames]
+    mf.wait_for_function("document.querySelectorAll('#hd-stage-root *').length > 0", timeout=20000)
+    large = mf.evaluate(SPIN)
+    assert large == {"infinite": 1, "reduced": False}, large
