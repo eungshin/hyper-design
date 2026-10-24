@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hyper Design — 홈</title>
+<link rel="stylesheet" href="home.css">
+</head>
+<body>
+<aside id="side" aria-label="홈 메뉴">
+  <div class="brand"><span class="badge">hd</span><span>Hyper Design</span></div>
+  <nav id="nav" role="tablist" aria-orientation="vertical">
+    <button class="nv" role="tab" data-sec="recent"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg>최근 항목</button>
+    <button class="nv" role="tab" data-sec="all"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>모든 프로젝트</button>
+    <button class="nv" role="tab" data-sec="starred"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5L2.8 8l5-.6z"/></svg>별표</button>
+    <button class="nv" role="tab" data-sec="trash"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M5.5 6l.8 10.5h7.4L14.5 6"/></svg>휴지통</button>
+    <hr>
+    <button class="nv act" id="pickFolder"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1.5 1.5 0 011.5-1.5h3.5l2 2H16a1.5 1.5 0 011.5 1.5v7.5A1.5 1.5 0 0116 16.5H4a1.5 1.5 0 01-1.5-1.5z"/></svg>폴더 열기</button>
+  </nav>
+</aside>
+<main id="main">
+  <header id="top">
+    <h1 id="secTitle">최근 항목</h1>
+    <label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/></svg>
+      <input id="q" type="search" placeholder="찾기 (Ctrl+F)" aria-label="프로젝트 찾기" autocomplete="off"></label>
+  </header>
+  <div id="banner" hidden></div>
+  <div id="grid" role="listbox" aria-label="프로젝트" tabindex="-1"></div>
+  <p id="empty" hidden></p>
+</main>
+<div id="menu" role="menu" hidden></div>
+<div id="dlg" hidden><form id="dlgBox" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+  <h2 id="dlgTitle"></h2><p id="dlgText"></p><input id="dlgIn" autocomplete="off">
+  <div class="dlgBtns"><button type="button" id="dlgNo">취소</button><button type="submit" id="dlgYes" class="pri">확인</button></div>
+</form></div>
+<div id="toasts" aria-live="polite"></div>
+<script src="home-model.js"></script>
+<script src="home.js"></script>
+</body>
+</html>
