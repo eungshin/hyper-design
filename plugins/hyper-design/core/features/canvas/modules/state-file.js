@@ -13,7 +13,12 @@
    read(state, name) → 저장 글 | null · write(state, name, text) → {ok, state(새 객체)} (JSON 이 아니면 ok:false, 상태 그대로) · drop(state, name) → 그 이름을 뺀 새 상태
    body(rev, state, names) → PUT 본문 {rev, state:{이름: 값 | null(지움)}}
    LIVE = {이름: 1} — 파일에서 바뀌면 셸이 제자리에서 다시 읽는 이름(notes·note-seq·busy), 그 밖은 다시 불러오기
-   HD.stateFile = {NAMES, LIVE, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body} */
+   두 탭(#274) — 같은 out 을 연 탭 가운데 파일에 쓰는 탭은 하나(BroadcastChannel 'hd:'+hash 메시지 {type, id, t}):
+     tabStart(id, t) → {id, t, role:'pending'} · tab(s, ev) → {s(새 객체), send: 보낼 메시지 | null}
+     ev = 내 일 {type:'timeout'}(알린 뒤 답 없음) | {type:'click'}(여기서 편집하기) 또는 남의 메시지 {type:'hello'|'here'|'take', id, t}
+     새 탭은 hello 를 알리고, 쓰는 탭(writer)만 here 로 답한다 → 답을 받은 새 탭은 reader(읽기만). 답이 없으면 writer 가 되어 here 를 알림.
+     둘 다 writer 면(동시에 시작) here 를 받은 쪽 중 더 새 탭(t 가 크고, 같으면 id 가 큰 쪽)이 reader, 먼저 연 탭은 here 로 다시 알림. click = writer + take, take 를 받으면 reader.
+   HD.stateFile = {NAMES, LIVE, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body, tabStart, tab} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -98,5 +103,24 @@ function body(rev, state, names) {
   return {rev: rev, state: s};
 }
 
-HD.stateFile = {NAMES: NAMES, LIVE: LIVE, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
+function tabStart(id, t) { return {id: id, t: t, role: 'pending'}; }
+function tab(s, ev) {
+  var me = function (role) { return {id: s.id, t: s.t, role: role}; }, say = function (type) { return {type: type, id: s.id, t: s.t}; };
+  var keep = {s: me(s.role), send: null};
+  if (!ev || typeof ev !== 'object') return keep;
+  if (ev.type === 'timeout') return s.role === 'pending' ? {s: me('writer'), send: say('here')} : keep;
+  if (ev.type === 'click') return {s: me('writer'), send: say('take')};
+  if (ev.id === s.id) return keep;                         // 제 메시지
+  if (ev.type === 'hello') return s.role === 'writer' ? {s: me('writer'), send: say('here')} : keep;
+  if (ev.type === 'take') return {s: me('reader'), send: null};
+  if (ev.type === 'here') {
+    if (s.role === 'pending') return {s: me('reader'), send: null};
+    if (s.role !== 'writer') return keep;
+    var older = ev.t < s.t || (ev.t === s.t && String(ev.id) < String(s.id));
+    return older ? {s: me('reader'), send: null} : {s: me('writer'), send: say('here')};
+  }
+  return keep;
+}
+
+HD.stateFile = {tabStart: tabStart, tab: tab, NAMES: NAMES, LIVE: LIVE, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
 })();

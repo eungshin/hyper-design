@@ -92,3 +92,165 @@ def test_pending_card_move_survives_ai_reply(live):   # #269 — 모아 둔 카�
     assert [len(n.get("replies") or []) for n in file_notes(pg) if n["id"] == "m1"] == [1], "AI 답도 파일에 남는다"
     assert len(puts) >= 2, "409 뒤 합쳐 다시 보냈다"
     assert pg.evaluate("window.__hdStay") == 1, "잃은 것이 없으니 다시 불러오지 않는다"
+
+
+from test_canvas_replies_live import memo, seed, T_BTN, T_LEAD  # noqa: E402
+
+
+def _seed(out, notes):
+    """앞 테스트 탭이 닫히며 보낸 PUT 이 도우미에서 파일을 바꾸는 중이면(Windows 잠금) 잠깐 뒤 다시."""
+    import time
+    for i in range(30):
+        try:
+            return seed(out, notes)
+        except PermissionError:
+            time.sleep(0.1)
+    seed(out, notes)
+
+
+def _open(c, srv, errors, routes=()):
+    pg = c.new_page()
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    for pat, fn in routes:
+        pg.route(pat, fn)
+    pg.goto(srv.url)
+    pg.wait_for_function("window.__hdReady !== undefined")
+    return pg
+
+
+def _wait(pg, cond, ms=5000):
+    t = 0
+    while t < ms and not cond():
+        pg.wait_for_timeout(100); t += 100
+    return cond()
+
+
+@pytest.mark.area("helper", "notes")
+def test_done_notes_archived_then_removed_once(browser, served):
+    """#273 — 열 때 30일 넘은 완료 메모만 POST /api/archive(도우미가 아직 없으면 mock) → {ok} 뒤에만 notes 에서 한 번 저장으로 뺀다. 묻기는 ?since=rev."""
+    out, srv = served
+    old = memo("m1", 1, T_BTN, "오래전 완료")
+    old["replies"] = [{"kind": "반영됨", "what": "고침", "screens": ["pay"], "at": "2026-01-01T00:00:00Z"}]
+    _seed(out, [old, memo("m2", 2, T_LEAD, "작업 중")])
+    posts, gets, errors = [], [], []
+
+    def arch(route):
+        posts.append(json.loads(route.request.post_data))
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True, "count": 1}))
+    c = browser.new_context(viewport={"width": 1440, "height": 1000})
+    try:
+        pg = _open(c, srv, errors, [("**/api/archive", arch)])
+        pg.on("request", lambda r: "/api/state" in r.url and r.method == "GET" and gets.append(r.url))
+        f = out / ".hd-canvas.json"
+        ids = lambda: [n["id"] for n in json.loads(f.read_text(encoding="utf-8"))["state"]["notes"]]
+        assert _wait(pg, lambda: ids() == ["m2"]), ids()
+        assert [[n["id"] for n in p["notes"]] for p in posts] == [["m1"]], "완료 + 30일 넘은 것만, 한 번"
+        assert _wait(pg, lambda: bool(gets)) and all("since=" in u for u in gets), gets
+        pg.wait_for_timeout(2500)
+        assert len(posts) == 1, "한 시간에 한 번"
+    finally:
+        c.close()
+    assert not errors, errors
+
+
+@pytest.mark.area("helper", "notes")
+def test_archive_failure_keeps_notes(browser, served):
+    out, srv = served
+    old = memo("m1", 1, T_BTN, "오래전 완료")
+    old["replies"] = [{"kind": "확인", "at": "2026-01-01T00:00:00Z"}]
+    _seed(out, [old])
+    errors, posts = [], []
+    c = browser.new_context(viewport={"width": 1440, "height": 1000})
+    try:
+        pg = _open(c, srv, errors, [("**/api/archive", lambda r: (posts.append(1), r.fulfill(status=404, body="{}")))])
+        assert _wait(pg, lambda: bool(posts))
+        pg.wait_for_timeout(500)
+        st = json.loads((out / ".hd-canvas.json").read_text(encoding="utf-8"))
+        assert [n["id"] for n in st["state"]["notes"]] == ["m1"] and st["rev"] == 1, "{ok} 없으면 아무것도 빼지 않는다"
+    finally:
+        c.close()
+    assert not errors, errors
+
+
+@pytest.mark.area("helper", "notes", "tools")
+def test_too_big_toasts_once_and_waits_for_next_change(browser, served):
+    """#273 — 413 = 도우미의 {error} 글을 한 번만 알리고, 다음 변경까지 다시 보내지 않는다."""
+    from test_canvas_edit import drag, visible_cover
+    out, srv = served
+    _seed(out, [memo("m2", 2, T_LEAD, "작업 중")])
+    puts, errors = [], []
+    msg = "상태가 너무 커요(2.1 MB, 한도 2 MB) — 완료 메모를 보관으로 옮기세요"
+
+    def big(route):
+        if route.request.method != "PUT":
+            return route.continue_()
+        puts.append(1)
+        route.fulfill(status=413, content_type="application/json", body=json.dumps({"error": msg}, ensure_ascii=False))
+    c = browser.new_context(viewport={"width": 1440, "height": 1000})
+    try:
+        pg = _open(c, srv, errors, [("**/api/state", big)])
+        pg.evaluate("""() => { window.__toasts = []; const t = document.getElementById('toast');
+            new MutationObserver(rs => rs.forEach(() => window.__toasts.push(t.textContent))).observe(t, {childList: true}); }""")   # toast() 한 번 = 글 바꾸기 한 번
+        fit_view(pg)
+        pg.keyboard.press("v")
+        cov = visible_cover(pg)
+        drag(pg, cov, 40, 0)
+        assert _wait(pg, lambda: len(puts) >= 1)
+        pg.wait_for_timeout(4500)                                       # 묻기 두 번 지나도 다시 보내지 않는다
+        assert len(puts) == 1, puts
+        drag(pg, visible_cover(pg), 30, 0)                              # 다음 변경 = 다시 보냄, 알림은 한 번 그대로
+        assert _wait(pg, lambda: len(puts) >= 2)
+        pg.wait_for_timeout(300)
+        assert [t for t in pg.evaluate("window.__toasts") if "MB" in t] == [msg], "도우미의 글 그대로, 두 번째 413 에는 다시 띄우지 않는다"
+    finally:
+        c.close()
+    assert not errors, errors
+
+
+@pytest.mark.area("helper", "notes", "tools")
+def test_second_tab_is_read_only_until_take(browser, served):
+    """#274 — 같은 out 을 연 두 탭: 새 탭은 '다른 탭에서 열려 있어요 — 여기서 편집하기' 줄 + PUT 없음. 누르면 그 탭이 쓰고 먼저 탭이 읽기만."""
+    from test_canvas_edit import drag, visible_cover
+    out, srv = served
+    _seed(out, [memo("m2", 2, T_LEAD, "작업 중")])
+    errors, puts = [], {"a": 0, "b": 0}
+
+    def count(name):
+        def fn(route):
+            if route.request.method == "PUT":
+                puts[name] += 1
+            return route.continue_()
+        return fn
+    c = browser.new_context(viewport={"width": 1440, "height": 1000})
+    try:
+        a = _open(c, srv, errors, [("**/api/state", count("a"))])
+        a.wait_for_timeout(300)
+        b = _open(c, srv, errors, [("**/api/state", count("b"))])
+        b.wait_for_selector("#hd-tab-lock:not([hidden])")
+        assert "다른 탭에서 열려 있어요" in b.text_content("#hd-tab-lock")
+        assert not a.locator("#hd-tab-lock").count() or a.locator("#hd-tab-lock").is_hidden(), "먼저 연 탭은 그대로 편집"
+        a.evaluate("window.__hdStay = 1"); b.evaluate("window.__hdStay = 1")
+        fit_view(b)
+        b.keyboard.press("v")
+        drag(b, visible_cover(b), 40, 0)                                # 읽기만인 탭의 편집 = 파일로 가지 않음
+        b.wait_for_timeout(800)
+        assert puts["b"] == 0, "읽기만인 탭은 PUT 하지 않는다"
+        b.click("#hd-tab-lock button")                                  # 여기서 편집하기 — 버린 쓰기가 있었으니 파일 상태로 다시 불러온다
+        a.wait_for_selector("#hd-tab-lock:not([hidden])")
+        b.wait_for_function("window.__hdStay === undefined", timeout=5000)
+        b.wait_for_function("window.__hdReady !== undefined")
+        b.wait_for_timeout(400)
+        assert b.locator("#hd-tab-lock").count() == 0 or b.locator("#hd-tab-lock").is_hidden(), "다시 연 탭이 계속 쓴다(먼저 탭이 읽기만이라 답하지 않음)"
+        fit_view(b)
+        b.keyboard.press("v")
+        before = puts["a"]
+        drag(b, visible_cover(b), 40, 0)
+        assert _wait(b, lambda: puts["b"] >= 1), "이제 이 탭이 쓴다"
+        fit_view(a)
+        a.keyboard.press("v")
+        drag(a, visible_cover(a), 30, 0)
+        a.wait_for_timeout(800)
+        assert puts["a"] == before, "가져간 뒤 먼저 탭은 PUT 하지 않는다"
+    finally:
+        c.close()
+    assert not errors, errors

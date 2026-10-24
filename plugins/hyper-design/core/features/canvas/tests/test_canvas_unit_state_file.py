@@ -55,6 +55,27 @@ const wb = S.write(st0, 'notes', '{nope');
 out.writeBad = {ok: wb.ok, same: wb.state === st0};
 out.drop = [S.drop({notes: 1, busy: 2}, 'busy')];
 out.body = S.body(4, {notes: [1], hidden: ['a'], future: 7, locked: ['b']}, ['notes', 'busy']);
+// 두 탭(#274): 새 탭이 알리고(hello) 쓰는 탭이 답(here)하면 새 탭은 읽기만 · 답이 없으면(timeout) 쓰는 탭이 되어 알림 · 누르면(click) 가져옴(take)
+const T = (s, ev) => S.tab(s, ev);
+const A0 = S.tabStart('a', 100), B0 = S.tabStart('b', 200);
+const a1 = T(A0, {type: 'timeout'});                                   // 혼자 = 쓰는 탭, 알림
+const b1 = T(B0, {type: 'hello', id: 'x', t: 50});                     // 아직 정하지 않음 — 남의 hello 에 답하지 않음
+const aHello = T(a1.s, {type: 'hello', id: 'b', t: 200});              // 쓰는 탭은 새 탭에 답
+const b2 = T(B0, {type: 'here', id: 'a', t: 100});                     // 답을 받은 새 탭 = 읽기만
+const b2t = T(b2.s, {type: 'timeout'});                                // 늦은 timeout 은 그대로
+const bClick = T(b2.s, {type: 'click'});                               // 여기서 편집하기
+const aTake = T(a1.s, {type: 'take', id: 'b', t: 200});                // 다른 탭이 가져감 = 읽기만
+const aHello2 = T(aTake.s, {type: 'hello', id: 'c', t: 300});          // 읽기만인 탭은 답하지 않음
+// 동시에 시작해 둘 다 쓰는 탭이 됨 → 서로의 here 로 더 새 탭이 물러남(시각이 같으면 id)
+const bW = T(B0, {type: 'timeout'});
+const bSeesOld = T(bW.s, {type: 'here', id: 'a', t: 100});
+const aSeesNew = T(a1.s, {type: 'here', id: 'b', t: 200});
+const tie = T(T(S.tabStart('b', 100), {type: 'timeout'}).s, {type: 'here', id: 'a', t: 100});
+const own = T(a1.s, {type: 'take', id: 'a', t: 100});                  // 제 메시지는 무시
+out.tab = {
+  start: A0, a1: a1, b1: b1, aHello: aHello.send, b2: b2.s.role, b2send: b2.send, b2t: b2t.s.role, bClick: bClick, aTake: [aTake.s.role, aTake.send],
+  aHello2: aHello2.send, bSeesOld: bSeesOld.s.role, aSeesNew: [aSeesNew.s.role, aSeesNew.send], tie: tie.s.role, own: own.s.role,
+  junk: [T(a1.s, null).s.role, T(a1.s, {type: 'nope', id: 'z'}).s.role]};
 console.log(JSON.stringify(out));
 """
 
@@ -145,3 +166,18 @@ def test_boot_unsent_mark_after_file_moved(out):
     assert m["rev"] == 5 and m["upload"] == [] and m["lost"] == ["notes"] and m["state"]["notes"] == [{"id": "other"}], "다른 곳이 썼으면 파일이 이기고 잃은 이름을 알린다"
     r = out["bootRemoved"]
     assert r["upload"] == ["notes"] and "notes" not in r["state"] and r["cache"]["notes"] is None, "보내지 못한 지우기도 다시 올린다"
+
+
+def test_tab_writer_rule(out):
+    """#274 — 같은 out 을 연 두 탭: 먼저 연 탭이 계속 쓰고, 새 탭은 읽기만(PUT 없음) — '여기서 편집하기'를 누르면 바뀐다."""
+    t = out["tab"]
+    assert t["start"] == {"id": "a", "t": 100, "role": "pending"}
+    assert t["a1"] == {"s": {"id": "a", "t": 100, "role": "writer"}, "send": {"type": "here", "id": "a", "t": 100}}, "답이 없으면 쓰는 탭 + 알림"
+    assert t["b1"]["send"] is None and t["b1"]["s"]["role"] == "pending"
+    assert t["aHello"] == {"type": "here", "id": "a", "t": 100}, "쓰는 탭은 새 탭의 hello 에 답한다"
+    assert t["b2"] == "reader" and t["b2send"] is None and t["b2t"] == "reader", "답을 받은 새 탭은 읽기만, 늦은 timeout 도 그대로"
+    assert t["bClick"] == {"s": {"id": "b", "t": 200, "role": "writer"}, "send": {"type": "take", "id": "b", "t": 200}}
+    assert t["aTake"] == ["reader", None], "가져가면 다른 탭은 읽기만"
+    assert t["aHello2"] is None, "읽기만인 탭은 hello 에 답하지 않는다(쓰는 탭이 새로고침해도 다시 쓰는 탭)"
+    assert t["bSeesOld"] == "reader" and t["aSeesNew"] == ["writer", {"type": "here", "id": "a", "t": 100}] and t["tie"] == "reader", "동시에 시작 = 먼저 연 탭(같으면 id 작은 쪽)이 이긴다"
+    assert t["own"] == "writer" and t["junk"] == ["writer", "writer"], "제 메시지·모르는 메시지는 무시"
