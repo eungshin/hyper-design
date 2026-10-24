@@ -67,7 +67,35 @@
   function send(msg) { try { if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*'); } catch (e) {} }
   function rectOf(el) { var r = el.getBoundingClientRect(); return {x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height)}; }
   function cssEsc(v) { return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/[^\w-]/g, '\\$&'); }
-  function unique(sel, el) { try { var m = document.querySelectorAll(sel); return m.length === 1 && m[0] === el; } catch (e) { return false; } }
+  /* 요소 경로 규칙(helper.py SEG·select 와 같은 것, 공유 fixture canvas/tests/fixtures/paths.json): 조각 ' > ' 조각(자식 관계)만,
+     조각 = #id | tag[data-region="…"] | tag(.첫class)?(:nth-of-type(n))? | body. .cls 는 첫 class 만 본다(CSS 의 '아무 class' 아님).
+     여럿이 맞으면 고르지 않는다(querySelector 처럼 첫 것을 잡으면 미리보기와 도우미 편집이 다른 요소를 본다). */
+  var SEG = /^(?:#(.+)|([a-zA-Z][\w-]*)(?:\[data-region="((?:[^"\\]|\\.)*)"\]|(?:\.((?:[^:\\]|\\.)+))?(?::nth-of-type\((\d+)\))?))$/;
+  function unesc(v) { return v.replace(/\\([0-9a-fA-F]{1,6}) ?/g, function (m, h) { return String.fromCodePoint(parseInt(h, 16)); }).replace(/\\(.)/g, '$1'); }
+  function segOk(n, seg) {
+    if (seg === 'body') return n.localName.toLowerCase() === 'body';
+    var m = SEG.exec(seg);
+    if (m[1] != null) return n.getAttribute('id') === unesc(m[1]);
+    if (n.localName.toLowerCase() !== m[2].toLowerCase()) return false;
+    if (m[3] != null) return n.getAttribute('data-region') === m[3].replace(/\\"/g, '"');
+    if (m[4] != null && ((n.getAttribute('class') || '').trim().split(/\s+/)[0] || '') !== unesc(m[4])) return false;
+    if (m[5] != null) {
+      var i = 1, p = n.previousElementSibling;
+      for (; p; p = p.previousElementSibling) if (p.localName === n.localName) i++;
+      if (i !== +m[5]) return false;
+    }
+    return true;
+  }
+  function match(path) {                              // 경로에 맞는 요소 전부(문서 차례) — 모르는 조각이면 []
+    var segs = String(path || '').split(' > ').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!segs.length || !segs.every(function (x) { return x === 'body' || SEG.test(x); })) return [];
+    return Array.prototype.filter.call(document.getElementsByTagName('*'), function (el) {
+      var cur = el;
+      for (var k = segs.length - 1; k >= 0; k--, cur = cur.parentNode) if (!cur || cur.nodeType !== 1 || !segOk(cur, segs[k])) return false;
+      return true;
+    });
+  }
+  function find(path) { var m = match(path); return m.length === 1 ? m[0] : null; }   // 하나만 맞을 때만
   function pathOf(el) {
     var segs = [], n = el;
     while (n && n.nodeType === 1 && n !== document.body && n !== document.documentElement) {
@@ -84,7 +112,7 @@
     if (!segs.length) return 'body';
     for (var k = 1; k <= segs.length; k++) {           // 끝에서부터 가장 짧은 유일한 경로
       var sel = segs.slice(segs.length - k).join(' > ');
-      if (unique(sel, el)) return sel;
+      if (find(sel) === el) return sel;
     }
     var full = segs.join(' > ');
     return segs[0].charAt(0) === '#' || segs[0].indexOf('[data-region') > 0 ? full : 'body > ' + full;
@@ -130,7 +158,7 @@
   }
   function locateOne(it, d) {
     var q = it.quote && it.quote.exact ? String(it.quote.exact) : '', el = null;
-    try { el = it.path ? document.querySelector(it.path) : null; } catch (e) { el = null; }
+    el = it.path ? find(it.path) : null;
     if (el && el !== document.body && el !== document.documentElement) {
       var sp = q ? spanOf(el, d) : null;
       if (!q || (sp && d.t.slice(sp.s, sp.e).indexOf(q) >= 0)) return withSrc({key: it.key, rect: rectOf(el), how: 'path'}, el);
@@ -228,14 +256,19 @@
     return h;
   }
   var LINK_SEL = 'a[href], [data-href], [onclick]';
-  function toOf(el) {                                 // 같은 폴더의 다른 화면으로 가는 링크면 그 화면 id
-    var h = hrefOf(el); if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return null;
-    var here = location.href.split(/[?#]/)[0], dir = here.replace(/[^\/]*$/, ''), u;
+  function linkTo(h, here) {                          // 링크 주소 → here 와 같은 폴더의 화면 id | null(build_canvas.link_target 과 같은 규칙)
+    if (!h || /^(#|javascript:|mailto:|tel:)/i.test(h)) return null;
+    here = here.split(/[?#]/)[0]; var dir = here.replace(/[^\/]*$/, ''), u;
     try { u = new URL(h, here).href.split(/[?#]/)[0]; } catch (e) { return null; }
     if (u.indexOf(dir) !== 0 || !/\.html?$/i.test(u)) return null;
-    var rest = decodeURIComponent(u.slice(dir.length)); if (rest.indexOf('/') >= 0) return null;   // 같은 폴더의 화면만
-    var to = rest.replace(/\.html?$/i, ''); return !to || to === screenId() ? null : to;
+    var rest; try { rest = decodeURIComponent(u.slice(dir.length)); } catch (e) { return null; }   // 깨진 %xx
+    if (rest.indexOf('/') >= 0) return null;          // 같은 폴더의 화면만
+    return rest.replace(/\.html?$/i, '') || null;
   }
+  function toOf(el) {                                 // 같은 폴더의 다른 화면으로 가는 링크면 그 화면 id
+    var to = linkTo(hrefOf(el), location.href); return to === screenId() ? null : to;
+  }
+  window.__hdRules = {pathOf: pathOf, match: match, find: find, hrefOf: hrefOf, linkTo: linkTo};
   function links() {
     var res = [];
     document.querySelectorAll(LINK_SEL).forEach(function (el) {
@@ -290,7 +323,7 @@
     });
     pend = [];
     (items || []).forEach(function (it) {
-      var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
+      var el = find(it.path);
       if (!el) return;
       var q = {el: el, o: el.style.outline, oo: el.style.outlineOffset};
       if (it.remove) { q.disp = el.style.display; el.style.display = 'none'; pend.push(q); return; }
@@ -320,7 +353,7 @@
     paints.forEach(function (n) { n.remove(); }); paints = [];
     var seen = {};
     (items || []).forEach(function (it) {
-      var el; try { el = document.querySelector(it.path); } catch (e) { el = null; }
+      var el = find(it.path);
       if (!el) return;
       var o = 3 + 6 * (seen[it.path] || 0);            // 같은 요소의 두 번째 쌍부터 바깥으로(3px 틈)
       seen[it.path] = (seen[it.path] || 0) + 1;

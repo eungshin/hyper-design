@@ -1,0 +1,20 @@
+{
+  "_doc": "화면 링크 규칙(#276) 공유 fixture — build_canvas(_Links + link_target), helper._link_to, palette.js(__hdRules.hrefOf + linkTo)가 같이 읽는다. from = 링크가 든 화면 파일, attr = 링크 속성(없으면 href), to = 가는 화면 id | null. 규칙 = 브라우저가 실제로 가는 곳: from 의 폴더 기준으로 풀어(./ · .. · %xx) 같은 폴더의 .html/.htm 이면 그 파일 이름. 자기 자신으로 가는 링크는 규칙에서는 id 를 내고, 버리는 것은 부르는 쪽(screen_links · toOf). \"helper\": \"todo\" = helper.py 가 아직 다르게 푼다(task 41 보고).",
+  "cases": [
+    {"from": "a.html", "href": "b.html", "to": "b"},
+    {"from": "a.html", "href": "./b.html", "to": "b"},
+    {"from": "a.html", "href": "b.html?x=1#top", "to": "b"},
+    {"from": "a.html", "href": "B.HTML", "to": "B"},
+    {"from": "a.html", "href": "a.html", "to": "a"},
+    {"from": "a.html", "href": "#top", "to": null},
+    {"from": "a.html", "href": "javascript:void(0)", "to": null},
+    {"from": "a.html", "href": "https://example.com/b.html", "to": null},
+    {"from": "a.html", "href": "sub/b.html", "to": null},
+    {"from": "a.html", "href": "../b.html", "to": null, "helper": "todo"},
+    {"from": "a.html", "href": "sub/../b.html", "to": "b", "helper": "todo"},
+    {"from": "a.html", "href": "my%20page.html", "to": "my page", "helper": "todo"},
+    {"from": "a.html", "attr": "data-href", "href": "b.html", "to": "b"},
+    {"from": "a.html", "attr": "onclick", "href": "location.href='b.html'", "to": "b"},
+    {"from": "a.html", "attr": "onclick", "href": "go('../b.html')", "to": null, "helper": "todo"}
+  ]
+}

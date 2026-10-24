@@ -1,0 +1,20 @@
+{
+  "_doc": "요소 경로 규칙(#275) 공유 fixture — palette.js(__hdRules.match · pathOf)와 helper.select 가 같이 읽는다. html = <body> 안 내용, expect = body 아래 요소(문서 차례, 0부터) 번호 | \"ambiguous\"(둘 이상 = 거절) | \"none\"(없음·모르는 조각). 규칙: 조각 ' > ' 조각(자식 관계)만, .cls = 첫 class 만, 둘 이상이면 고르지 않는다.",
+  "cases": [
+    {"name": "same-class siblings, nth picks the second", "html": "<p class=\"a\">x</p><p class=\"a\">y</p>", "path": "p.a:nth-of-type(2)", "expect": 1},
+    {"name": "AI added a same-class sibling elsewhere", "html": "<section><p class=\"note\">a</p></section><section><p class=\"note\">b</p></section>", "path": "p.note:nth-of-type(1)", "expect": "ambiguous"},
+    {"name": ".cls means the first class only", "html": "<p class=\"x a\">1</p><p class=\"a\">2</p>", "path": "p.a", "expect": 1},
+    {"name": "second class alone does not match", "html": "<div class=\"b a\">x</div>", "path": "div.a", "expect": "none"},
+    {"name": "two classes in one segment are not a selector list", "html": "<p class=\"a b\">x</p>", "path": "p.a.b", "expect": "none"},
+    {"name": "id anchor", "html": "<div id=\"main\"><span>x</span></div>", "path": "#main > span:nth-of-type(1)", "expect": 1},
+    {"name": "escaped id (CSS.escape of a leading digit)", "html": "<div id=\"1st\"><b>x</b></div>", "path": "#\\31 st > b:nth-of-type(1)", "expect": 1},
+    {"name": "escaped colon in a class", "html": "<i class=\"sm:p-2\">x</i>", "path": "i.sm\\:p-2:nth-of-type(1)", "expect": 0},
+    {"name": "data-region anchor", "html": "<div data-region=\"top bar\"><a>x</a></div><div data-region=\"foot\"><a>y</a></div>", "path": "div[data-region=\"foot\"] > a:nth-of-type(1)", "expect": 3},
+    {"name": "data-region with a quote", "html": "<div data-region='say \"hi\"'>x</div>", "path": "div[data-region=\"say \\\"hi\\\"\"]", "expect": 0},
+    {"name": "nth-of-type counts the same tag only", "html": "<ul><li>a</li><b>s</b><li>b</li></ul>", "path": "li:nth-of-type(2)", "expect": 3},
+    {"name": "same tag in two parents", "html": "<div><span>a</span></div><div><span>b</span></div>", "path": "span:nth-of-type(1)", "expect": "ambiguous"},
+    {"name": "body rooted", "html": "<div><p>x</p></div><p>y</p>", "path": "body > p:nth-of-type(1)", "expect": 2},
+    {"name": "descendant combinator is not in the grammar", "html": "<div><p>x</p></div>", "path": "div p", "expect": "none"},
+    {"name": "missing", "html": "<p>x</p>", "path": "p.missing", "expect": "none"}
+  ]
+}

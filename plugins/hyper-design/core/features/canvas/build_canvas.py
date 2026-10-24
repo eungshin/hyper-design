@@ -24,7 +24,7 @@ screens.json:
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 """
-import sys, os, json, re, html, pathlib, shutil
+import sys, os, json, re, html, pathlib, posixpath, shutil, urllib.parse
 from html.parser import HTMLParser
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -123,6 +123,22 @@ def is_dev_url(f):
     return isinstance(f, str) and bool(DEV_URL.match(f))
 
 
+def link_target(h):
+    """링크 주소(href · data-href · onclick 안 .html) → 같은 폴더 화면 id | None — 브라우저가 실제로 가는 곳(palette.js linkTo 와 같은 규칙).
+    화면 폴더 기준으로 풀어(./ · sub/.. · %xx) 같은 폴더의 .html/.htm 이면 파일 이름. ../ 로 나가거나 다른 폴더·주소·스킴이면 None.
+    자기 자신은 거르지 않는다(부르는 쪽 몫). 공유 규칙 tests/fixtures/links.json(task 41)."""
+    h = (h or "").strip().replace("\\", "/")
+    if not h or re.match(r"^[a-z][a-z0-9+.-]*:", h, re.I) or h.startswith(("/", "#")):   # 스킴(javascript:·https:…)·절대 경로·같은 쪽 안
+        return None
+    h = re.split(r"[?#]", h, maxsplit=1)[0]
+    if h.endswith("/") or re.search(r"%(?![0-9a-fA-F]{2})", h):   # 폴더 주소 · 깨진 %xx — 브라우저 쪽(new URL · decodeURIComponent)도 버린다
+        return None
+    rel = posixpath.normpath(urllib.parse.unquote(h)) if h else ""
+    if not rel or "/" in rel or not re.search(r"\.html?$", rel, re.I):
+        return None
+    return re.sub(r"\.html?$", "", rel, flags=re.I) or None
+
+
 def screen_links(out, card, ids):
     """카드 하나의 화면 파일에서 다른 화면으로 가는 링크 → [{to, text}] (도착 = 같은 폴더 .html 파일 이름). 개발 서버 주소 카드는 읽을 파일이 없다 → []."""
     if is_dev_url(card["file"]):
@@ -135,12 +151,7 @@ def screen_links(out, card, ids):
     p = _Links(); p.feed(src); p.close()
     res = []
     for h, text in p.out:
-        if re.match(r"^(#|javascript:|mailto:|tel:)", h, re.I) or "://" in h or h.startswith("/"):
-            continue
-        h = h.split("#")[0].split("?")[0]
-        if "/" in h.lstrip("./") or not re.search(r"\.html?$", h, re.I):
-            continue
-        to = re.sub(r"\.html?$", "", h.lstrip("./"), flags=re.I)
+        to = link_target(h)
         if to and to != card["id"] and to in ids:
             res.append({"to": to, "text": text})
     return res
