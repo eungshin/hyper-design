@@ -52,7 +52,7 @@ PACK=<pack 절대경로>
 ### 4. 확인
 - 모두 돌아오면 같은 메시지에서 포그라운드로: `python3 $SK/scripts/selfcheck.py <out>` · `python3 $SK/features/canvas/build_ref.py <out>`(커밋된 캔버스 코드로 빌드 — 작업 트리의 `build_canvas.py`를 다른 세션이 고치는 중이어도 깨지지 않는다).
 - 공용 CSS(`components.css`·`tokens.css`)를 고쳤으면 `python3 $SK/scripts/class_users.py <out> --css-old <out>/.hd-history/fix-components.css --css-new <out>/components.css`(클래스를 알면 `--classes a,b`)로 그 클래스를 쓰는 화면을 모두 찾아, 고친 화면과 함께 `python3 $SK/scripts/audit.py <out> --shots <out>/.shots` 캡처로 본다 — 고친 화면만 보지 않는다.
-- 빌드 뒤 캔버스 열기는 go 의 '캔버스 열기'와 같다(`helper.py <out> --no-open` 백그라운드 · `<out>/.hd-helper.json` 의 주소가 응답하면 다시 띄우지 않는다).
+- 빌드 뒤 캔버스 열기는 go 의 '캔버스 열기'와 같다(`helper.py <out> --no-open` 백그라운드 · `<out>/.hd-helper.json` 의 주소가 응답하면 다시 띄우지 않는다. 응답이 없어도 그 `pid` 가 살아 있으면 새로 띄우지 말고 몇 초 뒤 그 주소를 다시 묻는다 — 같은 out 의 둘째 도우미는 어차피 '이미 떠 있어요'로 거절된다).
 - selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다. `needs-part: <무엇>`은 3단계 분류가 틀린 것 — 메인이 new처럼 처리한다.
 
 ### 5. 마지막 메시지

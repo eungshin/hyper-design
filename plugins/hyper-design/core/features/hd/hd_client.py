@@ -3,7 +3,8 @@
 표지 = <HD_HOME | ~/.hyper-design>/active/<pid>.json (helper.py 가 쓰고 지운다). 죽은 표지(강제 종료)는 1초 핑으로 걸러 내고 지우지 않는다.
 상태 파일은 읽기만 한다 — 쓰기는 늘 도우미(POST /api/reply)로(쓰는 곳 하나).
 프로젝트 목록 <HD_HOME>/projects.json 은 이 파일만 읽고 쓴다(임시 파일 + os.replace). 규칙은 hd_projects.
-도우미 띄우기(hd open): build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
+도우미 띄우기(hd open): 떠 있는 것(표지 · <out>/.hd-helper.json 의 살아 있는 pid + 답하는 주소)이 있으면 그것 →
+  아니면 build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
   open_project 가 그 일 전부(브라우저 빼고) — hd open 과 도우미 POST /api/open 이 같이 쓴다.
 덮개: claim(POST /api/claim) · release(POST /api/release).
 왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · wait_pending(GET /api/state 2초마다).
@@ -186,6 +187,45 @@ def serving(out):
     return next((m for m in running() if P.key(abs_out(m["out"])) == k), None)
 
 
+HELPER_FILE = ".hd-helper.json"
+
+
+def read_record(out):
+    """<out>/.hd-helper.json → hd_model.helper_record 의 {port, pid, url, token} | None(없음·깨짐 — 깨지면 [hd] 한 줄)."""
+    p = pathlib.Path(out) / HELPER_FILE
+    if not p.is_file():
+        return None
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        warn("도우미 기록을 읽지 못했어요(%s): %s" % (e, p))
+        return None
+    return hd_model.helper_record(doc)
+
+
+def pid_alive(pid):
+    return _image(int(pid)) is not None
+
+
+def live_record(out, rec=None):
+    """.hd-helper.json 이 가리키는 도우미가 살아 있고 답하면 표지 모양 {pid, project, out, url, token, port, agent} | None.
+    다른 HD_HOME 으로 떴거나 표지가 없어도 그 out 의 도우미를 다시 쓰게(hd open · helper.py 시작 검사가 같이 쓴다)."""
+    rec = read_record(out) if rec is None else rec
+    if not rec or not rec.get("pid") or not rec.get("port") or not rec.get("token"):
+        return None
+    m = {"pid": rec["pid"], "out": abs_out(out), "url": rec["url"], "token": rec["token"], "port": rec["port"]}
+    alive = pid_alive(rec["pid"])                         # 죽은 pid 면 핑하지 않는다(Windows 에서 닫힌 포트 연결은 1초를 다 쓴다)
+    if hd_model.start_verdict(rec, alive, alive and ping(m)) != "refuse":
+        return None
+    try:
+        mk = json.loads(marker_path(m).read_text(encoding="utf-8"))
+        if isinstance(mk, dict) and mk.get("token") == m["token"]:
+            return dict(mk, out=mk.get("out") or m["out"])
+    except (OSError, ValueError):
+        pass                                          # 표지가 없으면(다른 HD_HOME) 기록만으로
+    return dict(m, project=project_from(out), agent=None)
+
+
 def build(out):
     """커밋된 캔버스 코드로 index.html 을 만든다 → (종료 코드, 출력 끝 몇 줄)."""
     r = subprocess.run([sys.executable, str(BUILD_REF), str(out)], capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -257,7 +297,7 @@ def open_project(target, agent=None):
     o = pathlib.Path(e["out"])
     if not is_out(o):
         raise NotFound("'%s' 의 out 폴더가 없어요(없음): %s — 링크만 지우려면 hd forget %s" % (e["name"], o, e["name"]))
-    m = serving(o)
+    m = serving(o) or live_record(o)                   # 표지가 없어도 .hd-helper.json 의 도우미가 답하면 그것(#271 — 둘째를 띄우지 않는다)
     reused = m is not None
     if not reused:
         code, tail = build(o)
@@ -266,7 +306,7 @@ def open_project(target, agent=None):
                 raise HdError("빌드 실패(build_ref.py %d): %s" % (code, " / ".join(tail.splitlines())))
             warn("빌드 실패(%d) — 있던 index.html 로 띄워요: %s" % (code, tail.splitlines()[-1] if tail else ""))
         proc, log = spawn_helper(o, agent)
-        m = wait_serving(o, proc)
+        m = wait_serving(o, proc) or live_record(o)    # 그 사이 다른 쪽이 띄웠으면 이 도우미는 거절하고 끝난다 — 그 도우미를 쓴다
         if m is None:
             raise HdError("도우미가 %d초 안에 뜨지 않았어요 — 로그 %s: %s" % (START_WAIT, log, " / ".join(log_tail(log).splitlines())))
     save_projects(P.touch(load_projects(), e["out"], now()))   # 도우미가 그 사이 목록을 썼을 수 있어 다시 읽는다

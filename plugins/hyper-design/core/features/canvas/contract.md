@@ -49,6 +49,9 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 셸에 새로 생긴 위쪽 `function` 이 있으면 왜 모듈이 아닌지 한 줄
 
 ## 로컬 도우미 (`helper.py`, 선택)
+- 포트(#270): `--port` 가 없으면 `<out>/.hd-helper.json` 의 지난 포트를 먼저 열고, 막혔으면 빈 포트로(`[hd]` 한 줄) — 주소(origin)가 같아야 캔버스 localStorage(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다. `.hd-helper.json` = 떠 있는 동안 `{url, pid, port, token}`(주소를 찍기 전에 씀) · 정상 종료 뒤 `{port}`
+- 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
+- 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다
 - 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고, 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 `build_canvas.py`로 다시 만든다(실패하면 되돌림)
 - 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
 - `POST /api/watch {files}` → `{mtimes: {file: mtime|null}}`(out 밖·없는 파일 = null) — AI 수정 중 덮개가 끝을 아는 유일한 신호

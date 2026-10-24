@@ -362,3 +362,33 @@ def release(value, screen):
         return {"v": 1, "items": items}, False, warns
     items = {k: v for k, v in items.items() if k != screen}
     return {"v": 1, "items": items}, True, warns
+
+
+# ---------------------------------------------------------------- 한 out 에 도우미 하나(#271) — <out>/.hd-helper.json 풀기 · 띄울지 정하기
+def _port(v):
+    return v if type(v) is int and 0 < v < 65536 else None
+
+
+def helper_record(doc):
+    """.hd-helper.json 의 객체 → {port, pid, url, token}(모르는 칸 None) | None(객체가 아님).
+    살아 있는 동안 = {url, pid, port, token} · 정상 종료 뒤 = {port}(다음에 같은 포트로 뜨게, #270). 옛 모양 {url, pid} 는 url 에서 포트·토큰을 읽는다."""
+    if not isinstance(doc, dict):
+        return None
+    url = doc.get("url") if isinstance(doc.get("url"), str) and doc.get("url") else None
+    port, token = _port(doc.get("port")), doc.get("token") if isinstance(doc.get("token"), str) and doc.get("token") else None
+    if url and (port is None or token is None):       # http://127.0.0.1:<port>/index.html?hd=<token>
+        host = url.split("://", 1)[-1].split("/", 1)[0]
+        p = host.rsplit(":", 1)[-1] if ":" in host else ""
+        port = port if port is not None else _port(int(p)) if p.isdigit() else None
+        q = url.split("?hd=", 1)[1] if "?hd=" in url else url.split("&hd=", 1)[1] if "&hd=" in url else ""
+        token = token or q.split("&", 1)[0].split("#", 1)[0] or None
+    pid = doc.get("pid") if type(doc.get("pid")) is int and doc.get("pid") > 0 else None
+    return {"port": port, "pid": pid, "url": url, "token": token}
+
+
+def start_verdict(rec, alive, answers):
+    """도우미를 띄우기 전 → 'refuse'(그 pid 가 살아 있고 그 주소가 답함 — 같은 out 에 둘째 쓰는 곳을 만들지 않는다) | 'start'.
+    기록 없음 · url 없음(정상 종료) · 죽은 pid · 답 없는 주소(pid 번호를 다른 프로그램이 받았거나 멈춘 도우미) = start(기록을 덮어씀)."""
+    if not rec or not rec.get("url") or not rec.get("pid"):
+        return "start"
+    return "refuse" if alive and answers else "start"

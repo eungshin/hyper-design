@@ -2,6 +2,10 @@
 
 python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 
+- 포트(#270): --port 가 없으면 <out>/.hd-helper.json 의 지난 포트를 먼저, 막혔으면 빈 포트(한 줄 남김) — 주소가 같아야 캔버스 localStorage 가 이어진다.
+- 한 out 에 하나(#271): .hd-helper.json 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 종료 코드 1. 죽은 pid 면 덮어쓴다.
+  .hd-helper.json = 떠 있는 동안 {url, pid, port, token} · 정상 종료 뒤 {port}.
+- 읽기(GET /api/state · index.html 스냅숏)는 빌드 자물쇠를 기다리지 않는다(쓰기가 임시 파일 + os.replace) — 쓰기만 하나씩.
 - 127.0.0.1 에만 열고, 실행마다 새 토큰을 만든다. 출력한 주소(…/index.html?hd=<토큰>)로 캔버스를 열면 '보내기'가 도우미를 쓴다.
 - 쓰는 곳은 <out> 안뿐이다. 쓰기 전에 원본을 <out>/.hd-history/<시각>/ 에 남기고, 쓴 뒤 build_canvas.py 로 캔버스를 다시 만든다(실패하면 원본으로 되돌림).
 - 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 카드 이름(title) · 설명(purpose) · 정책 목록(policies, task 31) · 옛 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
@@ -25,7 +29,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413(2 MB 넘음)
   POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
     — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
-  POST /api/stop {}                                           → {stopping:true} 를 답한 뒤 서버를 정상 종료(표지·.hd-helper.json 지움) — `hd stop`
+  POST /api/stop {}                                           → {stopping:true} 를 답한 뒤 서버를 정상 종료(표지 지움 · .hd-helper.json 은 {port} 만 남김) — `hd stop`
   POST /api/attach {agent: id|null}                           → {agent} — /api/forward 가 보낼 Paseo 에이전트를 바꾸고 표지의 agent 를 고쳐 씀(다시 띄우지 않음).
     id = 빈 글 아님·128자 이하·띄어쓰기 없음(hd_model.agent_error), 아니면 400 · null = 떼기(대기열 파일로) — `hd attach`
   GET /api/projects                                           → `hd projects --json` 과 같은 줄 [{name, out, state: running|off|missing, url, pid, last_opened}]
@@ -298,16 +302,11 @@ def _path_of(n):                                     # 요소 → select() 가 �
 
 
 def _link_to(attrs):
-    """요소 속성 → 가는 화면 id | None — build_canvas._Links · screen_links 와 같은 규칙(href · data-href · onclick 안 .html)."""
+    """요소 속성 → 가는 화면 id | None — build_canvas._Links + link_target 과 같은 규칙(href · data-href · onclick 안 .html, 공유 fixture links.json)."""
     h = attrs.get("href") or attrs.get("data-href")
     if not h and attrs.get("onclick"):
         m = build_canvas.GO_ONCLICK.search(attrs["onclick"]); h = m and m.group(1)
-    if not h or re.match(r"^(#|javascript:|mailto:|tel:)", h, re.I) or "://" in h or h.startswith("/"):
-        return None
-    h = h.split("#")[0].split("?")[0]
-    if "/" in h.lstrip("./") or not re.search(r"\.html?$", h, re.I):
-        return None
-    return re.sub(r"\.html?$", "", h.lstrip("./"), flags=re.I) or None
+    return build_canvas.link_target(h) if h else None
 
 
 # ---------------------------------------------------------------- 편집 적용(out 안만 · 원본 남김 · 다시 빌드)
@@ -705,7 +704,34 @@ def _state_write(out, doc):                          # 같은 폴더 임시 파�
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8", newline="")
     if p.is_file():
         shutil.copy2(p, p.with_name(STATE_FILE + ".bak"))
-    os.replace(tmp, p)
+    for i in range(REPLACE_TRIES):                   # 읽기는 자물쇠 없이 한다(#271) — Windows 는 읽는 중인 파일을 바꾸지 못해 잠깐 기다렸다 다시
+        try:
+            os.replace(tmp, p)
+            return
+        except PermissionError:
+            if i == REPLACE_TRIES - 1:
+                raise
+            time.sleep(0.02)
+
+
+REPLACE_TRIES = 25                                   # 0.02초씩 — 읽기 하나는 수 ms
+
+
+def state_peek(out):
+    """자물쇠 없는 읽기(GET /api/state · index.html 스냅숏, #271) → {rev, state} | None(못 읽음·깨짐 — 그때만 자물쇠 안에서 state_load).
+    쓰기는 임시 파일 + os.replace 라 반쯤 쓴 파일을 읽을 일은 없다. 깨진 파일을 옮기는 일(쓰기)은 하지 않는다."""
+    p = pathlib.Path(out) / STATE_FILE
+    for _ in range(REPLACE_TRIES):
+        if not p.is_file():
+            return {"rev": 0, "state": {}}
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+        except PermissionError:                       # Windows: 바로 그 순간 os.replace 중
+            time.sleep(0.02); continue
+        except (OSError, ValueError):
+            return None
+        return {"rev": doc["rev"], "state": doc["state"]} if _state_ok(doc) else None
+    return None
 
 
 def state_put(out, body):
@@ -765,8 +791,12 @@ def reply_post(out, body):
     return 200, {"rev": rev, "status": hd_model.status(note), "note": note.get("id"), "screen": note.get("screen")}
 
 
-def state_inject(out):                               # 페이지에 끼워 넣을 동기 스냅숏(window.__hdState) — </script> 가 끊지 않게 < 는 <
-    return "<script>window.__hdState=%s;</script>" % json.dumps(state_load(out), ensure_ascii=False).replace("<", "\\u003c")
+def state_inject(out, lock=None):                    # 페이지에 끼워 넣을 동기 스냅숏(window.__hdState) — </script> 가 끊지 않게 < 를 이스케이프
+    snap = state_peek(out)                           # 자물쇠 없이(#271) — 깨졌을 때만 자물쇠 안에서 state_load(옮기기)
+    if snap is None:
+        with lock or threading.Lock():
+            snap = state_load(out)
+    return "<script>window.__hdState=%s;</script>" % json.dumps(snap, ensure_ascii=False).replace("<", "\\u003c")
 
 
 def claim_post(out, body, now_ms=None):
@@ -923,14 +953,16 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                 if u.path == "/api/agents":
                     auto = urllib.parse.parse_qs(u.query).get("auto", [""])[0] == "1"
                     return self._json(200, agents_get(self.server, paseo, auto=auto))
-                with lock:
-                    return self._json(200, state_load(out))
+                snap = state_peek(out)                  # 빌드 자물쇠를 기다리지 않는다(#271 — 긴 빌드 중에도 hd 핑이 1초 안에 답)
+                if snap is None:
+                    with lock:                          # 깨졌을 때만: 옮기는 쓰기가 들어 있어 자물쇠 안에서
+                        snap = state_load(out)
+                return self._json(200, snap)
             parts = [p for p in u.path.split("/") if p]
             if any(p.startswith(".") for p in parts):      # 원본 기록·대기열·상태 파일은 내주지 않는다
                 return self.send_error(404)
             if u.path in ("/", "/index.html"):
-                with lock:
-                    snap = state_inject(out)
+                snap = state_inject(out, lock)
                 inject = head + "window.__hdAgent=%s;</script>" % json.dumps(self.server.agent)   # attach 로 바뀔 수 있어 줄 때마다
                 b = (out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject + snap, 1).encode("utf-8")
                 self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1015,7 +1047,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             return self._json(code, res)
 
     state_load(out)                                     # 시작할 때 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
-    srv = Server(("127.0.0.1", port), H)
+    srv = bind(H, [port] if isinstance(port, int) else list(port))
     srv.watch, srv.watch_stop = FileWatch(), threading.Event()
     threading.Thread(target=_watch_loop, args=(srv, out, lock), daemon=True).start()   # server_close 가 멈춘다
     srv.token = token
@@ -1027,9 +1059,34 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     return srv
 
 
+def port_order(recorded, asked=0):
+    """띄울 포트 차례(#270) — asked(--port, 0 아님) = 그것만 · 아니면 지난번 포트(.hd-helper.json) 먼저, 막혔으면 0(아무 빈 포트).
+    포트가 같아야 캔버스 주소(origin)가 같아 localStorage 키(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다."""
+    if type(asked) is int and asked > 0:
+        return [asked]
+    if type(recorded) is int and 0 < recorded < 65536:
+        return [recorded, 0]
+    return [0]
+
+
+def bind(handler, ports):
+    """ports 차례로 127.0.0.1 에 열어 본다 → Server. 앞 것이 막히면 [hd] 한 줄 남기고 다음, 마지막도 막히면 그 OSError."""
+    for i, port in enumerate(ports):
+        try:
+            return Server(("127.0.0.1", port), handler)
+        except OSError as e:
+            if i == len(ports) - 1:
+                raise
+            print("[hd] 지난번 포트 %d 를 쓸 수 없어 새 포트로 띄워요(%s) — 캔버스 주소가 바뀌어 창 설정이 처음으로 돌아가요" % (port, e),
+                  file=sys.stderr, flush=True)
+
+
 class Server(ThreadingHTTPServer):
+    allow_reuse_address = sys.platform != "win32"     # Windows 의 SO_REUSEADDR 는 쓰는 중인 포트도 다시 연다 — 지난 포트가 막혔는지 알아야 한다(#270)
+
     def server_close(self):
-        self.watch_stop.set()
+        if hasattr(self, "watch_stop"):                # 열기에 실패하면 socketserver 가 make_server 가 칸을 달기 전에 부른다
+            self.watch_stop.set()
         super().server_close()
 
 
@@ -1090,6 +1147,33 @@ def write_marker(out, srv, agent=None):
     return p
 
 
+RUN_FILE = ".hd-helper.json"                         # 주인 = 이 파일. 읽는 쪽: hd_client.read_record · skills go/fix
+
+
+def start_check(out):
+    """시작 전(#271) → (지난 포트 | None, 살아 있는 도우미 표지 | None). 표지가 있으면 같은 out 의 둘째 도우미가 되므로 띄우지 않는다."""
+    rec = hd_client.read_record(out)                 # 없음·깨짐 = None(깨졌으면 [hd] 한 줄, 덮어쓴다)
+    return (rec or {}).get("port"), hd_client.live_record(out, rec) if rec else None
+
+
+def write_run(run, srv):
+    run.write_text(json.dumps({"url": srv.url, "pid": os.getpid(), "port": srv.server_address[1], "token": srv.token}), encoding="utf-8")
+
+
+def leave_run(run, port):
+    """정상 종료 — 이 도우미가 쓴 기록일 때만 {port} 로 줄여 둔다(주소·pid 는 지움 → 스킬은 다시 띄우고, 다음 도우미는 같은 포트로)."""
+    try:
+        cur = hd_model.helper_record(json.loads(run.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        cur = None
+    if cur and cur.get("pid") not in (None, os.getpid()):
+        return                                        # 다른 도우미가 덮어썼다 — 그 기록은 그대로
+    try:
+        run.write_text(json.dumps({"port": port}), encoding="utf-8")
+    except OSError as e:
+        print("[hd] 도우미 기록을 고치지 못했어요(%s): %s" % (e, run), file=sys.stderr, flush=True)
+
+
 def _stop(signum, frame):                              # SIGTERM·SIGBREAK → Ctrl+C 와 같은 정상 종료(finally·atexit 가 표지를 지운다)
     raise KeyboardInterrupt
 
@@ -1105,7 +1189,10 @@ def main(argv=None):
     out = pathlib.Path(a.out).resolve()
     if not (out / "index.html").is_file() or not (out / "screens.json").is_file():
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)
-    srv = make_server(out, a.port, a.paseo_agent, a.paseo_cmd)
+    last, live = start_check(out)
+    if live:
+        sys.exit("이 out 은 이미 도우미가 떠 있어요(pid %s): %s — 그 주소를 쓰거나 `hd stop` 으로 끈 뒤 다시 띄우세요" % (live["pid"], live["url"]))
+    srv = make_server(out, port_order(last, a.port), a.paseo_agent, a.paseo_cmd)
     marker = write_marker(out, srv, a.paseo_agent)
     srv.marker = marker
     atexit.register(lambda: marker.unlink(missing_ok=True))
@@ -1116,9 +1203,9 @@ def main(argv=None):
     for name in ("SIGTERM", "SIGBREAK"):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), _stop)
+    run = out / RUN_FILE                             # 스킬이 이미 떠 있는지 보는 표지(그 url 이 응답하면 다시 띄우지 않는다) · 다음 시작의 포트
+    write_run(run, srv)                              # 주소를 찍기 전에(찍힌 주소를 본 쪽이 이 파일도 보게)
     print(srv.url, flush=True)
-    run = out / ".hd-helper.json"                    # 스킬이 이미 떠 있는지 보는 표지(그 url 이 응답하면 다시 띄우지 않는다)
-    run.write_text(json.dumps({"url": srv.url, "pid": os.getpid()}), encoding="utf-8")
     print("터미널 전달: " + ("Paseo 에이전트 " + a.paseo_agent if a.paseo_agent else "대기열 파일 " + str(out / ".hd-queue")), flush=True)
     if not a.no_open:
         threading.Timer(0.3, lambda: webbrowser.open(srv.url)).start()
@@ -1128,7 +1215,7 @@ def main(argv=None):
         pass
     finally:
         srv.server_close()
-        run.unlink(missing_ok=True)
+        leave_run(run, srv.server_address[1])
         marker.unlink(missing_ok=True)
 
 

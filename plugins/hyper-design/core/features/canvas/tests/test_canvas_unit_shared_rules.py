@@ -3,7 +3,7 @@
 #275 요소 경로: tests/fixtures/paths.json 을 helper.select(편집이 고치는 요소)가 그대로 따르는지.
 #276 화면 링크: tests/fixtures/links.json 을 build_canvas(_Links + link_target · 판의 선)와 helper._link_to(끊기·잇기)가 따르는지.
 같은 fixture 를 palette.js(미리보기·고르기)는 test_canvas_shared_rules.py(브라우저)에서 읽는다 — 세 곳이 한 표를 본다.
-"helper": "todo" 인 링크 칸은 helper.py 가 아직 다르게 푼다(task 41 은 helper 를 고치지 않음) → xfail(strict: 고쳐지면 표를 고치라고 깨진다).
+helper._link_to 는 build_canvas.link_target 하나로 푼다(task 40) — 링크 칸은 모두 그대로 통과해야 한다.
 """
 import json, re, sys
 from pathlib import Path
@@ -66,8 +66,7 @@ def test_build_canvas_follows_links_fixture(c):
     assert build_side(c) == c["to"]
 
 
-@pytest.mark.parametrize("c", [pytest.param(c, marks=pytest.mark.xfail(strict=True, reason="helper._link_to 가 아직 다르게 푼다 — helper todo(task 41)"))
-                               if c.get("helper") == "todo" else c for c in LINKS], ids=_ids(LINKS))
+@pytest.mark.parametrize("c", LINKS, ids=_ids(LINKS))
 def test_helper_link_to_follows_links_fixture(c):
     assert helper._link_to({_attr(c): c["href"]}) == c["to"]
 
