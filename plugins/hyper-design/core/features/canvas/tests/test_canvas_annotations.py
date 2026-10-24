@@ -163,7 +163,11 @@ def test_pins_reanchor_after_screen_changes(apage):
     pg.click(BADGE)
     pg.wait_for_selector("#thread .thlost", timeout=5000)
     assert pg.locator('#thread li[data-no] .thlost').count() == 1
+    why = "화면이 바뀌어 같은 요소가 여러 개이거나 없어요"
+    assert pg.text_content("#thread .thlost") == "요소를 찾을 수 없음" and pg.get_attribute("#thread .thlost", "title") == why
     assert pg.locator(PIN).count() == 0, "다시 찾지 못한 대상에는 핀이 없다"
+    # 메모 목록 줄에도 같은 상태(#285) — 조용히 사라지지 않는다
+    assert pg.locator("#nlist li .nlost").count() == 1 and pg.get_attribute("#nlist li .nlost", "title") == why
     pg.keyboard.press("Escape")
     write_pay(pg.out)
 

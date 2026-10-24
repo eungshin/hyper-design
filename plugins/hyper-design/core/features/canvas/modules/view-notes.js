@@ -4,10 +4,12 @@
    결정 필요 메모가 있는 카드 배지에 .decide(강조색 — 수는 그대로 열린 메모 수). 거르기 상태 = 켜짐 하나(저장하지 않음, 결정 필요가 0 이 되면 꺼짐).
    보낸 메모 숨기기(task 29): 목록·카드 배지 수는 HD.annotation.visible(n, 켜짐)인 메모만 — 보낸 뒤 AI 차례·완료한 메모는 숨김. 이 View 가 메모 막대(.ntool, task 32 — 한 줄 아이콘:
      #ncnt '메모 N' · #nsent · #ndec · #nclear) 안에 눈 아이콘 #nsent '보낸 메모 보기 (N)'(title·aria-label, 수 배지 .ncb[data-n] — N = 숨김이 될 메모 수, 0 이면 꺼진 단추로 자리 유지)를 그린다.
-     줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(올리거나 포커스일 때 보임, 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 hd-show-sent:<해시>('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
-     다른 View(핀·묶음)는 document.documentElement.dataset.hdShowSent('1'|'0')를 읽고 바뀌면 document 의 'hd-show-sent' 이벤트(의도)로 다시 그린다.
-   HD.viewNotes.mount(ctx) → {render(notes, ids?) → {memos, pending, decide}, filter(on), showSent(on?) → 켜짐}   ids = 메모가 바뀐 화면 — 카드 배지는 그 카드만(없으면 전부)
-   ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id), showNotes()(메모 패널을 앞으로), storage?, hash?(없으면 localStorage · 셸 hashStr 과 같은 해시)} */
+     줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(올리거나 포커스일 때 보임, 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 ctx.key('hd-show-sent')('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
+     바뀌면 ctx.sentChanged(켜짐)(의도 — 셸이 핀·묶음을 다시 그리게 잇는다, #263). 다른 View 는 셸이 건네는 showSent() 로 읽는다.
+   요소를 찾을 수 없음(#285): 화면이 다시 찾지 못한 대상(ctx.lost(n))이 있는 열린 메모 줄에 회색 말 .nlost(title = 까닭). 답이 오면 relost() — 바뀐 것이 있을 때만 목록을 다시.
+   HD.viewNotes.mount(ctx) → {render(notes, ids?) → {memos, pending, decide}, filter(on), showSent(on?) → 켜짐, relost()}   ids = 메모가 바뀐 화면 — 카드 배지는 그 카드만(없으면 전부)
+   ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id), showNotes()(메모 패널을 앞으로), storage{getItem,setItem}, key(prefix) → 저장 키,
+          sentChanged(on), lost(n) → 다시 찾지 못한 대상이 있나} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -15,7 +17,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 function mount(ctx) {
   var $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, E = HD.edits, A = HD.annotation;
   var only = false, last = [];                       // only = '결정 필요만' 켜짐 · last = 마지막 render 의 메모(거르기만 바꿀 때 다시 그리기)
-  var store = ctx.storage || localStorage, SKEY = 'hd-show-sent:' + (ctx.hash || hashOf(window.__hdKeyPath || location.pathname));
+  var store = ctx.storage, SKEY = ctx.key('hd-show-sent'), lostSig = '';
   var shown = readShown();                           // 보낸 메모 보기 켜짐(task 29) — 주인은 이 View
   function readShown() {
     var v = null;
@@ -25,8 +27,6 @@ function mount(ctx) {
     console.warn('[hd] ' + SKEY + ' 값이 깨졌어요(' + String(v).slice(0, 20) + ') — 보낸 메모 보기 꺼짐으로');
     return false;
   }
-  function publish() { document.documentElement.dataset.hdShowSent = shown ? '1' : '0'; }
-  publish();
   var ICON = {
     eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
@@ -36,7 +36,8 @@ function mount(ctx) {
   sbtn.innerHTML = ICON.eye + '<span class="ncb" data-n="0" hidden>0</span>';
   $('#ndec').parentNode.insertBefore(sbtn, $('#ndec'));
   var css = document.createElement('style'); css.id = 'hd-sent-css';
-  css.textContent = '#notes li.nhid{opacity:.55}#notes .nsst{margin-left:6px;color:#888;font-size:12px}';
+  css.textContent = '#notes li.nhid{opacity:.55}#notes .nsst,#notes .nlost{margin-left:6px;color:#888;font-size:12px}#notes .nlost{border-bottom:1px dashed #aaa;cursor:help}';
+  var LOST = '화면이 바뀌어 같은 요소가 여러 개이거나 없어요';
   document.head.appendChild(css);
 
   function targets(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
@@ -45,7 +46,8 @@ function mount(ctx) {
     var st = A.status(n), hid = !A.visible(n, false), cls = (n.sent ? ' sent' : '') + (hid ? ' nhid' : '');
     return '<li data-id="' + esc(n.id) + '"' + (cls ? ' class="' + cls.slice(1) + '"' : '') + '><div><span class="nn">' + ctx.circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
       ' · ' + esc(n.intent) + (k > 1 ? ' · ' + k + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span>' + (st === 'decide' ? '<span class="ndst">결정 필요</span>' : '') +
-      (hid ? '<span class="nsst" data-st="' + st + '">' + esc(A.LABEL[st]) + '</span>' : '') + '</div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
+      (hid ? '<span class="nsst" data-st="' + st + '">' + esc(A.LABEL[st]) + '</span>' : '') +
+      (st !== 'done' && ctx.lost(n) ? '<span class="nlost" title="' + LOST + '">요소를 찾을 수 없음</span>' : '') + '</div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
       '<div class="nact"><button type="button" class="nib" data-act="edit" title="고치기" aria-label="고치기">' + ICON.edit + '</button>' +
       '<button type="button" class="nib" data-act="del" title="지우기" aria-label="지우기">' + ICON.del + '</button></div></li>';
   }
@@ -65,8 +67,9 @@ function mount(ctx) {
       b.setAttribute('aria-label', '메모 ' + k + '건 보기' + dz); b.title = '메모 ' + k + '건 — 눌러서 보기' + dz;
     }
   }
+  function sig(notes) { return notes.filter(function (n) { return !n.edit && ctx.lost(n); }).map(function (n) { return n.id; }).join(','); }
   function render(notes, ids) {
-    last = notes;
+    last = notes; lostSig = sig(notes);
     var open = notes.filter(A.isOpen), sp = E.split(open), memo = {}, dec = {}, pend = E.tally(open), nd = A.decideCount(sp.memos);
     var all = E.split(notes).memos, vis = all.filter(function (n) { return A.visible(n, shown); }), nh = A.hiddenCount(all);   // 목록·배지 = 보이는 메모(task 29)
     vis.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; });
@@ -91,14 +94,15 @@ function mount(ctx) {
     });
     return {memos: vis.length, pending: sp.pending.length, decide: nd};
   }
-  function showSent(on) {                            // 보낸 메모 보기 켜기·끄기 → 저장 · 목록·배지 전부 다시 · 핀·묶음에 'hd-show-sent'
+  function showSent(on) {                            // 보낸 메모 보기 켜기·끄기 → 저장 · 목록·배지 전부 다시 · ctx.sentChanged(핀·묶음)
     if (on === undefined) return shown;
-    shown = !!on; publish();
+    shown = !!on;
     try { store.setItem(SKEY, shown ? '1' : '0'); } catch (e) { console.warn('[hd] 보낸 메모 보기 상태를 저장하지 못했어요'); }
     render(last);
-    document.dispatchEvent(new CustomEvent('hd-show-sent', {detail: {on: shown}}));
+    ctx.sentChanged(shown);
     return shown;
   }
+  function relost() { if (sig(last) !== lostSig) render(last, []); }   // 화면이 자리를 답함 — 찾을 수 없는 메모가 바뀌었을 때만 목록 다시(배지는 그대로)
   $('#nsent').addEventListener('click', function () { showSent(!shown); });
   function filter(on) { only = !!on; render(last, []); }   // 거르기만 바뀜 — 카드 배지는 그대로(ids 빈 목록)
   $('#ndec').addEventListener('click', function () { filter(!only); });
@@ -110,9 +114,8 @@ function mount(ctx) {
       if (b.dataset.act === 'del') ctx.del(id); else ctx.edit(id);
     });
   });
-  return {render: render, filter: filter, showSent: showSent};
+  return {render: render, filter: filter, showSent: showSent, relost: relost};
 }
-function hashOf(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }   // 셸 hashStr 과 같은 해시(ctx.hash 가 없을 때)
 
 HD.viewNotes = {mount: mount};
 })();

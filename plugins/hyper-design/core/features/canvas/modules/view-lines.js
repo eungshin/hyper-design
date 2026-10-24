@@ -2,6 +2,8 @@
    기획 갈래 = 얇은 회색 실선(D8, 글자 표시 없음). 선 태그 = 방향마다 하나(출발 카드 옆) — 번호 + 연결 이름(없으면 버튼 글).
    번호는 출발 화면마다 1, 2, 3 …(mark(from, to)) — 화면 안 출발 버튼의 테두리·번호(view-links)가 같은 색·같은 번호를 쓴다.
    강조: 고른 카드 전부(focus(ids), E21) 또는 Ctrl+클릭한 쌍 하나(pair) → 그 선·태그 진하게, 나머지 흐리게. 마우스를 올린 카드도 진하게(D6c ②).
+   화살촉(#286): 채운 marker 라 선의 stroke-opacity 가 닿지 않는다 — 색마다 투명도 단계(HD.lineTone.TONES)별 marker(hd-ln-<색>-<단계>, data-tone)를 두고
+     mark() 가 선마다 HD.lineTone.tone(상태) 단계의 화살촉을 단다(바뀐 선만 다시 씀). 선에 opacity 를 주지 않는다(래스터 그대로).
    쌍 목록은 HD.graph.overview(Model), 색은 HD.lineStyle.rowColor, 길은 HD.route.plan(지금 상자 자리 — 쪽·꺾는 곳·막혔을 때만 돌아가기). 표시 패널(보이기·투명도·굵기·색 프리셋)도 여기서.
    HD.viewLines.mount(ctx) → {render() → 가장 왼쪽 통로 x, apply(), focus(ids), pair(from, to), mark(from, to) → {n, color}|null, rename(from, to),
                               hits(stagePts, from) → 그은 선이 가로지른 path.ln[], openDropdown(), closeDropdown()}
@@ -13,7 +15,7 @@ var PLAN = '#B5B8B2';
 
 function mount(ctx) {
   var rowsEl = ctx.rowsEl, svg = ctx.svg, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, CARD = ctx.CARD, LEFT = ctx.LEFT, prefs = ctx.prefs;
-  var R = HD.route, S = HD.lineStyle, hov = null, foc = {}, pairKey = null, marks = {};
+  var R = HD.route, S = HD.lineStyle, LT = HD.lineTone, hov = null, foc = {}, pairKey = null, marks = {};
 
   // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면 바뀐 d·자리만 고쳐 쓰고,
   // 달라지면(편집·숨기기·색 프리셋) 전부 새로 넣는다. 카드 자리를 먼저 모두 읽고 그다음 쓴다(읽기·쓰기 번갈아 하지 않게).
@@ -61,8 +63,7 @@ function mount(ctx) {
       if (r.mode === 'corridor') minX = Math.min(minX, r.pts[2][0]);
       var color = p.plan ? PLAN : S.rowColor(prefs, rowOf[p.a]);
       var ci = cols.indexOf(color); if (ci < 0) { ci = cols.length; cols.push(color); }
-      lns.push({from: p.a, to: p.b, cls: 'ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : ''), both: p.ba ? 1 : 0, color: color,
-                end: 'url(#hd-ln-' + ci + ')', start: p.ba ? 'url(#hd-lns-' + ci + ')' : '', d: r.d});
+      lns.push({from: p.a, to: p.b, cls: 'ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : ''), both: p.ba ? 1 : 0, color: color, ci: ci, d: r.d});
       if (p.plan) return;
       [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(선이 출발 카드를 떠나는 점 옆)
         var from = x[1], to = x[2]; if (!p[x[0]]) return;
@@ -112,14 +113,16 @@ function mount(ctx) {
     $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
     $$('path.ln, marker.lnm', svg).forEach(function (n) { n.remove(); });
     var defs = '', paths = '', labels = '';
-    cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색 · 양방향은 시작에도(반대로)
+    cols.forEach(function (c, i) {                    // 화살촉 색 = 선 색 · 양방향은 시작에도(반대로) · 투명도 단계마다 하나(#286)
       var head = '<path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/>';
-      defs += '<marker class="lnm" id="hd-ln-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">' + head + '</marker>' +
-              '<marker class="lnm" id="hd-lns-' + i + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">' + head + '</marker>';
+      LT.TONES.forEach(function (t) {
+        defs += '<marker class="lnm" data-tone="' + t + '" id="hd-ln-' + i + '-' + t + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">' + head + '</marker>' +
+                '<marker class="lnm" data-tone="' + t + '" id="hd-lns-' + i + '-' + t + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">' + head + '</marker>';
+      });
     });
     lns.forEach(function (l) {
       paths += '<path class="' + l.cls + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" data-both="' + l.both +
-        '" stroke="' + l.color + '" marker-end="' + l.end + '"' + (l.start ? ' marker-start="' + l.start + '"' : '') + ' d="' + l.d + '"/>';
+        '" stroke="' + l.color + '" d="' + l.d + '"/>';   // 화살촉은 mark() 가 단계에 맞춰 단다
     });
     lbs.forEach(function (l) {
       labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" style="left:' + l.left + ';top:' + l.top + (l.tf ? ';transform:' + l.tf : '') +
@@ -137,8 +140,7 @@ function mount(ctx) {
     if (o.cls !== l.cls) { n.classList.toggle('pd', l.cls.indexOf(' pd') >= 0); n.classList.toggle('plan', l.cls.indexOf(' plan') >= 0); }
     if (o.both !== l.both) n.setAttribute('data-both', String(l.both));
     if (o.color !== l.color) n.setAttribute('stroke', l.color);
-    if (o.end !== l.end) n.setAttribute('marker-end', l.end);
-    if (o.start !== l.start) { if (l.start) n.setAttribute('marker-start', l.start); else n.removeAttribute('marker-start'); }
+    if (o.ci !== l.ci || o.both !== l.both) n._tone = null;   // 화살촉 색·양쪽이 바뀜 — mark() 가 다시 단다
     if (o.d !== l.d) n.setAttribute('d', l.d);
     n._hd = l;
   }
@@ -160,15 +162,24 @@ function mount(ctx) {
     var f = n.getAttribute('data-from'), t = n.getAttribute('data-to');
     return pairKey === f + '>' + t || (n.tagName.toLowerCase() === 'path' && pairKey === t + '>' + f);
   }
+  function heads(n, st) {                            // 선 하나의 화살촉 = 그 선과 같은 투명도 단계(바뀐 선만 쓴다)
+    var l = n._hd; if (!l) return;
+    var t = LT.tone(st);
+    if (n._tone === t) return;
+    n._tone = t;
+    n.setAttribute('marker-end', 'url(#hd-ln-' + l.ci + '-' + t + ')');
+    if (l.both) n.setAttribute('marker-start', 'url(#hd-lns-' + l.ci + '-' + t + ')'); else n.removeAttribute('marker-start');
+  }
   function mark() {
     var on = Object.keys(foc).length > 0 || !!pairKey, linked = {};
     rowsEl.classList.toggle('focusing', on);
     rowsEl.classList.toggle('lnhov', !!hov);
     for (var id in foc) linked[id] = 1;
     $$('path.ln, .alabel', rowsEl).forEach(function (n) {
-      var lit = pairKey ? inPair(n) : touches(n, foc);
+      var lit = pairKey ? inPair(n) : touches(n, foc), em = !!hov && (n.getAttribute('data-from') === hov || n.getAttribute('data-to') === hov);
       n.classList.toggle('on', lit);
-      n.classList.toggle('em', !!hov && (n.getAttribute('data-from') === hov || n.getAttribute('data-to') === hov));
+      n.classList.toggle('em', em);
+      if (n.tagName.toLowerCase() === 'path') heads(n, {focusing: on, hover: !!hov, on: lit, em: em, pd: n.classList.contains('pd')});
       if (lit) { linked[n.getAttribute('data-from')] = 1; linked[n.getAttribute('data-to')] = 1; }
     });
     $$('.card', rowsEl).forEach(function (c) {

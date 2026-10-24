@@ -187,7 +187,16 @@ def test_send_format(page):
 
 @pytest.mark.area("notes")
 def test_clear_sent(page):
-    """[보낸 것 완료로]: 보낸 메모를 지우지 않고 완료(답 '확인')로 — 목록·배지에서 빠지고 기록은 메모 안에 남는다."""
+    """[보낸 것 완료로]: 보낸 메모를 지우지 않고 완료(답 '확인')로 — 목록·배지에서 빠지고 기록은 메모 안에 남는다.
+    보낸 메모를 스스로 심는다(#264) — 앞 테스트(메모 달기·보내기)에 기대지 않아 혼자·영역(-m)·-n 에서 같게 돈다."""
+    page.evaluate("""() => { const sid = document.querySelector('#rows .card').dataset.id,
+        h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(window.__hdKeyPath || location.pathname);
+        Object.keys(localStorage).filter(k => k.startsWith('hd-notes:') || k.startsWith('hd-note-seq:') || k.startsWith('hd-show-sent:')).forEach(k => localStorage.removeItem(k));
+        localStorage.setItem('hd-notes:' + h, JSON.stringify([{id: 'sent1', no: 1, screen: sid, targets: [{path: 'body', text: ''}], path: 'body', text: '',
+            rect: null, note: '보낸 메모', intent: 'change', sent: true, replies: []}]));
+        localStorage.setItem('hd-note-seq:' + h, JSON.stringify({[sid]: 1})); }""")
+    reload(page)
+    page.click('#dock .dk-tab[data-p="notes"]')
     assert page.is_visible("#nclear") and page.get_attribute("#nclear", "aria-label") == page.get_attribute("#nclear", "title") == "보낸 것 완료로"
     page.click("#nclear")
     assert page.evaluate("document.querySelectorAll('#nlist li').length") == 0
@@ -685,6 +694,45 @@ def test_v3_main_flow_dashed(gpage):
     assert ops and all(abs(o - 0.18) < 0.01 for o in ops), ops
     gpage.keyboard.press("Escape")
     gpage.keyboard.press("Escape")
+
+
+HEADS_JS = """() => [...document.querySelectorAll('#rows path.ln')].flatMap(p => ['marker-end', 'marker-start'].filter(a => p.getAttribute(a)).map(a => {
+    const id = p.getAttribute(a).match(/#([^)]+)/)[1], h = document.querySelector('#' + id + ' path');
+    return [p.dataset.from + '>' + p.dataset.to, +(+getComputedStyle(p).strokeOpacity).toFixed(3), +(+getComputedStyle(h).fillOpacity).toFixed(3), p.style.opacity || '']; }))"""
+
+
+@pytest.mark.area("flow", "links")
+def test_v3_arrowheads_fade_with_line(gpage):
+    """#286: 화살촉(채운 marker)의 투명도 = 그 선의 stroke-opacity — 평소 · 카드에 올림(나머지 흐리게) · 고름(나머지 .18). 선에 opacity 는 없다(래스터 그대로)."""
+    gpage.keyboard.press("Escape")
+    pointer_off_board(gpage)
+    gpage.wait_for_timeout(200)
+
+    def same(state):
+        hs = gpage.evaluate(HEADS_JS)
+        assert hs, state
+        bad = [h for h in hs if abs(h[1] - h[2]) > 0.01 or h[3]]
+        assert not bad, (state, bad)
+        return hs
+    base = same("평소")
+    zoom_to(gpage, "pass", 300)                        # 마지막 move = 카드 밖 → 올린 카드 없음
+    b = gpage.locator('.card[data-id="pass"] .phone').bounding_box()
+    gpage.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+    gpage.wait_for_function("document.getElementById('rows').classList.contains('lnhov')", timeout=3000)
+    hov = same("올림")
+    assert len({h[2] for h in hov}) > 1, ("올린 카드 선은 진하고 나머지는 흐리다", hov)
+    pointer_off_board(gpage)
+    shift_click(gpage, "pass")
+    gpage.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
+    pointer_off_board(gpage)
+    gpage.wait_for_timeout(200)
+    foc = same("고름")
+    assert any(abs(h[2] - 0.18) < 0.01 for h in foc) and any(h[2] == 1 for h in foc), foc
+    gpage.keyboard.press("Escape")
+    gpage.keyboard.press("Escape")
+    pointer_off_board(gpage)
+    gpage.wait_for_timeout(200)
+    assert same("다시 평소") and len(base) == len(same("다시 평소"))
 
 
 # ---------------------------------------------------------------- canvas-v3 (phase 2): Ctrl+클릭 카메라 · 전환 메뉴 · 선 색/굵기

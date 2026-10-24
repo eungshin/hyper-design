@@ -122,7 +122,10 @@ svg.ar{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 /* 판에 늘 그리는 선(modules/view-lines.js): 쌍마다 하나, 출발 줄 색(stroke 속성), 굵기 = 선 굵기 설정 · 투명도 = 표시 패널(--lnop) */
 svg.ar path.ln{fill:none;stroke-width:calc(var(--lw,2) * .8px * var(--lnk,1));stroke-opacity:var(--lnop,.55);stroke-linecap:round;stroke-linejoin:round}
 svg.ar path.ln.pd{stroke-dasharray:calc(var(--lw,2) * 4px) calc(var(--lw,2) * 3px);stroke-linecap:butt;stroke-opacity:1}   /* 점선 = 반영 대기뿐(E14) · 투명도와 상관없이 진하게 · 한 칸은 화면에서 4.8px 이상(--lw ≥ 1.2/z) */
-svg.ar marker.lnm path{fill-opacity:var(--lnop,.55)}   /* 화살촉은 채움 — stroke-opacity 가 안 닿아 기본 투명도만 따른다 */
+svg.ar marker.lnm path{fill-opacity:var(--lnop,.55)}   /* 화살촉은 채움 — stroke-opacity 가 안 닿는다: 선 상태와 같은 단계의 marker(view-lines, HD.lineTone, #286) */
+svg.ar marker.lnm[data-tone="hov"] path{fill-opacity:calc(var(--lnop,.55) * .4)}
+svg.ar marker.lnm[data-tone="faint"] path{fill-opacity:.18}
+svg.ar marker.lnm[data-tone="full"] path{fill-opacity:1}
 svg.ar path.ln.plan{stroke-width:calc(var(--lw,2) * .5px * var(--lnk,1))}          /* 기획 갈래(D8): 얇은 회색 실선, 글자 표시 없음 */
 #rows.lnhov path.ln{stroke-opacity:calc(var(--lnop,.55) * .4)}
 #rows.lnhov path.ln.em,#rows.lnhov path.ln.pd{stroke-opacity:1}
@@ -2101,19 +2104,22 @@ function delMemo(id) {                              // 메모 지우기·편집 
           undo: function () { var l = NS.list().slice(); l.splice(Math.min(at, l.length), 0, n); NS.set(l); saveNotes(); }});
 }
 var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5) · 결정 필요(#232)
-                             del: delMemo, edit: editMemo, showNotes: function () { if (VD) VD.activate('notes'); }});
+                             del: delMemo, edit: editMemo, showNotes: function () { if (VD) VD.activate('notes'); },
+                             storage: localStorage, key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); },   // 보낸 메모 보기 켜짐(#263 — 셸이 저장소·키를 건넨다)
+                             sentChanged: function () { if (PN) PN.render(); if (TH) TH.refresh(); }, lost: function (n) { return PN ? PN.lost(n) : false; }});
 // 카드 메모 배지 → 그 화면 메모 묶음(modules/view-thread.js, #224) — 고치기·지우기는 메모 패널과 같은 함수, [메모 추가] = 화면 전체 메모
 var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { return NS.list(); }, title: function (id) { return titleOf(id); },
                               edit: editMemo, del: delMemo, add: function (id) { openCardMemo(id); },
                               done: function (id) { addReply([id], '확인', '메모 완료'); }, reopen: function (id) { addReply([id], '다시', '메모 다시 열기'); },
                               lost: function (n) { return PN ? PN.lost(n) : false; }, highlight: function (id, no) { if (PN) PN.highlight(id, no); },
-                              choose: function (id, c) { answerQuestion(id, c); }, queued: function () { return !!(VS && VS.on && !window.__hdAgent); }});
+                              choose: function (id, c) { answerQuestion(id, c); }, queued: function () { return !!(VS && VS.on && !window.__hdAgent); },
+                              showSent: function () { return VN.showSent(); }});
 // 메모 핀(modules/view-pins.js, task 11): 판 카드·크게 보기의 번호 핀 — 누르면 그 화면 메모 묶음이 그 메모로 열린다
 var PN = HD.viewPins.mount({rowsEl: rowsEl, mpins: $('#mpins'), $: $, $$: $$, esc: esc, CARD: CARD, list: function () { return NS.list(); },
   cardEl: function (id) { return VL.cardEl(id); },
   modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, frame: mframe, draft: draft}; },
-  openThread: function (id, no, el) { TH.open(id, el, no); },
-  changed: function () { TH.refresh(); }});
+  openThread: function (id, no, el) { TH.open(id, el, no); }, showSent: function () { return VN.showSent(); },
+  changed: function () { TH.refresh(); VN.relost(); }});
 PN.zoom(z);
 function addReply(ids, kind, label) {                // 사람 답(완료 = 확인 · 다시 열기 = 다시, 보내기 전으로) — 메모 안 n.replies 에 덧붙임, 되돌리기 한 단계
   var at = new Date().toISOString(), hit = ids.map(function (id) { return NS.find(id); }).filter(Boolean);

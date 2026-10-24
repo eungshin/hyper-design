@@ -3,27 +3,27 @@
    판: 보이는 메모(HD.annotation.visible — 아래 task 29)이고 다시 찾은 자리가 있는 대상만. 카드를 고르거나 올리거나, 판 배율로 화면이 실제의 60% 이상일 때(.pins-near), 막 메모를 단 카드에만 보인다(CSS).
      화면 전체(body)·빈 레이아웃·편집 메모는 핀 없음(배지·묶음만). 색: decide = --ui-accent 하나, 나머지 --ui-badge.
    크게 보기(셸 drawPins → paint): 그 화면 보이는 메모 전부, 다시 찾은 자리가 있으면 그것, 아직 답이 없으면 저장한 rect.
-   보낸 메모 숨기기(task 29): 판·크게 보기 모두 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = view-notes 가 쓰는 document.documentElement.dataset.hdShowSent === '1'),
-     숨김이 될 메모의 핀은 켜졌을 때 흐리게(.nhid). document 의 'hd-show-sent' 이벤트 = 다시 그리고 자리를 다시 묻는다.
+   보낸 메모 숨기기(task 29): 판·크게 보기 모두 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = ctx.showSent(), 주인 view-notes),
+     숨김이 될 메모의 핀은 켜졌을 때 흐리게(.nhid). 켜짐이 바뀌면 셸이 render() 를 부른다 = 다시 그리고 자리를 다시 묻는다(#263).
+   요소를 찾을 수 없음(#285): 답이 how 'none'(같은 요소가 여럿·없음)인 대상은 핀 없음 — lost(n)(HD.relocate.lost)로 메모 목록·묶음 줄이 알린다.
    핀 누르기 = ctx.openThread(화면 id, no, 핀) — 카드 고르기·끌기로 가지 않는다.
    HD.viewPins.mount(ctx) → {locate(id, frame), locateModal(), render(ids?), paint(), zoom(z), focus(id|null), highlight(id, no|null), lost(n)}
-   ctx = {rowsEl, mpins, $, $$, esc, CARD, list() → 메모 전부, cardEl(id), modal() → {open, screen, scale, frame, draft}, openThread(id, no, el)} */
+   ctx = {rowsEl, mpins, $, $$, esc, CARD, list() → 메모 전부, cardEl(id), modal() → {open, screen, scale, frame, draft}, openThread(id, no, el), showSent() → 켜짐, changed(id)?} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
-  var A = HD.annotation, T = HD.notes.targets, esc = ctx.esc;
+  var A = HD.annotation, T = HD.notes.targets, L = HD.relocate, esc = ctx.esc;
   var located = {}, mloc = {screen: null, items: {}}, asked = [], focused = null;
 
-  function key(n, i) { return n.id + ':' + i; }
-  function on() { return document.documentElement.dataset.hdShowSent === '1'; }
-  function shows(n) { return A.visible(n, on()); }   // 보일 메모(task 29) — 꺼짐이면 working·done 빠짐
+  function key(n, i) { return L.key(n.id, i); }
+  function shows(n) { return A.visible(n, ctx.showSent()); }   // 보일 메모(task 29) — 꺼짐이면 working·done 빠짐
   function dim(n) { return A.visible(n, false) ? '' : ' nhid'; }
   var css = document.createElement('style'); css.id = 'hd-pins-sent-css';
   css.textContent = '.npin.nhid,.pin.nhid{opacity:.55}.npbox.nhid,.pin-box.nhid{opacity:.4}';
   document.head.appendChild(css);
-  function pinnable(t) { return t && t.path && t.path !== 'body' && t.path !== '(새 화면)'; }
+  var pinnable = L.pinnable;
   function boardMemos(id) {                          // 판 핀이 될 메모: 사람이 쓴 메모(편집 아님)
     return ctx.list().filter(function (n) { return n.screen === id && !n.edit; });
   }
@@ -142,8 +142,7 @@ function mount(ctx) {
     if (m.open && m.screen === id) ctx.$$('[data-no="' + no + '"]', ctx.mpins).forEach(function (b) { b.classList.add('hi'); });
   }
   function lost(n) {                                 // 다시 찾지 못한 대상이 있나(판 카드 답, 없으면 크게 보기 답)
-    var map = located[n.screen] || (mloc.screen === n.screen ? mloc.items : null); if (!map) return false;
-    return T(n).some(function (t, i) { var a = map[key(n, i)]; return pinnable(t) && a && a.how === 'none'; });
+    return L.lost(n.id, T(n), located[n.screen] || (mloc.screen === n.screen ? mloc.items : null));
   }
 
   function pinOf(e) { var p = e.target.closest ? e.target.closest('.npin, #mpins .pin') : null; return p; }
@@ -156,8 +155,6 @@ function mount(ctx) {
   ['pointerdown', 'dblclick'].forEach(function (n) {
     ctx.rowsEl.addEventListener(n, function (e) { if (pinOf(e)) e.stopPropagation(); });   // 판 끌기·카드 옮기기·크게 보기로 가지 않게
   });
-
-  document.addEventListener('hd-show-sent', function () { render(); });   // 보낸 메모 보기가 바뀜(view-notes) — 핀 다시 + 자리 다시 묻기
 
   return {locate: locate, locateModal: locateModal, render: render, paint: paint, zoom: zoom, focus: focus, highlight: highlight, lost: lost};
 }

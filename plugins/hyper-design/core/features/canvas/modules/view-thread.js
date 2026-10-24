@@ -3,13 +3,13 @@
    상태 = 지금 연 화면 id 하나(저장하지 않음). 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc(셸이 close 를 부른다)·바깥 누르기 = 닫기.
    줄마다 번호 #n.no · 범위 말(이 요소가 아닐 때만, HD.annotation.scopeWord — R7) · 상태 말(HD.annotation.label — 받는 곳 없이 보낸 것 = '대기열', decide 만 강조색) · 답(답마다 회색 한 줄 HD.annotation.says, 마지막 것 펼침, 앞 것 접힘,
    반영됨 줄에 올리면 화면·캡처 · 사람 답은 작게 '완료함/다시 엶' + 시각) · 빈 레이아웃에서 옮겨 온 메모면 회색 한 줄(HD.promote.movedSay) · 기다리는 질문이면 고를 것 단추(누르기 = ctx.choose) · [완료](사람 답 '확인'). 닫힌 메모는 아래 접힌 '완료 N' 묶음에 [다시 열기].
-   보낸 메모 숨기기(task 29): 줄은 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = document.documentElement.dataset.hdShowSent === '1', 주인 view-notes) — 꺼짐이면 AI 작업 중·완료 메모는 빠지고
-   ('완료 N' 묶음도 켜졌을 때만) 숨긴 수를 회색 한 줄로. document 의 'hd-show-sent' 이벤트 = refresh.
-   다시 찾지 못한 대상(ctx.lost)이 있고 닫히지 않은 메모 = "대상이 바뀌었어요". 줄에 올리면 ctx.highlight(화면, no) — 그 핀·요소 테두리.
+   보낸 메모 숨기기(task 29): 줄은 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = ctx.showSent(), 주인 view-notes) — 꺼짐이면 AI 작업 중·완료 메모는 빠지고
+   ('완료 N' 묶음도 켜졌을 때만) 숨긴 수를 회색 한 줄로. 켜짐이 바뀌면 셸이 refresh() 를 부른다(#263).
+   다시 찾지 못한 대상(ctx.lost — 같은 요소가 여럿·없음)이 있고 닫히지 않은 메모 = "요소를 찾을 수 없음"(.thlost, title = 까닭, #285). 줄에 올리면 ctx.highlight(화면, no) — 그 핀·요소 테두리.
    핀 누르기(셸이 open(id, 핀, no)) = 그 메모로 스크롤하고 펼침. 배지가 없어져도(열린 메모 0) 메모가 남아 있으면 그 자리에 둔다.
    HD.viewThread.mount(ctx) → {open(id, anchorEl, no?), close() → 열려 있었나, refresh(), isOpen()}
    ctx = {rowsEl, esc, list() → 메모 전부, title(id), edit(noteId), del(noteId), add(screenId), done(noteId), reopen(noteId), lost(n), highlight(id, no|null),
-          choose(noteId, choice), queued() → 보내기가 대기열 파일에만 가나} */
+          choose(noteId, choice), queued() → 보내기가 대기열 파일에만 가나, showSent() → 보낸 메모 보기 켜짐} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -24,7 +24,6 @@ function mount(ctx) {
   var css = document.createElement('style'); css.id = 'hd-thread-sent-css';
   css.textContent = '#thread .thhid{padding:6px 12px;color:#888;font-size:12px}';
   document.head.appendChild(css);
-  document.addEventListener('hd-show-sent', function () { refresh(); });   // 보낸 메모 보기가 바뀜(view-notes)
 
   function memosOf(id) { return HD.edits.split(ctx.list()).memos.filter(function (n) { return n.screen === id; }); }
   function label(n) {
@@ -60,14 +59,13 @@ function mount(ctx) {
     return '<li data-id="' + esc(n.id) + '" data-no="' + esc(n.no) + '"' + (n.sent && open ? ' class="sent"' : '') + '><div class="thl"><span class="thn">#' + esc(n.no) + '</span><span class="the">' + esc(label(n)) + '</span>' +
       '<span class="ths" data-st="' + st + '"' + (st === 'working' && ctx.queued() ? ' data-q="1"' : '') + '>' + esc(A.label(n, ctx.queued())) + '</span>' + (A.scopeWord(n) ? '<span class="thsc">' + esc(A.scopeWord(n)) + '</span>' : '') +
       '<span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span></div>' +
-      (open && ctx.lost(n) ? '<div class="thlost">대상이 바뀌었어요</div>' : '') +
+      (open && ctx.lost(n) ? '<div class="thlost" title="화면이 바뀌어 같은 요소가 여러 개이거나 없어요">요소를 찾을 수 없음</div>' : '') +
       '<div class="tht">' + esc(n.note || '') + '</div>' + moved(n) + reps(n) + choices(n) +
       '<div class="tha">' + (open ? '<button type="button" class="nbtn" data-act="edit">고치기</button><button type="button" class="nbtn" data-act="del">지우기</button><button type="button" class="nbtn" data-act="done">완료</button>'
                                  : '<button type="button" class="nbtn" data-act="reopen">다시 열기</button>') + '</div></li>';
   }
-  function on() { return document.documentElement.dataset.hdShowSent === '1'; }
   function draw() {
-    var all = memosOf(cur.id), sh = on(), ms = all.filter(function (n) { return A.visible(n, sh); }), nh = all.length - ms.length;
+    var all = memosOf(cur.id), sh = ctx.showSent(), ms = all.filter(function (n) { return A.visible(n, sh); }), nh = all.length - ms.length;
     var open = ms.filter(A.isOpen), done = ms.filter(function (n) { return !A.isOpen(n); });
     var keep = box.querySelector('details.thdone'), wasOpen = keep && keep.open;
     box.innerHTML = '<div class="thh">' + esc(ctx.title(cur.id)) + ' · 메모 ' + open.length + '건</div><div class="thbody"><ol class="thlist">' + open.map(row).join('') + '</ol>' +
