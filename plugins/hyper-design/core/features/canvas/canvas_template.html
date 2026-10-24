@@ -446,7 +446,8 @@ body.split-lr #khint{display:none}
 #hlist li[data-i]:hover{background:#F4F5F3}
 #hlist li.now{background:#ECEDEA;font-weight:700}
 #hlist li.undone{opacity:.45}
-#hlist li.lock{cursor:default;color:#888}#hlist li.lock:hover{background:none}
+#hlist li.lock{cursor:not-allowed;color:#888}#hlist li.lock:hover{background:none}
+#hlist li[data-i]:focus-visible{outline:2px solid #8A8C87;outline-offset:-2px}
 #hlist .hl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #hlist .hs{flex:none;font-size:11px;color:#666;background:#F0F1EE;border-radius:999px;padding:1px 7px}
 #hlist .hs-sent,#hlist .hs-file{background:#E3E4E1;color:#333}
@@ -749,6 +750,11 @@ var ST = HD.viewStateSync.mount({hash: hashStr(KEYPATH), on: !!window.__hdHelper
   snapshot: window.__hdState, storage: localStorage, toast: function (m) { toast(m, false, 4000); }, warn: function (m) { console.warn(m); },
   reload: function () { stateReload = true; setTimeout(function () { location.reload(); }, 1200); },
   onExternal: function (names) { adoptExternal(names); }});   // AI 답(hd reply) 등 파일에서 바뀐 메모 — 새로고침 없이
+(function () {                                       // 쓰기마다 기록(HI)에 알린다 — 기록 줄의 상태 차이를 잡는 기준(base)을 고르려고(view-history.js)
+  var set = ST.setItem, rm = ST.removeItem;
+  ST.setItem = function (k, v) { set(k, v); if (HI) HI.wrote(k); };
+  ST.removeItem = function (k) { rm(k); if (HI) HI.wrote(k); };
+})();
 var PKEY = 'hd-card-pos:' + hashStr(KEYPATH), cardPos = {};
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);         // 메모 목록 하나(modules/notes.js) — 바꾼 뒤 saveNotes() 가 저장하고 닿은 카드만 다시 그린다
 var NS = HD.notes.store(HD.notes.parse((function () { try { return ST.getItem(NKEY); } catch (e) { return null; } })()));
@@ -836,9 +842,25 @@ function arrangeCards(ids, op) {                  // op = 정렬 패널 의도 {
   return moved;
 }
 
-/* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8) — 되돌리기 50단계 · 줄 누르기 · 보낸 자리 앞은 되돌리지 않음 ---------- */
-var HI = HD.viewHistory.mount({$: $, esc: esc, list: $('#hlist'), undoBtn: $('#undo'), redoBtn: $('#redo'), toast: function (m) { toast(m); }, key: 'hd-edit-log:' + hashStr(KEYPATH),
-                               getItem: ST.getItem, setItem: ST.setItem});
+/* ---------- 기록 시간줄 하나(modules/history.js · view-history.js, E2·E8, task 33) — 줄 누르기 = 그 줄 바로 뒤 상태(새로고침 뒤에도) · 보낸 자리 앞은 되돌리지 않음 ---------- */
+var HI = null;
+HI = HD.viewHistory.mount({$: $, esc: esc, list: $('#hlist'), undoBtn: $('#undo'), redoBtn: $('#redo'), toast: function (m) { toast(m); }, key: 'hd-edit-log:' + hashStr(KEYPATH),
+                           getItem: ST.getItem, setItem: ST.setItem, warn: function (m) { console.warn(m); },
+                           track: {read: function (n) { var t = ST.getItem('hd-' + n + ':' + hashStr(KEYPATH)); if (t == null) return null; try { return JSON.parse(t); } catch (e) { return null; } },
+                                   write: function (n, v) { var k = 'hd-' + n + ':' + hashStr(KEYPATH); try { if (v == null) ST.removeItem(k); else ST.setItem(k, JSON.stringify(v)); } catch (e) {} }},   // 저장 실패는 state-sync 가 알린다
+                           adopt: function (names) { adoptState(names); }});
+// 지난 세션 기록 줄로 오갈 때(view-history 가 상태 키를 되씀) — 셸이 들고 있는 값을 다시 읽어 그린다. 셸 함수인 까닭: cardPos·hidden·locked·linkNames·folders·NS 의 주인이 셸
+function adoptState(names) {
+  var has = function (n) { return names.indexOf(n) >= 0; };
+  if (has('card-pos')) { cardPos = {}; loadCardPos(); }
+  if (has('hidden')) { var was = Object.keys(hidden); loadHidden(); var now = Object.keys(hidden).filter(function (id) { return was.indexOf(id) < 0; }); renderHidden(); if (now.length) SL.dispatch({type: 'drop', ids: now}); scheduleVisible(); }
+  if (has('locked')) { loadLocked(); if (LY) LY.render(); if (VA) VA.render(); }
+  if (has('link-names')) loadLinkNames();
+  if (has('folders')) { folders = HD.folders.load(ST.getItem, FKEY); if (LY) LY.render(); }
+  if (has('notes')) adoptExternal(['notes']);
+  drawArrows(); placeSelbar();
+  if (VP) VP.refresh();
+}
 function record(op) { HI.record(op); if (VP) VP.refresh(); }   // 판이 바뀌면 나눈 칸 복사본도 다시             // op = {label, undo(), redo(), status?}
 function undo() { HI.undo(); }
 function redo() { HI.redo(); }
@@ -1169,20 +1191,24 @@ var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
 function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
 // 태그 이름(연결 이름) — 버튼 글과 따로, prefs 가 아닌 별도 키(prefs.normalize 가 모르는 필드를 버린다)
 var LNKEY = 'hd-link-names:' + hashStr(KEYPATH), linkNames = {};
-try { linkNames = JSON.parse(ST.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; }
+function loadLinkNames() { try { linkNames = JSON.parse(ST.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; } }
+loadLinkNames();
 // 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버린다
 var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
-(function () {
+function loadHidden() {                              // 시작 때 · 기록 줄로 오갈 때(adoptState)
   var raw = []; try { raw = JSON.parse(ST.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
+  hidden = {};
   var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
   live['@intro'] = live['@foot'] = 1;                // 판 글도 레이어(H7)
   (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
   $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
   $('#intro').hidden = !!hidden['@intro']; $('#foot').hidden = !!hidden['@foot'];
-})();
+}
+loadHidden();
 // 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
 var LOCKKEY = 'hd-locked:' + hashStr(KEYPATH), locked = {};
-try { (JSON.parse(ST.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; }
+function loadLocked() { locked = {}; try { (JSON.parse(ST.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; } }
+loadLocked();
 function lockGuard(ids) {                          // 잠긴 화면이 있으면 알리고 true
   var hit = ids.filter(function (id) { return locked[id]; }); if (!hit.length) return false;
   toast('잠긴 화면이에요 — 레이어 패널에서 풀어요'); return true;

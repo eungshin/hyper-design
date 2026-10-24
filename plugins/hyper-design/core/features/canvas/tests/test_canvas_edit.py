@@ -507,7 +507,7 @@ def test_tag_rename_keeps_button_text(dpage):
     dpage.keyboard.press("Escape")
 
 
-# ---------------------------------------------------------------- 4단계: 우클릭 메뉴 · 숨기기 · 되돌리기 50단계
+# ---------------------------------------------------------------- 4단계: 우클릭 메뉴 · 숨기기 · 되돌리기
 def cmenu_items(pg):
     pg.wait_for_selector("#cmenu:not([hidden])")
     return pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.childNodes[0].textContent)")
@@ -600,8 +600,8 @@ def test_hide_screen_and_hidden_list(epage):
 
 @pytest.mark.area("tools")
 def test_undo_redo_card_moves(epage):
-    epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")   # 앞 테스트가 옮겨 둔 카드 없이(-n 에서 순서가 바뀌어도)
-    reload(epage)                                    # 되돌리기 기록은 새로고침하면 비어 있다(50단계 상한은 unit: test_history_model_caps_undo_at_50)
+    epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:') || k.startsWith('hd-edit-log:')).forEach(k => localStorage.removeItem(k))")   # 앞 테스트가 옮겨 둔 카드·기록 없이(-n 에서 순서가 바뀌어도 — 기록은 새로고침 뒤에도 남는다, task 33)
+    reload(epage)
     epage.click("#zoom"); epage.click("#fit")
     epage.wait_for_timeout(150)
     assert epage.is_disabled("#undo") and epage.is_disabled("#redo")
@@ -640,6 +640,74 @@ def test_undo_redo_card_moves(epage):
     assert all(abs(s["dx"]) < 3 for s in stored), "되돌린 자리가 저장된다"
     epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:')).forEach(k => localStorage.removeItem(k))")
     epage.keyboard.press("h")
+    reload(epage)
+
+
+@pytest.mark.area("tools")
+def test_history_row_jump_after_reload(epage):
+    """task 33: 기록 줄 누르기 = 그 줄 바로 뒤 상태(포토샵) — 새로고침 뒤에도. 아래 줄은 흐리게(다시 하기),
+    보낸 자리와 그 위 줄은 누르면 이유를 알린다(조용히 무시하지 않는다)."""
+    epage.evaluate("Object.keys(localStorage).filter(k => k.startsWith('hd-card-pos:') || k.startsWith('hd-edit-log:')).forEach(k => localStorage.removeItem(k))")
+    reload(epage)
+    epage.click("#zoom"); epage.click("#fit")
+    epage.wait_for_timeout(150)
+    epage.keyboard.press("v")
+    p = visible_cover(epage)
+    x0, y0 = card_xy(epage, p["id"])
+    drag(epage, p, 40, 0)
+    x1, y1 = card_xy(epage, p["id"])
+    drag(epage, {"x": p["x"] + 40, "y": p["y"]}, 0, 40)
+    x2, y2 = card_xy(epage, p["id"])
+    assert (x1, y1) != (x0, y0) and (x2, y2) != (x1, y1)
+    epage.keyboard.press("h")
+    reload(epage)
+    epage.click('#dock .dk-tab[data-p="history"]')
+    h = epage.evaluate(HIST_JS)
+    moves = [r for r in h if r["label"] == "카드 옮기기"]
+    assert len(moves) == 2 and not any(r["lock"] for r in moves), h
+    epage.click(f'#hlist li[data-i="{moves[0]["i"]}"]')
+    epage.wait_for_timeout(150)
+    assert card_xy(epage, p["id"]) == [x1, y1], "지난 세션 줄 누르기 = 첫 번째 옮긴 자리"
+    assert [r for r in epage.evaluate(HIST_JS) if r["i"] == moves[1]["i"]][0]["undone"], "그 아래 줄은 흐리게(다시 하기)"
+    epage.click(f'#hlist li[data-i="{moves[1]["i"]}"]')
+    epage.wait_for_timeout(150)
+    assert card_xy(epage, p["id"]) == [x2, y2], "흐린 줄 누르기 = 다시 하기"
+    epage.click(f'#hlist li[data-i="{moves[0]["i"]}"]')         # 한 번 더 뒤로 → 새로고침해도 그 자리
+    epage.wait_for_timeout(150)
+    reload(epage)
+    assert card_xy(epage, p["id"]) == [x1, y1], "되돌린 자리가 저장된다"
+    epage.click('#dock .dk-tab[data-p="history"]')
+    epage.focus(f'#hlist li[data-i="{moves[0]["i"]}"]')
+    epage.click(f'#hlist li[data-i="{moves[0]["i"] - 1}"]')
+    epage.wait_for_timeout(150)
+    assert card_xy(epage, p["id"]) == [x0, y0], "시작 자리까지"
+    epage.focus(f'#hlist li[data-i="{moves[0]["i"]}"]')
+    epage.keyboard.press("Enter")                                # 줄은 키보드로도
+    epage.wait_for_timeout(150)
+    assert card_xy(epage, p["id"]) == [x1, y1]
+    # 보낸 자리: 메모 하나를 보내면 그 앞(옮기기 줄)은 잠긴다 — 누르면 이유
+    epage.click("#zoom"); epage.click("#fit")
+    epage.wait_for_timeout(150)
+    epage.keyboard.press("m")
+    c = visible_cover(epage)
+    epage.mouse.click(c["x"], c["y"])
+    epage.wait_for_selector("#pop:not([hidden])")
+    epage.fill("#pnote", "보내기 경계 확인")
+    epage.click("#padd")
+    epage.keyboard.press("Escape")
+    epage.keyboard.press("h")
+    epage.click("#nsend")
+    epage.wait_for_function("[...document.querySelectorAll('#hlist li[data-i]')].some(li => li.classList.contains('lock'))", timeout=4000)
+    reload(epage)                                                # 잠금도 새로고침 뒤까지
+    epage.click('#dock .dk-tab[data-p="history"]')
+    h = epage.evaluate(HIST_JS)
+    first = [r for r in h if r["label"] == "카드 옮기기"][0]
+    assert first["lock"] or [r for r in h if r["i"] == first["i"] - 1][0]["lock"], h
+    epage.click(f'#hlist li[data-i="{first["i"] - 1}"]')
+    epage.wait_for_function("document.getElementById('toast').textContent.includes('되돌릴 수 없어요')", timeout=3000)
+    assert "보낸" in epage.text_content("#toast"), epage.text_content("#toast")
+    assert card_xy(epage, p["id"]) == [x1, y1], "잠긴 줄은 아무것도 바꾸지 않는다"
+    epage.evaluate("Object.keys(localStorage).filter(k => /^hd-(card-pos|edit-log|notes|note-seq):/.test(k)).forEach(k => localStorage.removeItem(k))")
     reload(epage)
 
 
