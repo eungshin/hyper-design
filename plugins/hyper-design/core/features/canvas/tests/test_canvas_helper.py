@@ -414,7 +414,7 @@ def test_card_reload_posts_pending_once_per_load(ctx, out):   # S4 — 카드를
         for i in range(1, 4):
             key = pg.evaluate("""(i) => { const f = document.querySelector('.card[data-id="job"] .phone iframe'), b = document.querySelector('.card[data-id="job"] .cover');
                 f.removeAttribute('src'); f.setAttribute('data-src', b.dataset.file + '?v=t' + i); dispatchEvent(new Event('resize'));
-                return '/' + b.dataset.file.replace(/^[.]?[/]/, '') + '?v=t' + i; }""", i)
+                return '/' + b.dataset.file.replace(/^[.]?[/]/, '') + '?v=t' + i + '&hd-mode=board'; }""", i)   # 판 카드는 hd-mode=board 를 달고 실린다(board-motion.md)
             pg.wait_for_function("(k) => window.__hdPendN && window.__hdPendN[k] >= 1", arg=key, timeout=10000)
             pg.wait_for_timeout(300)
             counts.append(pg.evaluate("(k) => window.__hdPendN[k]", key))
