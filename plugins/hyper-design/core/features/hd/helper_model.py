@@ -34,14 +34,15 @@ def too_big(size, limit):
     return "상태가 너무 커요(%s MB — 한도 %s MB). 완료 메모를 보관으로 옮기세요" % (mb(size), mb(limit))
 
 
-def archive_lines(body):
-    """POST /api/archive 본문 {notes:[{…}]} → (JSON 줄 목록, None) | (None, 한국어 오류). 줄 = 메모 하나(한글 그대로, 줄바꿈 없음)."""
+def archive_lines(body, have=()):
+    """POST /api/archive 본문 {notes:[{…}]} → (JSON 줄 목록, None) | (None, 한국어 오류). 줄 = 메모 하나(한글 그대로, 줄바꿈 없음).
+    have = 보관 파일에 이미 있는 id — 그 메모는 다시 쓰지 않는다(보관 뒤 저장이 실패해 같은 메모가 다시 와도 한 줄)."""
     if not isinstance(body, dict) or not isinstance(body.get("notes"), list):
         return None, "{notes: [메모]} 가 아니에요"
     bad = [i for i, n in enumerate(body["notes"]) if not isinstance(n, dict)]
     if bad:
         return None, "notes: %d번째가 객체가 아니에요" % (bad[0] + 1)
-    return [json.dumps(n, ensure_ascii=False) for n in body["notes"]], None
+    return [json.dumps(n, ensure_ascii=False) for n in body["notes"] if n.get("id") is None or n.get("id") not in have], None
 
 
 def archive_notes(lines, cap=ARCHIVE_CAP):

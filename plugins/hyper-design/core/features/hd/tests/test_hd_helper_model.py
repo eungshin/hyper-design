@@ -107,3 +107,8 @@ def test_helper_model_is_pure():
         elif isinstance(node, ast.Name) and node.id in ("os", "urllib", "pathlib", "io", "socket", "subprocess", "datetime", "time"):
             bad.append(node.id)
     assert bad == [], "helper_model.py 는 I/O 를 쓰지 않는다: %s" % bad
+
+
+def test_archive_lines_skips_notes_already_archived():   # 보관 뒤 저장이 실패해 같은 메모가 다시 와도 한 줄만
+    lines, err = H.archive_lines({"notes": [{"id": "a"}, {"id": "b"}, {"note": "id 없음"}]}, have={"a"})
+    assert err is None and [json.loads(x).get("id") for x in lines] == ["b", None]

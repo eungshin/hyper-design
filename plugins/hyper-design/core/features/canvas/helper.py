@@ -964,12 +964,13 @@ ARCHIVE_FILE = ".hd-notes-archive.jsonl"
 
 def archive_post(out, body):
     """POST /api/archive 본문 {notes:[…]} → (code, 답). 줄마다 메모 하나를 덧붙인다(있던 것 + 새 줄을 임시 파일에 쓰고 os.replace — 반쯤 쓴 파일이 남지 않게). 쓰기 자물쇠 안에서 부른다."""
-    lines, err = helper_model.archive_lines(body)
+    p = pathlib.Path(out) / ARCHIVE_FILE
+    old = p.read_bytes() if p.is_file() else b""
+    have = {n.get("id") for n in helper_model.archive_notes(old.decode("utf-8", errors="replace").splitlines(), cap=10 ** 9)[0]}
+    lines, err = helper_model.archive_lines(body, have)
     if err:
         return 400, {"error": err}
     if lines:
-        p = pathlib.Path(out) / ARCHIVE_FILE
-        old = p.read_bytes() if p.is_file() else b""
         if old and not old.endswith(b"\n"):
             old += b"\n"
         tmp = p.with_name(ARCHIVE_FILE + ".tmp-%d" % os.getpid())
