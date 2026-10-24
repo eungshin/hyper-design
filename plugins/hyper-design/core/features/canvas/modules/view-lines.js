@@ -2,7 +2,7 @@
    기획 갈래 = 얇은 회색 실선(D8, 글자 표시 없음). 선 태그 = 방향마다 하나(출발 카드 옆) — 번호 + 연결 이름(없으면 버튼 글).
    번호는 출발 화면마다 1, 2, 3 …(mark(from, to)) — 화면 안 출발 버튼의 테두리·번호(view-links)가 같은 색·같은 번호를 쓴다.
    강조: 고른 카드 전부(focus(ids), E21) 또는 Ctrl+클릭한 쌍 하나(pair) → 그 선·태그 진하게, 나머지 흐리게. 마우스를 올린 카드도 진하게(D6c ②).
-   쌍 목록은 HD.graph.overview(Model), 색은 HD.lineStyle.rowColor, 모양은 HD.route.routeCurve. 표시 패널(보이기·투명도·굵기·색 프리셋)도 여기서.
+   쌍 목록은 HD.graph.overview(Model), 색은 HD.lineStyle.rowColor, 길은 HD.route.plan(지금 상자 자리 — 쪽·꺾는 곳·막혔을 때만 돌아가기). 표시 패널(보이기·투명도·굵기·색 프리셋)도 여기서.
    HD.viewLines.mount(ctx) → {render() → 가장 왼쪽 통로 x, apply(), focus(ids), pair(from, to), mark(from, to) → {n, color}|null, rename(from, to),
                               hits(stagePts, from) → 그은 선이 가로지른 path.ln[], openDropdown(), closeDropdown()}
    ctx = {rowsEl, svg, $, $$, esc, circled(n), CARD, LEFT, graph(), pending(), prefs, savePrefs(), names:{get(from,to), set(from,to,text)}, redraw(), record?({label, undo(), redo()})} */
@@ -13,47 +13,65 @@ var PLAN = '#B5B8B2';
 
 function mount(ctx) {
   var rowsEl = ctx.rowsEl, svg = ctx.svg, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, CARD = ctx.CARD, LEFT = ctx.LEFT, prefs = ctx.prefs;
-  var R = HD.route, S = HD.lineStyle, RADIUS = R.RADIUS, hov = null, foc = {}, pairKey = null, marks = {};
+  var R = HD.route, S = HD.lineStyle, hov = null, foc = {}, pairKey = null, marks = {};
 
-  // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면(카드 끌기 등) 바뀐 d·자리만 고쳐 쓰고,
+  // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면 바뀐 d·자리만 고쳐 쓰고,
   // 달라지면(편집·숨기기·색 프리셋) 전부 새로 넣는다. 카드 자리를 먼저 모두 읽고 그다음 쓴다(읽기·쓰기 번갈아 하지 않게).
-  var shape = null, lnEls = [], lbEls = [];
+  // 길(쪽·꺾는 곳·띄운 줄)은 HD.route.plan 이 지금 상자 자리로 정한다(DOM 줄이 아니라) — 여기서는 받아 쓰기만.
+  // 카드 끌기(.card.moving 이 있는 동안): 첫 프레임에 상자·쌍 목록을 한 번 재 두고, 그다음 프레임은 DOM 자리를 읽지 않고
+  // 움직인 카드의 style.left/top 만으로 그 카드에 닿은 선의 d·태그 자리만 고친다. 선을 숨겼으면 끄는 동안 아무것도 하지 않는다.
+  var shape = null, lnEls = [], lbEls = [], last = null;
+  svg.style.willChange = 'transform';              // 선 svg 를 제 층에 — 카드를 끌 때 선 전체를 다시 래스터하지 않게(task 38)
   function render() {
-    var box = {}, rowOf = {}, rows = $$('.flow', rowsEl);
+    var moving = $$('.card.moving', rowsEl);
+    if (moving.length) {
+      if (!prefs.lines) return last ? last.minX : LEFT;
+      if (last && last.dragging) return dragFrame(moving);
+      var m = full(); last.dragging = true; return m;
+    }
+    return full();
+  }
+  // 태그 자리(ab = 선의 첫 점 쪽, ba = 끝 점 쪽): 왼·오른쪽으로 떠나는 선은 그 점 옆, 위·아래로 떠나는 선은 카드 오른쪽 틈의
+  // 위·아래 끝(줄 머리글 위에 얹히지 않게). 같은 카드·같은 쪽 태그는 44px 씩 쌓는다
+  function labelAt(r, end, n, f) {
+    var q = end ? r.pts[r.pts.length - 1] : r.pts[0], side = end ? r.to : r.from, dy = n * 44;
+    if (side === 'left') return {left: (q[0] - 10) + 'px', top: (q[1] + 8 + dy) + 'px', tf: 'translateX(-100%)'};
+    if (side === 'right') return {left: (q[0] + 10) + 'px', top: (q[1] + 8 + dy) + 'px', tf: ''};
+    if (side === 'bottom') return {left: (f.x + f.w + 10) + 'px', top: (f.y + f.h - 64 - dy) + 'px', tf: ''};
+    return {left: (f.x + f.w + 10) + 'px', top: (f.y + 24 + dy) + 'px', tf: ''};
+  }
+  function full() {
+    var box = {}, base = {}, rowOf = {}, rows = $$('.flow', rowsEl);
     $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {   // 숨긴·삭제 대기 화면의 선은 그리지 않는다
-      box[c.dataset.id] = {x: c.offsetLeft, y: c.offsetTop, row: c.parentNode};
-      rowOf[c.dataset.id] = rows.indexOf(c.closest('.flow'));
+      var ph = c.querySelector('.phone'), id = c.dataset.id;
+      var b = {x: c.offsetLeft, y: c.offsetTop, w: c.offsetWidth || CARD.w, h: Math.max(c.offsetHeight, ph ? ph.offsetHeight : 0) || CARD.h};
+      box[id] = b;
+      base[id] = {x: b.x - (parseFloat(c.style.left) || 0), y: b.y - (parseFloat(c.style.top) || 0)};   // 끄는 동안 style 만으로 자리를 알게
+      rowOf[id] = rows.indexOf(c.closest('.flow'));
     });
     var pairs = HD.graph.overview(ctx.graph(), ctx.pending()).filter(function (p) { return box[p.a] && box[p.b]; });
-    var per = {}, seen = {}, lab = {}, num = {}, cols = [], lns = [], lbs = [], cross = 0, minX = LEFT;
+    var lab = {}, num = {}, cols = [], lns = [], lbs = [], minX = LEFT;
     marks = {};
     pairs.forEach(function (p) {
       if (!p.ab && p.ba) { var t = p.a; p.a = p.b; p.b = t; p.ab = true; p.ba = false; p.lab = {ab: p.lab.ba, ba: p.lab.ab}; }
-      per[p.a] = (per[p.a] || 0) + 1;
     });
-    pairs.forEach(function (p) {
-      var s = box[p.a], t = box[p.b];
-      var j = seen[p.a] || 0, n = per[p.a]; seen[p.a] = j + 1;
-      var sx = s.x + CARD.w / 2 + (j - (n - 1) / 2) * 28, tx = t.x + CARD.w / 2, d;
-      if (Math.abs(sx - tx) < 3 * RADIUS) sx = tx + (tx > s.x + CARD.w / 2 - 1 ? -1 : 1) * (CARD.w / 2 - 40);   // 같은 칸(위아래 줄): 세로선이 겹치지 않게
-      if (s.row === t.row) d = R.routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 10}, {lift: 54, apex: 14 * j});
-      else {                                        // 다른 줄: 왼쪽 통로(LEFT − 56 − 22·k)로 우회
-        var ck = cross++, lane = LEFT - 56 - 22 * (ck % 4);
-        sx = s.x + 60 + 24 * (ck % 3); tx = t.x + 60 + 24 * (ck % 3);
-        d = R.routeCurve({x: sx, y: s.y - 6, dir: 'up'}, {x: tx, y: t.y - 8}, {lift: 16, apex: 10 * (ck % 4), laneX: lane});
-        minX = Math.min(minX, lane);
-      }
+    var res = R.plan(box, pairs, {corridorX: LEFT - 56});
+    pairs.forEach(function (p, i) {
+      var r = res[i];
+      if (r.mode === 'corridor') minX = Math.min(minX, r.pts[2][0]);
       var color = p.plan ? PLAN : S.rowColor(prefs, rowOf[p.a]);
       var ci = cols.indexOf(color); if (ci < 0) { ci = cols.length; cols.push(color); }
       lns.push({from: p.a, to: p.b, cls: 'ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : ''), both: p.ba ? 1 : 0, color: color,
-                end: 'url(#hd-ln-' + ci + ')', start: p.ba ? 'url(#hd-lns-' + ci + ')' : '', d: d});
+                end: 'url(#hd-ln-' + ci + ')', start: p.ba ? 'url(#hd-lns-' + ci + ')' : '', d: r.d});
       if (p.plan) return;
-      [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(출발 카드 오른쪽에 쌓음)
+      [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(선이 출발 카드를 떠나는 점 옆)
         var from = x[1], to = x[2]; if (!p[x[0]]) return;
-        var k = num[from] = (num[from] || 0) + 1, f = box[from], li = lab[from] || 0; lab[from] = li + 1;
+        var end = x[0] === 'ba' ? 1 : 0, sk = from + '|' + (end ? r.to : r.from);
+        var k = num[from] = (num[from] || 0) + 1, li = lab[sk] || 0; lab[sk] = li + 1;
         marks[from + '>' + to] = {n: k, color: color};
         var nm = ctx.names ? ctx.names.get(from, to) : '', tx2 = nm || p.lab[x[0]].slice(0, 2).join(' · ') || (p.pend ? '반영 대기' : '');
-        lbs.push({from: from, to: to, named: !!nm, left: (f.x + CARD.w + 10) + 'px', top: (f.y + 24 + li * 44) + 'px', color: color,
+        var at = labelAt(r, end, li, box[from]);
+        lbs.push({from: from, to: to, pi: i, end: end, li: li, named: !!nm, left: at.left, top: at.top, tf: at.tf, color: color,
                   html: esc(ctx.circled(k)) + (tx2 ? ' ' + esc(tx2) : '')});
       });
     });
@@ -63,7 +81,32 @@ function mount(ctx) {
     if (same) { lns.forEach(function (l, i) { patchLine(lnEls[i], l); }); lbs.forEach(function (l, i) { patchLabel(lbEls[i], l); }); }
     else { rebuild(cols, lns, lbs); shape = key; }
     mark();
+    last = {box: box, base: base, pairs: pairs, res: res, lns: lns, lbs: lbs, minX: minX, dragging: false};
     return minX;
+  }
+  function dragFrame(moving) {                       // 끄는 프레임: DOM 자리 읽기 없음 · 움직인 카드에 닿은 선·태그만 쓴다
+    var only = {}, any = false;
+    moving.forEach(function (c) {
+      var id = c.dataset.id, b = last.box[id], o = last.base[id]; if (!b || !o) return;
+      last.box[id] = {x: o.x + (parseFloat(c.style.left) || 0), y: o.y + (parseFloat(c.style.top) || 0), w: b.w, h: b.h};
+      only[id] = 1; any = true;
+    });
+    if (!any) return last.minX;
+    last.res = R.plan(last.box, last.pairs, {corridorX: LEFT - 56, only: only, prev: last.res});
+    last.pairs.forEach(function (p, i) {
+      if (!only[p.a] && !only[p.b]) return;
+      var l = last.lns[i], n = lnEls[i], d = last.res[i].d;
+      if (l && n && l.d !== d) { l.d = d; n.setAttribute('d', d); }
+    });
+    last.lbs.forEach(function (l, i) {
+      var p = last.pairs[l.pi]; if (!only[p.a] && !only[p.b]) return;
+      var at = labelAt(last.res[l.pi], l.end, l.li, last.box[l.from]), n = lbEls[i];
+      if (!n) return;
+      if (l.left !== at.left) n.style.left = l.left = at.left;
+      if (l.top !== at.top) n.style.top = l.top = at.top;
+      if (l.tf !== at.tf) n.style.transform = l.tf = at.tf;
+    });
+    return last.minX;
   }
   function rebuild(cols, lns, lbs) {                  // 처음·쌍 목록이나 색이 바뀌었을 때: 전부 지우고 새로
     $$('.alabel', rowsEl).forEach(function (n) { n.remove(); });
@@ -79,7 +122,7 @@ function mount(ctx) {
         '" stroke="' + l.color + '" marker-end="' + l.end + '"' + (l.start ? ' marker-start="' + l.start + '"' : '') + ' d="' + l.d + '"/>';
     });
     lbs.forEach(function (l) {
-      labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" style="left:' + l.left + ';top:' + l.top +
+      labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" style="left:' + l.left + ';top:' + l.top + (l.tf ? ';transform:' + l.tf : '') +
         ';border-color:' + l.color + '" title="두 번 눌러 이름 바꾸기">' + l.html + '</div>';
     });
     $('defs', svg).insertAdjacentHTML('beforeend', defs);
@@ -103,6 +146,7 @@ function mount(ctx) {
     var o = n._hd || {}, editing = n.classList.contains('editing');
     if (o.left !== l.left) n.style.left = l.left;
     if (o.top !== l.top) n.style.top = l.top;
+    if (o.tf !== l.tf) n.style.transform = l.tf;
     if (o.color !== l.color) n.style.borderColor = l.color;
     if (o.named !== l.named) n.classList.toggle('named', l.named);
     if (editing) n.classList.remove('editing');
