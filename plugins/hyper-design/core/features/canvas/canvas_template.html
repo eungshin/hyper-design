@@ -111,14 +111,6 @@ body:not([data-tab="screens"]) .view #wbtn{visibility:visible}   /* 창 메뉴(�
 .phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
 .cover{position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;margin:0;background:transparent;border-radius:var(--card-r,28px);cursor:pointer}
 .cover:hover,.cover:focus-visible{outline:4px solid var(--ui-mark);outline-offset:0}
-/* AI 수정 중 덮개(Q2b, modules/view-busy.js): 카드 화면을 옅은 회색으로 덮는다 — 누르기는 아래 카드로(걷기 버튼만 받는다) */
-.busy{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(8px * var(--ts,1));background:rgba(241,241,238,.82);color:#2b2b29;font:600 calc(13px * var(--ts,1))/1.4 system-ui,sans-serif;pointer-events:none;border-radius:inherit}
-.busy-spin{width:calc(18px * var(--ts,1));height:calc(18px * var(--ts,1));border:calc(2px * var(--ts,1)) solid #c9c9c4;border-top-color:#2b2b29;border-radius:50%;animation:hd-busy-spin .9s linear infinite}
-@keyframes hd-busy-spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.busy-spin{animation:none}}
-.busy-txt{text-align:center;padding:0 calc(10px * var(--ts,1));overflow-wrap:anywhere}
-.busy [data-act=lift]{pointer-events:auto;font:inherit;font-weight:600;color:#2b2b29;background:#fff;border:1px solid #6b6b66;border-radius:999px;padding:calc(2px * var(--ts,1)) calc(12px * var(--ts,1));cursor:pointer}
-.busy [data-act=lift]:hover{background:#F1F1EE}
 .ftitle{font-size:22px;font-weight:700;margin-top:16px;line-height:1.35}
 .state{display:inline-block;font-size:15px;font-weight:700;color:#8a5a00;background:#fff3cf;border-radius:8px;padding:2px 8px;margin-right:8px;vertical-align:2px}
 .fdesc{font-size:18px;color:#555;margin-top:4px;line-height:1.45}
@@ -128,11 +120,12 @@ body:not([data-tab="screens"]) .view #wbtn{visibility:visible}   /* 창 메뉴(�
 .more .pol{margin-top:0}
 svg.ar{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 /* 판에 늘 그리는 선(modules/view-lines.js): 쌍마다 하나, 출발 줄 색(stroke 속성), 굵기 = 선 굵기 설정 · 투명도 = 표시 패널(--lnop) */
-svg.ar path.ln{fill:none;stroke-width:calc(var(--lw,2) * .8px * var(--lnk,1));opacity:var(--lnop,.55);stroke-linecap:round;stroke-linejoin:round}
-svg.ar path.ln.pd{stroke-dasharray:calc(var(--lw,2) * 4px) calc(var(--lw,2) * 3px);stroke-linecap:butt;opacity:1}   /* 점선 = 반영 대기뿐(E14) · 투명도와 상관없이 진하게 · 한 칸은 화면에서 4.8px 이상(--lw ≥ 1.2/z) */
+svg.ar path.ln{fill:none;stroke-width:calc(var(--lw,2) * .8px * var(--lnk,1));stroke-opacity:var(--lnop,.55);stroke-linecap:round;stroke-linejoin:round}
+svg.ar path.ln.pd{stroke-dasharray:calc(var(--lw,2) * 4px) calc(var(--lw,2) * 3px);stroke-linecap:butt;stroke-opacity:1}   /* 점선 = 반영 대기뿐(E14) · 투명도와 상관없이 진하게 · 한 칸은 화면에서 4.8px 이상(--lw ≥ 1.2/z) */
+svg.ar marker.lnm path{fill-opacity:var(--lnop,.55)}   /* 화살촉은 채움 — stroke-opacity 가 안 닿아 기본 투명도만 따른다 */
 svg.ar path.ln.plan{stroke-width:calc(var(--lw,2) * .5px * var(--lnk,1))}          /* 기획 갈래(D8): 얇은 회색 실선, 글자 표시 없음 */
-#rows.lnhov path.ln{opacity:calc(var(--lnop,.55) * .4)}
-#rows.lnhov path.ln.em,#rows.lnhov path.ln.pd{opacity:1}
+#rows.lnhov path.ln{stroke-opacity:calc(var(--lnop,.55) * .4)}
+#rows.lnhov path.ln.em,#rows.lnhov path.ln.pd{stroke-opacity:1}
 #rows.lnhov .alabel.em{display:block}
 /* 선 태그(방향마다 하나, 출발 카드 오른쪽): 번호 + 연결 이름. 평소엔 숨김(선만) — 마우스를 올린 카드 · 고른 카드의 선에만. 테두리 = 선 색 */
 .alabel{position:absolute;display:none;background:#fff;border:2px solid #8a8d86;color:#4a4c47;font-size:17px;font-weight:700;padding:3px 12px;border-radius:999px;white-space:nowrap;pointer-events:auto;cursor:default;box-shadow:0 1px 4px rgba(0,0,0,.10)}
@@ -143,7 +136,7 @@ svg.ar path.ln:not(.plan){pointer-events:visibleStroke;cursor:pointer}
 svg.ar circle.ln-end{r:calc(7px * var(--ts,1));fill:#fff;stroke:#2b2b29;stroke-width:calc(2px * var(--ts,1));cursor:grab;pointer-events:auto}
 svg.ar path.ln-ghost{fill:none;stroke:#6b6b66;stroke-width:calc(2px * var(--ts,1));stroke-dasharray:calc(6px * var(--ts,1)) calc(4px * var(--ts,1));pointer-events:none}
 #rows.nolines circle.ln-end{display:none}
-svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;stroke-width:calc(var(--lw,2) * 1.6px * var(--lnk,1))}
+svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!important;stroke-width:calc(var(--lw,2) * 1.6px * var(--lnk,1))}
 .foot{padding:20px 0 120px;font-size:17px;color:#777;max-width:1500px}
 .foot p{margin:0 0 6px}
 .foot ul{margin:4px 0 0;padding-left:22px;line-height:1.6}
@@ -169,8 +162,8 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;opacity:1!important;str
 #rows.focusing .card.hl{opacity:1}
 #rows.focusing .card.hl .phone{box-shadow:0 0 0 6px #8a8d86,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.focus .phone{box-shadow:0 0 0 10px #1c1c1c,0 3px 14px rgba(0,0,0,.10)}
-#rows.focusing path.ln{opacity:.18}
-#rows.focusing path.ln.on{opacity:1}
+#rows.focusing path.ln{stroke-opacity:.18}
+#rows.focusing path.ln.on{stroke-opacity:1}
 #rows.focusing .alabel.on{display:block}
 .nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0}
 .nbadge.decide{background:var(--ui-accent)}

@@ -115,7 +115,7 @@ def test_shift_click_focus(page):
             assert hl and op == 1, (cid, hl, op)
         else:
             assert not hl and op < 0.5, (cid, hl, op)
-    on = page.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => [p.classList.contains('on'), +getComputedStyle(p).opacity])")
+    on = page.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => [p.classList.contains('on'), +getComputedStyle(p).strokeOpacity])")
     assert all((op == 1) if o else (op < 0.5) for o, op in on), on     # 그 화면의 선(나가고 들어오는)은 같은 선이 진하게, 나머지는 흐리게(E20)
     SHOTS.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(SHOTS / "focus-mode.png"))
@@ -681,7 +681,7 @@ def test_v3_main_flow_dashed(gpage):
     pointer_off_board(gpage)
     gpage.wait_for_timeout(250)
     assert vis() == total
-    ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on):not(.pd)')].map(p => +getComputedStyle(p).opacity)")
+    ops = gpage.evaluate("[...document.querySelectorAll('#rows path.ln:not(.on):not(.pd)')].map(p => +getComputedStyle(p).strokeOpacity)")
     assert ops and all(abs(o - 0.18) < 0.01 for o in ops), ops
     gpage.keyboard.press("Escape")
     gpage.keyboard.press("Escape")

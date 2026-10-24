@@ -1685,7 +1685,7 @@ def test_trigger_drag_esc_cancels_and_deleted_card_refuses(dpage):
 # ---------------------------------------------------------------- 조각 2.5b 늘 보이는 선 (E7·E12·E14·D6b·D6c·D8·D9, rework §8-3)
 LINES_JS = """[...document.querySelectorAll('#ar path.ln')].map(p => ({from: p.dataset.from, to: p.dataset.to, both: p.dataset.both === '1',
     pd: p.classList.contains('pd'), plan: p.classList.contains('plan'), stroke: p.getAttribute('stroke'),
-    dash: getComputedStyle(p).strokeDasharray, op: +getComputedStyle(p).opacity, w: parseFloat(getComputedStyle(p).strokeWidth),
+    dash: getComputedStyle(p).strokeDasharray, op: +getComputedStyle(p).strokeOpacity, w: parseFloat(getComputedStyle(p).strokeWidth),
     shown: getComputedStyle(p).display !== 'none'}))"""
 
 
@@ -1780,7 +1780,7 @@ def test_trigger_link_draws_dashed_line_without_clicking(dpage):
 # ---------------------------------------------------------------- 조각 2.5d 선 체계 하나 (E20·E21, rework §7-3)
 LN_OF_JS = """(id) => [...document.querySelectorAll('#ar path.ln')].filter(p => p.dataset.from === id || p.dataset.to === id)
     .map(p => ({key: p.dataset.from + '>' + p.dataset.to, stroke: p.getAttribute('stroke'), d: p.getAttribute('d'),
-                on: p.classList.contains('on'), op: +getComputedStyle(p).opacity}))"""
+                on: p.classList.contains('on'), op: +getComputedStyle(p).strokeOpacity}))"""
 
 
 @pytest.mark.area("links", "flow")
