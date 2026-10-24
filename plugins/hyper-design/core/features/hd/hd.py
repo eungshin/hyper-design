@@ -17,6 +17,8 @@
   hd claim <screen> [<name|path>] [--note TEXT] [--by ID]
                                           "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
   hd release <screen> [<name|path>]       덮개 걷기
+  hd home [--no-browser] [--port N]       홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server)
+  hd home --shortcut [--desktop DIR]      바탕 화면에 'Hyper Design' 바로 가기(→ pythonw hd.py home)를 쓰고 끝
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -28,6 +30,7 @@ import hd_model as M  # noqa: E402
 import hd_projects as P  # noqa: E402
 
 HELPER = HERE.parent / "canvas" / "helper.py"
+HOME_DIR = HERE.parent / "home"
 
 
 def _same(a, b):
@@ -244,6 +247,22 @@ def cmd_release(a):
             "%s · %s %s" % (m.get("project"), a.screen, "덮개 걷음 (rev %s)" % res.get("rev") if res.get("released") else "덮개가 없어요(그대로)"))
 
 
+def cmd_home(a):
+    sys.path.insert(0, str(HOME_DIR))
+    if a.shortcut:
+        import shortcut
+        try:
+            lnk = shortcut.write_shortcut(C.home(), a.desktop)
+        except shortcut.ShortcutError as e:
+            raise C.HdError(str(e))
+        return {"shortcut": str(lnk)}, "바로 가기를 만들었어요: %s" % lnk
+    import home_server
+    res = home_server.serve(a.port, a.no_browser, on_url=lambda u: print(u, flush=True) if sys.stdout else None)
+    if res["reused"]:
+        return res, res["url"] + " (이미 떠 있음)"
+    return res, "홈을 껐어요"
+
+
 def parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="기계용 JSON 출력")
@@ -301,6 +320,12 @@ def parser():
     rl.add_argument("screen", help="화면 id")
     rl.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     rl.set_defaults(fn=cmd_release)
+    hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
+    hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
+    hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")
+    hm.add_argument("--desktop", help="바로 가기를 쓸 폴더(기본 사용자 바탕 화면)")
+    hm.add_argument("--port", type=int, default=None, help="허브 포트(기본 env HD_HUB_PORT | 12270, 막혔으면 빈 포트, 0 = 아무 빈 포트)")
+    hm.set_defaults(fn=cmd_home)
     return ap
 
 

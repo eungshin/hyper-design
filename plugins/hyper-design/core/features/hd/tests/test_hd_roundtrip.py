@@ -200,7 +200,8 @@ def test_helper_projects_and_open_routes(tmp_path):
     try:
         code, rows = api(url, "/api/projects")
         cli = hdj(home, "projects")[1]
-        assert code == 200 and rows == cli, "hd projects --json 과 같은 줄"
+        assert code == 200 and [{k: v for k, v in r.items() if k != "thumb"} for r in rows] == cli, "hd projects --json 과 같은 줄(+ 허브 썸네일 thumb)"
+        assert all("thumb" in r for r in rows)
         assert {(r["name"], r["state"]) for r in rows} == {("proj-a", "running"), ("proj-b", "off")}
         code, res = api(url, "/api/open", {"name": "nope"})
         assert code == 404 and "모르는 프로젝트" in res["error"]

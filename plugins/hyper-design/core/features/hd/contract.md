@@ -15,6 +15,7 @@ python $SK/features/hd/hd.py attach [--agent ID|none] [<name|path>] [--json]
 python $SK/features/hd/hd.py wait [<name|path>] [--timeout S] [--json]
 python $SK/features/hd/hd.py claim <screen> [<name|path>] [--note TEXT] [--by ID] [--json]
 python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
+python $SK/features/hd/hd.py home [--no-browser] [--port N] [--shortcut [--desktop DIR]] [--json]   # 홈 허브 · 바탕 화면 바로 가기 — home/contract.md
 ```
 설치(전역 R52): `~/.claude/tools/hd/hd.cmd`·`hd`(sh) 가 이 파일을 부르는 얇은 감싸개, 사용법은 `~/.claude/commands/hd.md`(필요할 때만 읽힘).
 
@@ -22,12 +23,12 @@ python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
 - 떠 있는 표지 `<HD_HOME | ~/.hyper-design>/active/<pid>.json` = `{pid, project, out, url, token, port, agent, started}` — `canvas/helper.py` 가 시작 때 쓰고 정상 종료(atexit · Ctrl+C · SIGTERM · SIGBREAK) 때 지운다. 강제 종료로 남은 표지는 읽는 쪽이 1초 핑(`GET /api/state`)으로 거른다(지우지 않음). `project` = out 폴더 이름이 `out` 이면 그 위 폴더 이름, 아니면 out 이름
 - `<out>/.hd-canvas.json`(canvas `contract.md` 상태 파일) — 읽기만. `state.notes` 와 `state.note-seq`
 - `<out>/screens.json` — 반영됨 `screens` 의 id 검사
-- 프로젝트 목록 `<HD_HOME | ~/.hyper-design>/projects.json` = `{version:1, projects:[{name, out, kind:'run', created, last_opened}]}` — **링크만**(out 이 어디 있는지). 상태는 `<out>/.hd-canvas.json` 에 이미 있으므로 복사하지 않는다. 주인 = `hd_client`(임시 파일 + `os.replace`); `helper.py` 는 시작 때 그 out 이 없으면 `hd_client.register` 로 넣는다. 깨진 파일은 `projects.json.corrupt-<시각>` 으로 옮기고 `[hd]` 한 줄 + 빈 목록. 모양이 틀린 항목 하나는 건너뛰고 `[hd]` 한 줄(파일은 그대로)
+- 프로젝트 목록 `<HD_HOME | ~/.hyper-design>/projects.json` = `{version:1, projects:[{name, out, kind:'run', created, last_opened, title?, starred?, trashed?}]}` — **링크만**(새 칸은 선택 — Home 의 제목·별표·휴지통, 규칙 `hd_projects.update`·`forget_trashed`, home/contract.md)(out 이 어디 있는지). 상태는 `<out>/.hd-canvas.json` 에 이미 있으므로 복사하지 않는다. 주인 = `hd_client`(임시 파일 + `os.replace`); `helper.py` 는 시작 때 그 out 이 없으면 `hd_client.register` 로 넣는다. 깨진 파일은 `projects.json.corrupt-<시각>` 으로 옮기고 `[hd]` 한 줄 + 빈 목록. 모양이 틀린 항목 하나는 건너뛰고 `[hd]` 한 줄(파일은 그대로)
 
 ## 출력
 - 쓰기는 늘 도우미 `POST /api/reply {note: id | {screen, no}, reply}` 로(상태 파일 쓰는 곳 하나). 도우미가 없으면 `hd reply` 는 실패하고 띄우는 명령을 알려 준다
 - `--json` 모양(왕복): `stop` → `{project, out, pid, port, how: route|kill|gone|other}` · `attach` → `{project, out, pid, agent, was}` · `wait` → `notes` 와 같은 모양(`which: working`). `wait` 시간 넘음은 종료 코드 **2**(다른 오류는 1)
-- `--json` 모양: `ls` → `[{project, out, url, agent, pid, port, started, open}]` · `notes` → `{project, out, rev, helper, which, notes:[{id, screen, no, status, intent, sent, edit, scope, target:{path, quote, count}, text, replies}]}` · `reply` → `{rev, status, note, screen}` · `projects` → `[{name, out, state: running|off|missing, url, pid, last_opened}]` · `save` → `{name, out, kind, created, last_opened, added}` · `open` → `{name, out, url, pid, agent, reused}` · `forget` → 지운 항목 · 오류 → `{error}`(종료 코드 1)
+- `--json` 모양: `ls` → `[{project, out, url, agent, pid, port, started, open}]` · `notes` → `{project, out, rev, helper, which, notes:[{id, screen, no, status, intent, sent, edit, scope, target:{path, quote, count}, text, replies}]}` · `reply` → `{rev, status, note, screen}` · `projects` → `[{name, title, out, state: running|off|missing, url, pid, created, last_opened, starred, trashed}]` · `save` → `{name, out, kind, created, last_opened, added}` · `open` → `{name, out, url, pid, agent, reused}` · `forget` → 지운 항목 · 오류 → `{error}`(종료 코드 1)
 - `notes` 줄: `scope`(canvas R7 `n.scope` = element|screen|all, 없으면 element)가 element 가 아니면 대상 뒤에 `· 범위: 이 화면` / `· 범위: 모든 화면`
 
 ## 프로젝트 (링크) 규칙 — `hd_projects.py`
@@ -43,7 +44,7 @@ python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
 - `hd attach` — `POST /api/attach {agent}` → `/api/forward` 가 보낼 곳과 표지의 `agent` 를 바꾼다(다시 띄우지 않음, 같은 pid). `--agent` 기본 env `PASEO_AGENT_ID`, `none` = 떼기(대기열 파일로). id 규칙 `hd_model.agent_error`: 빈 글 아님 · 128자 이하 · 띄어쓰기 없음 — CLI 와 도우미(400)가 같은 함수
 - 캔버스도 붙인다(#214): 칩 메뉴가 `GET /api/agents`(`paseo ls -g --json`, 읽기만)로 에이전트를 보여 주고 고르면 같은 `POST /api/attach` — 이 저장소에 실행 중인 것이 하나면 열 때 자동(붙어 있으면 그대로). 규칙은 `canvas/contract/agents.md`
 - `hd wait` — 2초마다 `GET /api/state` → `hd_model.pending`(status `working` = 보냄+답 없음)이 하나라도 있으면 `hd notes` 처럼 보여 주고 0. 기본 600초, 넘으면 2. 도우미에 닿지 않으면 그 out 의 표지를 다시 읽어 새 도우미로 이어 간다(`[hd]` 경고 한 줄)
-- 도우미 `GET /api/projects` → `hd projects --json` 과 같은 줄(`hd_client.project_rows`) · `POST /api/open {name, agent?}` → `hd open` 과 같은 `hd_client.open_project`(브라우저 없음) → `{name, out, url, pid, agent, reused}`. agent 기본 = 그 도우미의 지금 agent. 모르는 이름·없어진 out 404 `{error}` · 빌드·띄우기 실패 500. 둘 다 `X-HD-Token`
+- 도우미 `GET /api/projects` → `hd projects --json` 과 같은 줄(`hd_client.project_rows`) + 허브 썸네일 `thumb` — 라우트는 `home/home_api.route`(허브와 같은 JSON, 새 라우트 new·project·forget·reveal·tabs·home 도) · `POST /api/open {name, agent?}` → `hd open` 과 같은 `hd_client.open_project`(브라우저 없음) → `{name, out, url, pid, agent, reused}`. agent 기본 = 그 도우미의 지금 agent. 모르는 이름·없어진 out 404 `{error}` · 빌드·띄우기 실패 500. 둘 다 `X-HD-Token`
 - `hd claim <screen>` (#254) — "이 화면 고치는 중": `POST /api/claim {screen, by?, note?}` → 도우미가 최신 상태 파일 `state.busy` 에 `{via:'cli', since(ms), file, mtime(지금 파일 시각), by?, note?}` 를 넣고 rev+1(rev 를 받지 않는다 — `/api/reply` 와 같음: 쓰는 곳·자물쇠 하나라 CLI 의 409 재시도가 필요 없다). 캔버스는 새로고침 없이 그 카드에 덮개, 파일이 바뀌면 걷힌다. `--by` 기본 env `PASEO_AGENT_ID`(규칙 `agent_error`), `--note` ≤140. 없는 화면 = 한 줄 오류·종료 코드 1(CLI 가 screens.json 으로 먼저, 도우미도 404). 예) `hd claim job --note "제목 줄이는 중"`
 - `hd release <screen>` — `POST /api/release {screen}` → `{rev, released}`(없으면 released false, 쓰지 않음). 예) `hd release job`
 - `--json`: `claim` → `{rev, screen, file, project, by, note}` · `release` → `{rev, released, project, screen}`
@@ -64,9 +65,9 @@ python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
 
 조각 보고:
 - `hd_model` · 답 규칙·상태·번호·줄·기다릴 메모·에이전트 id·대상 고르기 · 상태 없음 · 메모 목록·답·note-seq·표지 목록 · `check_reply` `stamp` `status` `numbers` `find` `rows` `pick` `format_rows` `format_canvases` `project_name` `pending` `agent_error` `choose` · 한 out 에 도우미 하나 `helper_record` `start_verdict` · 덮개 `claim_error` `busy_items` `claim` `release`
-- `hd_projects` · 프로젝트 링크 규칙 · 상태 없음 · 목록 객체·경로 글·시각 글 · `slug` `key` `parse` `save` `touch` `forget` `find` `by_out` `ordered` `rows` `format_rows` `link_line` `ProjectError`
-- `hd_client` · 파일·HTTP 읽고 보내기 · `projects.json`(주인) · 표지·상태 파일은 helper 가 주인 · HD_HOME · out 경로 · 표지 · `markers` `running` `ping` `read_state` `screen_ids` `post_reply` `load_projects` `save_projects` `register` `serving` `build` `spawn_helper` `wait_serving` `open_browser` `open_project` `project_rows` `call` `stop` `kill_pid` `attach` `get_state` `wait_pending` `claim` `release` `stale` `read_record` `pid_alive` `live_record` `HdError` `NotFound` `TimedOut`
-- `hd` · 명령 풀이·캔버스 고르기·출력 · 상태 없음 · argv · `main` `resolve` `pick_canvas` `cmd_ls` `cmd_notes` `cmd_reply` `cmd_projects` `cmd_save` `cmd_open` `cmd_forget` `cmd_stop` `cmd_attach` `cmd_wait` `cmd_claim` `cmd_release`
+- `hd_projects` · 프로젝트 링크 규칙 · 상태 없음 · 목록 객체·경로 글·시각 글 · `slug` `key` `parse` `save` `touch` `forget` `find` `by_out` `ordered` `rows` `format_rows` `link_line` `ProjectError` `update` `forget_trashed` `title_error`
+- `hd_client` · 파일·HTTP 읽고 보내기 · `projects.json`(주인) · 표지·상태 파일은 helper 가 주인 · HD_HOME · out 경로 · 표지 · `markers` `running` `ping` `read_state` `screen_ids` `post_reply` `load_projects` `save_projects` `register` `serving` `build` `spawn_helper` `wait_serving` `open_browser` `open_project` `project_rows` `call` `stop` `kill_pid` `attach` `get_state` `wait_pending` `claim` `release` `stale` `read_record` `pid_alive` `live_record` `HdError` `NotFound` `TimedOut` `manifest_title` `titles_map` `update_project` `forget_trashed`
+- `hd` · 명령 풀이·캔버스 고르기·출력 · 상태 없음 · argv · `main` `resolve` `pick_canvas` `cmd_ls` `cmd_notes` `cmd_reply` `cmd_projects` `cmd_save` `cmd_open` `cmd_forget` `cmd_stop` `cmd_attach` `cmd_wait` `cmd_claim` `cmd_release` `cmd_home`(home_server.serve · shortcut 을 부를 뿐)
 - `canvas/helper.py` 추가분 · 표지 쓰기·지우기(주인) · `/api/reply`(상태 파일 쓰기는 기존 `_state_write` 하나로) · 시작 때 프로젝트 목록에 넣기(`hd_client.register`, 실패해도 한 줄 남기고 계속) · `write_marker` `reply_post` `hd_home` · 왕복 라우트 `/api/stop`(정상 종료) · `/api/attach`(`srv.agent` 하나가 보낼 곳의 주인, 표지 agent 고쳐 씀 `marker_agent`) · `GET /api/projects` · `/api/open`(`hd_client` 를 부를 뿐 — 복사 없음) · `attach_post` `open_post` `marker_agent` · 덮개 `/api/claim`·`/api/release`(상태 파일 쓰기는 `_state_save` 하나) `claim_post` `release_post` · 화면 파일 지켜보기 `FileWatch`(seq·바뀐 화면, I/O 없음) `scan` `_watch_loop`(1초, `server_close` 가 멈춤) `GET /api/files`
 - `skills/open/SKILL.md` · 인자 없음 → `hd projects` 후 한 번 묻기 · 이름/경로 → `hd open` · 새로 → PRD 한 번 묻고 `/hyper-design:go` 로 넘긴 뒤 `hd save --out`
 

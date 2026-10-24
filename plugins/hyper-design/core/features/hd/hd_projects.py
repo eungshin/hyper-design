@@ -1,6 +1,8 @@
 """Model — 프로젝트 목록(링크만) 규칙. 순수: 파일·네트워크·시계를 쓰지 않는다(tests/test_hd_projects.py 의 순수성 검사).
 
-목록 = $HD_HOME/projects.json = {version:1, projects:[{name, out, kind:'run', created, last_opened}]} — 어디 있는지만 적는다(복사 없음).
+목록 = $HD_HOME/projects.json = {version:1, projects:[{name, out, kind:'run', created, last_opened, title?, starred?, trashed?}]} — 어디 있는지만 적는다(복사 없음).
+  title = 사람이 붙인 제목(이름 slug 와 따로, 없으면 screens.json 의 title → 이름) · starred = 별표 · trashed = 휴지통에 넣은 시각(iso) | 없음.
+  새 칸은 선택이라 옛 파일도 그대로 읽힌다. 모양이 틀린 새 칸 하나는 그 칸만 버린다(항목은 살린다).
 상태는 <out>/.hd-canvas.json 에 이미 있으므로 링크 하나로 다시 열 수 있다.
 - 이름: slug(글자·숫자·'-', 소문자), 목록 안에서 하나뿐. 같은 out 을 두 번 넣으면 같은 항목(이름만 바뀔 수 있음)
 - 경로 비교는 key(): 역슬래시 → '/', 끝 '/' 없앰, 드라이브 문자로 시작하면(Windows) 대소문자 무시. 경로를 절대경로로 푸는 일은 Client 가 한다
@@ -52,8 +54,15 @@ def parse(doc):
         if not _entry_ok(e) or e["name"] in seen_n or key(e["out"]) in seen_o:
             continue
         seen_n.add(e["name"]); seen_o.add(key(e["out"]))
-        good.append({"name": e["name"], "out": e["out"], "kind": e.get("kind") or KIND,
-                     "created": e.get("created"), "last_opened": e.get("last_opened")})
+        g = {"name": e["name"], "out": e["out"], "kind": e.get("kind") or KIND,
+             "created": e.get("created"), "last_opened": e.get("last_opened")}
+        if isinstance(e.get("title"), str) and not title_error(e["title"]):
+            g["title"] = e["title"].strip()
+        if isinstance(e.get("starred"), bool):
+            g["starred"] = e["starred"]
+        if isinstance(e.get("trashed"), str) and e["trashed"]:
+            g["trashed"] = e["trashed"]
+        good.append(g)
     bad = len(doc["projects"]) - len(good)
     return {"version": VERSION, "projects": good}, ("항목 %d개를 건너뜀(모양이 틀리거나 겹침)" % bad if bad else None), False
 
@@ -127,17 +136,72 @@ def ordered(reg):
     return ps
 
 
-def rows(reg, alive, exists):
-    """목록 + 살아 있는 표지 + out 이 있는지 → 줄 객체 [{name, out, state:'running'|'off'|'missing', url, pid, last_opened}].
-    alive = 표지 목록, exists = {key(out): bool}."""
+def rows(reg, alive, exists, titles=None):
+    """목록 + 살아 있는 표지 + out 이 있는지 → 줄 객체
+    [{name, title, out, state:'running'|'off'|'missing', url, pid, created, last_opened, starred, trashed}].
+    alive = 표지 목록, exists = {key(out): bool}, titles = {key(out): screens.json 의 title}(제목이 없을 때 대신 — 없으면 이름)."""
     live = {key(m["out"]): m for m in alive if isinstance(m, dict) and m.get("out")}
+    titles = titles or {}
     out = []
     for e in ordered(reg):
         m = live.get(key(e["out"]))
         st = "running" if m else ("off" if exists.get(key(e["out"])) else "missing")
-        out.append({"name": e["name"], "out": e["out"], "state": st, "url": m.get("url") if m else None,
-                    "pid": m.get("pid") if m else None, "last_opened": e.get("last_opened")})
+        out.append({"name": e["name"], "title": e.get("title") or titles.get(key(e["out"])) or e["name"], "out": e["out"], "state": st,
+                    "url": m.get("url") if m else None, "pid": m.get("pid") if m else None, "created": e.get("created"),
+                    "last_opened": e.get("last_opened"), "starred": bool(e.get("starred")), "trashed": e.get("trashed") or None})
     return out
+
+
+TITLE_MAX = 80
+_UNSET = object()
+
+
+def title_error(title):
+    """제목 규칙 → 한 줄 오류 | None. 글이어야 하고, 앞뒤 빈칸을 뺀 뒤 1–80자, 줄바꿈 없음."""
+    if not isinstance(title, str):
+        return "title: 글이어야 해요"
+    t = title.strip()
+    if not t:
+        return "title: 비어 있어요"
+    if len(t) > TITLE_MAX:
+        return "title: %d자까지예요" % TITLE_MAX
+    if len(t.splitlines()) > 1:
+        return "title: 한 줄이어야 해요"
+    return None
+
+
+def update(reg, name, now, title=_UNSET, starred=None, trashed=None):
+    """이름 → (새 목록, 고친 항목). title(글) · starred(bool) · trashed(bool: True = 지금 시각, False = 되돌림) 중 준 것만 바꾼다.
+    모르는 이름·틀린 값 → ProjectError. 원래 목록은 고치지 않는다."""
+    if title is not _UNSET and title_error(title):
+        raise ProjectError(title_error(title))
+    if starred is not None and not isinstance(starred, bool):
+        raise ProjectError("starred: true/false 여야 해요")
+    if trashed is not None and not isinstance(trashed, bool):
+        raise ProjectError("trashed: true/false 여야 해요")
+    ps = [dict(e) for e in reg["projects"]]
+    cur = next((e for e in ps if e["name"] == name), None)
+    if cur is None:
+        raise ProjectError("모르는 프로젝트예요: %s" % name)
+    if title is not _UNSET:
+        cur["title"] = title.strip()
+    if starred is not None:
+        cur["starred"] = starred
+    if trashed is True and not cur.get("trashed"):
+        cur["trashed"] = now
+    elif trashed is False:
+        cur.pop("trashed", None)
+    return {"version": VERSION, "projects": ps}, cur
+
+
+def forget_trashed(reg, name):
+    """휴지통에 든 항목만 목록에서 뺀다(링크만) → (새 목록, 뺀 항목). 모르는 이름·휴지통에 없는 항목 → ProjectError."""
+    hit = next((e for e in reg["projects"] if e["name"] == name), None)
+    if hit is None:
+        raise ProjectError("모르는 프로젝트예요: %s" % name)
+    if not hit.get("trashed"):
+        raise ProjectError("휴지통에 있는 프로젝트만 목록에서 뺄 수 있어요: %s" % name)
+    return forget(reg, name)
 
 
 STATE_WORD = {"running": None, "off": "꺼짐", "missing": "없음"}

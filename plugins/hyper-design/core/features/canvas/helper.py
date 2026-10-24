@@ -34,6 +34,8 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
     id = 빈 글 아님·128자 이하·띄어쓰기 없음(hd_model.agent_error), 아니면 400 · null = 떼기(대기열 파일로) — `hd attach`
   GET /api/projects                                           → `hd projects --json` 과 같은 줄 [{name, out, state: running|off|missing, url, pid, last_opened}]
   POST /api/open {name, agent?}                               → {name, out, url, pid, agent, reused} — `hd open` 과 같은 hd_client.open_project(브라우저 없음).
+  GET /api/projects · POST /api/open · /api/new · /api/project · /api/forget · /api/reveal · GET·PUT /api/tabs · GET /api/home
+    = home/home_api.route(허브와 같은 JSON — 규칙은 home/contract.md). /api/home 은 허브를 띄우거나 그 주소 {url}
     agent 기본 = 이 도우미의 지금 agent · 모르는 이름·없어진 out 404 {error} · 빌드·띄우기 실패 500 {error}
   POST /api/claim {screen, by?, note?}                       → {rev, screen, file} — `hd claim`: state.busy 에 cli 덮개 {via:'cli', since, file, mtime(지금 파일 시각), by?, note?}
     를 늘 최신 파일에 넣고 rev+1(rev 를 받지 않는다 — /api/reply 와 같은 까닭: 쓰는 곳 하나·자물쇠 하나, CLI 가 409 를 다시 시도할 일이 없다). 모르는 화면 404 · 칸 오류 400
@@ -59,6 +61,9 @@ import build_canvas
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402  — 답 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
 import hd_client  # noqa: E402  — 프로젝트 목록(링크) 쓰기는 CLI 와 같은 Client 하나로
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "home"))
+import home_api  # noqa: E402  — 프로젝트·탭·홈 라우트는 허브(hd home)와 같은 모듈 하나(같은 JSON)
+import home_client  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
@@ -938,7 +943,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path in ("/api/state", "/api/projects", "/api/files", "/api/agents"):
+            if u.path in ("/api/state", "/api/files", "/api/agents") + home_api.GET_PATHS:
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
                 if u.path == "/api/files":
@@ -948,8 +953,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     except ValueError:
                         return self._json(400, {"error": "since: 정수가 아니에요"})
                     return self._json(200, self.server.watch.changes(since))
-                if u.path == "/api/projects":
-                    return self._json(200, hd_client.project_rows())
+                if u.path in home_api.GET_PATHS:
+                    return self._json(*home_api.route("GET", u.path, None, self.server.home_ctx))
                 if u.path == "/api/agents":
                     auto = urllib.parse.parse_qs(u.query).get("auto", [""])[0] == "1"
                     return self._json(200, agents_get(self.server, paseo, auto=auto))
@@ -1014,9 +1019,9 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if self.path == "/api/attach":
                 code, res = attach_post(self.server, body, lock)
                 return self._json(code, res)
-            if self.path == "/api/open":
-                code, res = open_post(body, self.server.agent)
-                return self._json(code, res)
+            res = home_api.route("POST", self.path, body, self.server.home_ctx)   # /api/open · new · project · forget · reveal
+            if res is not None:
+                return self._json(*res)
             if self.path == "/api/watch":
                 return self._json(200, watch(out, body.get("files") if isinstance(body, dict) else None))
             return self._json(404, {"error": "모르는 주소"})
@@ -1036,12 +1041,14 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             raw = self.rfile.read(n)
             if not self._host_ok() or self.headers.get("X-HD-Token") != token:
                 return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
-            if self.path != "/api/state":
+            if self.path not in ("/api/state", "/api/tabs"):
                 return self._json(404, {"error": "모르는 주소"})
             try:
                 body = json.loads(raw or b"null")
             except ValueError:
                 return self._json(400, {"error": "JSON 이 아니에요"})
+            if self.path == "/api/tabs":
+                return self._json(*home_api.route("PUT", self.path, body, self.server.home_ctx))
             with lock:                                  # 쓰기는 한 번에 하나(rev 비교와 쓰기 사이에 끼어들지 않게)
                 code, res = state_put(out, body)
             return self._json(code, res)
@@ -1052,6 +1059,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
     threading.Thread(target=_watch_loop, args=(srv, out, lock), daemon=True).start()   # server_close 가 멈춘다
     srv.token = token
     srv.agent = agent or None                           # /api/forward 가 보낼 곳 — /api/attach 로 바뀐다
+    srv.home_ctx = home_api.Ctx(hub=False, agent=lambda: srv.agent, port=home_client.hub_port)
     srv.marker = None                                   # main 이 표지 경로를 넣는다(attach 가 agent 를 고쳐 씀)
     srv.agents_cache, srv.agents_lock = None, threading.Lock()   # GET /api/agents 5초 캐시
     srv.repo = project_repo(out)
@@ -1106,19 +1114,8 @@ def attach_post(srv, body, lock):
 
 
 def open_post(body, agent=None):
-    """POST /api/open 본문 {name, agent?} → (code, 답). hd open 과 같은 hd_client.open_project(브라우저 없음)."""
-    if not isinstance(body, dict) or not isinstance(body.get("name"), str) or not body["name"].strip():
-        return 400, {"error": "name: 프로젝트 이름 또는 out 경로가 없어요"}
-    a = body.get("agent", agent)
-    if hd_model.agent_error(a):
-        return 400, {"error": hd_model.agent_error(a)}
-    try:
-        e, m, reused = hd_client.open_project(body["name"], a)
-    except hd_client.NotFound as x:
-        return 404, {"error": str(x)}
-    except hd_client.HdError as x:
-        return 500, {"error": str(x)}
-    return 200, {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+    """POST /api/open 본문 {name, agent?} → (code, 답). 본체는 home_api.open_post(허브와 같은 것)."""
+    return home_api.open_post(body, agent)
 
 
 def marker_agent(path, agent):

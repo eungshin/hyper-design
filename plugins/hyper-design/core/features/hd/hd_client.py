@@ -313,10 +313,49 @@ def open_project(target, agent=None):
     return e, m, reused
 
 
+def manifest_title(out):
+    """<out>/screens.json 의 title | None(없음·못 읽음 — 제목이 없을 뿐이라 경고하지 않는다: 이름으로 보인다)."""
+    try:
+        t = json.loads((pathlib.Path(out) / "screens.json").read_text(encoding="utf-8")).get("title")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return t.strip() if isinstance(t, str) and t.strip() else None
+
+
+def titles_map(reg):
+    return {P.key(e["out"]): manifest_title(e["out"]) for e in reg["projects"] if not e.get("title")}
+
+
 def project_rows():
-    """hd projects --json 과 같은 줄 객체(도우미 GET /api/projects 도 이것)."""
+    """hd projects --json 과 같은 줄 객체(도우미·허브 GET /api/projects 도 이것 — 허브 썸네일 주소는 home_api 가 붙인다)."""
     reg = load_projects()
-    return P.rows(reg, running(), exists_map(reg))
+    return P.rows(reg, running(), exists_map(reg), titles_map(reg))
+
+
+def update_project(name, **fields):
+    """POST /api/project — 제목·별표·휴지통 바꾸기 → 그 줄 객체. 모르는 이름 → NotFound, 틀린 값 → HdError."""
+    reg = load_projects()
+    if not any(e["name"] == name for e in reg["projects"]):
+        raise NotFound("모르는 프로젝트예요: %s" % name)
+    try:
+        reg, _ = P.update(reg, name, now(), **fields)
+    except P.ProjectError as e:
+        raise HdError(str(e))
+    save_projects(reg)
+    return next(r for r in project_rows() if r["name"] == name)
+
+
+def forget_trashed(name):
+    """POST /api/forget — 휴지통에 든 링크만 뺀다(파일은 그대로) → 뺀 항목."""
+    reg = load_projects()
+    if not any(e["name"] == name for e in reg["projects"]):
+        raise NotFound("모르는 프로젝트예요: %s" % name)
+    try:
+        reg, hit = P.forget_trashed(reg, name)
+    except P.ProjectError as e:
+        raise HdError(str(e))
+    save_projects(reg)
+    return hit
 
 
 # ---------------------------------------------------------------- 왕복: stop · attach · wait
