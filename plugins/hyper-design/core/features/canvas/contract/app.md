@@ -29,10 +29,13 @@ python3 $SK/features/hd/hd.py open dayfine
 - out 만들기 `app_out.py`(I/O) + `app_stages.py`(Model, 순수): 무대 목록은 `src/twin/registry.js` 를 **글로 읽는다**(node 에 묻지 않음 — 리터럴 배열·객체라 충분, unit 이 하위 프로세스 없이 돈다). 카드 = 무대마다 하나(제목 = 컴포넌트 이름, 설명 = `TWIN_LABELS`, 정책 줄 = 소스·픽스처 경로, 줄 = 그룹 `분자`·`유기체`) + 설정 탭마다 하나(`settings-window--<탭>`, `SettingsApp.svelte` 의 `const tabs`). `app.json` = `{kind:'app', repo, ui_dir, dev_cmd, dev_url, stages}` · `surface.json`(카드 520×640, 크게 보기 960×720 — 이미 있으면 그대로)
 - `build_canvas.py`: 화면 `file` 이 `http(s)://127.0.0.1|localhost[:포트]/…` 이면 카드가 그 주소를 그대로 싣는다(파일 읽기·링크 미리 뽑기 없음, `is_dev_url`). 다른 값은 예전 규칙 그대로
 - 소스 위치(`palette.js`): 고른 요소나 가장 가까운 조상의 `__svelte_meta.loc` → `hd-picked`·`hd-hit`·`hd-dbl` 답과 `hd-located` 항목에 `src:{file, line, column}`(저장소 기준 경로 — `__hdSrc.root` 아래 절대 경로면 잘라 내고, 상대면 `base/` 를 붙임, 저장소 밖 절대 경로는 그대로) · `comp:[안쪽 컴포넌트부터 ≤8]`. 메타가 없으면 두 칸 모두 없다(정적 화면 그대로)
+- 진입 모듈이 깨져도 빈 페이지가 아니다(#280): 감싸개의 `ENTRY` 는 앱 모듈을 하나씩 동적으로 읽는다(`ENTRY_DEPS`). 못 읽거나(없음·던짐) 쓰는 이름을 내보내지 않으면 무대 뿌리에 `[hd] <모듈>: <메시지>` 한 줄 + 부모 창에 `hd-here {screen, error:"<모듈>: <메시지>"}`. 모르는 무대·mount 실패도 같은 길(`무대 <id>: …`). 카드가 그 한 줄을 보인다
+- 앱 카드 "AI 수정 중" 칩 걷기(#272): 앱 카드는 `file` 이 주소라 mtime 이 없다. 감싸개가 HMR 뒤(`vite:afterUpdate`) `hd-here {screen, hmr:true}` 를 보내고, `view-busy` 가 그 카드 iframe 의 `hd-here`(HMR · 덮개 뒤 다시 실림 — 이 판에서 그 카드의 첫 로드는 빼고, `error` 알림도 빼고)로 `HD.busy.shouldLift` 를 본다(`contract/busy.md`). × 는 그대로 손으로 걷기. HMR 알림은 페이지 안 어느 모듈이 바뀌어도 온다(무대 페이지는 `stages.js` 가 모든 무대 컴포넌트를 읽어 사실상 앱 전체) — 다른 무대를 고쳐도 걷힐 수 있다
 - origin: 캔버스(도우미·file://)와 카드(`127.0.0.1:<vite>`)는 다른 origin — postMessage 는 `'*'` 로 보내고 `e.source` 로 거르므로 그대로 된다. HMR 웹소켓은 카드 페이지 자기 origin(개발 서버)에 붙는다(`[vite] connected.` — 테스트가 본다)
 
 ## 아직 (다른 곳의 일)
 
+- 의존(앱 비공개 모듈 — 앱 쪽에서 이름·내보내기가 바뀌면 카드가 `[hd] <모듈>: …` 한 줄을 보인다): `/src/styles/theme.css` · `/src/twin/stages.js`(`STAGES`·`STAGE_FIXTURES`·`stageProps`) · `/src/settings/store.js`(`applyConfigSnapshot`) · 설정 탭 건넴 `window.__dictSettingsTab` · CSS 변수 `--popup-bg`·`--popup-text`·`--popup-font-size`. 목록 원본 = `dayfine.vite.mjs` 의 `ENTRY_DEPS`(unit 테스트가 이 줄과 맞춰 본다)
 - 무대: 지금 10개. Welcome · Tutorial 틀 · History · Popup 은 dictionary 세션이 twin 무대로 더할 때까지 카드가 없다(더하면 `app_out.py` 를 다시 돌리면 된다)
 - `__svelte_meta` 는 Svelte 비공개 API(5.56.0 에서 확인) — 바뀌면 `src` 가 빠질 뿐 고르기는 그대로. 글 마디는 부모 요소의 줄만 준다
 - 카드 ≠ 진짜 창(pywebview 브리지 없음, 드래그·닫기 무반응) — 눈 확인은 앱의 규칙(R-UI6)대로
@@ -41,6 +44,6 @@ python3 $SK/features/hd/hd.py open dayfine
 
 | 고친 곳 | 돌릴 것 |
 |---|---|
-| `features/app/*` | `pytest $SK/features/app/tests -m unit`(약 1초) · 커밋 전 `pytest $SK/features/app/tests`(slow: vite + Playwright 약 35초, 앱·node_modules 가 없으면 건너뜀) |
+| `features/app/*` | `pytest $SK/features/app/tests -m unit`(약 3초 — 가짜 앱 나무로 `ENTRY` 실패 길 포함) · 커밋 전 `pytest $SK/features/app/tests`(slow: vite + Playwright 약 35초, 앱·node_modules 가 없으면 건너뜀) |
 | `foundation/palette.js` 의 `src` | 위 + `-m "unit or links or modal or tools or notes"`(캔버스) |
 | `build_canvas.py` 의 `is_dev_url` | 위 unit + `-m "unit or flow or links"`(캔버스) |

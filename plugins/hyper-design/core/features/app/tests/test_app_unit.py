@@ -174,3 +174,96 @@ def test_wrapper_stage_urls_and_public_files(tmp_path):
         {"screen": "../x", "id": None, "tab": None},
         None, None]
     assert o["pub"] == ["public/fonts/a.woff2", None, None, None, None]
+
+
+# ---------------------------------------------------------------- dayfine.vite.mjs ENTRY: 앱 비공개 모듈이 깨져도 카드에 한 줄(#280)
+# 가짜 앱 나무(src/twin/stages.js · src/settings/store.js · src/styles/theme.css + 가짜 svelte)를 node 모듈 훅으로 '/src/…'·'svelte' 에 잇고
+# ENTRY 를 그대로 돌린다 — 개발 서버·브라우저 없음. 부모 창으로 간 postMessage 와 무대 뿌리 글을 본다.
+ENTRY_RUN = r"""
+const {registerHooks} = require('module'), {pathToFileURL} = require('url'), path = require('path'), fs = require('fs');
+const [wrapper, fake, screen] = process.argv.slice(2);
+registerHooks({
+  resolve(spec, ctx, next) {
+    if (spec.startsWith('/src/')) return {url: pathToFileURL(path.join(fake, spec)).href, shortCircuit: true};
+    if (spec === 'svelte') return {url: pathToFileURL(path.join(fake, 'svelte.mjs')).href, shortCircuit: true};
+    return next(spec, ctx);
+  },
+  load(url, ctx, next) {
+    if (url.endsWith('.css')) { fs.statSync(new URL(url)); return {format: 'module', source: 'export default ""', shortCircuit: true}; }
+    return next(url, ctx);
+  },
+});
+const posts = [], root = {textContent: '', style: {}};
+globalThis.window = globalThis;
+globalThis.__hdStage = {screen, id: screen.split('--')[0], tab: screen.split('--')[1] || null};
+globalThis.document = {getElementById: () => root, documentElement: {style: {setProperty() {}}}};
+globalThis.parent = {postMessage: (m) => posts.push(m)};
+console.error = () => {};
+import(pathToFileURL(wrapper).href).then(async (m) => {
+  const f = path.join(fake, 'entry.mjs');
+  fs.writeFileSync(f, m.ENTRY);
+  await import(pathToFileURL(f).href);
+  await new Promise((r) => setTimeout(r, 50));
+  console.log(JSON.stringify({posts, text: root.textContent, mounted: globalThis.__mounted || null, deps: m.ENTRY_DEPS}));
+});
+"""
+
+GOOD_STAGES = "export const STAGES = {'word-header': {component: 'WH'}}; export const STAGE_FIXTURES = {}; export function stageProps(id) { return {id}; }\n"
+
+
+def _fake_app(root, stages=GOOD_STAGES, store="export function applyConfigSnapshot() {}\n"):
+    (root / "src" / "twin").mkdir(parents=True)
+    (root / "src" / "settings").mkdir(parents=True)
+    (root / "src" / "styles").mkdir(parents=True)
+    (root / "src" / "styles" / "theme.css").write_text("", encoding="utf-8")
+    (root / "svelte.mjs").write_text("export function mount(c, o) { globalThis.__mounted = {c, props: o.props}; }\n", encoding="utf-8")
+    if stages is not None:
+        (root / "src" / "twin" / "stages.js").write_text(stages, encoding="utf-8")
+    if store is not None:
+        (root / "src" / "settings" / "store.js").write_text(store, encoding="utf-8")
+    return root
+
+
+def _run_entry(tmp_path, fake, screen="word-header"):
+    if not NODE:
+        pytest.skip("node 가 PATH 에 없음")
+    run = tmp_path / "run.cjs"
+    run.write_text(ENTRY_RUN, encoding="utf-8")
+    r = subprocess.run([NODE, str(run), str(APP / "dayfine.vite.mjs"), str(fake), screen], capture_output=True, text=True, encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_entry_mounts_stage_from_fake_app(tmp_path):
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "app"))
+    assert o["mounted"] == {"c": "WH", "props": {"id": "word-header"}}
+    assert not [p for p in o["posts"] if p.get("error")], o["posts"]
+
+
+def test_entry_failing_private_module_posts_one_readable_line(tmp_path):
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "app", stages="throw new Error('boom');\n"))
+    errs = [p for p in o["posts"] if p.get("error")]
+    assert len(errs) == 1 and errs[0]["type"] == "hd-here" and errs[0]["screen"] == "word-header", o["posts"]
+    assert errs[0]["error"] == "/src/twin/stages.js: boom"
+    assert "/src/twin/stages.js: boom" in o["text"] and o["mounted"] is None, "카드에도 같은 한 줄(빈 페이지가 아님)"
+
+
+def test_entry_missing_module_and_missing_export_name_the_module(tmp_path):
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "a", store=None))
+    errs = [p["error"] for p in o["posts"] if p.get("error")]
+    assert len(errs) == 1 and errs[0].startswith("/src/settings/store.js: "), errs
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "b", store="export const other = 1;\n"))
+    errs = [p["error"] for p in o["posts"] if p.get("error")]
+    assert errs == ["/src/settings/store.js: applyConfigSnapshot 를 내보내지 않아요"], errs
+
+
+def test_entry_unknown_stage_posts_error(tmp_path):
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "app"), screen="nope")
+    errs = [p["error"] for p in o["posts"] if p.get("error")]
+    assert len(errs) == 1 and "nope" in errs[0] and "word-header" in errs[0], errs
+
+
+def test_entry_private_deps_are_listed_in_contract(tmp_path):
+    o = _run_entry(tmp_path, _fake_app(tmp_path / "app"))
+    doc = (CORE / "features" / "canvas" / "contract" / "app.md").read_text(encoding="utf-8")
+    assert o["deps"] and all(d in doc for d in o["deps"]), "ENTRY 가 읽는 앱 비공개 모듈은 app 계약 '아직/의존' 에 적는다"

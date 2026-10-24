@@ -6,6 +6,8 @@
    adopt() = 상태 파일에서 busy 가 바뀜(hd claim·release, view-state-sync onExternal) → 다시 읽어 그리기(새로고침 없음).
    ctx.files 가 있으면 1000ms 마다(보일 때만) 도우미의 바뀐 화면 목록을 받아 HD.busy.refresh 로 고른 카드만 ctx.reload,
    크게 보기가 그 화면이면 ctx.reloadModal. wrote(ids) = 판이 방금 스스로 쓴·다시 실은 화면(5초 동안 다시 싣지 않음).
+   앱 카드(#272): 카드 iframe 이 보낸 hd-here(palette.js 로드 · 감싸개 HMR {hmr:true}) → HD.busy 'here'(shouldLift). 화면 id = d.screen,
+   보낸 창이 그 카드의 iframe 일 때만(크게 보기 등은 무시). 이 판에서 그 카드의 첫 로드는 first(걷지 않음). 걷어도 다시 싣지 않는다(이미 새 화면).
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids)}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
@@ -127,6 +129,22 @@ function mount(ctx) {
     if (ids().some(function (id) { return st.items[id].mtime == null; })) poll(); else schedule();
   }
 
+  // 앱 카드(#272) — 카드 iframe 의 hd-here 로 걷기(mtime 이 없는 카드)
+  var loaded = {};                                    // 이 판에서 로드를 본 카드 id(첫 로드 = 판 새로 고침·처음 보임)
+  function frameOf(id) { var c = ctx.cardEl(id), f = c && c.querySelector('iframe'); return f && f.contentWindow; }
+  function onHere(e) {
+    var d = e.data;
+    if (!d || d.type !== 'hd-here' || typeof d.screen !== 'string' || !d.screen || d.error) return;   // error = 감싸개의 실패 알림(로드는 palette.js 가 따로 알린다)
+    var id = d.screen, w = frameOf(id);
+    if (!w || w !== e.source) return;
+    var kind = d.hmr ? 'hmr' : 'load', first = kind === 'load' && !has(loaded, id);
+    if (kind === 'load') loaded[id] = 1;
+    if (!has(st.items, id)) return;
+    var before = st;
+    dispatch({type: 'here', id: id, kind: kind, at: Date.now(), first: first});
+    if (st !== before) render();
+  }
+
   // 도우미가 지켜본 화면 파일(GET /api/files) — 바뀐 카드만 다시
   var since = null, ftimer = 0, fwarned = false;
   function fpoll() {
@@ -150,6 +168,7 @@ function mount(ctx) {
   function fnext() { clearTimeout(ftimer); ftimer = setTimeout(fpoll, FILES_EVERY); }
 
   style(); render(); schedule();
+  if (typeof addEventListener === 'function') addEventListener('message', onHere);
   if (ctx.files) fpoll();
   if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {   // 크게 보기를 열고·닫고·화면을 바꿀 때 칩도 따라
     var box = document.getElementById('modal'), title = document.getElementById('mtitle'), ob = new MutationObserver(drawModal);

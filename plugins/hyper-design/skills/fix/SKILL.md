@@ -13,10 +13,10 @@ description: hyper-design 캔버스에서 '보내기'로 복사한 메모를 화
 
 ```
 [hyper-design 수정 요청] out=C:/Code/demo/out · 2건
-1. screen=order-items · path=main > section.block:nth-of-type(2) > a.row:nth-of-type(1)
+1. screen=order-items · path=main > section.block:nth-of-type(2) > a.row:nth-of-type(1) · no=3
    text="와이셔츠 · 1벌 2,500원" · intent=change
    요청: 가격을 오른쪽 끝으로 붙이고 굵게
-2. screen=home · path=main > div.badge:nth-of-type(1)
+2. screen=home · path=main > div.badge:nth-of-type(1) · no=1
    text="바뀜" · intent=question
    요청: 이 배지는 무슨 뜻?
 ```
@@ -24,7 +24,8 @@ description: hyper-design 캔버스에서 '보내기'로 복사한 메모를 화
 ## 진행 — 한 턴
 
 ### 1. 읽기
-- `SK`를 정한다. 첫 줄에서 `out=` 경로(아래 `<out>`)를 읽고, 번호 항목마다 `screen`·`path`·`text`·`intent`·`요청`을 뽑는다.
+- `SK`를 정한다. 첫 줄에서 `out=` 경로(아래 `<out>`)를 읽고, 번호 항목마다 `screen`·`path`·`text`·`intent`·`요청`·`no`를 뽑는다.
+- 항목 머리 끝 ` · no=N`(여러 메모가 한 항목이면 `no=3,5`)은 그 항목에 든 캔버스 메모의 화면 안 번호다 — `path`는 ` · no=` 앞까지. 옛 요청문에는 없을 수 있다.
 - 빈 레이아웃(새 화면) 요청의 `목적:` 글이 그 화면의 첫째 브리프다 — 그대로 `screens.json` 그 화면의 `purpose`가 된다(`요청:` 아래 들여 쓴 줄은 같은 요청의 다음 줄).
 - 항목 아래 덧붙는 줄: `다른 곳:` 줄이 있으면 같은 요청을 그 경로들에도 · `범위: 이 화면 전체`/`범위: 모든 화면`이면 그 요소만이 아니라 그 화면 전체/모든 화면에 · 빈 레이아웃 `요청:` 아래 `- ` 줄은 그 화면에 남긴 메모 본문.
 - `out=`이 없으면 한 번만 묻고 턴을 끝낸다: "어느 결과 폴더(out)의 화면인가요? 경로를 알려주세요." `[[ASK]]`
@@ -56,7 +57,7 @@ PACK=<pack 절대경로>
 - selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다. `needs-part: <무엇>`은 3단계 분류가 틀린 것 — 메인이 new처럼 처리한다.
 
 ### 5. 마지막 메시지
-- 메모 닫기: `python3 $SK/features/hd/hd.py ls`가 되고 이 `<out>`이 목록에 있으면, 처리한 메모마다(번호는 `hd.py notes --out <out> --sent`에서 화면·글로 찾는다) `hd.py reply <screen>#<no> --out <out> --kind …`: 반영됨 `--what … --screens a,b --captured yes|no`(4단계 캡처) · 일부 `--done … --left …` · 대체됨 `--where …` · 질문 메모는 답변 `--text …` · 미루면 조용히 넘기지 않고 질문 `--question … --choice A --choice B`.
+- 메모 닫기: `python3 $SK/features/hd/hd.py ls`가 되고 이 `<out>`이 목록에 있으면, 처리한 항목의 `no=` 번호마다(그 항목의 `screen` 과 함께 — `no=3,5`면 둘 다) `hd.py reply <screen>#<no> --out <out> --kind …`. 번호로 닫는다(화면·글로 메모를 다시 찾지 않는다). `no=`가 없는 옛 요청문만 `hd.py notes --out <out> --sent`에서 번호를 본다: 반영됨 `--what … --screens a,b --captured yes|no`(4단계 캡처) · 일부 `--done … --left …` · 대체됨 `--where …` · 질문 메모는 답변 `--text …` · 미루면 조용히 넘기지 않고 질문 `--question … --choice A --choice B`.
 - `hd`가 안 되면 항목마다 한 줄: `<번호> · done` / `<번호> · answered` / `<번호> · not found (이유 한마디)`.
 - 안내 한 줄 + 여는 주소(`http://127.0.0.1…?hd=…`): hd로 닫았으면 "메모마다 결과가 붙었어요.", 아니면 "캔버스에서 '보낸 것 완료로'를 누르면 반영된 메모가 정리돼요."
 - 마지막 줄: `[[DONE <out>/index.html]]` — 이 줄 없이 턴을 끝내면 미완성으로 처리된다.

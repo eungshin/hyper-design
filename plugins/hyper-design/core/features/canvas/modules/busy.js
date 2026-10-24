@@ -7,13 +7,17 @@
      baseline{mtimes:{file: number|null}}   null 기준 채우기
      seen{mtimes:{file: number|null}}       기준보다 새 mtime 인 것 걷기
      lift{id}                               하나 걷기
+     here{id, kind, at, first?}             그 카드 화면이 새로 실림·바뀜 — shouldLift 이면 걷기(#272 앱 카드)
    load(getItem, key, warn?) → 상태(깨졌거나 판이 다르면 initial(), warn 이 있으면 '[hd] …' 한 줄) · save(state, setItem, key) 던지지 않음 · files(state) → 겹치지 않는 파일 목록
    label(item) → 상태 글 전체(cli: by·note 가 있으면 그것까지)
    look(item) → {kind: 'working'|'queued', text, title} — 상태 칩 모양(화면을 가리지 않는 작은 칩, task 37).
      paseo·cli = working(도는 표시 + 짧은 글, cli 는 label 을 MAX 자로 줄임) · queue = queued("대기열", 아무도 읽지 않음) · title = label 전체 + 걷히는 때
    refresh(changed, opt) → {cards:[id], modal: bool} — 도우미가 알린 바뀐 화면 중 다시 실을 것.
      opt = {known: [id](판에 있는 카드), busy: 상태(덮개가 있는 카드는 걷는 길이 다시 싣는다), skip: {id: 그때까지 ms}(방금 판이 스스로 쓴·다시 실은 것), now: ms, modal: 크게 보기 화면 id|null}
-   HD.busy = {VIA, MAX, initial, reduce, load, save, files, label, look, refresh} */
+   isApp(file) → 앱 카드인가(file 이 http(s) 개발 서버 주소 — mtime 이 없어 파일 규칙으로는 걷히지 않는다)
+   shouldLift(item, event) → bool(#272) — 앱 카드 덮개를 걷는 신호. event = {kind: 'hmr'|'load', at: ms(판이 받은 시각), first?: 이 판에서 그 카드의 첫 로드}
+     앱 카드만 · at > item.since 일 때만 · hmr(개발 서버가 그 페이지를 바꿈) = 걷기 · load = 첫 로드가 아니면 걷기(판 새로 고침·처음 보임은 AI 수정이 아님)
+   HD.busy = {VIA, MAX, initial, reduce, load, save, files, label, look, refresh, isApp, shouldLift} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -56,12 +60,25 @@ function reduce(s, a) {
     }
     return changed ? {v: 1, items: items} : s;
   }
+  if (a.type === 'here') {
+    if (!has(s.items, a.id) || !shouldLift(s.items[a.id], a)) return s;
+    items = copy(s.items); delete items[a.id];
+    return {v: 1, items: items};
+  }
   if (a.type === 'lift') {
     if (!has(s.items, a.id)) return s;
     items = copy(s.items); delete items[a.id];
     return {v: 1, items: items};
   }
   return s;
+}
+
+function isApp(file) { return typeof file === 'string' && /^https?:\/\//i.test(file); }
+function shouldLift(it, ev) {
+  if (!it || !ev || !isApp(it.file) || !num(ev.at) || !(ev.at > (num(it.since) ? it.since : 0))) return false;
+  if (ev.kind === 'hmr') return true;
+  if (ev.kind === 'load') return !ev.first;
+  return false;
 }
 
 function load(getItem, key, warn) {
@@ -121,5 +138,5 @@ function refresh(changed, opt) {
   return {cards: cards, modal: modal};
 }
 
-HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh};
+HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift};
 })();

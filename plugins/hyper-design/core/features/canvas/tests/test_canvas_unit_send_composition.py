@@ -5,7 +5,7 @@ R5 빈 레이아웃 = 항목 하나: 레이아웃 줄 + 그 화면 메모 본문
 R6 같은 화면 · 같은 글(공백 정리) · 같은 의도 · 같은 범위 메모 = 항목 하나: 첫 경로가 path=, 나머지는 '   다른 곳: …'.
    여러 요소 메모도 같은 규칙(항목 하나).
 R7 범위 n.scope = element|screen|all(없음 = element): screen·all 이면 '   범위: …' 줄. annotation.SCOPES = 고르기 말.
-옛 메모(범위 없음·겹침 없음·빈 레이아웃 없음)는 예전 출력 그대로 — 아래 OLD 로 고정.
+옛 메모(범위 없음·겹침 없음·빈 레이아웃 없음)는 예전 출력 그대로 — 아래 OLD 로 고정. 항목 머리 끝 ' · no=…'(#279) = 그 항목 메모 번호(번호 없는 메모 = 줄 없음, 4번 항목).
 """
 import json, shutil, subprocess, tempfile
 from pathlib import Path
@@ -73,14 +73,14 @@ def out():
 
 
 OLD = """[hyper-design 수정 요청] out=C:/o · 4건
-1. screen=home · path=h1.title
+1. screen=home · path=h1.title · no=1
    text=" 안녕 하세요 " · intent=change
    요청: 제목을 크게
-2. screen=home · path=p.lead
+2. screen=home · path=p.lead · no=2
    text="설명" · intent=change
    요청: 첫 줄
        둘째 줄
-3. screen=pay · path=body
+3. screen=pay · path=body · no=1
    text="결제" · intent=question
    요청: 왜 이 화면?
 4. screen=home · path=a.go
@@ -95,10 +95,10 @@ def test_old_notes_send_exactly_as_before(out):
 def test_blank_layout_and_its_memos_are_one_item(out):
     lines = out["r5"].split("\n")
     assert lines[0] == "[hyper-design 수정 요청] out=C:/o · 2건", "레이아웃 + 메모 둘 = 한 건, 다른 화면 메모 한 건"
-    assert lines[1] == "1. screen=new-ab · path=(새 화면)"
+    assert lines[1] == "1. screen=new-ab · path=(새 화면) · no=1,2,3"
     assert lines[3] == '   요청: 새 화면 "결제"(new-ab)을 빈 레이아웃으로 만들기 — 목적: 카드로 결제한다 · 내용은 이 목적과 이 화면에 남긴 메모를 따라 채우기'
     assert lines[4:7] == ["       - 카드 목록 위에 합계", "       - 쿠폰 칸", "         선택으로"], "메모 본문은 번호 차례, 여러 줄은 더 들여 써서"
-    assert lines[7] == "2. screen=home · path=h1" and len(lines) == 10
+    assert lines[7] == "2. screen=home · path=h1 · no=1" and len(lines) == 10
     assert out["r5ids"] == [["L", "m2", "m3"], ["h"]], "메모는 레이아웃 항목에 한 번만 — 보낼 때 함께 '보냄'"
 
 
@@ -111,11 +111,11 @@ def test_blank_layout_without_purpose_or_memo_body_is_flagged(out):
 def test_same_text_on_several_elements_is_one_item(out):
     lines = out["r6"].split("\n")
     assert lines[0] == "[hyper-design 수정 요청] out=C:/o · 4건"
-    assert lines[1] == "1. screen=home · path=a.one" and lines[3] == "   요청: 굵게  해 주세요"
+    assert lines[1] == "1. screen=home · path=a.one · no=1,3" and lines[3] == "   요청: 굵게  해 주세요"
     assert lines[4] == '   다른 곳: a.two ("둘")', "같은 글(공백 정리) = 한 건, 짧은 글은 함께"
-    assert lines[5] == "2. screen=home · path=p.lead"
-    assert lines[8] == "3. screen=home · path=a.three", "의도가 다르면 따로"
-    assert lines[11] == "4. screen=pay · path=a.p1" and lines[14] == "   다른 곳: button.long", "여러 요소 메모도 한 건 · 긴 글은 경로만"
+    assert lines[5] == "2. screen=home · path=p.lead · no=2"
+    assert lines[8] == "3. screen=home · path=a.three · no=4", "의도가 다르면 따로"
+    assert lines[11] == "4. screen=pay · path=a.p1 · no=1" and lines[14] == "   다른 곳: button.long", "여러 요소 메모도 한 건 · 긴 글은 경로만"
     assert len(lines) == 15
 
 

@@ -63,23 +63,48 @@ export function publicFile(app, path) {
   return existsSync(f) && statSync(f).isFile() ? f : null;
 }
 
-const ENTRY = `import '/src/styles/theme.css';
-import { mount } from 'svelte';
-import { STAGES, STAGE_FIXTURES, stageProps } from '/src/twin/stages.js';
-import { applyConfigSnapshot } from '/src/settings/store.js';
-const q = window.__hdStage || {};
+/* 무대 페이지가 읽는 앱의 비공개 모듈(app 계약 '아직/의존' 에 같은 목록) — 하나라도 못 읽으면 페이지에 한 줄 + 부모 창에 hd-here {error} (#280) */
+export const ENTRY_DEPS = ['/src/styles/theme.css', '/src/twin/stages.js', '/src/settings/store.js'];
+
+/* 무대 페이지 진입 모듈. import 는 하나씩 동적으로 — 실패하면 그 모듈 이름 + 메시지 한 줄(빈 페이지 대신).
+   HMR: 개발 서버가 바꾼 뒤(vite:afterUpdate) 부모 창에 hd-here {hmr:true} — 캔버스가 그 카드의 "AI 수정 중" 칩을 걷는다(#272) */
+export const ENTRY = `const q = window.__hdStage || {};
 const root = document.getElementById('hd-stage-root');
-const stage = q.id && STAGES[q.id];
-if (!stage) {
-  root.textContent = '[hd] 이 무대가 없어요: ' + (q.screen || '') + ' — 있는 무대: ' + Object.keys(STAGES).join(', ');
-  console.error('[hd] unknown twin stage', q.screen);
-} else {
-  // twin 페이지(TwinApp.svelte)와 같게: 설정 스토어는 usage-tab 스냅샷으로 채운다
-  applyConfigSnapshot(STAGE_FIXTURES['usage-tab'] || STAGE_FIXTURES[q.id] || {});
-  if (q.tab) window.__dictSettingsTab = q.tab;
-  document.documentElement.style.setProperty('--popup-font-size', '14px');
-  root.style.cssText = 'background:var(--popup-bg);color:var(--popup-text);font-size:var(--popup-font-size);min-height:100vh;box-sizing:border-box;padding:16px';
-  mount(stage.component, { target: root, props: stageProps(q.id) });
+function tell(m) {
+  try { parent.postMessage(Object.assign({type: 'hd-here', screen: q.screen || ''}, m), '*'); } catch (e) { console.error('[hd] postMessage', e); }
+}
+function fail(msg) {
+  root.textContent = '[hd] ' + msg;
+  console.error('[hd] twin stage', msg);
+  tell({error: msg});
+}
+function why(e) { return String((e && e.message) || e).split('\\n')[0]; }
+async function need(name, load, keys) {
+  let m;
+  try { m = await load(); } catch (e) { throw Object.assign(new Error(name + ': ' + why(e)), {hd: true}); }
+  for (const k of keys || []) if (m[k] == null) throw Object.assign(new Error(name + ': ' + k + ' 를 내보내지 않아요'), {hd: true});
+  return m;
+}
+if (import.meta.hot) import.meta.hot.on('vite:afterUpdate', () => tell({hmr: true}));
+try {
+  await need('/src/styles/theme.css', () => import('/src/styles/theme.css'));
+  const { mount } = await need('svelte', () => import('svelte'), ['mount']);
+  const { STAGES, STAGE_FIXTURES, stageProps } = await need('/src/twin/stages.js', () => import('/src/twin/stages.js'), ['STAGES', 'stageProps']);
+  const { applyConfigSnapshot } = await need('/src/settings/store.js', () => import('/src/settings/store.js'), ['applyConfigSnapshot']);
+  const stage = q.id && STAGES[q.id];
+  if (!stage) {
+    fail('이 무대가 없어요: ' + (q.screen || '') + ' — 있는 무대: ' + Object.keys(STAGES).join(', '));
+  } else {
+    // twin 페이지(TwinApp.svelte)와 같게: 설정 스토어는 usage-tab 스냅샷으로 채운다
+    const fx = STAGE_FIXTURES || {};
+    applyConfigSnapshot(fx['usage-tab'] || fx[q.id] || {});
+    if (q.tab) window.__dictSettingsTab = q.tab;
+    document.documentElement.style.setProperty('--popup-font-size', '14px');
+    root.style.cssText = 'background:var(--popup-bg);color:var(--popup-text);font-size:var(--popup-font-size);min-height:100vh;box-sizing:border-box;padding:16px';
+    mount(stage.component, { target: root, props: stageProps(q.id) });
+  }
+} catch (e) {
+  fail(e && e.hd ? e.message : '무대 ' + (q.id || '') + ': ' + why(e));
 }
 `;
 

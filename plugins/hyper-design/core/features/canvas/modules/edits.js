@@ -74,6 +74,7 @@ function split(notes) {
 }
 
 // 보내기 요청문(/hyper-design:fix 가 읽는 형식 — 항목 머리 '번호. screen=… · path=…'·text·요청 세 줄은 바꾸지 않는다)
+// 항목 머리 끝 ' · no=N[,M…]'(#279) = 그 항목에 든 메모의 화면 안 번호(차례대로, 번호 없는 옛 메모는 줄 없음) — fix 가 hd reply <screen>#<no> 로 닫는다
 // 요청 글이 여러 줄이면 둘째 줄부터 '요청: ' 뒤 글자 자리에 맞춰 들여 쓴다. 그 아래 덧붙는 줄(task 17):
 //   소스(task 27·30) '   소스: 파일:줄'(첫 대상에 src 가 있을 때 — 앱 카드) · 빈 레이아웃(R5) = 그 화면 메모 본문 '- …'(번호 차례) · 범위(R7) '   범위: …' · 같은 요청의 다른 자리(R6) '   다른 곳: 경로 ("짧은 글") · …'
 var CONT = '       ';
@@ -112,11 +113,16 @@ function items(list) {
   return out;
 }
 function indent(s, pad) { return String(s).replace(/[ \t]*\r?\n\s*/g, '\n' + pad); }   // 줄바꿈은 들여 쓴 다음 줄로 이어 남긴다(#225)
+function nos(it) {
+  var o = [];
+  it.notes.forEach(function (n) { var v = +n.no; if (v > 0 && v === Math.floor(v) && o.indexOf(v) < 0) o.push(v); });
+  return o.length ? ' · no=' + o.join(',') : '';
+}
 function place(a) { var t = flat(a.text); return a.path + (t && t.length <= 20 ? ' ("' + t + '")' : ''); }
 function request(notes, out) {
   var list = items(notes);
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
-    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
+    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + nos(n) + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
       '\n   요청: ' + indent(n.note, CONT) +
       (n.src && n.src.file ? '\n   소스: ' + n.src.file + (n.src.line ? ':' + n.src.line : '') : '') +
       n.memos.filter(function (m) { return flat(m.note); }).map(function (m) {

@@ -10,6 +10,7 @@ HEADER_RE = re.compile(r"^\[hyper-design 수정 요청\] out=.+ · \d+건$")
 ITEM_RE = re.compile(r"^(\d+)\. screen=[^\s·]+ · path=.+$")
 TEXT_RE = re.compile(r'^   text=".*" · intent=(change|question)$')
 NOTE_RE = re.compile(r"^   요청: .+$")
+NO_RE = re.compile(r" · no=(\d+(?:,\d+)*)$")     # #279: 항목 머리 끝 = 그 항목에 든 메모 번호(화면 안 번호 — hd reply <screen>#<no>)
 
 
 def _split():
@@ -45,6 +46,13 @@ def test_body_refs():
     assert 'model: "opus"' not in body
 
 
+def test_skill_closes_memos_by_number():
+    # #279: 메모는 요청문 항목의 no= 로 닫는다(화면·글로 찾지 않는다)
+    _, body = _split()
+    assert "no=" in body and "hd.py reply <screen>#<no>" in body, "항목의 no= 로 닫는 법"
+    assert "화면·글로 찾는다" not in body
+
+
 def test_example_matches_canvas_format():
     lines = _example()
     assert HEADER_RE.match(lines[0]), lines[0]
@@ -54,6 +62,7 @@ def test_example_matches_canvas_format():
     for i in range(n):
         m = ITEM_RE.match(items[3 * i])
         assert m and int(m.group(1)) == i + 1, items[3 * i]
+        assert NO_RE.search(items[3 * i]), "예시 항목에도 no=: " + items[3 * i]
         assert TEXT_RE.match(items[3 * i + 1]), items[3 * i + 1]
         assert NOTE_RE.match(items[3 * i + 2]), items[3 * i + 2]
     intents = {TEXT_RE.match(items[3 * i + 1]).group(1) for i in range(n)}
@@ -68,15 +77,19 @@ def test_template_emits_same_format():
         import pytest
         pytest.skip("node 없음")
     # 명령 줄 인자는 ASCII 로만(Windows 코드 페이지가 한글을 깨뜨림) — 여러 줄 메모 하나 + 질문 하나
-    js = ("require(%s); const n=[{screen:'a',path:'div:nth-of-type(1)',text:'old',intent:'change',note:'fix it\\nsecond line'},"
-          "{screen:'b',path:'body',text:'',intent:'question',note:'why?'}]; process.stdout.write(HD.edits.request(n,'C:/out'))") % json.dumps(str(EDITS))
+    js = ("require(%s); const n=[{screen:'a',path:'div:nth-of-type(1)',text:'old',intent:'change',note:'fix it\\nsecond line',no:4},"
+          "{screen:'b',path:'body',text:'',intent:'question',note:'why?',no:1},"
+          "{screen:'c',path:'body',text:'',intent:'change',note:'old memo'}]; process.stdout.write(HD.edits.request(n,'C:/out'))") % json.dumps(str(EDITS))
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, encoding="utf-8", check=True).stdout.splitlines()
     assert HEADER_RE.match(out[0]), out[0]
     items = [i for i, l in enumerate(out) if ITEM_RE.match(l)]
-    assert len(items) == 2, out
+    assert len(items) == 3, out
     for i in items:
         assert TEXT_RE.match(out[i + 1]), out[i + 1]
         assert NOTE_RE.match(out[i + 2]), out[i + 2]
+    assert out[1] == "1. screen=a · path=div:nth-of-type(1) · no=4", "항목마다 메모 번호(#279)"
+    assert NO_RE.search(out[items[1]]).group(1) == "1"
+    assert out[items[2]] == "3. screen=c · path=body", "번호 없는 옛 메모 = 예전 그대로"
 
 
 def test_other_places_and_scope_lines_keep_the_format():
@@ -97,5 +110,6 @@ def test_other_places_and_scope_lines_keep_the_format():
         assert TEXT_RE.match(out[i + 1]), out[i + 1]
         assert NOTE_RE.match(out[i + 2]), out[i + 2]
     assert out[4].startswith("   다른 곳: a.two") and out[8] == "   범위: 모든 화면", out
+    assert NO_RE.search(out[1]).group(1) == "1,2" and NO_RE.search(out[5]).group(1) == "3", "한 항목에 든 메모 번호 모두"
     _, body = _split()
     assert "다른 곳:" in body and "범위:" in body
