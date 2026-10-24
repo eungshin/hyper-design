@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전체 화면 한눈에 보기</title>
+<title>hyper-design</title>
 <!-- 캔버스 템플릿(정적). build_canvas.py 가 아래 hd-data 에 데이터만 끼워 넣는다. 외부 라이브러리 없음. -->
 <link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'">
 <style>
@@ -524,7 +524,7 @@ body.split-lr #khint{display:none}
 </head>
 <body data-tab="screens">
 <header class="hd">
-  <div class="hdname"><span class="app" aria-hidden="true">hd</span><h1 id="title">전체 화면 한눈에 보기</h1></div>
+  <div class="hdname"><span class="app" aria-hidden="true">hd</span><h1 id="title"></h1></div>
   <span class="sep" aria-hidden="true"></span>
   <div class="tabs" role="tablist" data-group="tabs">
     <button class="tab" role="tab" data-tab="screens" aria-selected="true">Screens</button>
@@ -651,7 +651,7 @@ var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
 
-if (D.title) { $('#title').textContent = D.title; document.title = D.title; }
+(function (t) { $('#title').textContent = t; if (t) document.title = t; })(HD.projects.shown(D.title, window.__hdOut || location.pathname));   // 머리 제목 — 도우미로 열면 view-home 이 프로젝트 제목으로 바꾼다(옛 기본 문구는 쓰지 않음)
 var pane = $('#screens'), stage = $('#stage'), rowsEl = $('#rows');
 
 /* ---------- 판 내용 ---------- */
