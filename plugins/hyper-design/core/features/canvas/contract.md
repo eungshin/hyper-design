@@ -52,12 +52,14 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 포트(#270): `--port` 가 없으면 `<out>/.hd-helper.json` 의 지난 포트를 먼저 열고, 막혔으면 빈 포트로(`[hd]` 한 줄) — 주소(origin)가 같아야 캔버스 localStorage(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다. `.hd-helper.json` = 떠 있는 동안 `{url, pid, port, token}`(주소를 찍기 전에 씀) · 정상 종료 뒤 `{port}`
 - 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
 - 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다
-- 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고, 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 `build_canvas.py`로 다시 만든다(실패하면 되돌림)
+- 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고(안인지는 `hd_projects.inside` — `hd` 와 같은 out 규칙 하나, #282), 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 다시 빌드한다(실패하면 되돌림). CLI 로 뜬 도우미는 `hd open` 과 같은 `build_ref.py`(저장소면 git HEAD 코드, 아니면 작업 트리 — #278)로, 같은 프로세스에서 `make_server` 를 쓰는 테스트는 작업 트리 `build_canvas.py` 로
+- 정리(#281): 시작할 때와 쓰기마다 `.hd-history/<시각>/` 이 가장 새 200개 밖이면서 30일보다 오래됐으면 지우고, `.hd-queue/<시각>.txt` 중 보냄·걷힘 표시(`<시각>.sent` — paseo send 가 받았을 때 도우미가 씀 · `<시각>.lifted` — 다 처리한 쪽이 씀)가 붙은 7일 넘은 것을 표시와 함께 지운다. 시각 이름이 아닌 것(`fix-components.css` 등)은 손대지 않는다(고르기 = `hd/helper_model.py`). 떼어 띄운 도우미의 로그는 `<out>/.hd-helper.log`
 - 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
 - `POST /api/watch {files}` → `{mtimes: {file: mtime|null}}`(out 밖·없는 파일 = null) — AI 수정 중 덮개가 끝을 아는 유일한 신호
 - 도우미로 열어도 저장 키는 file://로 열 때와 같다(`window.__hdKeyPath`). 도우미가 없거나 꺼져 있으면 '보내기'는 지금처럼 요청문을 복사한다
 - 프로젝트 상태 파일 `<out>/.hd-canvas.json` = `{"version":1, "rev":N, "updated":"<iso>", "state":{"notes":…, "card-pos":…, "edit-log":…, "link-names":…, "hidden":…, "locked":…, "folders":…, "busy":…, "note-seq":…}}`(값은 풀어 둔 JSON, 해시 없는 이름, 모르는 키는 그대로) — 터미널 에이전트(`hd`)가 읽는 곳. `index.html` 을 줄 때 `window.__hdState = {rev, state}` 를 끼워 넣는다
-- `GET /api/state` → `{rev, state}`(없으면 rev 0) · `PUT /api/state {rev, state:{바뀐 이름: 값|null(지움)}}` → rev 가 파일과 같으면 합쳐 `rev+1` 로 쓰고 `{rev}`, 다르면 `409 {rev, state}` · 깨진 JSON 400 · 2 MB 넘음 413. 둘 다 `X-HD-Token`. 쓰기는 임시 파일 + `os.replace`, 바로 앞 것 하나는 `.hd-canvas.json.bak`. 깨진 상태 파일은 `.hd-canvas.json.corrupt-<시각>` 으로 옮기고 한 줄 남긴 뒤 빈 상태(도우미는 멈추지 않는다). 점으로 시작하는 파일이라 정적 경로로는 내주지 않는다
+- `GET /api/state[?since=<rev>]` → `{rev, state}`(없으면 rev 0) · since 가 파일 rev 와 같으면 몸통 없이 `{rev, unchanged:true}`(#273 — 2초 읽기), 0 이상 정수가 아니면 400 · `PUT /api/state {rev, state:{바뀐 이름: 값|null(지움)}}` → rev 가 파일과 같으면 합쳐 `rev+1` 로 쓰고 `{rev}`, 다르면 `409 {rev, state}` · 깨진 JSON 400 · 2 MB 넘음 413 `{error}`(크기와 "완료 메모를 보관으로 옮기세요"). 둘 다 `X-HD-Token`. 쓰기는 임시 파일 + `os.replace`, 바로 앞 것 하나는 `.hd-canvas.json.bak`. 깨진 상태 파일은 `.hd-canvas.json.corrupt-<시각>` 으로 옮기고 한 줄 남긴 뒤 빈 상태(도우미는 멈추지 않는다). 점으로 시작하는 파일이라 정적 경로로는 내주지 않는다
+- 완료 메모 보관(#273): `POST /api/archive {notes:[{…}]}` → 메모마다 JSON 한 줄을 `<out>/.hd-notes-archive.jsonl` 끝에 붙여(있던 것 + 새 줄을 임시 파일에 쓰고 `os.replace`, 쓰기 자물쇠 안) `{ok:true, count}` · 객체 목록이 아니면 400(쓰지 않음) · `GET /api/archive` → `{notes:[…]}`(마지막 2000 줄, 새것이 뒤, 깨진 줄은 건너뛰고 `[hd]` 한 줄). 둘 다 `X-HD-Token`. 상태 파일에서 빼는 일은 캔버스(`{ok}` 뒤 한 번 저장)
 
 ## 테스트 층 (캔버스를 고치는 모든 세션이 따른다)
 
@@ -94,7 +96,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판의 선 하나뿐: 쌍마다 하나·줄 색·번호·태그·강조·자르기 맞춤·보이기/굵기/투명도/색) | `unit or flow or links or tools` |
 | `foundation/palette.js` 의 `quote`·`hd-locate` | `unit or notes or modal` |
 | `foundation/palette.js` | `links or modal or tools` |
-| `helper.py` | `helper` |
+| `helper.py` | `helper`(+ `-m slow -k helper_upkeep`, hd 테스트) |
 | `build_canvas.py` | `unit or flow or links` |
 | 여러 영역에 걸친 변경 | 그 영역들을 `or` 로 묶어서(전체는 아래 3 에서만) |
 

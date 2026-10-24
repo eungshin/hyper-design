@@ -5,7 +5,7 @@
   새 칸은 선택이라 옛 파일도 그대로 읽힌다. 모양이 틀린 새 칸 하나는 그 칸만 버린다(항목은 살린다).
 상태는 <out>/.hd-canvas.json 에 이미 있으므로 링크 하나로 다시 열 수 있다.
 - 이름: slug(글자·숫자·'-', 소문자), 목록 안에서 하나뿐. 같은 out 을 두 번 넣으면 같은 항목(이름만 바뀔 수 있음)
-- 경로 비교는 key(): 역슬래시 → '/', 끝 '/' 없앰, 드라이브 문자로 시작하면(Windows) 대소문자 무시. 경로를 절대경로로 푸는 일은 Client 가 한다
+- 경로 비교는 key(): 역슬래시 → '/', 끝 '/' 없앰, 드라이브 문자로 시작하면(Windows) 대소문자 무시. 같은 out = same(), out 안 = inside() — hd.py 와 helper._inside 도 이것 하나(#282). 경로를 절대경로로 푸는 일은 Client 가 한다
 - 지우기는 forget(이름) 뿐 — 링크만 지운다. out 폴더가 없어진 항목도 저절로 지우지 않는다(목록에 '없음')
 """
 
@@ -26,6 +26,17 @@ def key(path):
     while len(p) > 1 and p.endswith("/") and not p.endswith(":/"):
         p = p[:-1]
     return p.casefold() if len(p) >= 2 and p[1] == ":" else p
+
+
+def same(a, b):
+    """두 경로가 같은 out 인가 — key() 로 비교(절대경로로 푸는 일은 Client 가 한 번)."""
+    return key(a) == key(b)
+
+
+def inside(out, path):
+    """path 가 out 안(또는 out 자신)인가 — key() 로 비교, 이름 앞부분만 같은 옆 폴더는 밖. helper._inside 와 같은 규칙 하나(#282)."""
+    o, p = key(out), key(path)
+    return p == o or p.startswith(o if o.endswith("/") else o + "/")
 
 
 def slug(text):

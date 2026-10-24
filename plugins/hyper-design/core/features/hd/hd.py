@@ -34,7 +34,8 @@ HOME_DIR = HERE.parent / "home"
 
 
 def _same(a, b):
-    return pathlib.Path(a).resolve() == pathlib.Path(b).resolve()
+    """같은 out — 규칙은 hd_projects.same(key) 하나, 절대경로로 푸는 일은 Client(abs_out) 가 한 번(#282)."""
+    return P.same(C.abs_out(a), C.abs_out(b))
 
 
 def _listing(alive):

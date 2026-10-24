@@ -14,6 +14,8 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
   (없으면 터미널에서 /hyper-design:fix 에 그 내용을 붙여 넣는다).
 - 도우미가 꺼져 있으면 캔버스는 지금처럼 요청문을 복사한다.
 
+- 정리(#281): 시작·쓰기마다 가장 새 200개 밖 + 30일 넘은 .hd-history/<stamp>/, 보냄·걷힘 표시(.sent·.lifted) 붙은 7일 넘은 .hd-queue 파일(prune).
+- 다시 빌드: CLI(main)는 build_ref.py(hd open 과 같음 — git HEAD, #278), 같은 프로세스 테스트는 build_canvas.py.
 - 쓰기마다 <out>/.hd-history/<stamp>/manifest.json = {files:{relpath:{before, after_sha}}, changed} — 되살리기는 그 뒤 파일이 안 바뀌었을 때만.
 
 API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localhost 의 그 포트만)
@@ -25,8 +27,10 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
   /api/forward {text}                                         → {via:'paseo'|'queue', agent?, path?}
   /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
-  GET /api/state                                              → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0)
-  PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413(2 MB 넘음)
+  GET /api/state[?since=rev]                                  → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0) · since == rev 면 {rev, unchanged:true}(#273)
+  PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413 {error: 크기 + "완료 메모를 보관으로 옮기세요"}
+  POST /api/archive {notes:[…]}                               → {ok:true, count} — <out>/.hd-notes-archive.jsonl 에 메모마다 한 줄(임시 파일 + os.replace, 자물쇠 안) · 400
+  GET /api/archive                                            → {notes:[…]} (마지막 2000 줄, 새것이 뒤)
   POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
     — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
   POST /api/stop {}                                           → {stopping:true} 를 답한 뒤 서버를 정상 종료(표지 지움 · .hd-helper.json 은 {port} 만 남김) — `hd stop`
@@ -61,12 +65,16 @@ import build_canvas
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402  — 답 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
 import hd_client  # noqa: E402  — 프로젝트 목록(링크) 쓰기는 CLI 와 같은 Client 하나로
+import hd_projects  # noqa: E402  — out 안 규칙(inside)은 hd 와 같은 key 하나(#282)
+import helper_model  # noqa: E402  — since·413 글·보관 줄·정리 고르기(순수 Model)
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "home"))
 import home_api  # noqa: E402  — 프로젝트·탭·홈 라우트는 허브(hd home)와 같은 모듈 하나(같은 JSON)
 import home_client  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
+BUILD_REF = HERE / "build_ref.py"                    # hd open 과 같은 빌더 — 저장소면 git HEAD 코드로(#278), 아니면 작업 트리
+BUILDER = BUILD                                      # 다시 빌드에 쓰는 것 — CLI(main)는 use_ref_build() 로 BUILD_REF. 같은 프로세스에서 make_server 를 쓰는 테스트는 작업 트리
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 PASEO_DEFAULT = pathlib.Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Paseo" / "resources" / "bin" / "paseo.cmd"
 
@@ -315,9 +323,8 @@ def _link_to(attrs):
 
 
 # ---------------------------------------------------------------- 편집 적용(out 안만 · 원본 남김 · 다시 빌드)
-def _inside(out, p):
-    p = p.resolve()
-    return p == out or out in p.parents
+def _inside(out, p):                                 # 규칙은 hd_projects.inside(key: 구분자·끝 '/'·드라이브 대소문자) 하나 — 여기서는 한 번 풀기만
+    return hd_projects.inside(str(out), str(pathlib.Path(p).resolve()))
 
 
 def _sha(p):                                         # 파일 sha256 | None(없음)
@@ -327,8 +334,14 @@ def _sha(p):                                         # 파일 sha256 | None(없�
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: 자식 프로세스가 콘솔 창을 띄웠다 닫지 않게(창 없이 뜬 도우미에서 편집마다 깜빡임)
 
 
+def use_ref_build():
+    """CLI 로 뜬 도우미(실사용)는 hd open 과 같은 build_ref.py 로 다시 빌드한다 — 다른 세션이 고치는 중인 작업 트리가 떠 있는 캔버스에 들어가지 않게(#278)."""
+    global BUILDER
+    BUILDER = BUILD_REF
+
+
 def _build(out):
-    return subprocess.run([sys.executable, str(BUILD), str(out)], capture_output=True, text=True, encoding="utf-8",
+    return subprocess.run([sys.executable, str(BUILDER), str(out)], capture_output=True, text=True, encoding="utf-8",
                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=NO_WINDOW)
 
 
@@ -385,6 +398,7 @@ class _Writes:
             return "캔버스 다시 빌드 실패 — 되돌림: " + (r.stderr or "")[-300:]
         files = {rel: {"before": had, "after_sha": _sha(self.out / rel)} for rel, had in sorted(self.before.items())}
         (self.hist / "manifest.json").write_text(json.dumps({"files": files, "changed": changed}, ensure_ascii=False, indent=2), encoding="utf-8")
+        prune(self.out)                              # 쓸 때마다 기록이 늘어나므로 그때 오래된 것을 정리(#281)
         return None
 
 
@@ -586,6 +600,10 @@ def forward(out, text, agent=None, paseo=None):
             try:
                 r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
                 if r.returncode == 0:
+                    try:
+                        p.with_suffix(".sent").write_text("", encoding="utf-8")   # 보냄 표시 — 7일 뒤 정리(#281)
+                    except OSError as e:
+                        print("[hd] 대기열 보냄 표시를 쓰지 못했어요(%s): %s" % (e, p), file=sys.stderr, flush=True)
                     return {"via": "paseo", "agent": agent, "path": str(p)}
             except (OSError, subprocess.TimeoutExpired):
                 pass
@@ -709,6 +727,10 @@ def _state_write(out, doc):                          # 같은 폴더 임시 파�
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8", newline="")
     if p.is_file():
         shutil.copy2(p, p.with_name(STATE_FILE + ".bak"))
+    _replace(tmp, p)
+
+
+def _replace(tmp, p):
     for i in range(REPLACE_TRIES):                   # 읽기는 자물쇠 없이 한다(#271) — Windows 는 읽는 중인 파일을 바꾸지 못해 잠깐 기다렸다 다시
         try:
             os.replace(tmp, p)
@@ -911,6 +933,62 @@ def _watch_loop(srv, out, lock):
                 srv.watch.tick(m)
 
 
+# ---------------------------------------------------------------- 정리(#281): 오래된 기록·처리된 대기열 — 고르기는 helper_model, 여기는 지우기만
+def _stamp(dt):
+    return dt.strftime("%Y%m%d-%H%M%S-%f")
+
+
+def prune(out, now=None):
+    """<out>/.hd-history/<stamp>/ 가 가장 새 200개 밖이면서 30일보다 오래됐으면 지우고, .hd-queue 의 보냄·걷힘 표시가 붙은 7일 넘은 파일을 지운다.
+    그 밖(시각 이름이 아닌 것 — fix 스킬의 fix-components.css 등)은 손대지 않는다. 실패는 [hd] 한 줄(도우미는 멈추지 않음) → {history, queue} 지운 수."""
+    out, now = pathlib.Path(out), now or datetime.datetime.now()
+    done = {"history": 0, "queue": 0}
+    hist, q = out / ".hd-history", out / ".hd-queue"
+    try:
+        if hist.is_dir():
+            names = [d.name for d in hist.iterdir() if d.is_dir()]
+            for n in helper_model.history_prune(names, _stamp(now - datetime.timedelta(days=helper_model.HISTORY_DAYS))):
+                shutil.rmtree(hist / n); done["history"] += 1
+        if q.is_dir():
+            names = [f.name for f in q.iterdir() if f.is_file()]
+            for n in helper_model.queue_prune(names, _stamp(now - datetime.timedelta(days=helper_model.QUEUE_DAYS))):
+                (q / n).unlink(); done["queue"] += 1
+    except OSError as e:
+        print("[hd] 오래된 기록·대기열을 정리하지 못했어요(%s) — 그대로 둬요" % e, file=sys.stderr, flush=True)
+    return done
+
+
+# ---------------------------------------------------------------- 완료 메모 보관(#273): <out>/.hd-notes-archive.jsonl — 한 줄 = 메모 하나
+ARCHIVE_FILE = ".hd-notes-archive.jsonl"
+
+
+def archive_post(out, body):
+    """POST /api/archive 본문 {notes:[…]} → (code, 답). 줄마다 메모 하나를 덧붙인다(있던 것 + 새 줄을 임시 파일에 쓰고 os.replace — 반쯤 쓴 파일이 남지 않게). 쓰기 자물쇠 안에서 부른다."""
+    lines, err = helper_model.archive_lines(body)
+    if err:
+        return 400, {"error": err}
+    if lines:
+        p = pathlib.Path(out) / ARCHIVE_FILE
+        old = p.read_bytes() if p.is_file() else b""
+        if old and not old.endswith(b"\n"):
+            old += b"\n"
+        tmp = p.with_name(ARCHIVE_FILE + ".tmp-%d" % os.getpid())
+        tmp.write_bytes(old + "".join(x + "\n" for x in lines).encode("utf-8"))
+        _replace(tmp, p)
+    return 200, {"ok": True, "count": len(lines)}
+
+
+def archive_get(out):
+    """GET /api/archive → {notes:[…]} — 마지막 2000 줄, 새것이 뒤. 깨진 줄은 건너뛰고 [hd] 한 줄."""
+    p = pathlib.Path(out) / ARCHIVE_FILE
+    if not p.is_file():
+        return {"notes": []}
+    notes, bad = helper_model.archive_notes(p.read_text(encoding="utf-8", errors="replace").splitlines())
+    if bad:
+        print("[hd] 보관 파일에 깨진 줄 %d개를 건너뛰었어요: %s" % (bad, p), file=sys.stderr, flush=True)
+    return {"notes": notes}
+
+
 # ---------------------------------------------------------------- 서버
 def keypath(out):                                    # file:// 로 열었을 때의 location.pathname — 캔버스 저장 키를 같게
     return urllib.parse.urlparse((pathlib.Path(out).resolve() / "index.html").as_uri()).path
@@ -943,7 +1021,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path in ("/api/state", "/api/files", "/api/agents") + home_api.GET_PATHS:
+            if u.path in ("/api/state", "/api/files", "/api/agents", "/api/archive") + home_api.GET_PATHS:
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
                 if u.path == "/api/files":
@@ -958,11 +1036,17 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                 if u.path == "/api/agents":
                     auto = urllib.parse.parse_qs(u.query).get("auto", [""])[0] == "1"
                     return self._json(200, agents_get(self.server, paseo, auto=auto))
+                if u.path == "/api/archive":
+                    return self._json(200, archive_get(out))
+                try:
+                    since = helper_model.parse_since(urllib.parse.parse_qs(u.query).get("since", [None])[0])
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
                 snap = state_peek(out)                  # 빌드 자물쇠를 기다리지 않는다(#271 — 긴 빌드 중에도 hd 핑이 1초 안에 답)
                 if snap is None:
                     with lock:                          # 깨졌을 때만: 옮기는 쓰기가 들어 있어 자물쇠 안에서
                         snap = state_load(out)
-                return self._json(200, snap)
+                return self._json(200, helper_model.state_reply(snap, since))   # ?since=rev 가 같으면 몸통 없이(#273 — 2초 읽기)
             parts = [p for p in u.path.split("/") if p]
             if any(p.startswith(".") for p in parts):      # 원본 기록·대기열·상태 파일은 내주지 않는다
                 return self.send_error(404)
@@ -1006,9 +1090,10 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                             self.server.watch.absorb(m)
                     code = {"changed-since": 409, "missing": 404}.get(r.get("reason"), 500 if "error" in r else 200)
                     return self._json(code, r)
-            if self.path in ("/api/reply", "/api/claim", "/api/release"):
-                with lock:                                  # 상태 파일 쓰기는 /api/state 와 같은 자물쇠
-                    code, res = {"/api/reply": reply_post, "/api/claim": claim_post, "/api/release": release_post}[self.path](out, body)
+            if self.path in ("/api/reply", "/api/claim", "/api/release", "/api/archive"):
+                with lock:                                  # 상태 파일·보관 파일 쓰기는 /api/state 와 같은 자물쇠
+                    code, res = {"/api/reply": reply_post, "/api/claim": claim_post, "/api/release": release_post,
+                                 "/api/archive": archive_post}[self.path](out, body)
                 return self._json(code, res)
             if self.path == "/api/forward":
                 return self._json(200, forward(out, str(body.get("text") or ""), self.server.agent, paseo))
@@ -1037,7 +1122,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     if not chunk:
                         break
                     n -= len(chunk)
-                return self._json(413, {"error": "상태가 너무 커요(2 MB 넘음)"})
+                return self._json(413, {"error": helper_model.too_big(int(self.headers.get("Content-Length") or 0), STATE_MAX)})
             raw = self.rfile.read(n)
             if not self._host_ok() or self.headers.get("X-HD-Token") != token:
                 return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
@@ -1054,6 +1139,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             return self._json(code, res)
 
     state_load(out)                                     # 시작할 때 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
+    prune(out)                                          # 오래된 기록·처리된 대기열 정리(#281, 실패해도 한 줄)
     srv = bind(H, [port] if isinstance(port, int) else list(port))
     srv.watch, srv.watch_stop = FileWatch(), threading.Event()
     threading.Thread(target=_watch_loop, args=(srv, out, lock), daemon=True).start()   # server_close 가 멈춘다
@@ -1183,6 +1269,7 @@ def main(argv=None):
     ap.add_argument("--paseo-cmd", default=os.environ.get("HD_PASEO_CMD"))
     ap.add_argument("--no-open", action="store_true")
     a = ap.parse_args(argv)
+    use_ref_build()                                  # 실사용: hd open 과 같은 빌더(#278)
     out = pathlib.Path(a.out).resolve()
     if not (out / "index.html").is_file() or not (out / "screens.json").is_file():
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)

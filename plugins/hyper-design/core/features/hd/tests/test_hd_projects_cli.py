@@ -53,7 +53,7 @@ def test_save_open_reuse_forget(tmp_path):
         pid = a["pid"]
         assert time.time() - t0 < 30 and (out / "index.html").is_file(), "빌드 후 띄움"
         assert list((home / "active").glob("*.json")), "표지가 생김"
-        assert (out.parent / "helper.log").is_file()
+        assert (out / ".hd-helper.log").is_file() and not (out.parent / "helper.log").exists(), "로그는 out 안(#281)"
         code, b, err = hdj(home, "open", str(out), "--no-open")
         assert code == 0 and b["reused"] and b["pid"] == pid and b["url"] == a["url"], "두 번째 open 은 같은 도우미"
         code, rows, _ = hdj(home, "projects")

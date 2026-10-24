@@ -188,6 +188,7 @@ def serving(out):
 
 
 HELPER_FILE = ".hd-helper.json"
+HELPER_LOG = ".hd-helper.log"
 
 
 def read_record(out):
@@ -235,9 +236,9 @@ def build(out):
 
 
 def spawn_helper(out, agent=None):
-    """helper.py <out> --no-open [--paseo-agent ID] 를 이 터미널과 떼어 띄운다 → (Popen, 로그 경로). 출력은 <out>/../helper.log."""
+    """helper.py <out> --no-open [--paseo-agent ID] 를 이 터미널과 떼어 띄운다 → (Popen, 로그 경로). 출력은 <out>/.hd-helper.log(out 안 — 점 파일이라 정적 경로로 내주지 않음, #281)."""
     out = pathlib.Path(out)
-    log = out.parent / "helper.log"
+    log = out / HELPER_LOG
     args = [sys.executable, str(HELPER), str(out), "--no-open"] + (["--paseo-agent", agent] if agent else [])
     kw = {}
     if sys.platform == "win32":
