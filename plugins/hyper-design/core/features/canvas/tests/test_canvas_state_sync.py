@@ -5,6 +5,7 @@ import pytest
 
 from test_canvas_v2 import browser  # noqa: F401
 from test_canvas_helper import out, _serve, _req  # noqa: F401
+from test_canvas_edit import fit_view
 
 
 @pytest.mark.area("helper", "notes")
@@ -56,3 +57,38 @@ def test_helper_memo_survives_reload_within_write_delay(browser, out):   # 300ms
         c.close()
         srv.shutdown(); srv.server_close()
     assert not errors, errors
+
+
+from test_canvas_v2 import ctx  # noqa: F401,E402
+from test_canvas_replies_live import served, live, reply, file_notes  # noqa: F401,E402
+
+
+@pytest.mark.area("helper", "notes", "tools")
+def test_pending_card_move_survives_ai_reply(live):   # #269 — 모아 둔 카드 옮기기가 PUT 되기 전에 hd reply 가 rev 를 올려도(409) 옮기기와 답이 둘 다 파일에 남는다
+    import time
+    from test_canvas_edit import drag, visible_cover
+    pg, puts = live, []
+
+    def reply_first(route):                                             # 첫 PUT 이 닿기 직전에 AI 답 = 그 PUT 은 409
+        if route.request.method == "PUT":
+            puts.append(1)
+            if len(puts) == 1:
+                reply(pg, "m1", {"kind": "반영됨", "what": "버튼 키움", "screens": ["pay"], "captured": True})
+        return route.continue_()
+    pg.route("**/api/state", reply_first)
+    pg.evaluate("window.__hdStay = 1")
+    fit_view(pg)
+    pg.keyboard.press("v")
+    cov = visible_cover(pg)
+    drag(pg, cov, 40, 0)
+    f = pg.out / ".hd-canvas.json"
+    t0, st = time.time(), {}
+    while time.time() - t0 < 6:
+        st = json.loads(f.read_text(encoding="utf-8"))["state"]
+        if st.get("card-pos") and any(n.get("replies") for n in st.get("notes") or []):
+            break
+        pg.wait_for_timeout(100)                                        # route 처리는 Playwright 호출 안에서만 돈다(time.sleep 아님)
+    assert st.get("card-pos", {}).get(cov["id"]), "옮긴 자리가 파일에 남는다"
+    assert [len(n.get("replies") or []) for n in file_notes(pg) if n["id"] == "m1"] == [1], "AI 답도 파일에 남는다"
+    assert len(puts) >= 2, "409 뒤 합쳐 다시 보냈다"
+    assert pg.evaluate("window.__hdStay") == 1, "잃은 것이 없으니 다시 불러오지 않는다"

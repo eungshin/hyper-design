@@ -1,6 +1,9 @@
 /* View — 프로젝트별 키 읽기·쓰기 주인(#228): 도우미로 열면 .hd-canvas.json 이 진실 원천이고 브라우저 저장소는 캐시, 아니면 브라우저 저장소 그대로.
    규칙(어떤 키·파일이 이기나·올리기·보낼 본문)은 modules/state-file.js(Model). 여기는 쓰기를 300ms 모아 PUT /api/state, 닫을 때 마저 보내기, 409 처리.
-   409(다른 곳에서 바뀜) = 보내지 못한 이번 변경은 버리고 알린 뒤 ctx.reload()(새로 연 페이지가 파일 상태를 받는다).
+   409(다른 곳에서 바뀜 — hd reply·claim 은 rev 를 늘 올린다, #269) = 409 답의 서버 상태와 HD.saveMerge.resolve(Model)로 합친다:
+     보낸 이름이 서버에서 안 바뀌었으면(메모는 id 마다 칸끼리) 서버의 나머지를 받고 내 값을 지켜 새 rev 로 한 번 다시 보낸다
+     (받은 이름 중 notes·note-seq·busy 는 ctx.onExternal, 그 밖이 바뀌었으면 다시 보낸 뒤 다시 불러오기 — 잃는 것 없음).
+     둘 다 바꾼 이름이 있거나 다시 보낸 것도 409 면 이번 변경은 버리고 잃은 것을 토스트로 말한 뒤 ctx.reload().
    쓰기 대기 표시(hd-unsent:<hash> = {base: rev, names}) — 파일에 닿았다고 확인 못 한 이름(모으는 중·보내는 중·닫을 때 보낸 것)을 브라우저 저장소에 남긴다.
      닫을 때 보낸 PUT 이 새 페이지 GET 보다 늦게 닿거나 못 닿아도(300ms 안의 새로고침) 다음 시작 때 boot 가 그 값을 다시 올린다. 답(성공)·409 때 고쳐 쓰거나 지운다.
    보내기가 실패하면(도우미 꺼짐 등) 한 번 알리고 [hd] 경고, 바뀐 키는 다음 쓰기 때 같이 보낸다.
@@ -16,11 +19,10 @@ var HD = globalThis.HD = globalThis.HD || {};
 var CONFLICT = '다른 곳에서 바뀌어 다시 불러왔어요';
 var FAILED = '캔버스 상태를 파일에 저장하지 못했어요 — 이 브라우저에만 남아요';
 var LOST = '도우미에 닿지 않아 AI 답을 새로 받지 않아요 — 창을 다시 누르면 다시 시도해요';
-var LIVE = {notes: 1, 'note-seq': 1, busy: 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름 — 나머지는 다시 불러오기
 
 function mount(ctx) {
   var S = HD.stateFile, store = ctx.storage, on = !!(ctx.on && ctx.token);
-  var mode = 'off', rev = 0, state = {}, dirty = {}, inflight = [], timer = 0, busy = false, again = false, dead = false, failWarned = false, markWarned = false;
+  var mode = 'off', rev = 0, state = {}, base = {}, retried = false, reloadAfter = false, dirty = {}, inflight = [], timer = 0, busy = false, again = false, dead = false, failWarned = false, markWarned = false;
 
   function pass() {
     return {mode: mode, getItem: function (k) { return store.getItem(k); }, setItem: function (k, v) { store.setItem(k, v); },
@@ -34,7 +36,7 @@ function mount(ctx) {
   var MARK = S.unsentKey(ctx.hash), markText = null;
   try { markText = store.getItem(MARK); } catch (e) { ctx.warn('[hd] 쓰기 대기 표시를 읽지 못했어요: ' + (e && e.message || e)); }
   var b = S.boot(snap, local.values, S.unsent(markText));
-  mode = b.mode; rev = b.rev; state = b.state;
+  mode = b.mode; rev = b.rev; state = b.state; base = snap.state;   // base = 마지막으로 안 서버 상태(409 때 무엇이 서버에서 바뀌었나)
   Object.keys(b.cache).forEach(function (n) { cacheSet(n, b.cache[n]); });
   b.upload.forEach(function (n) { dirty[n] = 1; });
   if (b.lost.length) ctx.warn('[hd] 보내지 못한 변경이 그 사이 바뀐 파일에 밀려 버려져요: ' + b.lost.join(', '));
@@ -65,11 +67,30 @@ function mount(ctx) {
     ctx.warn('[hd] 상태 파일 저장 실패: ' + why);
     if (!failWarned) { failWarned = true; ctx.toast(FAILED); }
   }
-  function conflict() {
+  function conflict(lost) {
     dead = true; dirty = {}; inflight = []; clearTimeout(timer);
-    mark();                                          // 409 = 이번 변경은 버린다(다시 연 페이지가 올리지 않게)
-    ctx.toast(CONFLICT);
+    mark();                                          // 이번 변경은 버린다(다시 연 페이지가 올리지 않게)
+    if (lost && lost.length) {
+      ctx.warn('[hd] 다른 곳에서 같이 바뀌어 보내지 못한 변경을 버려요: ' + lost.join(', '));
+      ctx.toast(CONFLICT + ' — 잃은 변경: ' + HD.saveMerge.lostText(lost));
+    } else ctx.toast(CONFLICT);
     ctx.reload();
+  }
+  function union(a, b) { var r = a.slice(); b.forEach(function (n) { if (r.indexOf(n) < 0) r.push(n); }); return r; }
+  function rejected(j, sent) {                       // 409 — 서버 상태와 합쳐 한 번 다시 보내거나(잃는 것 없음), 둘 다 바꾼 이름을 알리고 다시 불러오기
+    var d = union(sent, names()), snap = S.snapshot(j);
+    if (!snap.ok) { ctx.warn('[hd] 409 답이 깨졌어요: ' + snap.why); return conflict(d); }
+    if (retried) return conflict(d);
+    var r = HD.saveMerge.resolve(d, base, state, snap.state);
+    if (!r.ok) return conflict(r.lost);
+    retried = true; rev = snap.rev; base = snap.state; state = r.state;
+    d.forEach(function (n) { dirty[n] = 1; });
+    inflight = []; mark();
+    r.adopt.forEach(function (n) { cacheSet(n, S.read(state, n)); });
+    if (r.adopt.some(function (n) { return !S.LIVE[n] && d.indexOf(n) < 0; })) reloadAfter = true;   // 자리·폴더 등은 셸이 따로 들고 있다 — 다시 보낸 뒤 다시 불러오기
+    var live = r.adopt.filter(function (n) { return S.LIVE[n]; });
+    if (live.length && ctx.onExternal) ctx.onExternal(live);
+    again = true;                                    // 지금 보내는 중(busy) — 끝나면 바로 다시
   }
   function flush() {
     clearTimeout(timer);
@@ -77,11 +98,15 @@ function mount(ctx) {
     if (busy) { again = true; return; }
     var sent = names(); if (!sent.length) return;
     dirty = {}; busy = true; inflight = sent;
-    req(S.body(rev, state, sent)).then(function (r) {
+    var bd = S.body(rev, state, sent);
+    req(bd).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
-        if (r.status === 409) return conflict();
+        if (r.status === 409) return rejected(j, sent);
         if (!r.ok || typeof j.rev !== 'number') return failed(sent, 'HTTP ' + r.status);
-        rev = j.rev; failWarned = false; inflight = []; mark();
+        rev = j.rev; failWarned = false; retried = false; inflight = []; mark();
+        base = Object.assign({}, base);
+        sent.forEach(function (n) { if (bd.state[n] == null) delete base[n]; else base[n] = bd.state[n]; });
+        if (reloadAfter) { reloadAfter = false; conflict(names()); }   // 합쳐 다시 보냄 — 이제 파일 상태로 다시 불러오기
       });
     }, function (e) { failed(sent, String(e && e.message || e)); }).then(function () {
       busy = false;
@@ -118,8 +143,8 @@ function mount(ctx) {
     var all = {}, changed = [];
     Object.keys(state).concat(Object.keys(snap.state)).forEach(function (n) { all[n] = 1; });
     Object.keys(all).forEach(function (n) { if (!same(state[n], snap.state[n])) changed.push(n); });
-    if (changed.some(function (n) { return !LIVE[n]; })) { conflict(); return; }   // 자리·폴더 등은 셸이 따로 들고 있다 — 지금처럼 다시 불러오기
-    rev = snap.rev; state = snap.state;
+    if (changed.some(function (n) { return !S.LIVE[n]; })) { conflict(); return; }   // 자리·폴더 등은 셸이 따로 들고 있다 — 지금처럼 다시 불러오기
+    rev = snap.rev; state = snap.state; base = snap.state;
     changed.forEach(function (n) { cacheSet(n, S.read(state, n)); });
     if (changed.length && ctx.onExternal) ctx.onExternal(changed);
   }

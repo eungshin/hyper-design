@@ -619,15 +619,15 @@ def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228
         assert pg.locator("#nlist li").count() == 1 and "파일에 남는 메모" in pg.text_content("#nlist"), "파일 상태로 메모가 보인다"
         assert "파일에 남는 메모" in pg.evaluate("localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:')))"), "파일이 이기고 캐시에도 쓴다"
 
-        rev = state()["rev"]                                         # 다른 곳(터미널 에이전트)에서 바뀜 → 이 페이지의 다음 쓰기 = 409
+        rev = state()["rev"]                                         # 다른 곳(터미널 에이전트)에서 hidden 만 바뀜 → 이 페이지의 다음 쓰기 = 409 → 합쳐 다시 보냄(#269)
         code, _ = _req(srv.url.split("/index.html")[0] + "/api/state", "PUT", {"rev": rev, "state": {"hidden": ["job"]}}, srv.token)
         assert code == 200
         pg.evaluate("window.__hdStay = 1")
         pg.click('#nlist li button[data-act="del"]')
         pg.wait_for_function("document.getElementById('toast').textContent.indexOf('다른 곳에서 바뀌어 다시 불러왔어요') >= 0", timeout=5000)
         pg.wait_for_function("window.__hdStay === undefined && window.__hdReady !== undefined", timeout=10000)
-        assert pg.locator("#nlist li").count() == 1, "이번 변경(지우기)은 버리고 파일 상태로 다시"
-        assert state()["state"]["hidden"] == ["job"] and len(state()["state"]["notes"]) == 1, "다른 곳의 변경을 덮어쓰지 않는다"
+        assert pg.locator("#nlist li").count() == 0, "서버가 메모를 바꾸지 않았으니 이번 변경(지우기)은 지켜 다시 보내고, 바뀐 hidden 을 받으려 다시 불러온다"
+        assert state()["state"]["hidden"] == ["job"] and len(state()["state"]["notes"]) == 0, "다른 곳의 변경을 덮어쓰지 않고 내 지우기도 남는다"
     finally:
         for c in (c1, c2):
             if c:

@@ -12,11 +12,13 @@
      rev 가 다르면 파일이 이긴다; 파일 값이 브라우저 값과 같으면(닫을 때 보낸 것이 닿음) 그만, 다르면 lost(View 가 [hd] 경고).
    read(state, name) → 저장 글 | null · write(state, name, text) → {ok, state(새 객체)} (JSON 이 아니면 ok:false, 상태 그대로) · drop(state, name) → 그 이름을 뺀 새 상태
    body(rev, state, names) → PUT 본문 {rev, state:{이름: 값 | null(지움)}}
-   HD.stateFile = {NAMES, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body} */
+   LIVE = {이름: 1} — 파일에서 바뀌면 셸이 제자리에서 다시 읽는 이름(notes·note-seq·busy), 그 밖은 다시 불러오기
+   HD.stateFile = {NAMES, LIVE, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy', 'note-seq'];
+var LIVE = {notes: 1, 'note-seq': 1, busy: 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름(view-state-sync) — 나머지는 다시 불러오기
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 
 function keyOf(name, hash) { return 'hd-' + name + ':' + hash; }
@@ -96,5 +98,5 @@ function body(rev, state, names) {
   return {rev: rev, state: s};
 }
 
-HD.stateFile = {NAMES: NAMES, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
+HD.stateFile = {NAMES: NAMES, LIVE: LIVE, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
 })();
