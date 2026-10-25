@@ -25,10 +25,13 @@ def env(home):
 
 
 def start_hub(home):
-    p = subprocess.Popen([sys.executable, str(HD_PY), "home", "--no-browser", "--port", "0"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=True, encoding="utf-8", env=env(home), creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if WIN else 0)
+    home.mkdir(parents=True, exist_ok=True)
+    log = home / ("hub-%d.err.log" % time.monotonic_ns())          # stderr 는 파일로 — 읽지 않는 PIPE 는 차면 허브가 멈춘다(47-2 2e)
+    with open(log, "w", encoding="utf-8") as err:
+        p = subprocess.Popen([sys.executable, str(HD_PY), "home", "--no-browser", "--port", "0"], stdout=subprocess.PIPE, stderr=err,
+                             text=True, encoding="utf-8", env=env(home), creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if WIN else 0)
     url = p.stdout.readline().strip()
-    assert url.startswith("http://127.0.0.1:") and "/?hd=" in url, (url, p.stderr.read() if p.poll() is not None else "")
+    assert url.startswith("http://127.0.0.1:") and "/?hd=" in url, (url, log.read_text(encoding="utf-8", errors="replace") if p.poll() is not None else "")
     return p, url
 
 

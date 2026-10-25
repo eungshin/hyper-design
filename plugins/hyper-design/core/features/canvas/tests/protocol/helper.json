@@ -1,7 +1,7 @@
 {
   "server": "canvas helper — plugins/hyper-design/core/features/canvas/helper.py <out> (one per out, 127.0.0.1, free or last port)",
   "auth": "X-HD-Token header on every /api/* (GET and POST/PUT); Host must be 127.0.0.1:<port> or localhost:<port>. Static files (/, /index.html, out files) need no token. The page URL carries the token as ?hd=<token>.",
-  "errors": "JSON {error} except: GET with a bad Host and unknown GET paths fall to SimpleHTTPRequestHandler (HTML body).",
+  "errors": "always JSON {error} on /api/* and on a bad Host (47-2 step 2). Missing out files (not /api) stay the static HTML 404.",
   "start_state": "out = hd/tests/hdfix.make_out: screens home, list; .hd-canvas.json rev 3 with notes n1..n4 (n4 = draft). Cases run in order and share state.",
   "routes": [
     {
@@ -12,8 +12,8 @@
          "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdHelper=true", "window.__hdKeyPath=", "window.__hdOut=", "window.__hdAgent=", "window.__hdState="]}},
         {"name": "index.html same", "request": {"method": "GET", "path": "/index.html", "token": false},
          "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdState="]}},
-        {"name": "bad host", "request": {"method": "GET", "path": "/", "host": "evil.example:80"},
-         "expect": {"status": 403, "ctype": "text/html"}}
+        {"name": "bad host is a JSON 403 (was HTML before 47-2)", "request": {"method": "GET", "path": "/", "host": "evil.example:80"},
+         "expect": {"status": 403, "json": {"error": "str"}}}
       ]
     },
     {
@@ -23,7 +23,8 @@
         {"name": "screen file", "request": {"method": "GET", "path": "/screens/home.html", "token": false}, "expect": {"status": 200, "ctype": "text/html"}},
         {"name": "dot file hidden", "request": {"method": "GET", "path": "/.hd-canvas.json", "token": false}, "expect": {"status": 404}},
         {"name": "missing file", "request": {"method": "GET", "path": "/nope.html", "token": false}, "expect": {"status": 404, "ctype": "text/html"}},
-        {"name": "unknown GET /api path is a static 404 (HTML, not JSON)", "request": {"method": "GET", "path": "/api/nope"}, "expect": {"status": 404, "ctype": "text/html"}}
+        {"name": "unknown GET /api path is a JSON 404 (was static HTML before 47-2)", "request": {"method": "GET", "path": "/api/nope"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "unknown GET /api path without a token is 403 (token first, like the hub)", "request": {"method": "GET", "path": "/api/nope", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
       ]
     },
     {
@@ -41,7 +42,7 @@
     },
     {
       "method": "PUT", "path": "/api/state", "callers": ["modules/view-state-sync.js (save)", "hd_client.py"],
-      "request": "{rev:int, state:{name: value | null (delete)}}; body over 2 MB = 413 (checked before the token)", "response": "{rev} | 409 {rev, state} when rev differs",
+      "request": "{rev:int, state:{name: value | null (delete)}}; body over 2 MB = 413 (after Host + token, 47-2)", "response": "{rev} | 409 {rev, state} when rev differs",
       "cases": [
         {"name": "ok", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 3, "state": {"card-pos": {"home": [5, 6]}, "hidden": null}}}, "expect": {"status": 200, "json": {"rev": {"$eq": 4}}}},
         {"name": "rev conflict", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 3, "state": {}}}, "expect": {"status": 409, "json": {"rev": {"$eq": 4}, "state": "dict"}}},
@@ -49,25 +50,27 @@
         {"name": "wrong shape", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": "4", "state": {}}}, "expect": {"status": 400, "json": {"error": "str"}}},
         {"name": "no token", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 4, "state": {}}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
         {"name": "too large", "request": {"method": "PUT", "path": "/api/state", "size": 2097153}, "expect": {"status": 413, "json": {"error": "str"}}},
-        {"name": "too large, no token (size is checked first)", "request": {"method": "PUT", "path": "/api/state", "size": 2097153, "token": false}, "expect": {"status": 413, "json": {"error": "str"}}},
+        {"name": "too large, no token = 403 (token is checked before the size since 47-2)", "request": {"method": "PUT", "path": "/api/state", "size": 2097153, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
         {"name": "unknown PUT path", "request": {"method": "PUT", "path": "/api/nope", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}}
       ]
     },
     {
       "method": "POST", "path": "/api/<any>", "callers": ["(guards shared by every POST)"],
-      "request": "body read first, then Host + token, then JSON parse, then route", "response": "403 / 400 / 404 {error}",
+      "request": "body read first, then Host + token, then size (2 MB, 47-2), then route, then JSON parse (47-2: route before parse)", "response": "403 / 400 / 404 {error}",
       "cases": [
         {"name": "no token", "request": {"method": "POST", "path": "/api/apply", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
         {"name": "bad host", "request": {"method": "POST", "path": "/api/apply", "body": {}, "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}},
         {"name": "bad JSON", "request": {"method": "POST", "path": "/api/apply", "raw": "{not json"}, "expect": {"status": 400, "json": {"error": "str"}}},
         {"name": "unknown path", "request": {"method": "POST", "path": "/api/nope", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}},
-        {"name": "unknown path with bad JSON is 400 (parse before route)", "request": {"method": "POST", "path": "/api/nope", "raw": "{"}, "expect": {"status": 400, "json": {"error": "str"}}},
-        {"name": "SUSPECTED BUG: JSON array body on /api/apply drops the connection (body.get on a list)", "request": {"method": "POST", "path": "/api/apply", "raw": "[]"}, "expect": {"status": "dropped"}},
-        {"name": "SUSPECTED BUG: JSON array body on /api/delete drops the connection", "request": {"method": "POST", "path": "/api/delete", "raw": "[]"}, "expect": {"status": "dropped"}},
-        {"name": "SUSPECTED BUG: JSON array body on /api/restore drops the connection", "request": {"method": "POST", "path": "/api/restore", "raw": "[]"}, "expect": {"status": "dropped"}},
-        {"name": "SUSPECTED BUG: JSON array body on /api/forward drops the connection", "request": {"method": "POST", "path": "/api/forward", "raw": "[]"}, "expect": {"status": "dropped"}},
+        {"name": "unknown path with bad JSON is 404 (route before parse since 47-2)", "request": {"method": "POST", "path": "/api/nope", "raw": "{"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "too large POST is 413", "request": {"method": "POST", "path": "/api/archive", "size": 2097153}, "expect": {"status": 413, "json": {"error": "str"}}},
+        {"name": "too large POST without a token is 403", "request": {"method": "POST", "path": "/api/archive", "size": 2097153, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "JSON array body on /api/apply is a clean 400 (dropped the connection before 47-2)", "request": {"method": "POST", "path": "/api/apply", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "JSON array body on /api/delete is a clean 400 (dropped the connection before 47-2)", "request": {"method": "POST", "path": "/api/delete", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "JSON array body on /api/restore is a clean 400 (dropped the connection before 47-2)", "request": {"method": "POST", "path": "/api/restore", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "JSON array body on /api/forward is a clean 400 (dropped the connection before 47-2)", "request": {"method": "POST", "path": "/api/forward", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
         {"name": "non-object body on /api/reply is a clean 400", "request": {"method": "POST", "path": "/api/reply", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
-        {"name": "GET on a POST-only route is a static 404 (HTML)", "request": {"method": "GET", "path": "/api/apply"}, "expect": {"status": 404, "ctype": "text/html"}}
+        {"name": "GET on a POST-only route is a JSON 404 (was static HTML before 47-2)", "request": {"method": "GET", "path": "/api/apply"}, "expect": {"status": 404, "json": {"error": "str"}}}
       ]
     },
     {

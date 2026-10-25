@@ -217,3 +217,5 @@ def _route(method, path, body, ctx):
 
 
 GET_PATHS = ("/api/projects", "/api/tabs", "/api/home")
+POST_PATHS = ("/api/open", "/api/new", "/api/project", "/api/forget", "/api/reveal", "/api/pick-folder")   # 서버가 JSON 을 풀기 전에 아는 주소인지 본다(47-2)
+PUT_PATHS = ("/api/tabs",)

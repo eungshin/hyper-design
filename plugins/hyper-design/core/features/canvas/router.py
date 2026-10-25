@@ -37,6 +37,14 @@ def get_files(s, q, body):
     return 200, s.busy.files(since)
 
 
+def _obj(fn):                                         # 본문이 JSON 객체여야 하는 주소 — 목록·글이면 400(47-2 2a: 전에는 body.get 에서 연결이 끊겼다)
+    def call(s, q, b):
+        if not isinstance(b, dict):
+            return 400, {"error": "JSON 객체가 아니에요({…} 모양으로 보내 주세요)"}
+        return fn(s, q, b)
+    return call
+
+
 ROUTES = {
     "GET": {
         "/api/state": get_state,
@@ -47,14 +55,14 @@ ROUTES = {
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
-        "/api/apply": lambda s, q, b: s.history.apply(b.get("edits") or []),
-        "/api/delete": lambda s, q, b: s.history.delete([str(i) for i in b.get("screens") or []]),
-        "/api/restore": lambda s, q, b: s.history.restore(str(b.get("stamp") or "")),
+        "/api/apply": _obj(lambda s, q, b: s.history.apply(b.get("edits") or [])),
+        "/api/delete": _obj(lambda s, q, b: s.history.delete([str(i) for i in b.get("screens") or []])),
+        "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""))),
         "/api/reply": lambda s, q, b: s.queue.reply(b),
         "/api/claim": lambda s, q, b: s.busy.claim(b),
         "/api/release": lambda s, q, b: s.busy.release(b),
         "/api/archive": lambda s, q, b: s.archive.post(b),
-        "/api/forward": lambda s, q, b: (200, s.queue.forward(str(b.get("text") or ""))),
+        "/api/forward": _obj(lambda s, q, b: (200, s.queue.forward(str(b.get("text") or "")))),
         "/api/attach": lambda s, q, b: s.queue.attach(b),
         "/api/watch": lambda s, q, b: (200, s.busy.mtimes(b.get("files") if isinstance(b, dict) else None)),
     },
@@ -71,7 +79,12 @@ class Router:
         self.home_ctx, self.on_stop = home_ctx, on_stop
 
     def knows(self, method, path):
-        return path in ROUTES.get(method, {}) or (self.home_ctx is not None and method == "GET" and path in home_api.GET_PATHS)
+        if path in ROUTES.get(method, {}):
+            return True
+        if method == "POST" and path == "/api/stop":
+            return self.on_stop is not None
+        home = {"GET": home_api.GET_PATHS, "POST": home_api.POST_PATHS, "PUT": home_api.PUT_PATHS}.get(method, ())
+        return self.home_ctx is not None and path in home
 
     def call(self, method, path, query, body, session):
         fn = ROUTES.get(method, {}).get(path)
@@ -121,14 +134,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
+    def _token_ok(self, sess):
+        return self.headers.get("X-HD-Token") == sess.token
+
     def do_GET(self):
         if not self._host_ok():
-            return self.send_error(403)
+            return self._json(403, {"error": "주소가 맞지 않아요"})           # 47-2 2b: 허브처럼 JSON(전에는 HTML)
         u = urllib.parse.urlparse(self.path)
         sess, rest = self.target(u.path)
-        if self.router.knows("GET", rest):
-            if self.headers.get("X-HD-Token") != sess.token:
+        if rest.startswith("/api/"):                     # /api 아래는 늘 JSON — 토큰 먼저, 모르는 주소·POST 전용 주소는 404(2b)
+            if not self._token_ok(sess):
                 return self._json(403, {"error": FORBIDDEN})
+            if not self.router.knows("GET", rest):
+                return self._json(404, {"error": "모르는 주소"})
             return self._reply(self.router.call("GET", rest, urllib.parse.parse_qs(u.query), None, sess))
         parts = [p for p in rest.split("/") if p]
         if any(p.startswith(".") for p in parts):        # 원본 기록·대기열·상태 파일은 내주지 않는다
@@ -137,43 +155,38 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return self._page(sess)
         return super().do_GET()
 
-    def _read(self):
-        try:                                            # 본문은 거절하기 전에도 먼저 다 읽는다 — 안 읽은 채 닫으면 Windows 가 RST 로 끊어
-            return self.rfile.read(int(self.headers.get("Content-Length") or 0))   # 상대가 403 대신 ConnectionAbortedError 를 받는다
-        except ValueError:
-            return b""
+    def _drain(self, n):                                 # 거절해도 본문은 다 읽는다 — 안 읽은 채 닫으면 Windows 가 RST 로 끊어 상대가 답 대신 연결 오류를 받는다
+        while n > 0:
+            chunk = self.rfile.read(min(n, 65536))
+            if not chunk:
+                break
+            n -= len(chunk)
 
-    def do_POST(self):
-        raw = self._read()
-        sess, rest = self.target(self.path)
-        if not self._host_ok() or self.headers.get("X-HD-Token") != sess.token:
-            return self._json(403, {"error": FORBIDDEN})
+    def _body_call(self, method):
+        """POST·PUT 차례(47-2 2c·2d): Host + 토큰(403) → 크기(2 MB 넘으면 413) → 아는 주소(404) → JSON(400) → 담당."""
         try:
-            body = json.loads(raw or b"{}")
-        except ValueError:
-            return self._json(400, {"error": "JSON 이 아니에요"})
-        return self._reply(self.router.call("POST", rest, None, body, sess))
-
-    def do_PUT(self):                                   # /api/state · /api/tabs — 한도를 넘어도 본문은 다 읽고 답한다(위 do_POST 와 같은 이유)
-        try:
-            n = int(self.headers.get("Content-Length") or 0)
+            n = max(0, int(self.headers.get("Content-Length") or 0))
         except ValueError:
             n = 0
-        if n > S.STATE_MAX:
-            while n > 0:
-                chunk = self.rfile.read(min(n, 65536))
-                if not chunk:
-                    break
-                n -= len(chunk)
-            return self._json(413, {"error": S.helper_model.too_big(int(self.headers.get("Content-Length") or 0), S.STATE_MAX)})
-        raw = self.rfile.read(n)
-        sess, rest = self.target(self.path)
-        if not self._host_ok() or self.headers.get("X-HD-Token") != sess.token:
+        path = urllib.parse.urlparse(self.path).path
+        sess, rest = self.target(path)
+        if not self._host_ok() or not self._token_ok(sess):
+            self._drain(n)
             return self._json(403, {"error": FORBIDDEN})
-        if rest not in ("/api/state", "/api/tabs"):
+        if n > S.STATE_MAX:
+            self._drain(n)
+            return self._json(413, {"error": S.helper_model.too_big(n, S.STATE_MAX)})
+        raw = self.rfile.read(n) if n else b""
+        if not self.router.knows(method, rest):
             return self._json(404, {"error": "모르는 주소"})
         try:
-            body = json.loads(raw or b"null")
+            body = json.loads(raw or (b"{}" if method == "POST" else b"null"))
         except ValueError:
             return self._json(400, {"error": "JSON 이 아니에요"})
-        return self._reply(self.router.call("PUT", rest, None, body, sess))
+        return self._reply(self.router.call(method, rest, None, body, sess))
+
+    def do_POST(self):
+        return self._body_call("POST")
+
+    def do_PUT(self):
+        return self._body_call("PUT")

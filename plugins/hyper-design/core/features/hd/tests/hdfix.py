@@ -1,5 +1,5 @@
 """hd 테스트 공용: 작은 out 만들기 · 도우미를 자식 프로세스로 띄우고 정상 종료하기. 브라우저 없음."""
-import json, os, signal, subprocess, sys, time
+import json, os, signal, subprocess, sys, tempfile, time
 from pathlib import Path
 
 HD = Path(__file__).resolve().parents[1]
@@ -42,11 +42,19 @@ def start_helper(out, home, agent=None, extra_env=None):
     for k in ("PASEO_AGENT_ID", "HD_PASEO_AGENT", "HD_PASEO_CMD"):   # 테스트 도우미가 실제 에이전트로 보내지 않게
         e.pop(k, None)
     e.update(extra_env or {})
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                         env=e, creationflags=flags)
+    log = Path(tempfile.mkstemp(prefix="helper-", suffix=".err.log", dir=Path(out).parent)[1])
+    with open(log, "w", encoding="utf-8") as err:   # stderr 는 파일로 — 읽지 않는 PIPE 는 버퍼(Windows 약 4 KB)가 차면 도우미가 다음 [hd] 줄에서 멈춘다(47-2 2e)
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=err, text=True, encoding="utf-8",
+                             env=e, creationflags=flags)
+    p.err_log = log
     url = p.stdout.readline().strip()
-    assert url.startswith("http://127.0.0.1:"), (url, p.stderr.read() if p.poll() is not None else "")
+    assert url.startswith("http://127.0.0.1:"), (url, stderr_of(p) if p.poll() is not None else "")
     return p, url
+
+
+def stderr_of(p):
+    """start_helper 로 띄운 도우미의 stderr 지금까지(파일)."""
+    return Path(p.err_log).read_text(encoding="utf-8", errors="replace")
 
 
 def stop_helper(p, timeout=10):

@@ -50,7 +50,7 @@ def test_busy_last_port_falls_back_and_logs(tmp_path):
             assert port_of(url) not in (busy, None)
         finally:
             hdfix.stop_helper(p)
-        assert "지난번 포트 %d" % busy in p.stderr.read()
+        assert "지난번 포트 %d" % busy in hdfix.stderr_of(p)
     finally:
         blocker.close()
 
