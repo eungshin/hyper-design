@@ -6,6 +6,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "hd" / "tests"))
 import hdfix  # noqa: E402
 import memo_archive as MA  # noqa: E402
+import write_record  # noqa: E402
 import session as S  # noqa: E402
 
 DAY = 86_400_000
@@ -103,4 +104,4 @@ def test_reverted_async_write_leaves_a_tombstone_and_its_undo_is_a_no_op(tmp_pat
     assert json.loads((hist / "reverted.json").read_text(encoding="utf-8"))["ids"] == ["e1"]
     code, r = sess.history.restore(stamp)
     assert code == 200 and r["reverted"] is True and r["restored"] == [] and r["changed"] == [] and "error" not in r
-    assert S.restore(out, "20000101-000000-000000")["reason"] == "missing", "없는 기록은 그대로 404"
+    assert write_record.restore(out, "20000101-000000-000000")["reason"] == "missing", "없는 기록은 그대로 404"

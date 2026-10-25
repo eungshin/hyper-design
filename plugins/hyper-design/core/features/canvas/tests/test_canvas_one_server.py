@@ -13,7 +13,7 @@ FEATURES = CANVAS.parent
 sys.path[:0] = [str(CANVAS), str(FEATURES / "hd"), str(FEATURES / "home")]
 import hd_client as C  # noqa: E402
 import home_server  # noqa: E402
-import session as S  # noqa: E402
+import write_record  # noqa: E402
 
 pytestmark = pytest.mark.area("helper")
 
@@ -21,7 +21,7 @@ SCREEN = "<!doctype html><html><head><meta charset='utf-8'></head><body><main><h
 
 
 def build(out):                                       # 작업 트리 빌드(허브의 실사용 build_ref 대신) — (코드, 끝 줄)
-    r = S.run_build(out)
+    r = write_record.run_build(out)
     return r.returncode, (r.stderr or "")[-300:]
 
 
@@ -43,7 +43,7 @@ def hub():
     outs = {n: make_out(tmp, n, t) for n, t in (("alpha", "알파"), ("beta", "베타"))}
     for o in outs.values():
         C.register(C.abs_out(o))
-    srv = home_server.make_hub(0, renderer=lambda *a: None, picker=lambda: None, build=lambda o: S.run_build(o))
+    srv = home_server.make_hub(0, renderer=lambda *a: None, picker=lambda: None, build=lambda o: write_record.run_build(o))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     urls = {n: _post(srv, "/api/open", {"name": n})["url"] for n in outs}
     try:

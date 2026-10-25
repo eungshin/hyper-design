@@ -2,7 +2,7 @@
 
 Python(board_text.py, 순수): plan(screens, decisions, {op, to, value}) → 새 screens.json · decisions.json(바뀐 것만).
   칸 키 = 판에 보인 차례(정한 것·시장 관례는 build_canvas 의 거르기와 같은 차례 → decisions.json 번호). 잘못된 요청 = BoardError, 아무것도 안 바꿈.
-  session.apply_edits 의 'board' 편집 = 쓰기 한 번(.hd-history 원본) → restore 로 바이트 그대로.
+  screen_edits.apply_edits 의 'board' 편집 = 쓰기 한 번(.hd-history 원본) → restore 로 바이트 그대로.
 JS(modules/board-text.js, 순수): HD.boardText.blocks(D) · apply(D, ops) · pending(notes) · check(key, text) · keepEm · captionDelete · layers."""
 import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
@@ -14,7 +14,8 @@ MOD = HERE.parent / "modules"
 NODE = shutil.which("node")
 sys.path.insert(0, str(HERE.parent))
 import board_text as BT  # noqa: E402
-import session  # noqa: E402
+import screen_edits  # noqa: E402
+import write_record  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -98,15 +99,15 @@ def test_apply_edits_board_writes_once_and_restore_brings_bytes_back(tmp_path):
     (o / "screens.json").write_text(json.dumps(SJ, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (o / "decisions.json").write_text(json.dumps(DEC, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     before = {f: (o / f).read_bytes() for f in ("screens.json", "decisions.json")}
-    r = session.apply_edits(o, [{"id": "e1", "screen": "@board", "edit": "board", "op": "delete", "to": "ideas"},
+    r = screen_edits.apply_edits(o, [{"id": "e1", "screen": "@board", "edit": "board", "op": "delete", "to": "ideas"},
                                 {"id": "e2", "screen": "@board", "edit": "board", "op": "set", "to": "decisions.core", "value": "새"},
                                 {"id": "e3", "screen": "@board", "edit": "board", "op": "delete", "to": "nope"}], stamp="b1", build=OK)
     assert r["applied"] == ["e1", "e2"] and [f["id"] for f in r["failed"]] == ["e3"] and r["stamp"] == "b1" and r["changed"] == []
     assert "ideas" not in json.loads((o / "screens.json").read_text(encoding="utf-8"))["story"]
     assert json.loads((o / "decisions.json").read_text(encoding="utf-8"))["core"] == "새"
-    assert "error" not in session.restore(o, "b1", build=OK)
+    assert "error" not in write_record.restore(o, "b1", build=OK)
     assert {f: (o / f).read_bytes() for f in before} == before, "되돌리기 한 번 = 두 파일 모두 바이트 그대로"
-    r = session.apply_edits(o, [{"id": "e4", "screen": "@board", "edit": "board", "op": "delete", "to": "nope"}], build=OK)
+    r = screen_edits.apply_edits(o, [{"id": "e4", "screen": "@board", "edit": "board", "op": "delete", "to": "nope"}], build=OK)
     assert r["applied"] == [] and r["stamp"] is None
 
 

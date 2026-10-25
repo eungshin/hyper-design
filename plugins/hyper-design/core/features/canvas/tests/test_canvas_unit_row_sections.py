@@ -14,7 +14,9 @@ HERE = Path(__file__).resolve().parent
 MOD = HERE.parent / "modules"
 NODE = shutil.which("node")
 sys.path.insert(0, str(HERE.parent))
-import session  # noqa: E402
+import board_rows  # noqa: E402
+import history  # noqa: E402
+import write_record  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -96,7 +98,7 @@ def _d():
 
 def test_plan_rename_updates_groups_and_every_screen_in_the_row():
     d = _d()
-    p = session.plan_group_rename(d, "홈", " 메인 ")
+    p = board_rows.plan_group_rename(d, "홈", " 메인 ")
     assert p["data"]["groups"] == ["로그인", "메인", "설정"]
     assert [s.get("group") for s in p["data"]["screens"]] == ["로그인", "메인", "설정", "메인", "로그인", None]
     assert p["screens"] == ["home", "home2"] and p["to"] == "메인"
@@ -104,9 +106,9 @@ def test_plan_rename_updates_groups_and_every_screen_in_the_row():
 
 
 def test_plan_rename_of_implicit_group_keeps_its_place():
-    p = session.plan_group_rename(_d(), "기타", "나머지")
+    p = board_rows.plan_group_rename(_d(), "기타", "나머지")
     assert p["data"]["groups"] == ["로그인", "홈", "설정", "나머지"] and p["data"]["screens"][5]["group"] == "나머지"
-    q = session.plan_group_rename({"screens": [{"id": "a"}, {"id": "b", "group": "B"}]}, "기타", "A")
+    q = board_rows.plan_group_rename({"screens": [{"id": "a"}, {"id": "b", "group": "B"}]}, "기타", "A")
     assert q["data"]["groups"] == ["A", "B"], "groups 가 없던 데이터도 지금 줄 차례 그대로"
 
 
@@ -114,17 +116,17 @@ def test_plan_rename_of_implicit_group_keeps_its_place():
     ("홈", "  ", "비었", "invalid"), ("홈", "설정", "이미 있어요", "invalid"), ("홈", "기타", "이미 있어요", "invalid"),
     ("없음", "새", "없는 줄", "missing"), ("홈", "x" * 81, "80자", "invalid"), (None, "새", "없는 줄", "missing")])
 def test_plan_rename_rejects(frm, to, word, reason):
-    with pytest.raises(session.GroupError) as e:
-        session.plan_group_rename(_d(), frm, to)
+    with pytest.raises(board_rows.GroupError) as e:
+        board_rows.plan_group_rename(_d(), frm, to)
     assert word in str(e.value) and e.value.reason == reason
 
 
 def test_plan_rename_same_name_is_a_no_op():
-    assert session.plan_group_rename(_d(), "홈", "홈 ")["same"] is True
+    assert board_rows.plan_group_rename(_d(), "홈", "홈 ")["same"] is True
 
 
 def test_plan_dissolve_merges_into_row_above():
-    p = session.plan_group_dissolve(_d(), "홈")
+    p = board_rows.plan_group_dissolve(_d(), "홈")
     assert (p["into"], p["where"], p["screens"]) == ("로그인", "above", ["home", "home2"])
     assert p["data"]["groups"] == ["로그인", "설정"]
     assert [s["id"] for s in p["data"]["screens"] if s.get("group") == "로그인"] == ["login", "login2", "home", "home2"], \
@@ -133,7 +135,7 @@ def test_plan_dissolve_merges_into_row_above():
 
 
 def test_plan_dissolve_first_row_goes_below():
-    p = session.plan_group_dissolve(_d(), "로그인")
+    p = board_rows.plan_group_dissolve(_d(), "로그인")
     assert (p["into"], p["where"]) == ("홈", "below")
     assert [s["id"] for s in p["data"]["screens"] if s.get("group") == "홈"] == ["login", "login2", "home", "home2"], "아래 줄 화면 앞에"
     assert p["data"]["groups"] == ["홈", "설정"]
@@ -141,16 +143,16 @@ def test_plan_dissolve_first_row_goes_below():
 
 def test_plan_dissolve_skips_empty_group_names():
     d = {"groups": ["A", "빈", "B"], "screens": [{"id": "a", "group": "A"}, {"id": "b", "group": "B"}]}
-    p = session.plan_group_dissolve(d, "B")
+    p = board_rows.plan_group_dissolve(d, "B")
     assert p["into"] == "A", "판에 없는(화면 0) 줄은 위 줄이 아니다"
 
 
 def test_plan_dissolve_rejects():
-    with pytest.raises(session.GroupError) as e:
-        session.plan_group_dissolve({"groups": ["A"], "screens": [{"id": "a", "group": "A"}]}, "A")
+    with pytest.raises(board_rows.GroupError) as e:
+        board_rows.plan_group_dissolve({"groups": ["A"], "screens": [{"id": "a", "group": "A"}]}, "A")
     assert "하나뿐" in str(e.value) and e.value.reason == "invalid"
-    with pytest.raises(session.GroupError) as e:
-        session.plan_group_dissolve(_d(), "없음")
+    with pytest.raises(board_rows.GroupError) as e:
+        board_rows.plan_group_dissolve(_d(), "없음")
     assert "없는 줄" in str(e.value) and e.value.reason == "missing"
 
 
@@ -168,12 +170,12 @@ def test_group_rename_writes_once_and_restore_brings_it_back():
     o = _out()
     try:
         before = (o / "screens.json").read_bytes()
-        r = session.group_rename(o, "홈", "메인", stamp="r1", build=OK)
+        r = board_rows.group_rename(o, "홈", "메인", stamp="r1", build=OK)
         assert r["stamp"] == "r1" and r["group"] == "메인" and r["screens"] == ["home", "home2"], r
         d = json.loads((o / "screens.json").read_text(encoding="utf-8"))
         assert d["groups"] == ["로그인", "메인", "설정"] and d["screens"][1]["group"] == "메인"
         assert (o / ".hd-history" / "r1" / "manifest.json").is_file(), "기록 = 되돌리기 한 번"
-        assert "error" not in session.restore(o, "r1", build=OK)
+        assert "error" not in write_record.restore(o, "r1", build=OK)
         assert (o / "screens.json").read_bytes() == before
     finally:
         shutil.rmtree(o, ignore_errors=True)
@@ -183,10 +185,10 @@ def test_group_dissolve_writes_once_and_restore_brings_it_back():
     o = _out()
     try:
         before = (o / "screens.json").read_bytes()
-        r = session.group_dissolve(o, "설정", stamp="d1", build=OK)
+        r = board_rows.group_dissolve(o, "설정", stamp="d1", build=OK)
         assert (r["into"], r["where"], r["screens"], r["stamp"]) == ("홈", "above", ["set"], "d1"), r
         assert json.loads((o / "screens.json").read_text(encoding="utf-8"))["groups"] == ["로그인", "홈"]
-        assert "error" not in session.restore(o, "d1", build=OK)
+        assert "error" not in write_record.restore(o, "d1", build=OK)
         assert (o / "screens.json").read_bytes() == before
     finally:
         shutil.rmtree(o, ignore_errors=True)
@@ -196,11 +198,11 @@ def test_group_ops_refuse_without_writing():
     o = _out()
     try:
         before = (o / "screens.json").read_bytes()
-        r = session.group_rename(o, "홈", "설정", build=OK)
-        assert r["reason"] == "invalid" and "이미 있어요" in r["error"] and session._code(r) == 400
-        r = session.group_dissolve(o, "없음", build=OK)
-        assert r["reason"] == "missing" and session._code(r) == 404
-        r = session.group_rename(o, "홈", "홈", build=OK)
+        r = board_rows.group_rename(o, "홈", "설정", build=OK)
+        assert r["reason"] == "invalid" and "이미 있어요" in r["error"] and history._code(r) == 400
+        r = board_rows.group_dissolve(o, "없음", build=OK)
+        assert r["reason"] == "missing" and history._code(r) == 404
+        r = board_rows.group_rename(o, "홈", "홈", build=OK)
         assert r["stamp"] is None and "error" not in r, "같은 이름 = 쓰지 않음"
         assert (o / "screens.json").read_bytes() == before and not (o / ".hd-history").exists()
     finally:

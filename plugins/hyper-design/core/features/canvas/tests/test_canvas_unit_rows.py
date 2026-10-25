@@ -3,7 +3,7 @@
 HD.rows.plan(have, want) (modules/rows.js, 순수): have = 지금 판의 줄 [{group, n}](n = 그 줄 카드 수, 빈 레이아웃 포함), want = 새 데이터의 줄 이름
 (nd.rows 차례) → {remove: [이름], insert: [{group, before: 이름|null}]}. 빈 줄(n 0)이면서 새 데이터에 없으면 걷는다. 카드가 남은 줄은
 새 데이터에 없어도 둔다. want 에 있는데 판에 없는 줄은 want 에서 그 뒤에 오는 남은 줄 앞에(없으면 끝에) 끼운다.
-session.emptied_groups(groups, before, after): 지우기로 비게 된 group 이름만 groups 에서 뺀다(원래 빈 이름은 그대로).
+board_rows.emptied_groups(groups, before, after): 지우기로 비게 된 group 이름만 groups 에서 뺀다(원래 빈 이름은 그대로).
 delete_screens 는 그것을 쓰고, 되살리기는 screens.json 을 통째로 돌려 groups 도 돌아온다. I/O 는 임시 폴더·가짜 빌드뿐."""
 import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
@@ -14,7 +14,9 @@ HERE = Path(__file__).resolve().parent
 MOD = HERE.parent / "modules"
 NODE = shutil.which("node")
 sys.path.insert(0, str(HERE.parent))
-import session  # noqa: E402
+import board_rows  # noqa: E402
+import screen_edits  # noqa: E402
+import write_record  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -78,10 +80,10 @@ def test_plan_bad_input_is_a_no_op(js):
 def test_emptied_groups_drops_only_names_that_became_empty():
     before = [{"id": "a1", "group": "A"}, {"id": "b1", "group": "B"}, {"id": "b2", "group": "B"}, {"id": "x"}]
     after = [s for s in before if s["id"] in ("b2", "x")]
-    assert session.emptied_groups(["A", "B", "C", "기타"], before, after) == ["B", "C", "기타"], "C 는 원래 비어 있었다 — 그대로"
+    assert board_rows.emptied_groups(["A", "B", "C", "기타"], before, after) == ["B", "C", "기타"], "C 는 원래 비어 있었다 — 그대로"
     after2 = [s for s in before if s["id"] in ("a1", "b1", "b2")]
-    assert session.emptied_groups(["A", "B", "기타"], before, after2) == ["A", "B"], "group 없는 화면 = '기타'"
-    assert session.emptied_groups(None, before, after) is None, "groups 가 없으면 그대로"
+    assert board_rows.emptied_groups(["A", "B", "기타"], before, after2) == ["A", "B"], "group 없는 화면 = '기타'"
+    assert board_rows.emptied_groups(None, before, after) is None, "groups 가 없으면 그대로"
 
 
 def _out():
@@ -99,13 +101,13 @@ def test_delete_screens_drops_emptied_group_and_restore_brings_it_back():
     ok = lambda out: types.SimpleNamespace(returncode=0, stderr="")
     try:
         before = (o / "screens.json").read_bytes()
-        res = session.delete_screens(o, ["a1"], stamp="d1", build=ok)
+        res = screen_edits.delete_screens(o, ["a1"], stamp="d1", build=ok)
         assert res["deleted"] == ["a1"], res
         assert json.loads((o / "screens.json").read_text(encoding="utf-8"))["groups"] == ["B", "C"], "비게 된 A 만 뺀다"
-        res = session.delete_screens(o, ["b1"], stamp="d2", build=ok)
+        res = screen_edits.delete_screens(o, ["b1"], stamp="d2", build=ok)
         assert json.loads((o / "screens.json").read_text(encoding="utf-8"))["groups"] == ["B", "C"], "b2 가 남은 B 는 둔다"
-        assert "error" not in session.restore(o, "d2", build=ok)
-        r = session.restore(o, "d1", build=ok)
+        assert "error" not in write_record.restore(o, "d2", build=ok)
+        r = write_record.restore(o, "d1", build=ok)
         assert "error" not in r, r
         assert (o / "screens.json").read_bytes() == before, "되살리기 = groups 까지 바이트 그대로"
     finally:

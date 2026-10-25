@@ -3,7 +3,7 @@
 Python(screen_copy.py, 순수): plan(screens.json, 원본 id, {want, title, files}) → 새 screens.json + 복사할 파일(원본 → 새 파일).
   새 id = '<원본>-copy'(쓰였으면 -copy-2 …, 화면 id·있는 파일 모두 피함) · 제목 = 원본 제목 + ' 복사'(옛 복제 메모와 같은 꼬리)
   · 자리 = screens 목록에서 원본 바로 뒤, 같은 줄 · 나가는 연결(branches·파일 안 링크) 그대로 · 들어오는 연결(다른 화면 → 원본) 그대로
-  · 앱 카드(개발 서버 주소) = 거절. session.apply_edits 의 'clone' 편집 = 쓰기 한 번 → restore 한 번이면 새 파일까지 사라진다.
+  · 앱 카드(개발 서버 주소) = 거절. screen_edits.apply_edits 의 'clone' 편집 = 쓰기 한 번 → restore 한 번이면 새 파일까지 사라진다.
 JS(modules/card-copy.js, 순수): 같은 id·제목 규칙 + 판에서 끼울 자리(after) — 셸이 화면에 먼저 보일 카드."""
 import json, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -15,7 +15,8 @@ MOD = HERE.parent / "modules"
 NODE = shutil.which("node")
 sys.path.insert(0, str(HERE.parent))
 import screen_copy as SC  # noqa: E402
-import session  # noqa: E402
+import screen_edits  # noqa: E402
+import write_record  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -100,14 +101,14 @@ def test_apply_edits_clone_copies_file_once_and_restore_removes_it(tmp_path):
     for s in SJ["screens"][:4]:
         (o / s["file"]).write_text('<a data-href="settings.html">%s</a>' % s["id"], encoding="utf-8")
     before = (o / "screens.json").read_bytes()
-    r = session.apply_edits(o, [{"id": "e1", "screen": "home", "edit": "clone", "to": "home-copy-2", "value": "홈 복사"},
+    r = screen_edits.apply_edits(o, [{"id": "e1", "screen": "home", "edit": "clone", "to": "home-copy-2", "value": "홈 복사"},
                                 {"id": "e2", "screen": "app", "edit": "clone", "to": "app-copy", "value": "x"}], stamp="c1", build=OK)
     assert r["applied"] == ["e1"] and [f["id"] for f in r["failed"]] == ["e2"] and r["stamp"] == "c1"
     assert r["changed"] == ["home-copy-2"]
     assert (o / "screens/home-copy-2.html").read_bytes() == (o / "screens/home.html").read_bytes(), "파일 그대로(나가는 링크 포함)"
     sj = json.loads((o / "screens.json").read_text(encoding="utf-8"))
     assert ids(sj)[:2] == ["home", "home-copy-2"]
-    assert "error" not in session.restore(o, "c1", build=OK)
+    assert "error" not in write_record.restore(o, "c1", build=OK)
     assert (o / "screens.json").read_bytes() == before and not (o / "screens/home-copy-2.html").exists(), "되돌리기 한 번 = 새 파일도 사라짐"
 
 

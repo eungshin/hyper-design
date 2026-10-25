@@ -78,7 +78,8 @@ import html_edit
 import router as R
 import safe_port
 import send_queue
-import session as S
+import screen_edits
+import write_record
 from html_edit import *  # noqa: F401,F403  — 예전 이름(helper.select · edit_html · edit_one · Tree …)
 from html_edit import (_after, _attr_patch, _block_ok, _dup_patch, _end, _has_text, _inline_only, _insert_patch, _is_root, _lead,  # noqa: F401
                        _link_to, _move_patch, _op_patch, _part, _patch, _path_of, _relink, _remove_patch, _replace_patch, _seg_ok,
@@ -90,8 +91,9 @@ from state_store import (STATE_FILE, STATE_MAX, _state_ok, _state_save, _state_w
 from note_archive import (ARCHIVE_FILE, archive_get, archive_post)  # noqa: F401
 from busy import (FileWatch, WATCH_EVERY, claim_post, release_post, scan, watch)  # noqa: F401
 from send_queue import (AGENTS_TTL, NO_PASEO, NO_WINDOW, agents_get, list_agents, project_repo, reply_post)  # noqa: F401
-from session import (POLICY_MAX_CHARS, POLICY_MAX_LINES, ProjectSession, _Writes, _parts_html, _policies, keypath, parts_of,  # noqa: F401
-                     prune)
+from write_record import (_Writes, prune)  # noqa: F401
+from screen_edits import (POLICY_MAX_CHARS, POLICY_MAX_LINES, _parts_html, _policies, parts_of)  # noqa: F401
+from session import (ProjectSession, keypath)  # noqa: F401
 from adapters import (PASEO_DEFAULT, _paseo_args, _paseo_cmd)  # noqa: F401
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
@@ -116,7 +118,7 @@ def use_ref_build():
 
 
 def _build(out):
-    return S.run_build(out, BUILDER)
+    return write_record.run_build(out, BUILDER)
 
 
 def _run(out):                                       # 세션·아래 함수가 부르는 빌드 — 부를 때마다 helper._build 를 찾는다(테스트가 바꿔 끼움)
@@ -124,15 +126,15 @@ def _run(out):                                       # 세션·아래 함수가 
 
 
 def apply_edits(out, edits, stamp=None):
-    return S.apply_edits(out, edits, stamp, build=_run)
+    return screen_edits.apply_edits(out, edits, stamp, build=_run)
 
 
 def delete_screens(out, ids, stamp=None):
-    return S.delete_screens(out, ids, stamp, build=_run)
+    return screen_edits.delete_screens(out, ids, stamp, build=_run)
 
 
 def restore(out, stamp):
-    return S.restore(out, stamp, build=_run)
+    return write_record.restore(out, stamp, build=_run)
 
 
 def forward(out, text, agent=None, paseo=None):

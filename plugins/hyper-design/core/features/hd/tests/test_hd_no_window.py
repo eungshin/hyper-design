@@ -6,7 +6,7 @@ HD = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(HD), str(HD.parent / "canvas")]
 import hd_client  # noqa: E402
 import send_queue  # noqa: E402
-import session  # noqa: E402
+import write_record  # noqa: E402
 
 FLAG = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -29,8 +29,8 @@ def test_hd_client_children_open_no_console_window(monkeypatch, tmp_path):
 
 def test_session_children_open_no_console_window(monkeypatch, tmp_path):
     seen = []
-    monkeypatch.setattr(session.subprocess, "run", _fake(seen))
-    session.run_build(tmp_path)
+    monkeypatch.setattr(write_record.subprocess, "run", _fake(seen))
+    write_record.run_build(tmp_path)
     send_queue.forward(tmp_path, "메모", agent="a1", paseo="paseo.exe")
     send_queue.list_agents(paseo="paseo.exe")
     assert len(seen) == 3 and all(f == FLAG for f in seen), seen

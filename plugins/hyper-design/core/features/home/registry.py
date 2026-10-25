@@ -23,13 +23,14 @@ import hd_client as C  # noqa: E402
 import hd_projects as P  # noqa: E402
 import home_api as A  # noqa: E402
 import router as R  # noqa: E402
+import write_record  # noqa: E402
 import session as S  # noqa: E402
 
 BUILD_REF = CANVAS / "build_ref.py"
 
 
 def ref_build(out):                                  # 허브의 다시 빌드 = hd open 과 같은 build_ref(저장소면 git HEAD 코드, #278)
-    return S.run_build(out, BUILD_REF)
+    return write_record.run_build(out, BUILD_REF)
 
 
 def prefix(name):
