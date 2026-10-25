@@ -12,8 +12,8 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 플러그인 쪽: `foundation/palette.js`, `foundation/specimens.html`(환경변수 `HD_SPECIMENS`로 바꿈)
 
 ## 출력
-- `out/index.html` — `canvas_template.html`에 데이터(`hd-data`, 화면 파일에서 미리 뽑은 화면 사이 링크 `links` 포함 — `palette.js` 의 `links()` 와 같은 규칙: `href`·`data-href`·`onclick` 안 `.html`)·`modules/*.js`·`modules/motion.css`를 끼워 넣은 한 파일. 화면 카드는 보일 때 한 번만 불러온다
-- 코드 도장(47-7): `index.html` 의 `<head>` 바로 뒤 `<meta name="hd-code" content="…">` — env `HD_CODE_STAMP`(`build_ref.py` 가 넘김 = `g:<ref 의 core 나무 sha 앞 16>`), 없으면 빌드 입력(템플릿·모듈·motion.css·build_canvas.py·code_stamp.py·links.py·board_data.py·code_probe.py·palette.js) 내용 해시 `w:…`(`code_probe.work_stamp`). 지금 도장 재기(git 나무 · 저장소가 아니면 내용 해시)는 Edge `code_probe.current`. 규칙은 순수 `code_stamp.py`(`tree_stamp` `content_stamp` `stamp_page` `page_stamp` `stale` `reuse_verdict` `page_after`) — 지금 도장을 모르면(git 실패) 옛것이라 하지 않는다
+- `out/index.html` — `canvas_template.html`에 데이터(`hd-data`, 화면 파일에서 미리 뽑은 화면 사이 링크 `links` 포함 — `palette.js` 의 `links()` 와 같은 규칙: `href`·`data-href`·`onclick` 안 `.html`)·`modules/*.js`·`modules/shell.css`(셸 화면 틀 CSS, `/* hd-shell */`)·`modules/motion.css`를 끼워 넣은 한 파일. 화면 카드는 보일 때 한 번만 불러온다
+- 코드 도장(47-7): `index.html` 의 `<head>` 바로 뒤 `<meta name="hd-code" content="…">` — env `HD_CODE_STAMP`(`build_ref.py` 가 넘김 = `g:<ref 의 core 나무 sha 앞 16>`), 없으면 빌드 입력(템플릿·모듈·shell.css·motion.css·build_canvas.py·code_stamp.py·links.py·board_data.py·code_probe.py·palette.js) 내용 해시 `w:…`(`code_probe.work_stamp`). 지금 도장 재기(git 나무 · 저장소가 아니면 내용 해시)는 Edge `code_probe.current`. 규칙은 순수 `code_stamp.py`(`tree_stamp` `content_stamp` `stamp_page` `page_stamp` `stale` `reuse_verdict` `page_after`) — 지금 도장을 모르면(git 실패) 옛것이라 하지 않는다
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조

@@ -20,7 +20,7 @@ MODULES_DIR = HERE / "modules"
 
 def code_inputs():
     """도장에 드는 빌드 입력 파일(작업 트리 내용 해시 — 저장소가 아닐 때). 차례는 상관없다(content_stamp 가 이름으로 줄 세움)."""
-    return [HERE / "canvas_template.html", *sorted(MODULES_DIR.glob("*.js")), MODULES_DIR / "motion.css",
+    return [HERE / "canvas_template.html", *sorted(MODULES_DIR.glob("*.js")), MODULES_DIR / "shell.css", MODULES_DIR / "motion.css",
             HERE / "build_canvas.py", HERE / "code_stamp.py", HERE / "links.py", HERE / "board_data.py", HERE / "code_probe.py",
             CORE / "foundation" / "palette.js"]
 

@@ -70,12 +70,12 @@ def test_focusing(out):
     assert out["focHovEm"] == "full" and out["focHov"] == "faint" and out["focHovOn"] == "full"
 
 
-# ── 템플릿 선 CSS 와 line-tone.js 가 같은 말을 하는지(손으로 옮긴 규칙의 지킴이) ──
-# 템플릿의 `path.ln` stroke-opacity 규칙을 작은 캐스케이드(특이도 + 차례)로 상태마다 풀고,
+# ── 셸 선 CSS(modules/shell.css) 와 line-tone.js 가 같은 말을 하는지(손으로 옮긴 규칙의 지킴이) ──
+# 셸 CSS 의 `path.ln` stroke-opacity 규칙을 작은 캐스케이드(특이도 + 차례)로 상태마다 풀고,
 # 그 상태에서 HD.lineTone.tone() 이 고른 단계의 화살촉 fill-opacity 값과 글자 그대로 같아야 한다.
 import itertools, re
 
-TEMPLATE = HERE.parent / "canvas_template.html"
+SHELL_CSS = MOD / "shell.css"                            # 셸 화면 틀 CSS(빌드가 템플릿 <style> 안에 끼움)
 STATE_KEYS = ("focusing", "hover", "on", "em", "pd")
 ROW_CLASS = {"lnhov": "hover", "focusing": "focusing"}   # #rows.<이름> → 상태
 PATH_CLASS = {"on", "em", "pd", "ln"}                    # 선 path 에 붙는 상태 클래스(그 밖 클래스 규칙은 이 지킴이 밖)
@@ -152,9 +152,8 @@ console.log(JSON.stringify(states.map((s) => globalThis.HD.lineTone.tone(s))));
 """
 
 
-def check_css_agrees(template_text, mod_dir):
-    """틀린 상태 목록(빈 목록 = 같음). 테스트가 일부러 바꾼 사본으로도 부를 수 있게 함수로 둔다."""
-    css = "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", template_text, flags=re.S))
+def check_css_agrees(css, mod_dir):
+    """틀린 상태 목록(빈 목록 = 같음). 테스트가 일부러 바꾼 사본으로도 부를 수 있게 함수로 둔다. css = 셸 CSS 글."""
     rules = _rules(css)
     marks = _marker_opacity(rules)
     assert set(marks) == {"base", "hov", "faint", "full"}, f"화살촉 단계 CSS 를 못 찾음: {marks}"
@@ -177,15 +176,15 @@ def check_css_agrees(template_text, mod_dir):
     return bad
 
 
-def test_tone_matches_template_line_css(out):
-    bad = check_css_agrees(TEMPLATE.read_text(encoding="utf-8"), MOD)
+def test_tone_matches_shell_line_css(out):
+    bad = check_css_agrees(SHELL_CSS.read_text(encoding="utf-8"), MOD)
     assert not bad, "선 CSS 와 line-tone.js 가 다름(한쪽을 바꾸면 다른 쪽도): " + "; ".join(
         f"{ {k for k, v in s.items() if v} } tone={t} 화살촉={m} 선={l}" for s, t, m, l in bad[:6])
 
 
 def test_guard_catches_drift(out):
-    """지킴이가 실제로 어긋남을 잡는지 — 템플릿 사본에서 판 강조 흐림 값만 바꾼다."""
-    t = TEMPLATE.read_text(encoding="utf-8")
+    """지킴이가 실제로 어긋남을 잡는지 — 셸 CSS 사본에서 판 강조 흐림 값만 바꾼다."""
+    t = SHELL_CSS.read_text(encoding="utf-8")
     drift = t.replace("#rows.focusing path.ln{stroke-opacity:.18}", "#rows.focusing path.ln{stroke-opacity:.3}")
-    assert drift != t, "고칠 줄을 못 찾음 — 이 테스트의 문자열을 템플릿에 맞춘다"
+    assert drift != t, "고칠 줄을 못 찾음 — 이 테스트의 문자열을 shell.css 에 맞춘다"
     assert check_css_agrees(drift, MOD), "흐림 값을 바꿨는데 지킴이가 못 잡음"

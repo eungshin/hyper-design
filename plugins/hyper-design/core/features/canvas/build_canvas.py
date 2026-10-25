@@ -3,7 +3,7 @@
 python3 build_canvas.py <out_dir>
 
 출력
-- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 modules/*.js 모듈(<!-- hd-modules -->)·modules/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
+- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 modules/*.js 모듈(<!-- hd-modules -->)·modules/shell.css(/* hd-shell */)·modules/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
                         헤더 = 제목 · 탭[Screens|Foundation|Components] · 팔레트 점 · [전체 보기][배율%]
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 크게 보기(크기는 표면 프로필 frame.modal, 기본 390×844).
@@ -24,7 +24,7 @@ screens.json:
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 코드 도장(code_stamp.py): index.html 의 <head> 에 <meta name="hd-code"> — 환경변수 HD_CODE_STAMP(build_ref 가 넘기는 git 나무 도장),
-없으면 빌드 입력(템플릿·모듈·motion.css·이 파일·palette.js) 내용 해시. 열기가 지금 도장과 견줘 옛 페이지를 다시 빌드한다.
+없으면 빌드 입력(템플릿·모듈·shell.css·motion.css·이 파일·palette.js) 내용 해시. 열기가 지금 도장과 견줘 옛 페이지를 다시 빌드한다.
 """
 import sys, os, json, re, html, pathlib, shutil
 
@@ -36,8 +36,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
 MODULES_MARKER = "<!-- hd-modules -->"
-MOTION_CSS = MODULES_DIR / "motion.css"
-MOTION_MARKER = "/* hd-motion */"
+# <style> 안 표시 자리 → 끼울 CSS(템플릿에서 셸 CSS 가 motion.css 보다 앞 — 캐스케이드 차례 그대로)
+CSS_SLOTS = (("/* hd-shell */", MODULES_DIR / "shell.css"), ("/* hd-motion */", MODULES_DIR / "motion.css"))
 PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
 
@@ -69,10 +69,11 @@ def inline_modules(tpl):
         js = f.read_text(encoding="utf-8").replace("</", "<\\/").replace("<!--", "<\\!--")
         parts.append(f'<script data-hd-module="{name}">\n{js}</script>')
     tpl = tpl.replace(MODULES_MARKER, "\n".join(parts), 1)
-    # 움직임 토큰·전환(modules/motion.css)을 <style> 안 표시 자리에
-    assert MOTION_MARKER in tpl, f"canvas_template.html 에 {MOTION_MARKER} 자리가 없다"
-    css = MOTION_CSS.read_text(encoding="utf-8").replace("</", "<\\/")
-    return tpl.replace(MOTION_MARKER, css, 1)
+    # 셸 화면 틀(modules/shell.css)·움직임 토큰·전환(modules/motion.css)을 <style> 안 표시 자리에
+    for marker, f in CSS_SLOTS:
+        assert marker in tpl, f"canvas_template.html 에 {marker} 자리가 없다"
+        tpl = tpl.replace(marker, f.read_text(encoding="utf-8").replace("</", "<\\/"), 1)
+    return tpl
 
 
 def build_index(out, m):

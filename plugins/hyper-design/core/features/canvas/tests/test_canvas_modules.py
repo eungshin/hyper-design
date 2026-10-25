@@ -263,6 +263,7 @@ def test_single_file_output(res):
     order = [html.index(f'data-hd-module="{n}"') for n in ALL_MODULES]
     assert order == sorted(order) and order[-1] < html.index("// ── Canvas shell")
     assert "/* hd-motion */" not in html and "--duration-fast: 250ms" in html and html.index("--camera-glide-dur") < html.index("</style>")   # motion.css 인라인
+    assert "/* hd-shell */" not in html and html.index(":root{--ui-accent") < html.index("--duration-fast: 250ms"), "shell.css 인라인 — motion.css 보다 앞(캐스케이드 차례)"
     assert not re.search(r"<script[^>]+\bsrc=", html), "외부 스크립트 참조 없음"
 
 
@@ -395,20 +396,22 @@ def test_dock_model():
 
 
 def test_ui_chrome_colours_are_neutral_tokens():
-    """색 위계(H13): 판 바깥 UI(배지·주 버튼·핀·고른 카드·편집 칸)는 --ui-* 무채색 토큰만 쓴다 — 채도 높은 빨강·파랑이 다시 들어오지 않게."""
-    tpl = (SCRIPTS / "canvas_template.html").read_text(encoding="utf-8")
-    root = re.search(r":root\{([^}]*)\}", tpl)
+    """색 위계(H13): 판 바깥 UI(배지·주 버튼·핀·고른 카드·편집 칸)는 --ui-* 무채색 토큰만 쓴다 — 채도 높은 빨강·파랑이 다시 들어오지 않게.
+    토큰·규칙은 셸 CSS(modules/shell.css)에서, 색 금지는 셸 CSS 와 템플릿(스크립트 안 인라인 색) 둘 다."""
+    css = (MOD / "shell.css").read_text(encoding="utf-8")
+    root = re.search(r":root\{([^}]*)\}", css)
     assert root and all(f"--ui-{k}:" in root.group(1) for k in ("primary", "mark", "badge", "danger")), "판 바깥 UI 토큰"
     for sel in (".nbadge{", ".nbtn.pri{", ".pin{", ".card.picked .phone{", "#tools .tb .cnt{", ".pchip{", "#tedit textarea{"):
-        rule = tpl[tpl.index(sel):tpl.index("}", tpl.index(sel))]
+        rule = css[css.index(sel):css.index("}", css.index(sel))]
         assert "var(--ui-" in rule, sel
+    shell = css + (SCRIPTS / "canvas_template.html").read_text(encoding="utf-8")
     for hexv in ("#e5484d", "#F59E0B", "#7cc4ff"):
-        assert hexv not in tpl, f"채도 높은 판 바깥 색이 남음: {hexv}"
+        assert hexv not in shell, f"채도 높은 판 바깥 색이 남음: {hexv}"
 
 
 def test_dock_width_is_not_inherited_by_the_board():
-    """P4: --dockw 는 상속하지 않는 속성으로 등록하고, 쓰는 칸만 물려받는다 — 도크 너비를 끌 때 판 전체 스타일을 다시 계산하지 않게."""
-    tpl = (SCRIPTS / "canvas_template.html").read_text(encoding="utf-8")
+    """P4: --dockw 는 상속하지 않는 속성으로 등록하고, 쓰는 칸만 물려받는다 — 도크 너비를 끌 때 판 전체 스타일을 다시 계산하지 않게(셸 CSS = modules/shell.css)."""
+    tpl = (MOD / "shell.css").read_text(encoding="utf-8")
     assert re.search(r"@property --dockw\{[^}]*inherits:false", tpl), "--dockw 는 inherits:false"
     users = set(re.findall(r"([#.][\w-]+)\{[^}]*var\(--dockw", tpl))
     taker = re.search(r"^([^{\n]*)\{--dockw:inherit\}", tpl, re.M)
