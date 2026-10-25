@@ -328,15 +328,25 @@ function apply() {
   stage.style.transform = 'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + z.toFixed(4) + ')';
   stage.dataset.zoom = z.toFixed(4);
   $('#zoom').textContent = Math.round(z * 100) + '% ▾';
-  rowsEl.style.setProperty('--lw', Math.max(2, 1.2 / z).toFixed(2));   // 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
   var ts = tagScale();                             // 선 위 태그: 작게 볼 때 화면에서 읽히는 크기로(겹침 상자도 다시 잰다)
-  rowsEl.style.setProperty('--ts', ts.toFixed(3));
+  scheduleZoomVars();                              // --lw·--ts 는 한 프레임에 한 번(figma-lite 2) — 이동은 위에서 바로
   if (PN) PN.zoom(z);                              // 화면이 실제의 60% 이상이면 메모 핀을 늘 보인다
   placeSelbar();
   if (Math.abs(ts - lastTs) > 0.02) { lastTs = ts; clearTimeout(tsT); tsT = setTimeout(function () { if (VL) VL.paint(); }, 120); }
   scheduleVisible();
 }
-var lastTs = 1, tsT = 0;
+var lastTs = 1, tsT = 0, varsRaf = 0, varsT = 0;
+function zoomVars(exact) {                         // --lw·--ts(#rows 아래 전체 스타일 다시 계산, 60 Ctrl+휠 = 112ms): 확대 중엔 10% 넘게 바뀔 때만, 멈추면 정확한 값
+  var lw = Math.max(2, 1.2 / z), ts = tagScale(), st = rowsEl.style;   // lw: 기본 2 · 작게 봐도 화면에서 1.2px 아래로 가늘어지지 않게
+  var put = function (k, v, d) { var s = v.toFixed(d), o = parseFloat(st.getPropertyValue(k));
+    if (exact ? st.getPropertyValue(k) !== s : !(Math.abs(v / o - 1) <= 0.1)) st.setProperty(k, s); };
+  put('--lw', lw, 2); put('--ts', ts, 3);
+}
+function scheduleZoomVars() {                      // 이동(transform)은 apply 가 바로 — 이 둘만 프레임에 한 번 + 멈춘 뒤 150ms 에 정확히(figma-lite 2)
+  if (!rowsEl.style.getPropertyValue('--lw')) { zoomVars(true); return; }   // 처음(부팅) = 바로
+  if (!varsRaf) varsRaf = requestAnimationFrame(function () { varsRaf = 0; zoomVars(false); });
+  clearTimeout(varsT); varsT = setTimeout(function () { zoomVars(true); }, 150);
+}
 function tagScale() { return Math.max(1, 0.75 / z); }   // 글자 16·0.75 = 12px, 테두리 2·0.75 = 1.5px(화면)
 var fitMin = ZMIN;                                // 전체 보기가 ZMIN 보다 작아야 하면 그만큼은 허용
 function clampZ(v) { return Math.min(ZMAX, Math.max(fitMin, v)); }
