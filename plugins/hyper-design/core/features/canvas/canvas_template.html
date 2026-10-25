@@ -1223,10 +1223,11 @@ function loadHidden() {                              // 시작 때 · 기록 줄
   var raw = []; try { raw = JSON.parse(ST.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
   hidden = {};
   var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
-  live['@intro'] = live['@foot'] = 1;                // 판 글도 레이어(H7)
+  live['@intro'] = live['@foot'] = live['@dscard'] = 1;                // 판 글도 레이어(H7)
   (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
   $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
   $('#intro').hidden = !!hidden['@intro']; $('#foot').hidden = !!hidden['@foot'];
+  if ($('#dscard')) $('#dscard').hidden = !!hidden['@dscard'];
 }
 loadHidden();
 // 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
@@ -1357,7 +1358,7 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
     });
     var drafts = $$('.card.draft', rowsEl).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; });
     if (drafts.length) groups.push({id: '@drafts', name: '빈 레이아웃', screens: drafts});
-    return {groups: groups, texts: [{id: '@intro', name: '판 글 · 소개'}, {id: '@foot', name: '판 글 · 끝'}]};
+    return {groups: groups, texts: [{id: '@intro', name: '판 글 · 소개'}, {id: '@foot', name: '판 글 · 끝'}].concat($('#dscard') ? [{id: '@dscard', name: '디자인 시스템'}] : [])};
   },
   state: function () { var memo = {}; HD.edits.split(NS.list()).memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; }); return {hidden: hidden, locked: locked, memo: memo}; },
   picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
