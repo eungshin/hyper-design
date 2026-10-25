@@ -143,3 +143,40 @@ def test_lift_while_new_claim_arrives_resends_without_reload(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def test_ai_write_event_reloads_the_card_with_polling_off(ctx, out):
+    """47-4b — 실시간 알림(SSE /api/events): 칩이 '실시간'이 되면 2초 상태 읽기·/api/files 폴링이 멈추고, AI 가 화면 파일을 쓰면 이벤트로 그 카드만 다시 싣는다."""
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors, polls = [], []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.on("request", lambda r: polls.append(r.url) if ("/api/files" in r.url or "/api/state" in r.url or "/api/ai-writes" in r.url) and r.method == "GET" else None)
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        assert pg.text_content("#livechip") == "실시간"
+        pg.evaluate("window.__sameLoad = 1")
+        pg.wait_for_timeout(500)
+        polls.clear()
+        pg.wait_for_timeout(2600)                          # 폴링이면 상태 읽기 1번 + /api/files 2번은 있었다
+        assert polls == [], "실시간이면 폴링 없음: %s" % polls
+        before = pg.evaluate(SRCS)
+        touch(out / "screens" / "job.html")                # 터미널 AI 가 쓴 것 = 서버 지켜보기 → screen.written(by ai)
+        pg.wait_for_function("(b) => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return f && (f.getAttribute('src') || '') + '|' + (f.getAttribute('data-src') || '') !== b; }",
+                             arg=before["job"], timeout=6000)
+        after = pg.evaluate(SRCS)
+        assert [k for k in before if before[k] != after.get(k)] == ["job"], "그 카드만"
+        assert not [u for u in polls if "/api/files" in u], "다시 싣기는 이벤트로(파일 폴링 없음): %s" % polls
+        assert pg.evaluate("window.__sameLoad") == 1
+        SHOTS.mkdir(parents=True, exist_ok=True)
+        pg.screenshot(path=str(SHOTS / "live-chip.png"), clip={"x": 0, "y": 0, "width": 900, "height": 60})
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+SHOTS = pathlib.Path(os.environ.get("HD_SHOTS_47_4B", pathlib.Path(tempfile.gettempdir()) / "claude" / "t47-4b"))

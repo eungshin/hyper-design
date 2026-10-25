@@ -256,3 +256,51 @@ def test_remove_hides_the_element_at_once_and_survives_the_swap(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+@pytest.mark.area("helper", "modal", "tools")
+def test_async_apply_whose_build_fails_reverts_the_optimistic_change(ctx, out):
+    """47-4b — 바로 쓰기는 async apply: 도우미는 쓰고 바로 답하고(빌드는 뒤에서), 그 빌드가 깨지면 build.failed{reverted} 이벤트로
+    먼저 보인 복제를 거두고 화면을 파일대로 되돌리며 까닭을 알린다."""
+    import subprocess as sp
+    srv = _serve(out)
+    calls = []
+
+    def broken(o):                                       # 뒤 빌드 한 번 실패(되돌린 뒤 다시 빌드는 성공)
+        calls.append(1)
+        return sp.CompletedProcess([], 1, "", "시험용 빌드 실패") if len(calls) == 1 else sp.CompletedProcess([], 0, "", "")
+    pg, errors = _open(ctx, srv.url)
+    bodies = []
+    pg.on("request", lambda r: bodies.append(r.post_data) if r.url.endswith("/api/apply") else None)
+    try:
+        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        mf = _modal(pg)
+        before = _job(out)
+        _pick(pg, mf, TILE % 2)
+        srv.session.builder._run = broken
+        if pg.is_visible('#elbar [data-act="dup"]'):
+            pg.click('#elbar [data-act="dup"]')
+        else:
+            pg.click("#elbar [data-more]"); pg.click('#elpop .ep-act[data-act="dup"]')
+        mf.wait_for_function("() => document.querySelectorAll('.tile-grid > button').length === 10", timeout=3000)   # 답을 기다리지 않고 복사본
+        pg.wait_for_function("(document.getElementById('toast') || {}).textContent.indexOf('시험용 빌드 실패') >= 0", timeout=10000)
+        assert "되돌렸어요" in pg.text_content("#toast")
+        assert json.loads(bodies[0])["async"] is True, "캔버스 쓰기는 async"
+        _wait_file(pg, out, lambda s: s == before, "도우미가 파일을 되돌렸다")
+        for _ in range(60):                                # 크게 보기 틀도 파일대로(9개)
+            fr = next(f for f in pg.frames if f.parent_frame and f.frame_element().get_attribute("id") == "mframe")
+            try:
+                if fr.evaluate("() => document.querySelectorAll('.tile-grid > button').length") == 9:
+                    break
+            except Exception:                              # 다시 싣는 중
+                pass
+            pg.wait_for_timeout(100)
+        else:
+            raise AssertionError("되돌린 화면이 보이지 않는다")
+        assert len(calls) == 2
+        SHOTS.mkdir(parents=True, exist_ok=True)
+        pg.screenshot(path=str(Path(tempfile.gettempdir()) / "claude" / "t47-4b" / "async-build-failed.png"))
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

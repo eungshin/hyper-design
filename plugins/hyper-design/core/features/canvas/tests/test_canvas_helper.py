@@ -591,6 +591,7 @@ def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228
     def open_fresh():
         c = browser.new_context(viewport={"width": 1440, "height": 1000})
         pg = c.new_page()
+        pg.route("**/api/events*", lambda r: r.abort())   # 47-4b: 이 테스트는 '다음 쓰기 = 409 → 합치기' 길을 본다 — 실시간 알림이면 바깥 PUT 을 바로 받아 다시 불러온다(그 길은 test_canvas_claim_watch -k polling_off 쪽)
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("dialog", lambda d: d.accept())
         pg.goto(srv.url)

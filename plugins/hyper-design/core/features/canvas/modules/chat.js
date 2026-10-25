@@ -7,9 +7,11 @@
      요소 칩마다 요소 메모(범위 칸 없음 = 이 요소, quote·src 그대로 — 앱 카드면 요청문 '소스:' 줄) → 요소 칩이 없는 화면 칩들은 memo-batch.build(scope screen),
      칩이 없으면 첫 화면에 scope all 메모 하나. 글이 비었거나 화면이 없으면 memos [] + why(한국어 한 줄).
    상태: stage(n, busyItem, inflight) — 메모 하나의 단계(sending·unsent·sent·queued·working·decide·partial·applied·answered, 메모가 없음 = 바로 반영돼 빠짐 = applied).
-     line(last, find, busyOf, inflight) → {stage, text, req}|null — 여러 메모면 가장 앞선 단계(STAGES 차례) + 끝난 수 (k/N).
+     line(last, find, busyOf, inflight, opt?{progress, titleOf}) → {stage, text, req}|null — 여러 메모면 가장 앞선 단계(STAGES 차례) + 끝난 수 (k/N).
+     진행(S2, 47-4b): progress(p, ev, screens) → {step:'working'|'landed'|'done', screen} | p — 요청 화면(screens, 비면 아무 화면)의 claim · AI 쓰기(screen.written ai · ai.write) · release.
+       opt.progress 가 있고 손이 필요한 단계(sending·unsent·decide)가 아니면 줄 = 'AI 작업 중 · <화면>' · '반영됨 · <화면>' · '끝'(+ ' · ' 짧은 답, stage working·applied·done).
    마지막 요청 record(text, memos, at) = {text, ids, at} · parseLast(raw) → {last, bad}(깨졌으면 bad — 셸 아닌 View 가 [hd] 경고)
-   HD.chat = {PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, build, stage, line, record, parseLast} */
+   HD.chat = {PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, build, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -28,6 +30,11 @@ var SAY = {
   partial: '일부 반영 — 남은 것은 메모에',
   applied: '반영됨 ✓'
 };
+var PSAY = {working: 'AI 작업 중 · ', landed: '반영됨 · ', done: '끝'};    // 이벤트 진행 줄(S2)
+var PSTAGE = {working: 'working', landed: 'applied', done: 'done'};
+var HANDS = ['sending', 'unsent', 'decide'];
+var FINAL = ['applied', 'answered', 'partial'];          // 메모가 끝난 단계               // 손이 필요한 단계 = 이벤트보다 앞선다
+var REPLY_CUT = 40;
 
 function flat(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
 function tagOf(path) {
@@ -101,11 +108,20 @@ function stage(n, busy, inflight) {
   if (busy && (busy.via === 'paseo' || busy.via === 'cli')) return 'working';
   return 'sent';
 }
-function line(last, find, busyOf, inflight) {
+function line(last, find, busyOf, inflight, opt) {
   if (!last || !Array.isArray(last.ids) || !last.ids.length) return null;
   var ns = last.ids.map(function (id) { return find ? find(id) : null; });
   var st = ns.map(function (n) { return stage(n, n && busyOf ? busyOf(n.screen) : null, inflight); });
   var top = STAGES.filter(function (s) { return st.indexOf(s) >= 0; })[0] || 'sent';
+  var pr = opt && opt.progress;
+  if (pr && PSTAGE[pr.step] && HANDS.indexOf(top) < 0) {   // 이벤트 진행(S2) — 손이 필요한 단계가 아니면 마지막 이벤트가 줄을 맡는다
+    var t = opt.titleOf ? opt.titleOf(pr.screen) : pr.screen, said = replyText(ns), step = pr.step;
+    if (step === 'landed' && st.every(function (x) { return FINAL.indexOf(x) >= 0; })) step = 'done';   // 쓰고 모든 메모에 답함 = 끝(덮개를 캔버스가 먼저 걷으면 release 가 오지 않는다)
+    pr = {step: step, screen: pr.screen};
+    var tx = pr.step === 'done' ? PSAY.done : PSAY[pr.step] + (t == null || t === '' ? pr.screen : t);
+    if (said && pr.step !== 'working') tx += ' · ' + said;
+    return {stage: PSTAGE[pr.step], text: tx, req: last.text};
+  }
   var text = SAY[top];
   if (top === 'answered') {
     var a = ns.filter(function (n, i) { return st[i] === 'answered'; })[0], r = lastReply(a);
@@ -113,6 +129,27 @@ function line(last, find, busyOf, inflight) {
   }
   if (st.length > 1) text += ' (' + st.filter(function (s) { return s === 'applied' || s === 'answered'; }).length + '/' + st.length + ')';
   return {stage: top, text: text, req: last.text};
+}
+function replyText(ns) {                                 // 요청 메모의 마지막 답을 짧게(답변 = '답: …', 반영됨 = 무엇, 일부 = 한 것)
+  for (var i = 0; i < ns.length; i++) {
+    var r = lastReply(ns[i]); if (!r) continue;
+    var x = r.kind === '답변' ? '답: ' + flat(r.text) : r.kind === '반영됨' ? flat(r.what) : r.kind === '일부' ? flat(r.done) : '';
+    if (x && x !== '답: ') return x.length > REPLY_CUT ? x.slice(0, REPLY_CUT) + '…' : x;
+  }
+  return '';
+}
+function progress(p, ev, screens) {
+  if (!ev || typeof ev.type !== 'string') return p;
+  var mine = function (id) { return typeof id === 'string' && !!id && (!screens || !screens.length || screens.indexOf(id) >= 0); };
+  var t = ev.type;
+  if (t === 'claim' && mine(ev.screen)) return {step: 'working', screen: ev.screen};
+  if (t === 'release' && mine(ev.screen)) return {step: 'done', screen: ev.screen};
+  if (t === 'ai.write' && mine(ev.screen)) return {step: 'landed', screen: ev.screen};
+  if (t === 'screen.written' && ev.by === 'ai' && Array.isArray(ev.screens)) {
+    var hit = ev.screens.filter(mine)[0];
+    if (hit) return {step: 'landed', screen: hit};
+  }
+  return p;
 }
 
 function record(text, memos, at) {
@@ -127,5 +164,5 @@ function parseLast(raw) {
 }
 
 HD.chat = {PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
-           scope: scope, scopeLabel: scopeLabel, build: build, stage: stage, line: line, record: record, parseLast: parseLast};
+           scope: scope, scopeLabel: scopeLabel, build: build, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();

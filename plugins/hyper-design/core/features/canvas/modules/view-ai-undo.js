@@ -1,8 +1,10 @@
 /* View — AI 되돌리기(48c): AI 가 덮개(hd claim) 동안 쓴 화면마다 기록 패널에 'AI 반영 · <화면>' 한 줄(파일에 씀)을 올리고, 되돌리기·다시 하기 = 도우미 되살리기.
    상태: since(마지막 seq) · seen(올린 stamp) · 줄마다 cur(다음에 되살릴 stamp — 되살릴 때마다 반대쪽 stamp 를 받는다). 규칙은 HD.aiUndo(Model).
-   ctx = {api{on, call}, record(op), toast(msg), warn?(msg), cardEl?(id)} — 도우미가 없으면(api.on 거짓) 아무것도 하지 않는다.
-   되살린 카드는 이 기능이 바로 다시 싣는다(cardEl 의 .phone iframe, 주소 = HD.aiUndo.again) — 지켜보기(notify)만 믿으면 AI 반영 직후 5초 안의 되돌리기가 view-busy 의 건너뛰기에 막힌다.
-   2초마다(숨은 탭은 건너뜀) GET /api/ai-writes?since=. HD.feature('aiUndo') → {poll()} | {} */
+   ctx = {api{on, call}, record(op), toast(msg), warn?(msg), reload?(ids, {stamp, echo}), cardEl?(id)} — 도우미가 없으면(api.on 거짓) 아무것도 하지 않는다.
+   되살린 카드는 이 기능이 바로 다시 싣는다 — 공용 ctx.reload(47-4b: 교체 길 · 같은 되살리기 알림과 지켜보기 메아리를 한 번으로), 없으면 예전처럼 .phone iframe 주소(HD.aiUndo.again).
+     지켜보기(notify)만 믿으면 AI 반영 직후 5초 안의 되돌리기가 view-busy 의 건너뛰기에 막힌다.
+   2초마다(숨은 탭은 건너뜀) GET /api/ai-writes?since= — 실시간(live(true), view-live)이면 주기 읽기 없이 ai.write 이벤트가 poll() 을 부른다.
+   HD.feature('aiUndo') → {poll(), live(on)} | {} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -16,12 +18,15 @@ function mount(ctx) {
   function restore(row) {
     return ctx.api.call('POST', '/api/restore', A.body(row.cur)).then(function (res) {
       var o = A.outcome(res);
-      if (o.ok) { row.cur = o.next; reload(res.body.changed); } else ctx.toast(o.msg);
+      if (o.ok) { row.cur = o.next; reload(res.body.changed, o.next); } else ctx.toast(o.msg);
     }, function (e) { ctx.toast('되돌리지 못했어요 — 도우미에 닿지 않아요: ' + row.label); warn('[hd] AI 반영 되살리기: ' + (e && e.message || e)); });
   }
 
-  function reload(ids) {
-    if (!ctx.cardEl || !Array.isArray(ids)) return;
+  function reload(ids, stamp) {
+    if (!Array.isArray(ids)) return;
+    // 공용 ctx.reload(47-4b) — 교체 길(겹쳐 바꾸기) · 실시간 알림이 같은 되살리기(stamp)를 이미 실었으면 건너뜀 · 지켜보기의 메아리(ai 알림)는 한 번 먹음
+    if (typeof ctx.reload === 'function') { ctx.reload(ids, {stamp: stamp || null, echo: true}); return; }
+    if (!ctx.cardEl) return;
     ids.forEach(function (id) {
       var c = ctx.cardEl(id), f = c && c.querySelector('.phone iframe'), url = f && A.again(f.getAttribute('src') || f.getAttribute('data-src'), Date.now());
       if (url) f.setAttribute('src', url);
@@ -48,10 +53,11 @@ function mount(ctx) {
       if (!warned) { warned = true; warn('[hd] AI 반영 기록을 받지 못했어요(다시 시도): ' + (e && e.message || e)); }
     }).then(next, next);
   }
-  function next() { clearTimeout(timer); timer = setTimeout(poll, A.EVERY); }
+  var liveOn = false;
+  function next() { clearTimeout(timer); timer = 0; if (!liveOn) timer = setTimeout(poll, A.EVERY); }   // 실시간이면 ai.write 이벤트가 poll() 을 부른다
 
   poll();
-  return {poll: poll};
+  return {poll: poll, live: function (on) { liveOn = !!on; if (liveOn) { clearTimeout(timer); timer = 0; } else if (!timer) next(); }};
 }
 
 HD.feature('aiUndo', {needs: ['api', 'record', 'toast'], mount: mount});

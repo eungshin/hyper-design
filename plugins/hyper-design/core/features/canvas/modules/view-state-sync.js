@@ -18,7 +18,8 @@
      PUT·닫을 때 보내기·보관·쓰기 대기 표시를 하지 않고(새로 받기는 그대로), 역할을 <html data-hd-tab> + document 'hd-tab-role' {role} 로 알린다 —
      편집은 view-read-only 가 처음부터 막고(흐린 조작부·aria-disabled·줄 가리키기), 그래도 닿은 프로젝트 키 쓰기는 버린다(토스트 한 번, 안전망). 위쪽에 '다른 탭에서 열려 있어요 — 여기서 편집하기' 줄,
      누르면 이 탭이 쓰는 탭(take — 다른 탭이 읽기만)이 되고, 읽기만일 때 버린 쓰기가 있었으면 파일 상태로 다시 불러온다. 정하기 전(tabWaitMs, 기본 150ms)에는 보내지 않는다.
-   HD.viewStateSync.mount(ctx) → {mode, getItem(k), setItem(k, v), removeItem(k), flush(), rev(), poll()(지금 한 번 — 테스트·focus), role()('writer'|'reader'|'pending'), archive(force?)}
+   실시간(47-4b): live(true) = 2초 읽기를 멈추고 서버 이벤트(notes.changed·claim·release, rev 가 새것)가 poll() 을 부른다(view-live) · live(false) = 흐름이 끊김 → 2초 읽기 다시.
+   HD.viewStateSync.mount(ctx) → {mode, getItem(k), setItem(k, v), removeItem(k), flush(), rev(), poll()(지금 한 번 — 테스트·focus·이벤트), role()('writer'|'reader'|'pending'), archive(force?), live(on)}
      mode = 'off'(file:// · 토큰 없음) | 'local'(스냅숏 깨짐) | 'file' | 'migrate'. off·local 이면 모든 키가 ctx.storage 그대로(던지는 것도 그대로)
    ctx = {hash, on, token, snapshot(window.__hdState), storage{getItem,setItem,removeItem}, toast(msg), warn(msg), reload(), onExternal(names)?, delayMs?(기본 300), pollMs?(기본 2000), idleMs?(기본 10000), tabWaitMs?(기본 150)} */
 (function () {
@@ -38,7 +39,7 @@ function mount(ctx) {
   function pass() {
     return {mode: mode, getItem: function (k) { return store.getItem(k); }, setItem: function (k, v) { store.setItem(k, v); },
             removeItem: function (k) { store.removeItem(k); }, flush: function () {}, rev: function () { return 0; }, poll: function () {},
-            role: function () { return 'writer'; }, archive: function () {}};
+            role: function () { return 'writer'; }, archive: function () {}, live: function () {}};
   }
   if (!on) return pass();
   var snap = S.snapshot(ctx.snapshot);
@@ -148,11 +149,12 @@ function mount(ctx) {
   addEventListener('beforeunload', onLeave);
   if (b.upload.length) schedule();                  // 파일이 없을 때 브라우저 값 한 번 올리기(rev 0 → 1)
 
-  var ptimer = 0, polling = false, fails = 0, stopped = false;
+  var ptimer = 0, polling = false, fails = 0, stopped = false, liveOn = false;
   function same(a, b) { return JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b); }
-  function next() {
+  function next(soon) {                               // 실시간(47-4b)이면 주기 읽기 없음 — 이벤트가 poll() 을 부른다(보내는 중이라 미룬 것만 soon 뒤 한 번)
     clearTimeout(ptimer); ptimer = 0;
     if (dead || stopped) return;
+    if (liveOn) { if (soon) ptimer = setTimeout(poll, soon); return; }
     ptimer = setTimeout(poll, document.hidden ? (ctx.idleMs || 10000) : (ctx.pollMs || 2000));
   }
   function lost(why) {
@@ -176,8 +178,8 @@ function mount(ctx) {
   function poll() {
     clearTimeout(ptimer); ptimer = 0;
     if (dead || stopped || polling) return;
-    if (busy) { next(); return; }                    // 보내는 중 — 그 답의 rev 를 받은 뒤에
-    if (names().length) { if (!big && writer()) flush(); next(); return; }  // 보내지 않은 변경 먼저(파일이 앞서 있으면 409 = 충돌 길) · 413 뒤엔 다음 변경까지 쉰다
+    if (busy) { next(500); return; }                 // 보내는 중 — 그 답의 rev 를 받은 뒤에
+    if (names().length) { if (!big && writer()) flush(); next(500); return; }  // 보내지 않은 변경 먼저(파일이 앞서 있으면 409 = 충돌 길) · 413 뒤엔 다음 변경까지 쉰다
     archive(false);
     polling = true;
     fetch('/api/state?since=' + rev, {headers: {'X-HD-Token': ctx.token}, cache: 'no-store'}).then(function (r) {
@@ -187,7 +189,7 @@ function mount(ctx) {
       fails = 0;
       if (j && j.unchanged === true) return;          // 파일 rev 가 그대로(#273) — 본문 없음
       if (!dead && !busy && !names().length) take(j);   // 기다리는 사이 바뀐 것이 있으면 다음 번에
-    }, function (e) { lost(String(e && e.message || e)); }).then(function () { polling = false; next(); });
+    }, function (e) { if (liveOn) ctx.warn('[hd] 상태 다시 읽기 실패: ' + String(e && e.message || e)); else lost(String(e && e.message || e)); }).then(function () { polling = false; next(); });
   }
   function archive(force) {                          // 완료 메모 보관(#273) — 쓰는 탭만, 한 시간에 한 번(413 이면 바로)
     if (dead || archiving || !writer() || !HD.archive) return;
@@ -295,7 +297,8 @@ function mount(ctx) {
     rev: function () { return rev; },
     poll: poll,
     role: function () { return tabS.role; },
-    archive: archive
+    archive: archive,
+    live: function (on) { liveOn = !!on; if (!liveOn && !polling) { if (stopped) { stopped = false; fails = 0; } next(); } else if (liveOn) next(); }   // 실시간 켜기 = 주기 읽기 멈춤 · 끄기 = 2초 읽기 다시
   };
 }
 

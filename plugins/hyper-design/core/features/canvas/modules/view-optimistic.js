@@ -4,7 +4,9 @@
    옮기기 k칸 = 도우미 move(up|down = 옆 형제와 맞바꿈)를 차례로 k번(앞 답의 paths 로 다음 경로) — apply_edits 는 한 묶음 안 같은 요소의 move 를 하나로 겹쳐 쓴다.
      중간 쓰기의 다시 싣기는 건너뛴다(hold) · 중간에 실패하면 화면을 실제로 쓴 칸까지만 되돌린다.
    상태 = 진행 중 변경(HD.optimistic reduce) + 화면마다 '방금 낙관 반영함'(take 가 한 번 읽고 지움) + 열린 글자 고치기(tag 마다). 저장 없음.
-   HD.viewOptimistic.mount(ctx) → {inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
+   async apply(47-4b): 답이 async 면 받은 편집 id 를 빌드 확인까지 기억 — built(ids)(build.done) 가 지우고, reverted(ids, why)(build.failed) → 그 변경을 거두고(hd-opt-undo) 토스트,
+     되돌린 것 중 내 것 id 목록을 돌려준다(셸이 그 화면을 다시 싣는다 — 파일은 도우미가 이미 되돌림).
+   HD.viewOptimistic.mount(ctx) → {built(ids), reverted(ids, why) → [id], inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
    ctx = {on() → 도우미로 바로 쓰나, write(label, list) → Promise<res>(view-sync write), queue(label, list, msg)(반영 대기로 — 도우미 없음·연결 끊김),
           frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(고른 요소를 옮긴 자리로 · 그 자리 글자 고치기를 마치거나 취소한 뒤 그 요소를 다시 — 판·크게 보기, 51-2), warn(msg)} */
 (function () {
@@ -36,7 +38,7 @@ function mount(ctx) {
     return ctx.write(label, notes).then(function (res) {
       st = O.reduce(st, {type: 'step', tag: tag});
       var oc = O.outcome(res, notes.map(function (n) { return n.id; }));
-      if (oc.kept) { st = O.reduce(st, {type: 'keep', tag: tag}); end(tag); return {kept: true, res: res}; }
+      if (oc.kept) { st = O.reduce(st, {type: 'keep', tag: tag}); end(tag); unbuilt(notes, screen, tag, label, res); return {kept: true, res: res}; }
       st = O.reduce(st, {type: 'revert', tag: tag, why: oc.why});
       each(screen, {type: 'hd-opt-undo', tag: tag});
       end(tag);
@@ -51,6 +53,26 @@ function mount(ctx) {
     });
   }
   function end(tag) { st = O.reduce(st, {type: 'end', tag: tag}); }
+
+  // async apply(47-4b): 도우미가 받았지만 아직 빌드로 확인 안 된 편집 id → {screen, tag, label}. build.done 이 지우고, build.failed 의 reverted 면 되돌림을 알린다
+  var pend = {}, PEND_MS = 120000;
+  function unbuilt(notes, screen, tag, label, res) {
+    if (!res || res.async !== true) return;          // 동기 답 = 이미 빌드됨
+    var now = Date.now(), k;
+    for (k in pend) if (now - pend[k].at > PEND_MS) delete pend[k];
+    notes.forEach(function (n) { pend[n.id] = {screen: screen, tag: tag, label: label, at: now}; });
+  }
+  function built(ids) { (ids || []).forEach(function (id) { delete pend[id]; }); }
+  function reverted(ids, why) {                       // 뒤 빌드가 깨져 도우미가 되돌린 편집 — 화면의 먼저 보인 변경을 거두고 한 번 알림(셸이 그 화면을 다시 싣는다)
+    var told = {}, mine = [];
+    (ids || []).forEach(function (id) {
+      var p = pend[id]; if (!p) return;
+      delete pend[id]; mine.push(id);
+      each(p.screen, {type: 'hd-opt-undo', tag: p.tag});
+      if (!told[p.tag]) { told[p.tag] = 1; ctx.toast(O.failText(p.label, why, 0, 1), false, 8000); }
+    });
+    return mine;
+  }
 
   // 복제·옮기기 한 칸·글자(다른 틀) — items = palette.js hd-opt 항목
   function run(label, screen, notes, items, where) {
@@ -93,7 +115,7 @@ function mount(ctx) {
       return ctx.write(label, [x]).then(function (res) {
         var oc = O.outcome(res, [x.id]);
         if (!oc.kept) return back(oc.why);
-        done++; st = O.reduce(st, {type: 'step', tag: tag});
+        done++; st = O.reduce(st, {type: 'step', tag: tag}); unbuilt([x], screen, tag, label, res);
         if (done >= n) { st = O.reduce(st, {type: 'keep', tag: tag}); end(tag); return {kept: true, done: done}; }
         var np = res.paths && res.paths[x.id];
         if (!np) return back('옮긴 요소의 새 자리를 도우미가 알려 주지 않았어요');
@@ -167,7 +189,7 @@ function mount(ctx) {
     }
   });
 
-  return {inline: inline, run: run, edit: edit, moves: moves,
+  return {inline: inline, run: run, edit: edit, moves: moves, built: built, reverted: reverted,
           hold: function (screen) { return O.hold(st, screen); },
           take: function (screen) { var v = !!fresh[screen]; delete fresh[screen]; return v; },
           typing: function (where) { return Object.keys(ins).some(function (k) { return ins[k].on && (!where || ins[k].where === where); }); }};

@@ -9,7 +9,7 @@
      local{getItem, setItem, removeItem}(전역 설정 키) · key(prefix) → 'prefix:' + 프로젝트 해시 · record(op) · prefs() · savePrefs() ·
      frameLoaded(id, frame) — 카드 iframe 이 막 실림: 셸이 테마(hd-palette·hd-theme-vars)·반영 대기(hd-pending)·메모 자리(hd-locate)를 보낸다(48a 교체가 만든 새 틀) ·
      selected() → 고른 카드 id 목록 · picked() → 고른 요소 {screen, h, app}|null(요소 막대) · sendNotes(list) → 메모를 더하고 바로 보내기(보내는 중이면 false, S1 대화창)
-     · api{on, call(method, path, body)} */
+     · api{on, call(method, path, body)} · reload(ids, opt?{stamp, echo}) — 그 카드들을 교체 길로 다시 싣기(실시간 알림이 같은 쓰기를 이미 실었으면 건너뜀, echo = 되살리기 notify 의 메아리 한 번 먹기 — 47-4b) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};

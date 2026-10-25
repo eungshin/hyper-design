@@ -16,7 +16,9 @@
      전/후 보기(48b): done 에 before(옛 화면 스냅숏 있음)면 칩에 [전/후](button.bcmp[data-act=compare][aria-pressed]) — HD.busy.doneMs(true)(10초) 동안,
      누르면 'hd-swap-compare' {id, on:true}(view-swap 이 옛 화면을 겹침, 칩 글 '바뀌기 전 화면', 보는 동안 칩이 남음) · 다시 누르면 off 와 10초 다시.
      칩이 걷히면(새 교체 'hd-swap' start · 덮개 다시 씀) 켜져 있던 전/후 보기도 off.
-   HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids)}
+   실시간(47-4b, view-live): live(true) = /api/files 1초 읽기 멈춤(덮개 칩의 /api/watch 는 칩이 있는 동안 그대로) · changed(ids, seq) = 이벤트 screen.written by ai
+     (폴링 답과 같은 길 — seq 를 기준으로 삼아 폴링으로 돌아가도 이어짐) · resync() = /api/files 한 번(reset 뒤 놓친 것) · since() = 지금 파일 seq|null
+   HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids), live(on), changed(ids, seq), resync(), since()}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
 (function () {
@@ -225,26 +227,29 @@ function mount(ctx) {
   }
 
   // 도우미가 지켜본 화면 파일(GET /api/files) — 바뀐 카드만 다시
-  var since = null, ftimer = 0, fwarned = false;
-  function fpoll() {
+  var since = null, ftimer = 0, fwarned = false, liveOn = false;
+  function changed(list) {                            // 바뀐 화면 파일(폴링 답 · 이벤트 screen.written by ai) → 고른 카드만 다시 · 칩 카드는 걷는 길을 바로
+    if (!Array.isArray(list) || !list.length) return;
+    var now = Date.now(), t = B.refresh(list, {known: ctx.known ? ctx.known() : [], busy: st, skip: skip, now: now,
+                                              modal: ctx.modalScreen ? ctx.modalScreen() : null});
+    if (t.cards.length) { wrote(t.cards); ctx.reload(t.cards); }
+    if (t.modal && ctx.reloadModal) ctx.reloadModal();
+    if (list.some(function (id) { return has(st.items, id); })) poll();
+  }
+  function fpoll(once) {
     ftimer = 0;
-    if (typeof document !== 'undefined' && document.hidden) { fnext(); return; }
+    if (!once && typeof document !== 'undefined' && document.hidden) { fnext(); return; }
     Promise.resolve().then(function () { return ctx.files(since == null ? -1 : since); }).then(function (r) {
       fwarned = false;
       if (!r || typeof r.seq !== 'number') { warn('[hd] /api/files 답이 깨졌어요'); return; }
       var first = since == null || r.seq < since;     // 처음 · 도우미가 다시 떴음 = 기준만 잡기
       since = r.seq;
-      if (first || !Array.isArray(r.changed) || !r.changed.length) return;
-      var now = Date.now(), t = B.refresh(r.changed, {known: ctx.known ? ctx.known() : [], busy: st, skip: skip, now: now,
-                                                     modal: ctx.modalScreen ? ctx.modalScreen() : null});
-      if (t.cards.length) { wrote(t.cards); ctx.reload(t.cards); }
-      if (t.modal && ctx.reloadModal) ctx.reloadModal();
-      if (r.changed.some(function (id) { return has(st.items, id); })) poll();   // 칩 카드 = 걷는 길을 바로
+      if (!first) changed(r.changed);
     }, function (e) {
       if (!fwarned) { fwarned = true; warn('[hd] 바뀐 화면 파일을 받지 못했어요(다시 시도): ' + (e && e.message || e)); }
-    }).then(fnext, fnext);
+    }).then(once ? null : fnext, once ? null : fnext);
   }
-  function fnext() { clearTimeout(ftimer); ftimer = setTimeout(fpoll, FILES_EVERY); }
+  function fnext() { clearTimeout(ftimer); ftimer = 0; if (!liveOn) ftimer = setTimeout(fpoll, FILES_EVERY); }   // 실시간(47-4b)이면 주기 읽기 없음
 
   style(); render(); schedule();
   if (typeof addEventListener === 'function') addEventListener('message', onHere);
@@ -255,7 +260,11 @@ function mount(ctx) {
     if (box) ob.observe(box, {attributes: true, attributeFilter: ['hidden']});
     if (title) ob.observe(title, {childList: true, characterData: true, subtree: true});
   }
-  return {mark: mark, render: render, lift: lift, adopt: adopt, wrote: wrote};
+  return {mark: mark, render: render, lift: lift, adopt: adopt, wrote: wrote,
+          live: function (on) { liveOn = !!on; if (!ctx.files) return; if (liveOn) { clearTimeout(ftimer); ftimer = 0; } else if (!ftimer) fnext(); },
+          changed: function (list, seq) { if (typeof seq === 'number' && (since == null || seq > since)) since = seq; changed(list); },
+          resync: function () { if (ctx.files) fpoll(true); },
+          since: function () { return since; }};
 }
 
 HD.viewBusy = {mount: mount};

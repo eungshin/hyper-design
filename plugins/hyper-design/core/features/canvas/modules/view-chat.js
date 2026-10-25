@@ -5,6 +5,7 @@
    보이기 설정(S1b)의 주인은 dock.js(창 메뉴 '대화창', 키 hd-dock) — 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on:false} 만 보내고, 몸의 no-chat 표시로 숨는다.
    받는 곳 칩(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
    자리: 판(도크 왼쪽) 아래 가운데. 프로젝트 탭 바(아래 왼쪽, view-tabs 가 이 창 앞에서 멈춤)가 좁은 창에서 최소 폭이라 겹칠 때만 그 위로 올린다.
+   진행 줄(S2, 47-4b): document 'hd-event'(view-live)를 HD.chat.progress 로 — 보낸 요청 화면의 claim·AI 쓰기·release 를 줄 하나(마지막 상태)로. 저장하지 않음(새로고침 = 메모 상태 줄).
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
 'use strict';
@@ -46,7 +47,7 @@ var CSS =
   'html body.has-chat:not(.no-chat):not(.bare):not(.modal-open) #toast{bottom:var(--hd-chat-top,120px)}';
 
 function mount(ctx) {
-  var C = HD.chat, dismissed = {}, last = null, shownLine = null, chipSig = null, warned = {}, booted = false, tbSeen = false;
+  var C = HD.chat, prog = null, dismissed = {}, last = null, shownLine = null, chipSig = null, warned = {}, booted = false, tbSeen = false;
   var LKEY = ctx.key('hd-chat-last');
   var root = document.createElement('div');
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -93,7 +94,7 @@ function mount(ctx) {
   }
   function renderLine() {
     var inflight = !!(last && Date.now() - last.at < 20000);
-    var l = C.line(last, function (id) { return ctx.notes.find(id) || null; }, busyOf(), inflight);
+    var l = C.line(last, function (id) { return ctx.notes.find(id) || null; }, busyOf(), inflight, {progress: prog && prog.p, titleOf: ctx.title});
     if (!l) { lineEl.hidden = true; shownLine = null; return; }
     var key = l.req + '\n' + l.text;
     if (key === shownLine) return;
@@ -145,6 +146,8 @@ function mount(ctx) {
     catch (e) { console.error('[hd] 대화창 보내기: ' + (e && e.message || e)); ctx.toast('보내지 못했어요 — ' + (e && e.message || e)); return false; }
     if (ok === false) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 보내 주세요'); return false; }
     last = C.record(text, r.memos, Date.now());
+    prog = {screens: r.memos.some(function (m) { return m.scope === 'all'; }) ? [] :   // 진행 줄(S2) — 이 요청 화면의 이벤트만(모든 화면 요청 = 아무 화면)
+      r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null};
     try { ctx.local.setItem(LKEY, JSON.stringify(last)); } catch (e) {}   // 저장 공간이 꽉 차도 이 창의 상태 줄은 그대로 보인다
     render();
     return true;
@@ -187,6 +190,11 @@ function mount(ctx) {
   ['pointerup', 'keyup'].forEach(function (t) { addEventListener(t, soon, true); });
   addEventListener('message', soon);                       // 요소 고르기는 화면의 답(hd-hit) 뒤에 정해진다
   addEventListener('resize', place);
+  document.addEventListener('hd-event', function (e) {   // 서버 이벤트(view-live 의도, 47-4b) → 진행 줄: AI 작업 중 · 반영됨 · 끝 — 메모 답은 상태를 다시 읽은 뒤 1초 그리기가 붙인다
+    if (!prog) return;
+    var np = C.progress(prog.p, e.detail, prog.screens);
+    if (np !== prog.p) { prog.p = np; renderLine(); }
+  });
   setInterval(render, 1000);                               // 메모 상태·덮개는 다른 길(2초 읽기·답)로 바뀐다 — 47-4 SSE 가 오면 이벤트로
   renderAgent(); render(); grow(); booted = true;               // 처음 그린 줄(새로고침 뒤)은 맥박 없이
   return {render: render, send: send, last: function () { return last; }};
