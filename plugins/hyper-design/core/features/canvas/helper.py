@@ -75,6 +75,7 @@ import build_canvas  # noqa: F401  — 예전 이름(helper.build_canvas)
 import build_ref
 import html_edit
 import router as R
+import safe_port
 import session as S
 from html_edit import *  # noqa: F401,F403  — 예전 이름(helper.select · edit_html · edit_one · Tree …)
 from html_edit import (_after, _attr_patch, _block_ok, _dup_patch, _end, _has_text, _inline_only, _insert_patch, _is_root, _lead,  # noqa: F401
@@ -190,7 +191,7 @@ def bind(handler, ports):
     """ports 차례로 127.0.0.1 에 열어 본다 → Server. 앞 것이 막히면 [hd] 한 줄 남기고 다음, 마지막도 막히면 그 OSError."""
     for i, port in enumerate(ports):
         try:
-            return Server(("127.0.0.1", port), handler)
+            return safe_port.open_server(Server, "127.0.0.1", port, handler)   # 빈 포트가 브라우저가 막는 포트면 다시
         except OSError as e:
             if i == len(ports) - 1:
                 raise

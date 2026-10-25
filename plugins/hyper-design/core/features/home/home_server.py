@@ -26,6 +26,7 @@ import home_client as H  # noqa: E402
 import home_model as M  # noqa: E402
 import thumb as T  # noqa: E402
 import registry as RG  # noqa: E402  — 프로젝트 세션들(task 47-2) — canvas 폴더를 path 에 넣는다
+import safe_port  # noqa: E402  — canvas 폴더(registry 가 path 에 넣음)
 import router as R  # noqa: E402  — 세션 주소 처리(canvas/router.py)
 import code_stamp as CS  # noqa: E402  — 코드 도장(순수 Model, canvas — registry 가 path 에 넣음)
 
@@ -62,12 +63,12 @@ class Hub(ThreadingHTTPServer):
 def bind(handler, port):
     """port 를 열고, 막혔으면(0 이 아닐 때) [hd] 한 줄 뒤 빈 포트로."""
     try:
-        return Hub(("127.0.0.1", port), handler)
+        return safe_port.open_server(Hub, "127.0.0.1", port, handler)
     except OSError as e:
         if not port:
             raise
         warn("포트 %d 를 쓸 수 없어 빈 포트로 띄워요(%s)" % (port, e))
-        return Hub(("127.0.0.1", 0), handler)
+        return safe_port.open_server(Hub, "127.0.0.1", 0, handler)
 
 
 HD_PY = HERE.parent / "hd" / "hd.py"
