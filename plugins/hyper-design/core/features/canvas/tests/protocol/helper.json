@@ -340,6 +340,29 @@
       ]
     },
     {
+      "method": "GET", "path": "/api/chat", "callers": ["modules/view-chat-log.js (panel open, hd-event, every 4 s while shown)"],
+      "request": "?since=<seq> optional", "response": "{seq, records:[{seq,at,turn,kind,...}], reset?}",
+      "cases": [
+        {"name": "log", "request": {"method": "GET", "path": "/api/chat"}, "expect": {"status": 200, "json": {"seq": "int", "records": "list"}}},
+        {"name": "bad since = 400", "request": {"method": "GET", "path": "/api/chat?since=x"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/chat", "callers": ["modules/view-chat-log.js (hd-chat-sent = ask, turn undo = undone)"],
+      "request": "{kind:'ask', text, notes, chips, screens, agent} | {kind:'undone', turn}", "response": "{record}",
+      "cases": [
+        {"name": "ask is recorded", "request": {"method": "POST", "path": "/api/chat", "body": {"kind": "ask", "text": "hi", "notes": [], "chips": [], "screens": [], "agent": null}}, "expect": {"status": 200, "json": {"record": "dict"}}},
+        {"name": "unknown kind = 400", "request": {"method": "POST", "path": "/api/chat", "body": {"kind": "nope"}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/agents/transcript", "callers": ["modules/view-chat-log.js (picked or connected agent)"],
+      "request": "?agent=<id>&since=<cursor>", "response": "{agent, source, entries:[...], cursor}",
+      "cases": [
+        {"name": "agent neither picked nor connected = 403", "request": {"method": "GET", "path": "/api/agents/transcript?agent=stranger"}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/stop", "callers": ["hd_client.py (hd stop)"],
       "request": "{}", "response": "{stopping:true}, then the server shuts down (must stay last)",
       "cases": [

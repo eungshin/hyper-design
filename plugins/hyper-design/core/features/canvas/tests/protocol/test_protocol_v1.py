@@ -241,7 +241,7 @@ def test_helper_protocol_v1(servers):
 def test_fixtures_name_every_route():
     """fixture 의 라우트 목록 = helper.py · home_api · home_server 가 아는 주소 전부(새 주소를 더하면 여기서 걸린다)."""
     src = "".join((FEATURES / f).read_text(encoding="utf-8") for f in ("canvas/helper.py", "canvas/router.py", "home/home_api.py"))   # 47-2: 라우트 표 = router.py
-    known = set(re.findall(r'"(/api/[a-z-]+)"', src))
+    known = set(re.findall(r'"(/api/[a-z/-]+)"', src))
     named = set()
     for name in ("helper.json", "hub.json", "v1.json", "events.json", "presence.json"):
         for r in json.loads((HERE / name).read_text(encoding="utf-8"))["routes"]:
