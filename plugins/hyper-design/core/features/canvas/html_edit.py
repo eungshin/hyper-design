@@ -4,7 +4,7 @@
 import html, re
 from html.parser import HTMLParser
 
-import build_canvas
+import links
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
@@ -405,8 +405,8 @@ def _path_of(n):                                     # 요소 → select() 가 �
 
 
 def _link_to(attrs):
-    """요소 속성 → 가는 화면 id | None — build_canvas._Links + link_target 과 같은 규칙(href · data-href · onclick 안 .html, 공유 fixture links.json)."""
+    """요소 속성 → 가는 화면 id | None — links.Links + link_target 과 같은 규칙(href · data-href · onclick 안 .html, 공유 fixture links.json)."""
     h = attrs.get("href") or attrs.get("data-href")
     if not h and attrs.get("onclick"):
-        m = build_canvas.GO_ONCLICK.search(attrs["onclick"]); h = m and m.group(1)
-    return build_canvas.link_target(h) if h else None
+        m = links.GO_ONCLICK.search(attrs["onclick"]); h = m and m.group(1)
+    return links.link_target(h) if h else None

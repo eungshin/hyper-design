@@ -1,9 +1,9 @@
 """공유 규칙 fixture(task 41) — Python 쪽. 브라우저 없음.
 
 #275 요소 경로: tests/fixtures/paths.json 을 helper.select(편집이 고치는 요소)가 그대로 따르는지.
-#276 화면 링크: tests/fixtures/links.json 을 build_canvas(_Links + link_target · 판의 선)와 helper._link_to(끊기·잇기)가 따르는지.
+#276 화면 링크: tests/fixtures/links.json 을 links(Links + link_target · 판의 선)와 helper._link_to(끊기·잇기)가 따르는지.
 같은 fixture 를 palette.js(미리보기·고르기)는 test_canvas_shared_rules.py(브라우저)에서 읽는다 — 세 곳이 한 표를 본다.
-helper._link_to 는 build_canvas.link_target 하나로 푼다(task 40) — 링크 칸은 모두 그대로 통과해야 한다.
+helper._link_to 는 links.link_target 하나로 푼다(task 40) — 링크 칸은 모두 그대로 통과해야 한다.
 """
 import json, re, sys
 from pathlib import Path
@@ -13,6 +13,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import build_canvas  # noqa: E402
+import links  # noqa: E402
 import helper  # noqa: E402  — 읽기만(select · _link_to)
 
 PATHS = json.loads((HERE / "fixtures" / "paths.json").read_text(encoding="utf-8"))["cases"]
@@ -54,11 +55,11 @@ def _ids(cases):
 
 
 def build_side(c):
-    """화면 원문 → _Links 가 뽑은 링크 → link_target (판의 선·연결 목록이 쓰는 길)."""
-    p = build_canvas._Links()
+    """화면 원문 → links.Links 가 뽑은 링크 → link_target (판의 선·연결 목록이 쓰는 길)."""
+    p = links.Links()
     p.feed('<a %s="%s">x</a>' % (_attr(c), c["href"].replace("&", "&amp;").replace('"', "&quot;"))); p.close()
     assert len(p.out) == 1, p.out
-    return build_canvas.link_target(p.out[0][0])
+    return links.link_target(p.out[0][0])
 
 
 @pytest.mark.parametrize("c", LINKS, ids=_ids(LINKS))
