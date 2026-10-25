@@ -5,8 +5,7 @@
 2) 에이전트 진행 줄이 판에 없는 화면(coupon)을 말함 → 마지막 줄 옆 빈 자리 틀 + 카메라가 그 틀을 판 창 안으로 → 움직임 줄이기면 반짝임 없음 →
    에이전트가 떠남(bye) → 반짝임 멈춤 + 까닭 + [지우기] → 지우면 틀이 없어짐.
 
-셸 붙이는 줄(ctx.view)은 아직 템플릿에 없다 — 이 테스트는 add_init_script 로 같은 칸을 만든다(셸이 view-motion 에 넘기는 getView/setView 를 잡아
-mountAll ctx 에 view 로 더함). 실제 Paseo·Claude 에이전트에는 보내지 않는다(hello 한 가짜 에이전트, 이벤트로만 받음).
+카메라·다시 싣기는 셸 mountAll ctx 의 view·refresh 칸(main 이 붙임). 실제 Paseo·Claude 에이전트에는 보내지 않는다(hello 한 가짜 에이전트, 이벤트로만 받음).
 스크린숏은 HD_S5_SHOTS 가 있을 때만 그 폴더에.
 """
 import json, os, shutil, subprocess, sys, tempfile, threading, urllib.request
@@ -27,19 +26,6 @@ SHOTS = os.environ.get("HD_S5_SHOTS")
 LAYOUT = {"id": "L1", "no": 1, "screen": "new-ab", "targets": [{"path": "(새 화면)", "text": "빈 레이아웃", "rect": None}], "path": "(새 화면)",
           "text": "빈 레이아웃", "rect": None, "intent": "change", "sent": False, "edit": "new-screen", "op": "new", "to": "", "value": "쿠폰",
           "purpose": "쿠폰을 고른다", "x": 900, "y": 0, "replies": [], "note": '새 화면 "쿠폰"(new-ab)을 빈 레이아웃으로 만들기'}
-
-# 셸 붙이는 줄 흉내: view-motion 에 넘기는 getView/setView/pane 을 잡아 mountAll ctx.view 로
-VIEW_HOOK = r"""
-(() => {
-  const HD = window.HD = window.HD || {};
-  let vm, ma, cap = null;
-  Object.defineProperty(HD, 'viewMotion', {configurable: true, get() { return vm; },
-    set(v) { vm = Object.assign({}, v, {mount(c) { cap = c; return v.mount(c); }}); }});
-  Object.defineProperty(HD, 'mountAll', {configurable: true, get() { return ma; },
-    set(f) { ma = function (c) { if (cap) c.view = {get: cap.getView, set: cap.setView, pane: cap.pane}; return f(c); }; }});
-})();
-"""
-
 
 @pytest.fixture()
 def live(ctx):
@@ -64,7 +50,6 @@ def live(ctx):
     pg = ctx.new_page()
     errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.add_init_script(VIEW_HOOK)
     pg.goto(srv.url)
     pg.wait_for_function("window.__hdReady !== undefined")
     pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)

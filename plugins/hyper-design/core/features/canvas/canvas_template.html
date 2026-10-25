@@ -2547,6 +2547,8 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   frameLoaded: function (id, f) { sendTo(f); sendPending(f, id); if (PN) PN.locate(id, f); },
   selected: function () { return SL.ids(); },
   focus: function (ids) { fitCards(ids, z); },     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
+  view: {get: function () { return {z: z, tx: tx, ty: ty}; }, set: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }, pane: pane},   // 카메라(S5 만드는 중 틀 따라가기)
+  refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
   sendNotes: function (list) { if (sending) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); sendList(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
