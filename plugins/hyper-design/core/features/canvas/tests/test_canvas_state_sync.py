@@ -1,5 +1,6 @@
 """프로젝트 상태 파일(#228) View — modules/view-state-sync.js 브라우저 테스트(도우미로 연 페이지)."""
 import json
+import time
 
 import pytest
 
@@ -162,7 +163,15 @@ def test_done_notes_archived_then_removed_once(browser, served):
 
 @pytest.mark.area("helper", "notes")
 def test_archive_failure_keeps_notes(browser, served):
+    """탭이 보낸 보관이 실패({ok} 없음)하면 아무것도 빼지 않는다. 서버 시계의 보관(47-5a, 처음 한 번 + 한 시간마다)이 씨앗을 넣은 뒤 돌면
+    m1 을 먼저 옮겨 탭이 보낼 일이 없어진다(경쟁) — 이 테스트는 탭 쪽 길만 보므로 시계를 멈춘다."""
     out, srv = served
+    tk = srv.session.ticker
+    for _ in range(100):                               # 모듈 fixture 가 막 띄운 시계의 첫 바퀴(모든 일 처음 한 번)가 씨앗보다 늦게 돌 수 있다 — 끝난 뒤 멈춤
+        if all(t is not None for t in tk.next):
+            break
+        time.sleep(0.05)
+    tk.stop.set()
     old = memo("m1", 1, T_BTN, "오래전 완료")
     old["replies"] = [{"kind": "확인", "at": "2026-01-01T00:00:00Z"}]
     _seed(out, [old])
