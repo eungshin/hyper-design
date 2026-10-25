@@ -1,7 +1,7 @@
 """Model — HdError 가족: 한국어 한 줄(message) + 다음 행동(next). 순수(I/O·시계 없음).
 
 가족: Offline(닿지 않음) · NotFound(없음 404) · Conflict(rev 어긋남 409) · TooLarge(2 MB 넘음 413) · Unauthorized(토큰·주소 403/401) ·
-Invalid(규칙 어긋남 400) · TimedOut(기다림 끝, 종료 코드 2) · NotYet(아직 없는 기능 — events, task 47-4b).
+Invalid(규칙 어긋남 400) · TimedOut(기다림 끝, 종료 코드 2) · NotYet(이 서버·연결에 아직 없는 기능 — 예: 옛 도우미의 events).
 str(e) = message 그대로(CLI 가 'hd: ' 를 붙여 찍는다). next 는 따로 두고, 보여 줄 때만 line() 이 같은 줄에 ' — 다음: …' 로 붙인다.
 """
 
@@ -62,7 +62,7 @@ class TimedOut(HdError):
 
 
 class NotYet(HdError):
-    default_next = "지금은 hd wait(2초 확인)를 쓰세요"
+    default_next = "hd wait 를 쓰세요(이벤트가 없으면 2초 확인으로 기다려요)"
 
 
 BY_STATUS = {401: Unauthorized, 403: Unauthorized, 404: NotFound, 409: Conflict, 413: TooLarge, 400: Invalid}

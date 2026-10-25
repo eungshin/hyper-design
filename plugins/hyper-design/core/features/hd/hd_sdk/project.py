@@ -1,5 +1,5 @@
 """Service — Project: 프로젝트 하나(out 폴더 + 그것을 띄운 서버 세션)에 하는 일. notes · reply · claim · release · apply · files · state ·
-attach · stop · wait. events 는 아직(task 47-4b — 부르면 NotYet).
+attach · stop · wait · events(SSE, task 47-4b — wait 도 이벤트로 깨어나고 흐름이 없으면 폴링).
 
 상태 = 표지(marker: {pid, project, out, url, token, port, agent, prefix?, hub?}) 하나 | None(파일만 — 도우미 없음). 쓰기는 늘 서버로
 (Transport), 읽기는 서버가 있으면 GET /api/state, 없으면 상태 파일(hd_client.read_state). 규칙은 hd_model(답 검사·찾기·덮개·에이전트 id).
@@ -13,9 +13,14 @@ import hd_model as M
 
 from . import errors as E
 from .transport import HttpTransport, client_errors
-from .values import Note
+from . import sse
+from .values import Note, Event
 
 POLL = 2.0
+READ = 30.0                                          # 흐름 읽기 timeout(서버 맥박 ': hb' 15초 — 그 두 배 조용하면 다시 붙음)
+RETRIES = 3                                          # 연달아 붙지 못하면 Offline(wait 는 폴링으로)
+BACKOFF_MAX = 10.0
+WAKE = ("open", "notes.changed", "claim", "release", "reset")   # wait 가 상태를 다시 보는 이벤트
 
 
 def check_claim(screen, by=None, note=None):
@@ -166,16 +171,46 @@ class Project:
 
     # ------------------------------------------------------------ 기다리기
     def wait(self, timeout, poll=POLL, clock=time.time, sleep=time.sleep):
-        """보낸(working) 메모가 생길 때까지 poll 초마다 GET /api/state → ({rev, state}, [Note]). 시간 넘으면 TimedOut(종료 코드 2).
-        서버에 닿지 않으면 finder 로 그 out 의 새 표지를 찾아 이어 간다([hd] 경고는 한 줄만). 47-4b 가 events 로 바꾼다."""
+        """보낸(working) 메모가 생길 때까지 → ({rev, state}, [Note]). 시간 넘으면 TimedOut(종료 코드 2).
+        이벤트(47-4b): 흐름이 열릴 때마다와 notes.changed·claim·release·reset 마다 상태를 다시 본다(타이머 없이 깨어남).
+        흐름이 없거나(옛 서버 · 가짜 transport) 끊겨 다시 붙지 못하면 남은 시간 동안 poll 초마다 GET /api/state —
+        서버에 닿지 않으면 finder 로 그 out 의 새 표지를 찾아 이어 간다([hd] 경고는 한 줄만)."""
         self._need()
-        end, warned = clock() + timeout, False
+        end = clock() + timeout
+        try:
+            found = self._pending()
+        except E.HdError:                              # 닿지 않음 = 폴링 길(표지를 다시 찾는다)
+            return self._wait_poll(end, timeout, poll, clock, sleep, failed=True)
+        if found:
+            return found
+        if hasattr(self.transport, "stream"):
+            try:
+                for ev in self._events(None, end - clock(), RETRIES, clock, sleep, opens=True):
+                    if ev.type in WAKE:
+                        found = self._pending()
+                        if found:
+                            return found
+                if clock() >= end:
+                    raise E.TimedOut("%g초 동안 보낸 메모가 없어요(%s)" % (timeout, self.marker["out"]))
+            except (E.NotYet, E.Offline, E.Unauthorized):
+                pass                                   # 폴링으로(남은 시간)
+        return self._wait_poll(end, timeout, poll, clock, sleep)
+
+    def _pending(self):
+        st = self.state()
+        rs = [Note.from_row(r) for r in M.pending(st["state"])]
+        return (st, rs) if rs else None
+
+    def _wait_poll(self, end, timeout, poll, clock, sleep, failed=False):
+        warned = False
         while True:
             try:
-                st = self.state()
-                rs = [Note.from_row(r) for r in M.pending(st["state"])]
-                if rs:
-                    return st, rs
+                if failed:
+                    failed = False
+                    raise E.Offline("앞서 닿지 않았어요")
+                found = self._pending()
+                if found:
+                    return found
             except E.HdError:
                 if not warned:
                     C.warn("도우미에 닿지 않아요 — 표지를 다시 읽으며 기다려요(%s)" % self.marker["out"]); warned = True
@@ -190,6 +225,40 @@ class Project:
                 raise E.TimedOut("%g초 동안 보낸 메모가 없어요(%s)" % (timeout, self.marker["out"]))
             sleep(min(poll, left))
 
-    def events(self, since=None):
-        """서버 이벤트 흐름(SSE /v1/p/<이름>/events, protocol events.json) — 아직 없음: task 47-4b 가 만든다."""
-        raise E.NotYet("project.events() 는 아직 없어요(task 47-4b)")
+    # ------------------------------------------------------------ 이벤트(SSE, task 47-4b)
+    def events(self, since=None, timeout=None, retries=RETRIES, clock=time.time, sleep=time.sleep):
+        """서버 이벤트 흐름 GET <세션>/api/events(protocol events.json) → Event 차례로(generator).
+        since = 이 id 다음부터(이어 받기, None = 지금부터). 흐름이 끊기면 마지막 id 를 Last-Event-ID 로 다시 붙는다(0.5·1·2…초, retries 번 넘게
+        연달아 실패 = Offline). reset(이어 받을 수 없음 — 서버가 다시 떴거나 너무 오래됨)은 Event(type='reset', data {reason, last})로 내고 last 부터 이어 간다
+        — 받는 쪽은 상태를 다시 읽는다. timeout 초가 지나면 끝(오류 없음, None = 끝없이). 흐름이 없는 옛 서버(404) = NotYet."""
+        if not hasattr(self._need(), "stream"):
+            raise E.NotYet("이 연결에는 이벤트 흐름이 없어요")
+        return (e for e in self._events(since, timeout, retries, clock, sleep) if e.type != "open")
+
+    def _events(self, since, timeout, retries, clock, sleep, opens=False):
+        end = None if timeout is None else clock() + timeout
+        last, fails = since, 0
+        while end is None or clock() < end:
+            wait = READ if end is None else max(0.1, min(READ, end - clock()))
+            try:
+                lines = self.transport.stream("/api/events", last=last, timeout=wait)
+            except E.NotFound as e:
+                raise E.NotYet("이 서버에는 이벤트 흐름이 없어요(옛 도우미): %s" % e) from e
+            except E.Offline:
+                fails += 1
+                if fails > retries:
+                    raise
+                sleep(min(BACKOFF_MAX, 0.5 * 2 ** (fails - 1)))
+                continue
+            fails = 0
+            if opens:
+                yield Event(0, "open")
+            for fr in sse.frames(lines):
+                ev = sse.event_of(fr)
+                if ev is None:
+                    C.warn("이벤트가 깨져 건너뛰어요: %s" % str(fr.get("data"))[:80])
+                    continue
+                last = ev.data.get("last", ev.id) if ev.type == "reset" else ev.id
+                yield ev
+                if end is not None and clock() >= end:
+                    return

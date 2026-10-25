@@ -74,8 +74,7 @@ def test_sdk_round_trip_through_a_real_hub(hub, tmp_path):
     with pytest.raises(S.Unauthorized) as ei:
         stranger.notes()
     assert ei.value.next and "다음:" in ei.value.line()
-    with pytest.raises(S.NotYet):
-        p.events()
+    assert list(p.events(timeout=0.5)) == [], "47-4b: 흐름이 열리고 조용하면 아무것도 없이 끝(흐름은 test_hd_sdk_events_hub.py)"
 
     assert p.stop() == "route" and h.hello()["sessions"] == 0
     with pytest.raises(S.NotFound):

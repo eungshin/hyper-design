@@ -7,9 +7,9 @@
   아니면 build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
   open_project 가 그 일 전부(브라우저 빼고) — hd open 과 도우미 POST /api/open 이 같이 쓴다.
 덮개: claim(POST /api/claim) · release(POST /api/release).
-왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · wait_pending(GET /api/state 2초마다).
+왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · stream(SSE 이벤트 흐름 — 기다리기는 hd_sdk Project.wait/events, 47-4b).
 """
-import datetime, json, os, pathlib, signal, socket, subprocess, sys, time, urllib.error, urllib.request, webbrowser
+import datetime, json, os, pathlib, signal, socket, subprocess, sys, time, urllib.error, urllib.request
 
 import hd_model
 import hd_projects as P
@@ -142,9 +142,32 @@ def call(m, path, body=None, method="POST", timeout=10):
         raise Offline("도우미에 닿지 않아요(%s): %s" % (e, _base(m)))
 
 
-def post_reply(m, body, timeout=10):
-    """POST /api/reply → (code, 답 객체). 닿지 않으면 HdError."""
-    return call(m, "/api/reply", body, timeout=timeout)
+def stream(m, path, last=None, timeout=30):
+    """SSE 흐름 하나(GET, task 47-4b) → (200, 줄 iterator) | (code, 답 객체). 줄은 bytes, 끝나면(서버가 닫음 · 읽기 timeout 초 조용함) 끝난다.
+    last = Last-Event-ID(이어 받기). 닿지 않으면 Offline."""
+    headers = {"X-HD-Token": m["token"], "Accept": "text/event-stream"}
+    if last is not None:
+        headers["Last-Event-ID"] = str(last)
+    req = urllib.request.Request(_base(m) + path, method="GET", headers=headers)
+    try:
+        r = urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read())
+        except ValueError:
+            return e.code, {"error": "HTTP %d" % e.code}
+    except (OSError, ValueError) as e:
+        raise Offline("도우미에 닿지 않아요(%s): %s" % (e, _base(m)))
+
+    def lines():
+        try:
+            for raw in r:
+                yield raw
+        except OSError:                              # 읽기 timeout · 끊김 = 흐름 끝(부르는 쪽이 이어 받는다)
+            return
+        finally:
+            r.close()
+    return 200, lines()
 
 
 # ---------------------------------------------------------------- 프로젝트 목록 (링크만)
@@ -316,10 +339,6 @@ def log_tail(log, n=5):
         return ""
 
 
-def open_browser(url):
-    webbrowser.open(url)
-
-
 class NotFound(HdError):
     """없는 프로젝트·out — 도우미는 404 로 돌려준다."""
 
@@ -430,9 +449,8 @@ def forget_trashed(name):
     return hit
 
 
-# ---------------------------------------------------------------- 왕복: stop · attach · wait
+# ---------------------------------------------------------------- 왕복: stop · attach
 STOP_WAIT = 5.0
-POLL = 2.0
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -559,26 +577,3 @@ def get_state(m, timeout=5):
     if code != 200 or not isinstance(res, dict) or not isinstance(res.get("state"), dict):
         raise HdError("상태를 읽지 못했어요(%s): %s" % (code, _base(m)))
     return res
-
-
-def wait_pending(m, timeout, poll=POLL):
-    """working 메모가 생길 때까지 poll 초마다 GET /api/state → (표지, {rev, state}, 줄 객체). 시간 넘으면 TimedOut.
-    도우미에 닿지 않으면 그 out 의 표지를 다시 읽어 이어 간다(다시 뜬 도우미) — [hd] 경고는 한 줄만."""
-    out, end, warned = m["out"], time.time() + timeout, False
-    while True:
-        try:
-            st = get_state(m)
-            rs = hd_model.pending(st["state"])
-            if rs:
-                return m, st, rs
-        except HdError:
-            if not warned:
-                warn("도우미에 닿지 않아요 — 표지를 다시 읽으며 기다려요(%s)" % out); warned = True
-            again = serving(out)
-            if again and again.get("token") != m.get("token"):
-                m = again
-                continue
-        left = end - time.time()
-        if left <= 0:
-            raise TimedOut("%g초 동안 보낸 메모가 없어요(%s)" % (timeout, out))
-        time.sleep(min(poll, left))

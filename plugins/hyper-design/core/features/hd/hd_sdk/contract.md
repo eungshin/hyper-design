@@ -19,8 +19,9 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 |---|---|---|---|---|
 | `errors.py` | Model(순수) | `HdError` 가족 | 한국어 한 줄 `message` + 다음 행동 `next` · `line()` · `as_dict()` · `from_status(code, body, who)` | 없음 |
 | `values.py` | Model(순수) | `Note` · `Event` | 값 객체. Note = `hd_model.rows` 줄 하나(키 순서 그대로, `ref` `is_open` `line`) · Event = events.json 의 `{id, type, ts, project, …}` | 없음(frozen) |
-| `transport.py` | Client 어댑터 | `HttpTransport` · `client_errors` | `request(method, path, body, timeout) → (code, 답)` = `hd_client.call` · hd_client 오류 → 가족 | 표지 하나 |
-| `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events(아직) | 표지 하나(attach·wait 가 고침) |
+| `sse.py` | Model(순수) | `frames` · `event_of` | SSE 줄 → frame(`retry`·주석·`: hb` 건너뜀, data 여러 줄) → `Event`(reset frame = `Event(type='reset', data{reason, last})`) | 없음 |
+| `transport.py` | Client 어댑터 | `HttpTransport` · `client_errors` | `request(method, path, body, timeout) → (code, 답)` = `hd_client.call` · `stream(path, last, timeout)` = `hd_client.stream`(SSE 줄) · hd_client 오류 → 가족 | 표지 하나 |
+| `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events | 표지 하나(attach·wait 가 고침) |
 | `hub.py` | Service | `Hub` | home.json 의 허브 · hello · new · canvases · project(고르기) · pick(고르기) · projects · open · save · forget | 없음(매번 hd_client 를 읽음) |
 | `text.py` | View | — | 사람용 줄(`hd_model.format_rows` · `format_canvases` · `hd_projects.format_rows` · `link_line` 을 부를 뿐) | 없음 |
 
@@ -33,7 +34,8 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 - 쓰기 전에 규칙으로 먼저 본다(답·덮개·에이전트 id·없는 화면) — 걸리면 서버에 가지 않는다.
 
 ## 아직 (다음 단계)
-- `Project.events()` = `NotYet`(task 47-4b: SSE `/v1/p/<이름>/events`, 모양 `canvas/tests/protocol/events.json` — `Event.from_dict` 는 그 모양을 이미 읽는다). `Project.wait` 는 지금 2초 `GET /api/state` — 47-4b 가 events 로.
+- `Project.events(since=None, timeout=None, retries=3)`(47-4b) = SSE `<세션>/api/events`(모양 `canvas/tests/protocol/events.json`) → `Event` generator. 끊기면 마지막 id 를 Last-Event-ID 로 다시 붙고(0.5·1·2…초, 연달아 retries 번 넘게 실패 = `Offline`), reset 은 `Event('reset')` 으로 내고 그 `last` 부터 — 받는 쪽은 상태를 다시 읽는다. 흐름이 없는 옛 서버(404)·흐름을 못 여는 transport = `NotYet`. timeout = 그 초 뒤 끝(오류 없음).
+- `Project.wait` = 흐름이 열릴 때와 notes.changed·claim·release·reset 마다 상태를 다시 본다(타이머 없이 깨어남). 흐름이 없거나 끊겨 다시 못 붙으면 남은 시간 2초 `GET /api/state`(서버가 다시 뜨면 finder 로 새 표지).
 - `Hub.hello()` = 지금은 `GET /v1/sessions`(허브 토큰)로 닿는지·토큰이 맞는지만. 접속 알리기·맥박(AgentPresence)은 task 47-5 가 서버에 hello 라우트를 더할 때.
 - `apply(…, async=True)` 는 47-4a 서버가 받으면 그대로 넘어간다(옵션을 몸통에 그대로 실음).
 

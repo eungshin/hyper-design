@@ -171,11 +171,11 @@ def test_claim_release_apply_files_attach(out):
         p.attach("a b")
 
 
-def test_events_is_not_yet(out):
+def test_events_without_a_stream_is_not_yet(out):   # 47-4b — events 는 test_hd_sdk_events.py. 흐름을 못 여는 transport = NotYet(바로)
     p, _ = project(out, {})
     with pytest.raises(S.NotYet) as ei:
         p.events()
-    assert "47-4b" in str(ei.value) and ei.value.next
+    assert "이벤트" in str(ei.value) and ei.value.next
 
 
 class Clock:
