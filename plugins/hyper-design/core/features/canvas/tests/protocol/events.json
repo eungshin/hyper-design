@@ -1,0 +1,137 @@
+{
+  "server": "events (task 47-4a) — one EventBus per open project session (canvas/events.py), streamed as Server-Sent Events. Same server as v1.json (hub, /v1/p/<name>/…) and the stand-alone helper (helper.py, /api/events). Replayed in-process by test_protocol_events.py on a temp HD_HOME with a fake build (switches in `build` steps below are test-only).",
+  "auth": "Session token or hub token (as v1.json), sent as X-HD-Token OR as ?hd=<token> (EventSource cannot set headers). Host must be 127.0.0.1:<port> or localhost:<port>. Failures are JSON like every route: 403 {error} (token/Host), 404 {error} (project not open), 503 {error} (too many streams on this project, 16).",
+  "stream": "200 text/event-stream; charset=utf-8, Cache-Control no-store, no Content-Length, connection closes when either side stops. The first frame is `retry: 2000` (EventSource reconnect delay). Each event is one frame: `id: <id>` `event: <type>` `data: <the whole event as one JSON line>` then a blank line. A heartbeat comment `: hb` is sent after 15 s without a frame. A client that disconnects is dropped within about a second (the server peeks the socket every second) — no thread is left behind.",
+  "resume": "Last-Event-ID header (EventSource sends it on reconnect), else ?since=<id>. None = live only (no replay). Equal to the newest id = nothing to replay. Inside the ring (the last 256 events, or older by exactly one) = replay every event after it, then live. Older than the ring, larger than the newest id, or not an integer = one `reset` frame first (id = the newest id, data {type:'reset', reason:'too-old'|'unknown', last}) — refetch state (GET /api/state, /api/files) and go on from there. A stream that falls 512 events behind is closed; reconnect with Last-Event-ID.",
+  "ids": "Integer, +1 per event, per project. The first id of a session is the clock in ms when the session opened, so a new session of the same project always has larger ids than an old one (an id from an old session = reset too-old, never mixed).",
+  "async_apply": "POST /api/apply with \"async\": true (exactly the JSON value true; anything else = today's synchronous apply, unchanged). The server writes the source files, answers at once {accepted, failed, stamp, changed, paths, rev, async:true} and rebuilds in the background: one build at a time, writes that arrive while a build runs (or within 0.1 s of each other) are coalesced into the next build, and a build that new writes overtook is not announced (latest wins). Success = build.done listing every stamp and edit id it covers. Failure = every write not yet built is undone from its .hd-history stamp (newest first), the canvas is rebuilt from the undone sources, then build.failed {reason, reverted:[edit ids], kept:[edit ids that could not be undone because the file changed since], stamps, screens, repaired}. `rev` in the answer = the id of the screen.written event for this write — subscribe with Last-Event-ID = rev - 1 (or any id before it) to be sure to see its build event.",
+  "event": {"id": "int", "type": "str", "ts": "int", "project": "str"},
+  "types": {
+    "screen.written": {
+      "doc": "screen source files changed. by 'human' = written by this server (apply, delete, restore; sync = after the rebuild, async = before it). by 'ai' = the 1 s file watch saw a file change that this server did not write (agent, editor). rev = the /api/files seq at that moment (poll fallback: GET /api/files?since=rev). stamp = the .hd-history stamp that undoes this write (POST /api/restore), null for ai and for a restore without keep.",
+      "shape": {"screens": {"$list": "str"}, "by": "str", "rev": "int", "stamp": "str|null"}
+    },
+    "notes.changed": {"doc": ".hd-canvas.json got a new rev by PUT /api/state or POST /api/reply (claim and release have their own events, also with rev).", "shape": {"rev": "int"}},
+    "claim": {"doc": "POST /api/claim succeeded (AI busy cover on).", "shape": {"screen": "str", "rev": "int", "by": "str|null", "note": "str|null"}},
+    "release": {"doc": "POST /api/release removed a cover (no event when nothing was held).", "shape": {"screen": "str", "rev": "int"}},
+    "ai.write": {"doc": "48c AI undo row: act 'record' = a new row 'AI 반영 · <screen>' (GET /api/ai-writes seq), 'update' = the same row's restore point moved (the AI wrote again).", "shape": {"seq": "int", "stamp": "str", "screen": "str", "label": "str", "act": "str"}},
+    "build.started": {"doc": "async apply only: a background build starts for these writes.", "shape": {"stamps": {"$list": "str"}, "ids": "list", "screens": {"$list": "str"}}},
+    "build.done": {"doc": "async apply only: the canvas is rebuilt with these writes (the newest build that no later write overtook).", "shape": {"stamps": {"$list": "str"}, "ids": "list", "screens": {"$list": "str"}}},
+    "build.failed": {"doc": "the rebuild failed. async: the listed writes were undone (reverted = their edit ids), repaired = the rebuild after the undo succeeded. sync apply/delete/restore whose rebuild failed (already undone by the request itself) also publish it, with stamps [] and repaired null (the request undid and rebuilt by itself).", "shape": {"reason": "str", "reverted": "list", "kept": "list", "stamps": {"$list": "str"}, "screens": {"$list": "str"}, "repaired": "bool|null"}},
+    "reset": {"doc": "per stream, not stored: the Last-Event-ID was not usable. id = the newest id.", "shape": {"reason": "str", "last": "int"}}
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/v1/p/<name>/events",
+      "callers": ["SDK project.events() (47-3)", "canvas EventSource (47-4b)"],
+      "request": "token header or ?hd=; Last-Event-ID or ?since=",
+      "response": "text/event-stream (see stream)",
+      "cases": [
+        {"name": "no token", "request": {"path": "/v1/p/proj-c/events", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "wrong token", "request": {"path": "/v1/p/proj-c/events", "token": "wrong"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "wrong ?hd= token", "request": {"path": "/v1/p/proj-c/events?hd=wrong", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad host", "request": {"path": "/v1/p/proj-c/events", "token": "${session}", "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "project not open", "request": {"path": "/v1/p/nope/events", "token": "${hub}"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "session token header", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"retry": 2000, "events": []}}},
+        {"name": "session token in ?hd= (EventSource)", "request": {"path": "/v1/p/proj-c/events?hd=${session}", "token": false}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"retry": 2000, "events": []}}},
+        {"name": "hub token", "request": {"path": "/v1/p/proj-c/events", "token": "${hub}"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"retry": 2000, "events": []}}},
+        {"name": "Last-Event-ID too old = reset first", "request": {"path": "/v1/p/proj-c/events", "token": "${session}", "last": "1"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"events": [{"type": {"$eq": "reset"}, "reason": {"$eq": "too-old"}, "last": "int"}]}}},
+        {"name": "Last-Event-ID in the future = reset unknown", "request": {"path": "/v1/p/proj-c/events", "token": "${session}", "last": "99999999999999"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"events": [{"type": {"$eq": "reset"}, "reason": {"$eq": "unknown"}, "last": "int"}]}}},
+        {"name": "Last-Event-ID not a number = reset unknown", "request": {"path": "/v1/p/proj-c/events", "token": "${session}", "last": "abc"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"events": [{"type": {"$eq": "reset"}, "reason": {"$eq": "unknown"}}]}}},
+        {"name": "POST is not a route", "request": {"method": "POST", "path": "/v1/p/proj-c/events", "token": "${session}", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "callers": ["canvas EventSource on the old root (47-4b)", "stand-alone helper.py"],
+      "request": "old root alias: the session token (header or ?hd=) picks the session; the hub token keeps the hub meaning (no hub events = 404)",
+      "response": "as /v1/p/<name>/events",
+      "cases": [
+        {"name": "alias with ?hd= session token", "request": {"path": "/api/events?hd=${session}", "token": false}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"retry": 2000, "events": []}}},
+        {"name": "alias with header session token", "request": {"path": "/api/events", "token": "${session}"}, "expect": {"status": 200, "ctype": "text/event-stream", "stream": {"retry": 2000, "events": []}}},
+        {"name": "hub token = hub meaning (404)", "request": {"path": "/api/events", "token": "${hub}"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"path": "/api/events", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/p/<name>/api/apply (async)",
+      "callers": ["SDK project.apply(..., wait=False) (47-3)", "canvas (47-4b, later)"],
+      "request": "{edits:[…], async:true} — the opt-in is exactly the JSON value true",
+      "response": "{accepted:[id], failed:[{id, reason}], stamp, changed:[screen], paths:{id: path}, rev, async:true} at once; the build result comes as an event",
+      "cases": [
+        {"name": "async accepted at once", "request": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "a1", "screen": "home", "edit": "text", "path": "h1", "value": "Home A"}]}},
+         "expect": {"status": 200, "json": {"accepted": {"$eq": ["a1"]}, "failed": {"$eq": []}, "stamp": "str", "changed": {"$eq": ["home"]}, "paths": "dict", "rev": "int", "async": {"$eq": true}}}},
+        {"name": "async, nothing to write", "request": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "a2", "screen": "nope", "edit": "text", "path": "h1", "value": "x"}]}},
+         "expect": {"status": 200, "json": {"accepted": {"$eq": []}, "failed": {"$list": {"id": "str", "reason": "str"}, "$min": 1}, "stamp": "null", "changed": {"$eq": []}, "rev": "int", "async": {"$eq": true}}}},
+        {"name": "async not exactly true = today's sync apply", "request": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": "yes", "edits": [{"id": "a3", "screen": "home", "edit": "text", "path": "h1", "value": "Home B"}]}},
+         "expect": {"status": 200, "json": {"applied": {"$eq": ["a3"]}, "stamp": "str", "changed": {"$eq": ["home"]}}}},
+        {"name": "async via the old root alias", "request": {"method": "POST", "path": "/api/apply", "token": "${session}", "body": {"async": true, "edits": []}},
+         "expect": {"status": 200, "json": {"accepted": {"$eq": []}, "stamp": "null", "rev": "int", "async": {"$eq": true}}}}
+      ]
+    }
+  ],
+  "flows": {
+    "doc": "Scripted scenarios replayed in order on a fresh session each (proj-c, hdfix out: screens home, list; state rev 3). Steps: open = start a stream (name, request as a case); send = one request + expect (+ save, as v1.json); events = read the next frames of that stream, they must be exactly these types in this order, each checked against `event` + its `types` shape + the extra shape given; build = test-only switch of the fake build: 'ok' | 'fail-once' (the next build fails, the repair build after the undo passes) | 'slow' (every build takes 0.6 s); get = GET a file and check its body contains a text.",
+    "cases": [
+      {"name": "state writes: PUT state, reply, claim, release", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 3, "state": {"x": 1}}}, "expect": {"status": 200, "json": {"rev": {"$eq": 4}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/reply", "token": "${session}", "body": {"note": "n1", "reply": {"kind": "일부", "done": "a", "left": "b"}}}, "expect": {"status": 200, "json": {"rev": {"$eq": 5}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/claim", "token": "${session}", "body": {"screen": "home", "by": "t", "note": "working"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 6}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/release", "token": "${session}", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"released": {"$eq": true}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/release", "token": "${session}", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"released": {"$eq": false}}}},
+        {"events": "s", "types": ["notes.changed", "notes.changed", "claim", "release"], "shapes": [{"rev": {"$eq": 4}}, {"rev": {"$eq": 5}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 6}, "by": {"$eq": "t"}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 7}}]}
+      ]},
+      {"name": "sync apply = screen.written after the build, no build events", "steps": [
+        {"open": "s", "request": {"path": "/api/events?hd=${session}", "token": false}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"edits": [{"id": "s1", "screen": "home", "edit": "text", "path": "h1", "value": "Sync"}]}}, "expect": {"status": 200, "json": {"applied": {"$eq": ["s1"]}, "stamp": "str"}}, "save": {"stamp": "stamp"}},
+        {"events": "s", "types": ["screen.written"], "shapes": [{"screens": {"$eq": ["home"]}, "by": {"$eq": "human"}, "stamp": {"$eq": "${stamp}"}}]}
+      ]},
+      {"name": "async apply: answer, screen.written, build.started, build.done", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "x1", "screen": "home", "edit": "text", "path": "h1", "value": "Async"}]}}, "expect": {"status": 200, "json": {"accepted": {"$eq": ["x1"]}, "stamp": "str", "rev": "int"}}, "save": {"stamp": "stamp", "rev": "rev"}},
+        {"events": "s", "types": ["screen.written", "build.started", "build.done"], "shapes": [{"id": {"$eq": "${rev}"}, "by": {"$eq": "human"}, "stamp": {"$eq": "${stamp}"}}, {"ids": {"$eq": ["x1"]}}, {"ids": {"$eq": ["x1"]}, "stamps": {"$eq": ["${stamp}"]}, "screens": {"$eq": ["home"]}}]},
+        {"get": "/v1/p/proj-c/screens/home.html", "contains": "Async"}
+      ]},
+      {"name": "rapid async writes coalesce, latest wins", "steps": [
+        {"build": "slow"},
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "c1", "screen": "home", "edit": "text", "path": "h1", "value": "One"}]}}, "expect": {"status": 200, "json": {"accepted": {"$eq": ["c1"]}}}},
+        {"events": "s", "types": ["screen.written", "build.started"], "shapes": [{}, {"ids": {"$eq": ["c1"]}}]},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "c2", "screen": "list", "edit": "text", "path": "h1", "value": "Two"}]}}, "expect": {"status": 200, "json": {"accepted": {"$eq": ["c2"]}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "c3", "screen": "home", "edit": "text", "path": "h1", "value": "Three"}]}}, "expect": {"status": 200, "json": {"accepted": {"$eq": ["c3"]}}}},
+        {"events": "s", "types": ["screen.written", "screen.written", "build.started", "build.done"], "shapes": [{}, {}, {"ids": {"$eq": ["c1", "c2", "c3"]}}, {"ids": {"$eq": ["c1", "c2", "c3"]}, "screens": {"$eq": ["home", "list"]}}]}
+      ]},
+      {"name": "async build fails: sources undone, build.failed lists the edit ids", "steps": [
+        {"build": "fail-once"},
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"async": true, "edits": [{"id": "f1", "screen": "home", "edit": "text", "path": "h1", "value": "Broken"}]}}, "expect": {"status": 200, "json": {"accepted": {"$eq": ["f1"]}}}, "save": {"stamp": "stamp"}},
+        {"events": "s", "types": ["screen.written", "build.started", "build.failed"], "shapes": [{}, {}, {"reverted": {"$eq": ["f1"]}, "kept": {"$eq": []}, "stamps": {"$eq": ["${stamp}"]}, "screens": {"$eq": ["home"]}, "repaired": {"$eq": true}}]},
+        {"get": "/v1/p/proj-c/screens/home.html", "contains": "<h1>home</h1>"},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/restore", "token": "${session}", "body": {"stamp": "${stamp}"}}, "expect": {"status": 404, "json": {"reason": {"$eq": "missing"}}}}
+      ]},
+      {"name": "sync apply whose build fails = build.failed (already undone by the request)", "steps": [
+        {"build": "fail-once"},
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "body": {"edits": [{"id": "g1", "screen": "home", "edit": "text", "path": "h1", "value": "Nope"}]}}, "expect": {"status": 200, "json": {"applied": {"$eq": []}, "stamp": "null"}}},
+        {"events": "s", "types": ["build.failed"], "shapes": [{"reverted": {"$eq": ["g1"]}, "stamps": {"$eq": []}, "repaired": "null"}]}
+      ]},
+      {"name": "resume: Last-Event-ID replays what was missed, then live", "steps": [
+        {"open": "a", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 3, "state": {"x": 1}}}, "expect": {"status": 200}},
+        {"events": "a", "types": ["notes.changed"], "save": {"first": "id"}},
+        {"send": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 4, "state": {"x": 2}}}, "expect": {"status": 200}},
+        {"send": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 5, "state": {"x": 3}}}, "expect": {"status": 200}},
+        {"open": "b", "request": {"path": "/v1/p/proj-c/events", "token": "${session}", "last": "${first}"}},
+        {"events": "b", "types": ["notes.changed", "notes.changed"], "shapes": [{"rev": {"$eq": 5}}, {"rev": {"$eq": 6}}]},
+        {"open": "c", "request": {"path": "/v1/p/proj-c/events?hd=${session}&since=${first}", "token": false}},
+        {"events": "c", "types": ["notes.changed", "notes.changed"], "shapes": [{"rev": {"$eq": 5}}, {"rev": {"$eq": 6}}]},
+        {"send": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 6, "state": {"x": 4}}}, "expect": {"status": 200}},
+        {"events": "b", "types": ["notes.changed"], "shapes": [{"rev": {"$eq": 7}}]}
+      ]}
+    ]
+  }
+}

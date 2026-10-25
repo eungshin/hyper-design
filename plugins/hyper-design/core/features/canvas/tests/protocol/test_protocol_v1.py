@@ -243,7 +243,7 @@ def test_fixtures_name_every_route():
     src = "".join((FEATURES / f).read_text(encoding="utf-8") for f in ("canvas/helper.py", "canvas/router.py", "home/home_api.py"))   # 47-2: 라우트 표 = router.py
     known = set(re.findall(r'"(/api/[a-z-]+)"', src))
     named = set()
-    for name in ("helper.json", "hub.json", "v1.json"):
+    for name in ("helper.json", "hub.json", "v1.json", "events.json"):
         for r in json.loads((HERE / name).read_text(encoding="utf-8"))["routes"]:
             named.add(r["path"].split("?")[0])
     assert known <= named, "fixture 에 없는 주소: %s" % sorted(known - named)
