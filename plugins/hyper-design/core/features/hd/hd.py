@@ -1,4 +1,4 @@
-"""hd — 터미널 에이전트가 떠 있는 캔버스의 메모를 읽고 답한다. argparse → hd_client(I/O) → hd_model(규칙) → 출력.
+"""hd — 터미널 에이전트가 떠 있는 캔버스의 메모를 읽고 답한다. argparse → hd_sdk(Hub·Project — task 47-3) → 출력. 얇은 껍데기: 규칙·I/O 는 SDK 아래.
 
   hd ls                                   떠 있는 캔버스: project · url · agent · 열린 메모 수
   hd notes [<project>|--out PATH] [--open|--sent|--all]
@@ -25,72 +25,35 @@ import argparse, json, os, pathlib, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import hd_client as C  # noqa: E402
-import hd_model as M  # noqa: E402
-import hd_projects as P  # noqa: E402
+import hd_sdk as S  # noqa: E402  — 모든 일은 SDK(Hub·Project·Note·HdError, task 47-3). 여기는 argparse → SDK → 출력뿐
 
-HELPER = HERE.parent / "canvas" / "helper.py"
 HOME_DIR = HERE.parent / "home"
 
 
-def _same(a, b):
-    """같은 out — 규칙은 hd_projects.same(key) 하나, 절대경로로 푸는 일은 Client(abs_out) 가 한 번(#282)."""
-    return P.same(C.abs_out(a), C.abs_out(b))
-
-
-def _listing(alive):
-    return "; ".join("%s (%s)" % (m.get("project"), m.get("out")) for m in alive) or "없음"
-
-
-def resolve(project=None, out=None, need_helper=False):
-    """→ (out 경로, 살아 있는 표지 | None). 고를 수 없으면 HdError(떠 있는 것 목록을 붙여)."""
-    alive = C.running()
-    if out:
-        o = pathlib.Path(out).resolve()
-        if not (o / "screens.json").is_file():
-            raise C.HdError("screens.json 이 있는 out 폴더가 아니에요: %s" % o)
-        m = next((m for m in alive if _same(m["out"], o)), None)
-    else:
-        pool = [m for m in alive if m.get("project") == project or _same(m["out"], project)] if project else alive
-        if not pool:
-            raise C.HdError(("'%s' 캔버스가 떠 있지 않아요" % project if project else "떠 있는 캔버스가 없어요") +
-                            " — 떠 있는 것: %s. 파일만 읽으려면 --out PATH" % _listing(alive))
-        if len(pool) > 1:
-            raise C.HdError("캔버스가 여럿이에요 — 하나를 고르세요(project 또는 --out): %s" % _listing(pool))
-        m = pool[0]; o = pathlib.Path(m["out"])
-    if need_helper and not m:
-        raise C.HdError("이 out 을 띄운 도우미가 없어요 — 먼저 띄우세요: python \"%s\" \"%s\" --no-open" % (HELPER, o))
-    return o, m
-
-
-def _seq(st):
-    return st["state"].get("note-seq")
-
-
-def _notes(st):
-    n = st["state"].get("notes")
-    return n if isinstance(n, list) else []
+def _hub():
+    return S.Hub()
 
 
 def cmd_ls(a):
     rows = []
-    for m in C.running():
+    for p in _hub().canvases():
         try:
-            st = C.read_state(m["out"]); n = len(M.pick(M.rows(_notes(st), _seq(st))))
-        except C.HdError:
+            n = len(p.notes("open"))
+        except S.HdError:
             n = None
+        m = p.marker
         rows.append({"project": m.get("project"), "out": m["out"], "url": m.get("url"), "agent": m.get("agent"),
                      "pid": m.get("pid"), "port": m.get("port"), "started": m.get("started"), "open": n})
-    return rows, M.format_canvases(rows)
+    return rows, S.text.canvases(rows)
 
 
 def cmd_notes(a):
-    o, m = resolve(a.project, a.out)
-    st = C.read_state(o)
-    rs = M.pick(M.rows(_notes(st), _seq(st)), a.which)
-    proj = m.get("project") if m else M.project_name(o.name, o.parent.name)
-    head = "%s · rev %s · %s · %d개%s" % (proj, st["rev"], a.which, len(rs), "" if m else " · 도우미 꺼짐(읽기만)")
-    return {"project": proj, "out": str(o), "rev": st["rev"], "helper": bool(m), "which": a.which, "notes": rs}, head + "\n" + M.format_rows(rs)
+    p = _hub().project(a.project, a.out)
+    st = p.state()
+    ns = p.notes(a.which, state=st)
+    head = "%s · rev %s · %s · %d개%s" % (p.name, st["rev"], a.which, len(ns), "" if p.online else " · 도우미 꺼짐(읽기만)")
+    return ({"project": p.name, "out": str(p.out), "rev": st["rev"], "helper": p.online, "which": a.which, "notes": [n.as_dict() for n in ns]},
+            head + "\n" + S.text.notes(ns))
 
 
 def build_reply(a):
@@ -109,83 +72,41 @@ def build_reply(a):
 
 
 def cmd_reply(a):
-    o, m = resolve(a.project, a.out, need_helper=True)
-    ref = M.parse_ref(a.note)
-    st = C.read_state(o)
-    notes = _notes(st)
-    i = M.find(notes, ref, _seq(st))
-    if i is None:
-        raise C.HdError("없는 메모: %s — hd notes --all 로 번호를 보세요" % a.note)
-    reply = build_reply(a)
-    errs = M.check_reply(reply, notes[i].get("intent"), agent=True, known_screens=C.screen_ids(o))
-    if errs:
-        raise C.HdError("답이 규칙에 맞지 않아요:\n  " + "\n  ".join(errs))
-    code, res = C.post_reply(m, {"note": ref, "reply": reply})
-    if code != 200:
-        raise C.HdError("도우미가 거절했어요(%d): %s" % (code, "\n  ".join(res.get("errors") or [res.get("error", "")])))
-    label = "%s#%s" % (ref["screen"], ref["no"]) if isinstance(ref, dict) else a.note
+    p = _hub().project(a.project, a.out, need_helper=True)
+    res = p.reply(a.note, build_reply(a))
+    r = S.parse_ref(a.note)
+    label = "%s#%s" % (r["screen"], r["no"]) if isinstance(r, dict) else a.note
     return res, "%s → %s (rev %s)" % (label, res.get("status"), res.get("rev"))
 
 
 def cmd_projects(a):
-    rs = C.project_rows()
-    return rs, P.format_rows(rs)
+    rs = _hub().projects()
+    return rs, S.text.projects(rs)
 
 
 def cmd_save(a):
-    if a.out:
-        o = pathlib.Path(C.abs_out(a.out))
-        if not C.is_out(o):
-            raise C.HdError("screens.json 이 있는 out 폴더가 아니에요: %s" % o)
-    else:
-        alive = C.running()
-        if len(alive) != 1:
-            raise C.HdError(("떠 있는 캔버스가 없어요" if not alive else "캔버스가 여럿이에요(%s)" % _listing(alive)) + " — --out PATH 로 고르세요")
-        o = pathlib.Path(C.abs_out(alive[0]["out"]))
-    reg = C.load_projects()
-    old = P.by_out(reg, str(o))
-    try:
-        reg, e, added = P.save(reg, str(o), C.now(), a.name, default_name=C.project_from(o))
-    except P.ProjectError as x:
-        raise C.HdError(str(x))
-    C.save_projects(reg)
+    e, added, old = _hub().save(a.out, a.name)
     how = "새로 저장" if added else ("이름 바꿈, 전: %s" % old["name"] if old["name"] != e["name"] else "이미 있음")
-    return dict(e, added=added), "%s (%s)" % (P.link_line(e), how)
+    return dict(e, added=added), "%s (%s)" % (S.text.link(e), how)
 
 
 def cmd_open(a):
     agent = a.agent or os.environ.get("PASEO_AGENT_ID") or None
-    e, m, reused = C.open_project(a.target, agent)
+    e, p, reused = _hub().open(a.target, agent)
     if not a.no_open:
-        C.open_browser(m["url"])
-    data = {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+        import webbrowser
+        webbrowser.open(p.url)
+    data = {"name": e["name"], "out": e["out"], "url": p.url, "pid": p.pid, "agent": p.agent, "reused": reused}
     how = "이미 떠 있음" if reused else "새로 띄움"
     note = ""
-    if reused and agent and m.get("agent") != agent:
-        note = " · 떠 있는 도우미는 %s 로 보내요(바꾸려면 hd attach --agent %s %s)" % (m.get("agent") or "대기열 파일", agent, e["name"])
-    return data, "%s · %s · %s · pid %s · 보내기 → %s%s" % (e["name"], m["url"], how, m.get("pid"), m.get("agent") or "대기열 파일", note)
+    if reused and agent and p.agent != agent:
+        note = " · 떠 있는 도우미는 %s 로 보내요(바꾸려면 hd attach --agent %s %s)" % (p.agent or "대기열 파일", agent, e["name"])
+    return data, "%s · %s · %s · pid %s · 보내기 → %s%s" % (e["name"], p.url, how, p.pid, p.agent or "대기열 파일", note)
 
 
 def cmd_forget(a):
-    reg, hit = P.forget(C.load_projects(), a.name)
-    if hit is None:
-        raise C.HdError("저장한 프로젝트에 '%s' 이 없어요 — hd projects" % a.name)
-    C.save_projects(reg)
-    return hit, "링크를 지웠어요: %s (파일은 그대로)" % P.link_line(hit)
-
-
-def pick_canvas(ref, stale_ok=False):
-    """이름(표지 project 또는 저장한 이름) | out 경로 | None → 표지. stale_ok 면 응답 없는 표지도 고른다(hd stop)."""
-    keys = set()
-    if ref is not None:
-        keys.add(P.key(C.abs_out(ref)))
-        e = P.find(C.load_projects(), ref)
-        if e:
-            keys.add(P.key(C.abs_out(e["out"])))
-    m, err = M.choose(C.running(), ref, keys, C.stale() if stale_ok and ref is not None else (), key=lambda o: P.key(C.abs_out(o)))
-    if err:
-        raise C.HdError(err)
-    return m
+    hit = _hub().forget(a.name)
+    return hit, "링크를 지웠어요: %s (파일은 그대로)" % S.text.link(hit)
 
 
 STOP_WORD = {"route": "도우미가 스스로 껐어요", "kill": "답이 없어 pid 를 강제로 껐어요", "gone": "프로세스가 이미 없어 표지만 지웠어요",
@@ -193,72 +114,64 @@ STOP_WORD = {"route": "도우미가 스스로 껐어요", "kill": "답이 없어
 
 
 def cmd_stop(a):
-    m = pick_canvas(a.target, stale_ok=True)
-    how = C.stop(m)
-    return ({"project": m.get("project"), "out": m["out"], "pid": m.get("pid"), "port": m.get("port"), "how": how},
-            "%s · pid %s · %s (링크는 그대로)" % (m.get("project"), m.get("pid"), STOP_WORD[how]))
+    p = _hub().pick(a.target, stale_ok=True)
+    how = p.stop()
+    return ({"project": p.name, "out": str(p.marker["out"]), "pid": p.pid, "port": p.port, "how": how},
+            "%s · pid %s · %s (링크는 그대로)" % (p.name, p.pid, STOP_WORD[how]))
 
 
 def cmd_attach(a):
     agent = a.agent if a.agent is not None else os.environ.get("PASEO_AGENT_ID")
     if agent is None:
-        raise C.HdError("보낼 에이전트가 없어요 — --agent ID 를 주거나(PASEO_AGENT_ID 도 없음), 떼려면 --agent none")
+        raise S.Invalid("보낼 에이전트가 없어요 — --agent ID 를 주거나(PASEO_AGENT_ID 도 없음), 떼려면 --agent none")
     agent = None if agent == "none" else agent
-    err = M.agent_error(agent)
-    if err:
-        raise C.HdError(err)
-    m = pick_canvas(a.target)
-    got = C.attach(m, agent)
-    return ({"project": m.get("project"), "out": m["out"], "pid": m.get("pid"), "agent": got, "was": m.get("agent")},
-            "%s · 보내기 → %s (전: %s)" % (m.get("project"), got or "대기열 파일", m.get("agent") or "대기열 파일"))
+    S.check_agent(agent)
+    p = _hub().pick(a.target)
+    was = p.agent
+    got = p.attach(agent)
+    return ({"project": p.name, "out": p.marker["out"], "pid": p.pid, "agent": got, "was": was},
+            "%s · 보내기 → %s (전: %s)" % (p.name, got or "대기열 파일", was or "대기열 파일"))
 
 
 def cmd_wait(a):
-    m = pick_canvas(a.target)
-    m, st, rs = C.wait_pending(m, a.timeout)
-    head = "%s · rev %s · working · %d개" % (m.get("project"), st["rev"], len(rs))
-    return ({"project": m.get("project"), "out": m["out"], "rev": st["rev"], "helper": True, "which": "working", "notes": rs},
-            head + "\n" + M.format_rows(rs))
-
-
-def _claim_target(a):
-    m = pick_canvas(a.target)
-    ids = C.screen_ids(m["out"])
-    if ids is not None and a.screen not in ids:
-        raise C.HdError("없는 화면이에요: %s — 있는 화면: %s" % (a.screen, ", ".join(sorted(ids)) or "없음"))
-    return m
+    p = _hub().pick(a.target)
+    st, ns = p.wait(a.timeout)
+    head = "%s · rev %s · working · %d개" % (p.name, st["rev"], len(ns))
+    return ({"project": p.name, "out": p.marker["out"], "rev": st["rev"], "helper": True, "which": "working", "notes": [n.as_dict() for n in ns]},
+            head + "\n" + S.text.notes(ns))
 
 
 def cmd_claim(a):
     by = a.by if a.by is not None else os.environ.get("PASEO_AGENT_ID") or None
-    err = M.claim_error(a.screen, by, a.note)
-    if err:
-        raise C.HdError(err)
-    m = _claim_target(a)
-    res = C.claim(m, a.screen, by, a.note)
-    return (dict(res, project=m.get("project"), by=by, note=a.note),
+    S.check_claim(a.screen, by, a.note)
+    p = _hub().pick(a.target)
+    res = p.claim(a.screen, by, a.note)
+    return (dict(res, project=p.name, by=by, note=a.note),
             "%s · %s 덮개 씌움%s (rev %s) — 파일이 바뀌거나 hd release %s 면 걷혀요" % (
-                m.get("project"), a.screen, " · " + a.note if a.note else "", res.get("rev"), a.screen))
+                p.name, a.screen, " · " + a.note if a.note else "", res.get("rev"), a.screen))
 
 
 def cmd_release(a):
-    m = _claim_target(a)
-    res = C.release(m, a.screen)
-    return (dict(res, project=m.get("project"), screen=a.screen),
-            "%s · %s %s" % (m.get("project"), a.screen, "덮개 걷음 (rev %s)" % res.get("rev") if res.get("released") else "덮개가 없어요(그대로)"))
+    p = _hub().pick(a.target)
+    res = p.release(a.screen)
+    return (dict(res, project=p.name, screen=a.screen),
+            "%s · %s %s" % (p.name, a.screen, "덮개 걷음 (rev %s)" % res.get("rev") if res.get("released") else "덮개가 없어요(그대로)"))
 
 
 def cmd_home(a):
+    """홈 서버 띄우기 · 바로 가기 — 서버를 띄우는 일이라 SDK(서버에 말 걸기) 밖: home_server · shortcut 을 부를 뿐."""
     sys.path.insert(0, str(HOME_DIR))
+    import hd_client
     if a.shortcut:
         import shortcut
         try:
-            lnk = shortcut.write_shortcut(C.home(), a.desktop)
+            lnk = shortcut.write_shortcut(hd_client.home(), a.desktop)
         except shortcut.ShortcutError as e:
-            raise C.HdError(str(e))
+            raise S.HdError(str(e))
         return {"shortcut": str(lnk)}, "바로 가기를 만들었어요: %s" % lnk
     import home_server
-    res = home_server.serve(a.port, a.no_browser, on_url=lambda u: print(u, flush=True) if sys.stdout else None)
+    with S.client_errors():
+        res = home_server.serve(a.port, a.no_browser, on_url=lambda u: print(u, flush=True) if sys.stdout else None)
     if res["reused"]:
         return res, res["url"] + " (이미 떠 있음)"
     return res, "홈을 껐어요"
@@ -281,7 +194,7 @@ def parser():
     r = sub.add_parser("reply", parents=[common], help="메모에 답하기(도우미로 씀)")
     r.add_argument("note", help="<screen>#<no> 또는 메모 id")
     r.add_argument("--project"); r.add_argument("--out")
-    r.add_argument("--kind", required=True, choices=M.AGENT_KINDS)
+    r.add_argument("--kind", required=True, choices=S.AGENT_KINDS)
     for k in ("what", "done", "left", "where", "text", "question", "detail", "by"):
         r.add_argument("--" + k)
     r.add_argument("--screens", help="쉼표로: a,b")
@@ -339,11 +252,11 @@ def main(argv=None):
     a = parser().parse_args(argv)
     try:
         data, text = a.fn(a)
-    except C.HdError as e:
+    except S.HdError as e:
         if a.json:
-            print(json.dumps({"error": str(e)}, ensure_ascii=False))
-        print("hd: %s" % e, file=sys.stderr)
-        return getattr(e, "code", 1)
+            print(json.dumps(e.as_dict(), ensure_ascii=False))
+        print("hd: %s" % e.line(), file=sys.stderr)
+        return e.code
     print(json.dumps(data, ensure_ascii=False, indent=1) if a.json else text)
     return 0
 

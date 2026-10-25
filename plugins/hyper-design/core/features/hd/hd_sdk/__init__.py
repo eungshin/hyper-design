@@ -17,3 +17,4 @@ from .transport import HttpTransport, client_errors  # noqa: F401
 from .project import Project, check_claim, check_agent  # noqa: F401
 from .hub import Hub  # noqa: F401
 from . import text  # noqa: F401
+from hd_model import AGENT_KINDS, parse_ref  # noqa: F401,E402  — 에이전트가 쓸 수 있는 답 종류(반영됨·일부·대체됨·답변·질문) · '<screen>#<no>' | 메모 id 풀기

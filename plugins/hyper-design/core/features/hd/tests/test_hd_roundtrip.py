@@ -175,7 +175,7 @@ def test_wait_survives_helper_restart(tmp_path):
                          text=True, encoding="utf-8", env=env(home))
     p2 = None
     try:
-        time.sleep(1.0)
+        time.sleep(2.5)                               # hd wait 이 도우미를 고를 때까지(부하에서 파이썬 시작이 1초를 넘는다 — 47-3)
         hdfix.stop_helper(p)
         p2, url2 = hdfix.start_helper(out, home)
         rev = api(url2, "/api/state")[1]["rev"]
