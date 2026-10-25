@@ -19,7 +19,10 @@
      앱 카드만 · at > item.since 일 때만 · hmr(개발 서버가 그 페이지를 바꿈) = 걷기 · load = 첫 로드가 아니면 걷기(판 새로 고침·처음 보임은 AI 수정이 아님)
    hereError(seen, d) → {seen(새 객체), show: 글|null, clear: bool} — 앱 카드 iframe 의 hd-here {error}(감싸개가 비공개 모듈을 못 읽음, #280).
      seen = {화면 id: 지금 보인 글}. 같은 카드·같은 글이면 show null(한 번만) · 글은 공백 정리 + ERR_MAX 자(넘으면 …) · error 없는 hd-here(다시 잘 실림) = 그 카드 clear
-   HD.busy = {VIA, MAX, ERR_MAX, initial, reduce, load, save, files, label, look, refresh, isApp, shouldLift, hereError} */
+   lookDone() → {kind: 'done', text: '방금 반영됨 ✓', title} — 덮개가 걷힌 카드의 새 화면이 판에 반영된 뒤 DONE_MS 동안 보이는 칩(48a)
+   landed(rec, ev) → {rec(새 객체), show: bool} — rec = {화면 id: 걷힌 시각}. ev = {type: 'lifted', ids, at}(파일이 바뀌어 걷힘 — 손 걷기 × 는 넣지 않는다)
+     | {type: 'swapped', id, at}(그 카드 교체가 끝남 — 걷힌 지 LANDED_WAIT 안이면 show, 그 id 는 지움)
+   HD.busy = {VIA, MAX, ERR_MAX, DONE_MS, LANDED_WAIT, initial, reduce, load, save, files, label, look, lookDone, landed, refresh, isApp, shouldLift, hereError} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -144,6 +147,23 @@ function look(it) {
   return {kind: 'working', text: t, title: full + ' — 화면 파일이 바뀌면 사라져요(× = 지우기)'};
 }
 
+var DONE_MS = 2000, LANDED_WAIT = 10 * 60 * 1000;    // 미룬 교체(알약)는 사용자가 손을 뗄 때까지 — 넉넉히
+function lookDone() { return {kind: 'done', text: '방금 반영됨 ✓', title: 'AI 수정이 이 카드에 반영됐어요'}; }
+function landed(rec, ev) {
+  var cur = rec && typeof rec === 'object' ? rec : {}, next;
+  if (!ev) return {rec: cur, show: false};
+  if (ev.type === 'lifted' && Array.isArray(ev.ids) && num(ev.at)) {
+    next = copy(cur);
+    ev.ids.forEach(function (id) { if (typeof id === 'string' && id) next[id] = ev.at; });
+    return {rec: next, show: false};
+  }
+  if (ev.type === 'swapped' && has(cur, ev.id) && num(ev.at)) {
+    next = copy(cur); delete next[ev.id];
+    return {rec: next, show: num(cur[ev.id]) && ev.at - cur[ev.id] <= LANDED_WAIT};
+  }
+  return {rec: cur, show: false};
+}
+
 function refresh(changed, opt) {
   opt = opt || {};
   var known = {}, cards = [], skip = opt.skip || {}, now = num(opt.now) ? opt.now : 0, items = (opt.busy && opt.busy.items) || {};
@@ -159,5 +179,6 @@ function refresh(changed, opt) {
   return {cards: cards, modal: modal};
 }
 
-HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift, ERR_MAX: ERR_MAX, hereError: hereError};
+HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift, ERR_MAX: ERR_MAX, hereError: hereError,
+           DONE_MS: DONE_MS, LANDED_WAIT: LANDED_WAIT, lookDone: lookDone, landed: landed};
 })();

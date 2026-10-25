@@ -10,6 +10,9 @@
    보낸 창이 그 카드의 iframe 일 때만(크게 보기 등은 무시). 이 판에서 그 카드의 첫 로드는 first(걷지 않음). 걷어도 다시 싣지 않는다(이미 새 화면).
    hd-here {error}(감싸개가 앱의 비공개 모듈을 못 읽음, #280) = 그 카드 화면 밑에 빨간 한 줄 .cerr(role=alert, title = 전체) + [hd] 경고 —
      토스트가 아니고 카드마다 같은 글은 한 번(HD.busy.hereError), 그 카드가 다시 잘 실리면(error 없는 hd-here) 걷는다. 덮개는 걷지 않는다.
+   "방금 반영됨 ✓"(48a): 화면 파일이 바뀌어 걷힌 카드(손 걷기 × 는 아님)의 교체가 끝나면(document 'hd-swap' {id, phase:'done'} — view-swap) 같은 자리에
+     칩 <div class="busy bchip" data-kind="done"> 을 HD.busy.DONE_MS 동안(규칙 HD.busy.landed) · 앱 카드가 hd-here 로 걷히면 바로(이미 새 화면).
+     'hd-swap' failed {why} = 그 카드 .cerr 한 줄(앱 카드 실패 줄과 같은 길) — 그 카드의 다음 done 이 걷는다.
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids)}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
@@ -32,6 +35,9 @@ var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--ts,1));
   '.busy.bchip [data-act=lift]:hover,.busy.bchip [data-act=lift]:focus-visible{background:rgba(0,0,0,.09)}' +
   '@keyframes hd-bchip-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.busy.bchip .bspin{animation:none}}' +
   '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--ts,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
+  '.busy.bchip[data-kind=done]{transition:opacity .3s ease-out}.busy.bchip[data-kind=done].bout{opacity:0}' +
+  '.busy.bchip[data-kind=done] .bok{flex:none;color:var(--ui-accent,#c2590a);font-weight:700}' +
+  '@media (prefers-reduced-motion:reduce){.busy.bchip[data-kind=done]{transition:none}}' +
   '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}' +
   '.card .cerr{margin-top:calc(8px * var(--ts,1));font:500 calc(12px * var(--ts,1))/1.35 system-ui,sans-serif;color:var(--ui-danger,#b42318);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}';
 
@@ -44,6 +50,7 @@ function style() {
 function mount(ctx) {
   var B = HD.busy, warn = ctx.warn || function (m) { console.warn(m); };
   var st = B.load(ctx.getItem, ctx.key, warn), els = {}, timer = 0, skip = {}, mel = null;
+  var landedRec = {}, dones = {}, swapErr = {};          // 48a — 파일이 바뀌어 걷힌 카드 · 지금 보이는 "방금 반영됨" 칩 · 교체 실패 줄을 단 카드
 
   function dispatch(a) {
     var n = B.reduce(st, a);
@@ -74,6 +81,7 @@ function mount(ctx) {
     if (!host) { if (el) { unmark(el); el.remove(); delete els[id]; } return; }
     if (!same(el, host, it, id)) {
       if (el) { unmark(el); el.remove(); }
+      undone(id);
       el = chip(id, it); host.appendChild(el); els[id] = el;
     }
     if (B.look(it).kind === 'working') host.setAttribute('data-busy', 'working'); else host.removeAttribute('data-busy');
@@ -96,6 +104,31 @@ function mount(ctx) {
     for (k in st.items) draw(k, st.items[k]);
     drawModal();
   }
+  function undone(id) { var d = dones[id]; if (d) { clearTimeout(d.t); d.el.remove(); delete dones[id]; } }
+  function showDone(id) {                             // "방금 반영됨 ✓" — DONE_MS 뒤 사라짐(덮개가 다시 씌면 그 칩이 대신)
+    var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card);
+    if (!host || has(st.items, id)) return;
+    undone(id);
+    var lk = B.lookDone(), el = document.createElement('div');
+    el.className = 'busy bchip'; el.setAttribute('data-kind', 'done'); el.setAttribute('data-id', id); el.setAttribute('role', 'status'); el.title = lk.title;
+    var ok = document.createElement('span'); ok.className = 'busy-txt'; ok.textContent = lk.text; el.appendChild(ok);
+    el.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    host.appendChild(el);
+    var d = dones[id] = {el: el, t: setTimeout(function () {
+      el.classList.add('bout');
+      d.t = setTimeout(function () { if (dones[id] === d) { el.remove(); delete dones[id]; } }, 320);
+    }, B.DONE_MS)};
+  }
+  function onSwap(e) {                                // view-swap 의 의도 — 교체가 끝남·실패
+    var d = e.detail || {}, id = d.id;
+    if (typeof id !== 'string' || !id) return;
+    if (d.phase === 'failed') { swapErr[id] = 1; errLine(id, d.why || '새 버전을 싣지 못했어요'); return; }
+    if (d.phase !== 'done') return;
+    if (has(swapErr, id)) { delete swapErr[id]; errLine(id, null); }
+    var r = B.landed(landedRec, {type: 'swapped', id: id, at: Date.now()});
+    landedRec = r.rec;
+    if (r.show) showDone(id);
+  }
   function wrote(list) { var until = Date.now() + SKIP_MS; (list || []).forEach(function (id) { skip[id] = until; }); }
 
   function poll() {
@@ -107,7 +140,7 @@ function mount(ctx) {
       dispatch({type: 'baseline', mtimes: m});        // 기준을 못 잡았던 것은 여기서 잡는다
       dispatch({type: 'seen', mtimes: m});
       var gone = before.filter(function (id) { return !has(st.items, id); });
-      if (gone.length) { render(); wrote(gone); ctx.reload(gone); }
+      if (gone.length) { landedRec = B.landed(landedRec, {type: 'lifted', ids: gone, at: Date.now()}).rec; render(); wrote(gone); ctx.reload(gone); }
     }, function () { /* 도우미가 잠깐 안 되면 다음 차례에 다시 */ }).then(schedule, schedule);
   }
   function schedule() { if (!timer && ids().length) timer = setTimeout(poll, EVERY); }
@@ -162,7 +195,7 @@ function mount(ctx) {
     if (!has(st.items, id)) return;
     var before = st;
     dispatch({type: 'here', id: id, kind: kind, at: Date.now(), first: first});
-    if (st !== before) render();
+    if (st !== before) { render(); showDone(id); }      // 앱 카드 = 이미 새 화면(다시 싣지 않음)
   }
 
   // 도우미가 지켜본 화면 파일(GET /api/files) — 바뀐 카드만 다시
@@ -189,6 +222,7 @@ function mount(ctx) {
 
   style(); render(); schedule();
   if (typeof addEventListener === 'function') addEventListener('message', onHere);
+  if (typeof document !== 'undefined') document.addEventListener('hd-swap', onSwap);
   if (ctx.files) fpoll();
   if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {   // 크게 보기를 열고·닫고·화면을 바꿀 때 칩도 따라
     var box = document.getElementById('modal'), title = document.getElementById('mtitle'), ob = new MutationObserver(drawModal);

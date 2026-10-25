@@ -22,6 +22,9 @@ SAMPLE = """<main><section class="block"><h1 class="title">하는 일</h1>
 <a class="row" href="a.html">가기 <b>›</b></a><p>설명 &amp; 글</p><button class="btn">시작</button><button class="btn">또</button></section></main>"""
 
 
+# 그 카드의 화면 틀(.phone 의 첫 iframe)이 새 버전(?v=)을 들었나 — src(실림) 또는 data-src(보일 때 실림). 한 번에 읽는다(따로 읽으면 그 사이 옮겨 가 둘 다 비어 보인다)
+FRESH = """(id) => { const f = document.querySelector('.card[data-id="' + id + '"] .phone iframe'); return !!f && ((f.getAttribute('src') || '') + (f.getAttribute('data-src') || '')).indexOf('?v=') >= 0; }"""
+
 @pytest.fixture()
 def out():
     if not DAYFINE.exists():
@@ -239,8 +242,7 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         assert "도우미가 씀" in (out / "screens" / "job.html").read_text(encoding="utf-8")
         assert "이건 무슨 뜻?" in pathlib.Path(last["forward"]["path"]).read_text(encoding="utf-8")
         assert pg.evaluate("window.__hdStay") == 1, "쓴 뒤 페이지 전체를 새로고침하지 않는다(E17)"
-        job_src = pg.evaluate("(() => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return f.getAttribute('src') || f.getAttribute('data-src') || ''; })()")   # 한 번에 읽는다(따로 읽으면 그 사이 data-src → src 로 옮겨 가 둘 다 비어 보인다)
-        assert "?v=" in job_src, "바뀐 카드만 다시 싣는다"
+        pg.wait_for_function(FRESH, arg="job", timeout=8000)   # 바뀐 카드는 새 버전(?v=)을 싣는다 — 실린 카드는 숨긴 틀에서 다 그린 뒤 바뀐다(48a)
         left = pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')")
         assert [n["id"] for n in left] == ["x2"] and left[0]["sent"], "바로 쓴 편집은 메모에서 빠지고, 터미널로 보낸 것은 보냄"
         srv.shutdown(); srv.server_close()                  # 도우미가 꺼지면 지금처럼 복사
@@ -348,7 +350,7 @@ def test_helper_canvas_busy_chip_never_hides_screen(ctx, out):   # Q2b · task 3
         f = out / "screens" / "job.html"
         f.write_text(f.read_text(encoding="utf-8") + "\n<!-- AI 가 고침 -->\n", encoding="utf-8")
         pg.wait_for_selector(busy, state="detached", timeout=6000)  # 화면 파일이 바뀌면 걷힌다
-        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "그 카드만 다시 싣는다"
+        pg.wait_for_function(FRESH, arg="job", timeout=8000)   # 그 카드는 새 버전(?v=)을 싣는다(48a: 다 그린 뒤 바뀜)
         zoom_to(pg, "language", 420)
         pg.locator(work + " [data-act=lift]").click()            # [×] = 손으로 바로 걷기 · 테두리도
         pg.wait_for_selector(work, state="detached", timeout=4000)

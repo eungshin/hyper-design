@@ -686,6 +686,36 @@
         "note": "-n 4 전체 286개"
       },
       "note": "새 모듈 없음: edits.items·emptyLayouts(R5·R6·범위 줄), annotation.SCOPES·scopeOf·scopeWord(R7), 메모 창 #pscope·묶음 .thsc. 옛 메모 출력은 unit 으로 먼저 고정. 여러 요소 메모가 한 항목이 되어 test_multi_select_note 를 고침. unit 파일 1·브라우저 테스트 1"
+    },
+    {
+      "slice": "task48a 스며드는 교체(swap·view-swap, 방금 반영됨 칩)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 5
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "숨긴 iframe 을 붙인 뒤 src 를 주면 about:blank load 가 먼저 와 빈 화면으로 교체 — 스크롤 유지 브라우저 테스트가 잡음(src 먼저)"
+        },
+        {
+          "by": "new-test",
+          "what": "판의 capture click(메모 도구)이 알약 클릭을 먹음 — 미룸 테스트가 잡음(document capture 로 받음)"
+        }
+      ],
+      "waste": [],
+      "flaky": [
+        "busy_app·claim_watch 가 -n 4 area 에서 한 번 깨지고 --lf 로 통과(부하 시간)"
+      ],
+      "note": "R56: test_canvas_helper 두 곳의 즉시 '?v=' 확인을 '그 카드가 새 버전을 싣는다'로 기다리게 고침(교체가 다 그린 뒤에 바뀜)"
     }
   ]
 }

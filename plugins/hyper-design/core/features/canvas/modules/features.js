@@ -6,7 +6,8 @@
    HD.features = {names(), missing(needs, ctx) → 없는 칸 이름들, errors() → 지금까지의 오류 글}
    셸이 건네는 ctx 칸(canvas_template.html 의 mountAll 한 곳): $ · $$ · esc · toast(msg, withUndo, ms) · warn(msg) · rowsEl · CARD ·
      title(id) · cardEl(id) · notes{list(), find(id), save()} · store{getItem, setItem, removeItem}(프로젝트 키 = 상태 파일) ·
-     local{getItem, setItem, removeItem}(전역 설정 키) · key(prefix) → 'prefix:' + 프로젝트 해시 · record(op) · prefs() · savePrefs() */
+     local{getItem, setItem, removeItem}(전역 설정 키) · key(prefix) → 'prefix:' + 프로젝트 해시 · record(op) · prefs() · savePrefs() ·
+     frameLoaded(id, frame) — 카드 iframe 이 막 실림: 셸이 테마(hd-palette·hd-theme-vars)·반영 대기(hd-pending)·메모 자리(hd-locate)를 보낸다(48a 교체가 만든 새 틀) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
