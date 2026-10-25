@@ -146,6 +146,14 @@
       ]
     },
     {
+      "method": "GET", "path": "/api/parts", "callers": ["modules/view-blocks.js (Components part picker, task 49b)"],
+      "request": "-", "response": "{parts:[{key, title, ok}]} from out/components.html | {parts:[], error} when there is no components.html",
+      "cases": [
+        {"name": "no components.html", "request": {"method": "GET", "path": "/api/parts"}, "expect": {"status": 200, "json": {"parts": {"$eq": []}, "error": "str"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/parts", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/apply", "callers": ["modules/view-sync.js (Send: direct edits)"],
       "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link, path?, value?, op?, to?, index?}]}",
       "response": "{applied:[id], failed:[{id, reason}], stamp, changed:[screen], history} (stamp null and no history when nothing written)",
