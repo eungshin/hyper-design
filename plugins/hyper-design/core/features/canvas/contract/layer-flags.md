@@ -7,7 +7,8 @@
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
 | `modules/layer-flags.js` | Model | 저장된 숨김·잠금 id 목록을 지금 있는 id 에 맞춰 거름. 상태 없음. `HD.layerFlags = {BOARD, live(rows, notes), clean(text, live) → {ids, set, dropped, changed, bad}}` |
-| 셸 `layerFlags(key, what)` · `loadHidden` · `loadLocked` | — | 저장소 읽기·다시 쓰기·`[hd]` 경고만(규칙은 Model). 셸 함수인 까닭: `hidden`·`locked` 의 주인이 셸이고 `ST`·`D`·`NS` 를 바로 읽음 |
+| `modules/view-layer-flags.js` | View | 숨김·잠금·태그 이름(`hd-link-names:`)의 주인: 저장소 읽기·다시 쓰기·`[hd]` 경고(규칙은 Model), 숨긴 카드 `.hid`·판 글 가리기, `#thid` 개수, 숨기기·잠그기·이름 바꾸기의 되돌리기 줄. 상태 = `hidden`·`locked`·`linkNames`. ctx `{$, $$, rowsEl, cardEl, getItem, setItem, hash, live(), record, toast, redraw, openHidden, hiddenChanged(ids, on), layersChanged, lockedChanged}`. `HD.viewLayerFlags.mount(ctx) → {hidden(), locked(), isHidden(id), isLocked(id), hide(ids, on), lock(ids, on), guard(ids), names{get, set}, loadHidden() → 새로 숨은 id, loadLocked(), loadLinkNames(), renderHidden()}` — 셸이 직접 붙인다(`LF`, 셸 C3 2026-10-26) |
+| 셸 `adoptState` · `openHidl` | — | 기록 줄로 오갈 때 `LF.load*` 뒤 고르기·선·패널을 잇기만 · 숨긴 것 단추·메뉴 = 레이어 패널을 숨긴 것만으로. 다른 읽는 곳(정렬 상자·삭제·끌기·요소 막대·레이어 패널·교체 `placed`)은 `LF` 의 읽기 함수를 받는다 |
 
 ## 규칙
 
@@ -20,4 +21,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/layer-flags.js` · 셸 `layerFlags`·`loadHidden`·`loadLocked`(+ `tests/test_canvas_unit_layer_flags.py` · 브라우저 `test_canvas_layer_flags.py`) | `unit or layers` |
+| `modules/layer-flags.js` · `view-layer-flags.js`(+ `tests/test_canvas_unit_layer_flags.py` · 브라우저 `test_canvas_layer_flags.py`) | `unit or layers` |

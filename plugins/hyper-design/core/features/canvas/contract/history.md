@@ -15,4 +15,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/history.js`(+ `tests/test_canvas_unit_history.py`) · `view-history.js` · 셸 `adoptState`·`loadHidden`·`loadLocked`·`loadLinkNames`·`ST` 쓰기 알림 | `unit or tools or notes` |
+| `modules/history.js`(+ `tests/test_canvas_unit_history.py`) · `view-history.js` · 셸 `adoptState`·`view-layer-flags` 의 `loadHidden`·`loadLocked`·`loadLinkNames`·`ST` 쓰기 알림 | `unit or tools or notes` |

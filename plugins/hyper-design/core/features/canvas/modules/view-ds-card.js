@@ -2,7 +2,7 @@
    카드 = iframe(srcdoc) 하나 — <link id="tokens" href="tokens.css"> 를 화면과 똑같이 읽고, 셸이 모든 iframe 에 보내는 hd-palette·hd-theme-vars 를
    그대로 받는다(화면의 palette.js 와 같은 두 가지만). 그래서 테마 패널에서 고르거나 색을 고치면 카드와 모든 화면이 한 번에 바뀐다.
    누르기(끌지 않고)·Enter = Foundation 탭(이동 도구 V 에서는 누르기 = 판 글 고르기, t51-9). 숨기기 = 판 글 레이어 '@dscard'(주인은 셸 hidden — 레이어 패널 눈·숨긴 것 목록). 시작 때 숨김은
-   셸 loadHidden 이 이 카드보다 먼저 돌아서 저장 키 hd-hidden 을 읽기만 한다. 요청문·메모 핀·연결·교체 대상이 아니다(.card 가 아님).
+   view-layer-flags 의 loadHidden(셸이 붙일 때) 이 이 카드보다 먼저 돌아서 저장 키 hd-hidden 을 읽기만 한다. 요청문·메모 핀·연결·교체 대상이 아니다(.card 가 아님).
    토큰이 없으면(hd-data tokens 없음·색 토큰 0) 카드 없음, 오류 없음. 데이터가 깨졌으면 [hd] 경고 한 줄.
    HD.feature('dsCard', {needs: [rowsEl, frameLoaded, store, key, warn]}) → {el | null} */
 (function () {
@@ -94,7 +94,7 @@ function mount(ctx) {
   f.addEventListener('load', function () { ctx.frameLoaded(LAYER, f); });   // 지금 테마(바탕 파일 + 내 테마 색)를 화면 카드와 같은 길로
   f.srcdoc = doc(spec, esc);
   el.appendChild(f);
-  try {                                                // 시작 숨김 — 주인은 셸(hd-hidden), 셸 loadHidden 이 이 카드보다 먼저 돈다
+  try {                                                // 시작 숨김 — 주인은 view-layer-flags(hd-hidden), 그 loadHidden 이 이 카드보다 먼저 돈다
     var hid = JSON.parse(ctx.store.getItem(ctx.key('hd-hidden')) || '[]');
     el.hidden = Array.isArray(hid) && hid.indexOf(LAYER) >= 0;
   } catch (e) { ctx.warn('[hd] 디자인 시스템 카드: 숨김 목록을 읽지 못했어요 — 보이게 둬요'); }
