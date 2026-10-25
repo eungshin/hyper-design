@@ -82,11 +82,14 @@ from html_edit import *  # noqa: F401,F403  — 예전 이름(helper.select · e
 from html_edit import (_after, _attr_patch, _block_ok, _dup_patch, _end, _has_text, _inline_only, _insert_patch, _is_root, _lead,  # noqa: F401
                        _link_to, _move_patch, _op_patch, _part, _patch, _path_of, _relink, _remove_patch, _replace_patch, _seg_ok,
                        _set_attr, _strip_ids, _text_patch, _unesc)
-from session import (AGENTS_TTL, ARCHIVE_FILE, NO_PASEO, NO_WINDOW, PASEO_DEFAULT, POLICY_MAX_CHARS, POLICY_MAX_LINES,  # noqa: F401
-                     REPLACE_TRIES, STATE_FILE, STATE_MAX, WATCH_EVERY, FileWatch, ProjectSession, _inside, _now, _parts_html,
-                     _paseo_args, _paseo_cmd, _policies, _replace, _screen_files, _sha, _stamp, _state_ok, _state_save, _state_write,
-                     _write_json, _Writes, agents_get, archive_get, archive_post, claim_post, keypath, list_agents, parts_of,
-                     project_repo, prune, release_post, reply_post, scan, state_inject, state_load, state_peek, state_put, watch)
+# 예전 이름 — 세션 부품 모듈에서(task 47-2 · 세션 나누기)
+from out_io import (REPLACE_TRIES, _inside, _now, _replace, _screen_files, _sha, _stamp, _write_json)  # noqa: F401
+from state_store import (STATE_FILE, STATE_MAX, _state_ok, _state_save, _state_write, state_inject, state_load, state_peek,  # noqa: F401
+                         state_put)
+from session import (AGENTS_TTL, ARCHIVE_FILE, FileWatch, NO_PASEO, NO_WINDOW, POLICY_MAX_CHARS, POLICY_MAX_LINES,  # noqa: F401
+                     ProjectSession, WATCH_EVERY, _Writes, _parts_html, _policies, agents_get, archive_get, archive_post,
+                     claim_post, keypath, list_agents, parts_of, project_repo, prune, release_post, reply_post, scan, watch)
+from adapters import (PASEO_DEFAULT, _paseo_args, _paseo_cmd)  # noqa: F401
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402

@@ -10,8 +10,11 @@ SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나
 import json, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
+import chat_log as CL
 import events as EV
-import session as S
+from state_store import STATE_MAX  # out_io 가 hd 폴더를 sys.path 에 넣는다
+
+import helper_model  # noqa: E402  — since 풀기 · 413 글
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "home"))
 import home_api  # noqa: E402  — 프로젝트·탭·홈 라우트는 허브(hd home)와 같은 모듈 하나(같은 JSON)
@@ -32,7 +35,7 @@ def _since_files(q):
 
 def get_state(s, q, body):
     try:
-        since = S.helper_model.parse_since(q.get("since", [None])[0])
+        since = helper_model.parse_since(q.get("since", [None])[0])
     except ValueError as e:
         return 400, {"error": str(e)}
     return 200, s.store.get(since)
@@ -55,7 +58,7 @@ def get_files(s, q, body):
 
 def get_chat(s, q, body):                             # S3 대화 기록 — since 뒤 기록(없으면 다)
     try:
-        since = S.CL.parse_since(q.get("since", [None])[0])
+        since = CL.parse_since(q.get("since", [None])[0])
     except ValueError as e:
         return 400, {"error": str(e)}
     return 200, s.chat.get(since)
@@ -274,9 +277,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not self._host_ok() or not self._token_ok(sess):
             self._drain(n)
             return self._json(403, {"error": FORBIDDEN})
-        if n > S.STATE_MAX:
+        if n > STATE_MAX:
             self._drain(n)
-            return self._json(413, {"error": S.helper_model.too_big(n, S.STATE_MAX)})
+            return self._json(413, {"error": helper_model.too_big(n, STATE_MAX)})
         raw = self.rfile.read(n) if n else b""
         if not self.router.knows(method, rest):
             return self._json(404, {"error": "모르는 주소"})

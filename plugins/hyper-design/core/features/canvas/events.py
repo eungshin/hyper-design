@@ -137,6 +137,11 @@ class EventBus:
             s.close()
 
 
+def emit(bus, type_, **data):
+    """세션 부품이 내는 길 하나 — 버스가 없으면(부품만 따로 쓰는 테스트) 알리지 않는다 → 이벤트 | None."""
+    return bus.publish(type_, **data) if bus is not None else None
+
+
 def reset_event(bus, reason):
     """흐름마다 하나(고리에 넣지 않음) — id = 지금 newest(EventSource 가 이어 받을 곳을 여기로 옮긴다)."""
     last = bus.last

@@ -16,7 +16,7 @@
   EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
 """
-import datetime, hashlib, json, os, pathlib, posixpath, secrets, shutil, subprocess, sys, threading, time, urllib.parse
+import datetime, json, os, pathlib, posixpath, secrets, shutil, subprocess, sys, threading, time, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import board_text as BT  # 판 글 고치기·지우기 계획(순수 Model, t51-9)
@@ -26,7 +26,9 @@ import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import memo_archive as MA  # 완료 메모 보관 고르기(순수 Model, task 47-5a)
+from out_io import _inside, _now, _replace, _screen_files, _sha, _stamp, _write_json  # out 폴더 파일 바탕
 import presence as PR  # 접속한 에이전트(task 47-5a)
+from state_store import StateStore, _state_save, state_load  # <out>/.hd-canvas.json
 import screen_copy as SC  # 카드 바로 복제 계획(순수 Model, 51-6)
 import transcript_pump as TRP  # 터미널 대화 펌프(S3b — 출처는 transcripts.py, 해석은 transcript_parse.py)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
@@ -34,7 +36,6 @@ from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402  — 답·덮개 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
-import hd_projects  # noqa: E402  — out 안 규칙(inside)은 hd 와 같은 key 하나(#282)
 import helper_model  # noqa: E402  — since·413 글·보관 줄·정리 고르기(순수 Model)
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -43,12 +44,6 @@ from adapters import PASEO_DEFAULT, _paseo_args, _paseo_cmd  # noqa: E402,F401  
 
 
 # ---------------------------------------------------------------- 편집 적용(out 안만 · 원본 남김 · 다시 빌드)
-def _inside(out, p):                                 # 규칙은 hd_projects.inside(key: 구분자·끝 '/'·드라이브 대소문자) 하나 — 여기서는 한 번 풀기만
-    return hd_projects.inside(str(out), str(pathlib.Path(p).resolve()))
-
-
-def _sha(p):                                         # 파일 sha256 | None(없음)
-    return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
 
 
 BUILD_FAIL = "캔버스 다시 빌드 실패"                  # 답·이벤트가 다시 빌드 실패를 알아보는 글(앞부분)
@@ -63,15 +58,6 @@ def run_build(out, script=None):
     """다시 빌드 하나 — script(기본 작업 트리 build_canvas.py) 를 자식 프로세스로. CLI 도우미는 build_ref.py 를 넘긴다(helper.use_ref_build, #278)."""
     return subprocess.run([sys.executable, str(script or BUILD), str(out)], capture_output=True, text=True, encoding="utf-8",
                           env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=NO_WINDOW)
-
-
-def _screen_files(data):
-    return {s["id"]: s.get("file") or f"screens/{s['id']}.html" for s in data.get("screens", [])}
-
-
-def _write_json(sj, data, raw):                      # 원래 들여쓰기·끝 줄바꿈을 따라 쓴다
-    sj.write_text(json.dumps(data, ensure_ascii=False, indent=2 if '\n  "' in raw else None) + ("\n" if raw.endswith("\n") else ""),
-                  encoding="utf-8", newline="")
 
 
 class _Writes:
@@ -674,97 +660,6 @@ def watch(out, files):
 
 
 # ---------------------------------------------------------------- 프로젝트 상태 파일(#228): <out>/.hd-canvas.json 이 캔버스 프로젝트별 키의 진실 원천
-STATE_FILE = ".hd-canvas.json"
-STATE_MAX = 2 * 1024 * 1024                          # PUT 본문 한도(넘으면 413)
-
-
-def _state_ok(doc):
-    return isinstance(doc, dict) and type(doc.get("rev")) is int and doc["rev"] >= 0 and isinstance(doc.get("state"), dict)
-
-
-def state_load(out):
-    """상태 파일 → {rev, state}. 없으면 {rev:0, state:{}}. 깨졌으면 .hd-canvas.json.corrupt-<시각> 으로 옮기고 한 줄 남긴 뒤 빈 상태(도우미는 멈추지 않는다)."""
-    p = pathlib.Path(out) / STATE_FILE
-    if not p.is_file():
-        return {"rev": 0, "state": {}}
-    try:
-        doc = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        doc = None
-    if _state_ok(doc):
-        return {"rev": doc["rev"], "state": doc["state"]}
-    bad = p.with_name(STATE_FILE + ".corrupt-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
-    try:
-        os.replace(p, bad)
-        print("[hd] 깨진 상태 파일을 옮기고 빈 상태로 시작해요: " + bad.name, file=sys.stderr, flush=True)
-    except OSError as e:
-        print("[hd] 깨진 상태 파일을 옮기지 못했어요(빈 상태로 시작): %s" % e, file=sys.stderr, flush=True)
-    return {"rev": 0, "state": {}}
-
-
-def _state_write(out, doc):                          # 같은 폴더 임시 파일 → os.replace(원자적), 바로 앞 것 하나는 .bak
-    p = pathlib.Path(out) / STATE_FILE
-    tmp = p.with_name(STATE_FILE + ".tmp-%d" % os.getpid())
-    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8", newline="")
-    if p.is_file():
-        shutil.copy2(p, p.with_name(STATE_FILE + ".bak"))
-    _replace(tmp, p)
-
-
-def _replace(tmp, p):
-    for i in range(REPLACE_TRIES):                   # 읽기는 자물쇠 없이 한다(#271) — Windows 는 읽는 중인 파일을 바꾸지 못해 잠깐 기다렸다 다시
-        try:
-            os.replace(tmp, p)
-            return
-        except PermissionError:
-            if i == REPLACE_TRIES - 1:
-                raise
-            time.sleep(0.02)
-
-
-REPLACE_TRIES = 25                                   # 0.02초씩 — 읽기 하나는 수 ms
-
-
-def state_peek(out):
-    """자물쇠 없는 읽기(GET /api/state · index.html 스냅숏, #271) → {rev, state} | None(못 읽음·깨짐 — 그때만 자물쇠 안에서 state_load).
-    쓰기는 임시 파일 + os.replace 라 반쯤 쓴 파일을 읽을 일은 없다. 깨진 파일을 옮기는 일(쓰기)은 하지 않는다."""
-    p = pathlib.Path(out) / STATE_FILE
-    for _ in range(REPLACE_TRIES):
-        if not p.is_file():
-            return {"rev": 0, "state": {}}
-        try:
-            doc = json.loads(p.read_text(encoding="utf-8"))
-        except PermissionError:                       # Windows: 바로 그 순간 os.replace 중
-            time.sleep(0.02); continue
-        except (OSError, ValueError):
-            return None
-        return {"rev": doc["rev"], "state": doc["state"]} if _state_ok(doc) else None
-    return None
-
-
-def state_put(out, body):
-    """PUT 본문 {rev, state:{이름: 값 | null(지움)}} → (code, 답). rev 가 파일과 같을 때만 합쳐 rev+1 로 쓴다 · 다르면 409 {rev, state}."""
-    if not isinstance(body, dict) or type(body.get("rev")) is not int or not isinstance(body.get("state"), dict):
-        return 400, {"error": "{rev: 정수, state: {}} 가 아니에요"}
-    cur = state_load(out)
-    if body["rev"] != cur["rev"]:
-        return 409, cur
-    state = dict(cur["state"])
-    for k, v in body["state"].items():
-        if v is None:
-            state.pop(k, None)
-        else:
-            state[k] = v
-    return 200, {"rev": _state_save(out, cur["rev"] + 1, state)}
-
-
-def _now():
-    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def _state_save(out, rev, state):
-    _state_write(out, {"version": 1, "rev": rev, "updated": _now(), "state": state})
-    return rev
 
 
 def reply_post(out, body):
@@ -797,14 +692,6 @@ def reply_post(out, body):
     notes = notes[:i] + [note] + notes[i + 1:]
     rev = _state_save(out, cur["rev"] + 1, dict(cur["state"], notes=notes))
     return 200, {"rev": rev, "status": hd_model.status(note), "note": note.get("id"), "screen": note.get("screen")}
-
-
-def state_inject(out, lock=None):                    # 페이지에 끼워 넣을 동기 스냅숏(window.__hdState) — </script> 가 끊지 않게 < 를 이스케이프
-    snap = state_peek(out)                           # 자물쇠 없이(#271) — 깨졌을 때만 자물쇠 안에서 state_load(옮기기)
-    if snap is None:
-        with lock or threading.Lock():
-            snap = state_load(out)
-    return "<script>window.__hdState=%s;</script>" % json.dumps(snap, ensure_ascii=False).replace("<", "\\u003c")
 
 
 def claim_post(out, body, now_ms=None):
@@ -906,8 +793,6 @@ def scan(out, cache):
 
 
 # ---------------------------------------------------------------- 정리(#281): 오래된 기록·처리된 대기열 — 고르기는 helper_model, 여기는 지우기만
-def _stamp(dt):
-    return dt.strftime("%Y%m%d-%H%M%S-%f")
 
 
 def prune(out, now=None):
@@ -971,10 +856,6 @@ def _code(r):                                        # restore·apply·delete �
     return {"changed-since": 409, "missing": 404, "invalid": 400}.get(r.get("reason"), 500 if "error" in r else 200)
 
 
-def _emit(bus, type_, **data):                       # 버스가 없으면(부품만 따로 쓰는 테스트) 알리지 않는다
-    return bus.publish(type_, **data) if bus is not None else None
-
-
 def _str(v):
     return v if isinstance(v, str) else None
 
@@ -999,36 +880,6 @@ class Builder:
         return parts_of(self.out)
 
 
-class StateStore:
-    """<out>/.hd-canvas.json — 읽기는 자물쇠 없이(#271, 깨졌을 때만 자물쇠 안에서 옮김), 쓰기(PUT 합치기·rev+1)는 세션 자물쇠 안에서."""
-
-    def __init__(self, out, lock, bus=None):
-        self.out, self.lock, self.bus = out, lock, bus
-
-    def load(self):
-        return state_load(self.out)
-
-    def snapshot(self):
-        snap = state_peek(self.out)
-        if snap is None:
-            with self.lock:
-                snap = state_load(self.out)
-        return snap
-
-    def get(self, since):
-        return helper_model.state_reply(self.snapshot(), since)   # ?since=rev 가 같으면 몸통 없이(#273 — 2초 읽기)
-
-    def put(self, body):
-        with self.lock:                              # rev 비교와 쓰기 사이에 끼어들지 않게
-            code, res = state_put(self.out, body)
-            if code == 200:
-                _emit(self.bus, "notes.changed", rev=res["rev"])
-            return code, res
-
-    def inject(self):
-        return state_inject(self.out, self.lock)
-
-
 class History:
     """<out>/.hd-history — 화면 파일 쓰기(apply · delete)마다 원본 + manifest, 되살리기(restore). 쓰기는 하나씩, 끝나면 on_written(지켜보기 기준 옮김).
     쓰기마다 screen.written(by human) · 다시 빌드가 깨지면 build.failed. apply_async = 쓰기만 하고 바로 답, 빌드는 rebuilder(47-4a)."""
@@ -1040,10 +891,10 @@ class History:
     def _written(self, r, ids, stamp):
         """쓰기 답 → 이벤트(자물쇠 안에서). 쓴 것이 있으면 screen.written, 다시 빌드가 깨져 되돌렸으면 build.failed. → screen.written 이벤트 | None."""
         if r.get("changed") and (r.get("stamp") or "restored" in r):
-            return _emit(self.bus, "screen.written", screens=list(r["changed"]), by="human", rev=self.seq(), stamp=stamp)
+            return EV.emit(self.bus, "screen.written", screens=list(r["changed"]), by="human", rev=self.seq(), stamp=stamp)
         broke = [f for f in r.get("failed") or [] if str(f.get("reason", "")).startswith(BUILD_FAIL)]
         if broke or str(r.get("error", "")).startswith(BUILD_FAIL):
-            _emit(self.bus, "build.failed", reason=broke[0]["reason"] if broke else r["error"], reverted=[f["id"] for f in broke] or list(ids),
+            EV.emit(self.bus, "build.failed", reason=broke[0]["reason"] if broke else r["error"], reverted=[f["id"] for f in broke] or list(ids),
                   kept=[], stamps=[], ids=[f["id"] for f in broke] or list(ids), screens=[], repaired=None)
         return None
 
@@ -1170,7 +1021,7 @@ class Queue:
             else:
                 print("[hd] %s 로 넘기지 못해 대기열 파일로 남겨요(%s): %s" % (how, why, p.name), file=sys.stderr, flush=True)
                 via = "queue"
-        ev = _emit(self.bus, "request.sent", to=target, via=via, notes=notes, text=text, path=str(p))
+        ev = EV.emit(self.bus, "request.sent", to=target, via=via, notes=notes, text=text, path=str(p))
         res = {"via": via, "path": str(p)}
         if via != "queue":
             res["agent"] = target
@@ -1199,9 +1050,9 @@ class Queue:
         with self.lock:
             code, res = reply_post(self.out, body)
             if code == 200:
-                _emit(self.bus, "notes.changed", rev=res["rev"])
+                EV.emit(self.bus, "notes.changed", rev=res["rev"])
                 by = body["reply"].get("by")                # 47-5a: 에이전트가 답했다(캔버스 대화창 · 접속 칩)
-                _emit(self.bus, "agent.reply", note=_str(res.get("note")), kind=str(body["reply"].get("kind")), screen=_str(res.get("screen")),
+                EV.emit(self.bus, "agent.reply", note=_str(res.get("note")), kind=str(body["reply"].get("kind")), screen=_str(res.get("screen")),
                       agent=_str(by), status=res["status"], text=CL.reply_text(body["reply"]))   # text = 대화 패널에 보일 답(S3)
             return code, res
 
@@ -1219,7 +1070,7 @@ class Busy:
             if code == 200 and self.ai is not None:
                 self.ai.begin(res["screen"], res["file"])   # 48c — AI 가 쓰기 전 모습
             if code == 200:
-                _emit(self.bus, "claim", screen=res["screen"], rev=res["rev"], by=_str(body.get("by")), note=_str(body.get("note")))
+                EV.emit(self.bus, "claim", screen=res["screen"], rev=res["rev"], by=_str(body.get("by")), note=_str(body.get("note")))
         return code, res
 
     def release(self, body):
@@ -1228,7 +1079,7 @@ class Busy:
             if code == 200 and self.ai is not None:
                 self._ai(body["screen"], self.ai.end)   # 48c — 마지막으로 보고 끝
             if code == 200 and res.get("released"):
-                _emit(self.bus, "release", screen=body["screen"], rev=res["rev"])
+                EV.emit(self.bus, "release", screen=body["screen"], rev=res["rev"])
         return code, res
 
     def mtimes(self, files):
@@ -1256,7 +1107,7 @@ class Busy:
                 if m is not None:
                     changed = self.watch.tick(m)
                     if changed:
-                        _emit(self.bus, "screen.written", screens=changed, by="ai", rev=self.watch.seq, stamp=None)
+                        EV.emit(self.bus, "screen.written", screens=changed, by="ai", rev=self.watch.seq, stamp=None)
                     for sid in changed:
                         if self.ai is not None:
                             self._ai(sid, self.ai.seen)
@@ -1268,7 +1119,7 @@ class Busy:
         act = act if act in ("record", "update") else ("record" if len(self.ai.log) > n else None)
         row = self.ai.log[-1] if len(self.ai.log) > n else self.ai.row(sid)
         if act in ("record", "update") and row is not None:
-            _emit(self.bus, "ai.write", seq=row["seq"], stamp=row["stamp"], screen=row["screen"], label=row["label"], act=act)
+            EV.emit(self.bus, "ai.write", seq=row["seq"], stamp=row["stamp"], screen=row["screen"], label=row["label"], act=act)
 
 
 class AiUndo:
@@ -1365,7 +1216,7 @@ class Archive:
                 print("[hd] 완료 메모를 보관하지 못했어요: %s" % res.get("error"), file=sys.stderr, flush=True)
                 return 0
             rev = _state_save(self.out, cur["rev"] + 1, dict(cur["state"], notes=MA.without(notes, picks)))
-            _emit(self.bus, "notes.changed", rev=rev)
+            EV.emit(self.bus, "notes.changed", rev=rev)
         print("[hd] 완료 메모 %d개를 보관으로 옮겼어요(%s)" % (len(picks), ARCHIVE_FILE), file=sys.stderr, flush=True)
         return len(picks)
 
