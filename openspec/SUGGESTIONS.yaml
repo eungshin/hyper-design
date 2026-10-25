@@ -1,0 +1,52 @@
+_comment: Pre-proposal idea backlog for this project. Suggested -> Proposed (/opsx propose) -> In Progress -> Applied
+  -> Archived.
+suggestions:
+- id: canvas-screen-variants
+  title: Canvas screen variants - "try another version" makes a sibling card, "change this" edits in place
+  title_ko: "캔버스 화면 변형 - '다른 버전'은 형제 카드를 만들고 '바꿔'는 제자리 수정"
+  note: 'Why: in the 2026-10-22 comparison with ibelick create-canvas, the biggest gap was that /hyper-design:fix always overwrites the screen file, so an A/B comparison needs a manual copy and the old version survives only in .hd-history. Re-checked 2026-10-25: duplicateCard (copyOf) only makes an unrelated new screen, AI edits still overwrite screens/<id>.html, and history covers canvas state only. Intended result: duplicateCard copyOf becomes variantOf + variant; a "다른 버전" memo kind in edits.js; a fix rule "variant = new id and file, never overwrite"; the caption shows "target · variant" (absorbed from the retired canvas-card-name-copy card). Constraints: lines come from hrefs inside each screen file, so only the variant''s outgoing lines duplicate the original''s and need filtering in build_canvas.py; id--state variants already sit right after the original mid-group, so placement can follow that rule; HTML screens only (app cards from a dev server are excluded); keep screen <-> canvas messages and the fix request format unchanged; follow the canvas contract.md test layers and responsibility gate. Timing (other session review 2026-10-25): third worker of Wave B - during Wave A the shell and edits.js belong to 49a. Reference: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-1, tasks/PLAN-2026-10-25.md. Filing only; not authorization to implement.'
+  note_ko: '이유: 2026-10-22 ibelick create-canvas 비교에서 가장 큰 차이였다. /hyper-design:fix는 화면 파일을 늘 덮어써서, A/B를 하려면 사람이 직접 복사해야 하고 옛 안은 .hd-history에만 남는다. 2026-10-25 재확인: duplicateCard(copyOf)는 원본과 관계없는 새 화면만 만들고, AI 수정은 여전히 screens/<id>.html을 덮어쓰며, 기록은 캔버스 상태만 되돌린다. 목표: duplicateCard의 copyOf를 variantOf+variant로 바꾼다. edits.js에 "다른 버전" 메모 종류를 둔다. fix에 "변형 = 새 id·새 파일, 덮어쓰지 않음" 규칙을 둔다. 캡션에 "대상 · 변형"을 보인다(폐기한 canvas-card-name-copy 카드에서 흡수). 제약: 선은 화면 파일 안 href에서 뽑으므로, 원본과 겹치는 것은 변형에서 나가는 선뿐이고 build_canvas.py에서 거른다. id--상태 변형은 이미 원본 바로 뒤 묶음 가운데에 들어가므로 자리는 그 규칙을 따른다. HTML 화면에만 해당한다(dev 서버 앱 카드 제외). 화면 ↔ 캔버스 메시지와 fix 요청문 형식은 바꾸지 않는다. 캔버스 contract.md의 테스트 층과 책임 게이트를 따른다. 시점(다른 세션 검토 2026-10-25): 파도 B의 셋째 일꾼. 파도 A 동안은 셸과 edits.js의 주인이 49a다. 근거: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-1, tasks/PLAN-2026-10-25.md. 카드 기록만이며 구현 승인이 아니다.'
+  tags: [canvas, variants, ab-review, fix, deferred]
+  source: "Master 2026-10-22: create-canvas 비교검토 개선 작업을 다음에 진행할 수 있도록 Suggested에 올려줘 · 2026-10-25 재평가"
+  fit: high
+  status: suggested
+- id: canvas-hidden-locked-stale-ids
+  title: Hidden and locked lists keep deleted ids - a rebuilt screen with the same id comes back hidden or locked
+  title_ko: "숨김·잠금 목록이 지운 id를 남김 - 같은 id로 다시 만든 화면이 숨김·잠금으로 돌아옴"
+  note: 'Why: the 2026-10-22 storage-contract card is mostly covered (.hd-canvas.json has version/rev with 409 merge; stale ids are dropped from positions and folders). The remaining gap was reproduced at unit level by the other session on 2026-10-25: delete a screen and rebuild it under the same id and it returns hidden or locked. Hidden is filtered only in memory and never written back; locked is not filtered even in memory, so it survives every save. Intended result: filter hidden and locked against live cards and save back after filtering, plus one line in the canvas contract ("an id not on the board is dropped from hidden/locked"). Constraints: keep the existing keys and the same keys under file:// and the helper; small and independent, so do it early together with report-unasked-defaults. Reference: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-3, canvas_template.html hidden/locked load (around 1219-1234). Filing only; not authorization to implement.'
+  note_ko: '이유: 2026-10-22 저장소 계약 카드는 대부분 반영됐다(.hd-canvas.json의 version/rev와 409 병합, 위치·폴더에서 낡은 id 걸러짐). 남은 빈틈은 2026-10-25 다른 세션이 unit 수준에서 재현했다. 화면을 지웠다가 같은 id로 다시 만들면 숨김·잠금 상태로 돌아온다. 숨김은 메모리에서만 걸러지고 파일에 다시 써지지 않는다. 잠금은 메모리에서도 걸러지지 않아 저장할 때마다 남는다. 목표: 숨김·잠금을 지금 판의 카드 기준으로 거르고, 거른 뒤 저장한다. 캔버스 계약에 한 줄("판에 없는 id는 숨김·잠금에서 빠진다")을 더한다. 제약: 기존 키를 유지하고, file://과 도우미에서 같은 키를 쓴다. 작고 독립적이라 report-unasked-defaults와 묶어 일찍 한다. 근거: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-3, canvas_template.html 숨김·잠금 불러오기(1219-1234 부근). 카드 기록만이며 구현 승인이 아니다.'
+  tags: [canvas, state-file, hidden, locked, bug, deferred]
+  source: "2026-10-25 create-canvas 재평가 + 다른 세션 unit 재현"
+  fit: high
+  status: suggested
+- id: report-unasked-defaults
+  title: max and fix final reports list the defaults chosen without asking
+  title_ko: "max·fix 최종 보고에 묻지 않고 고른 기본값 적기"
+  note: 'Why: create-canvas ends with defaults chosen without asking. Re-checked 2026-10-25: the go final message already has "하네스가 대신 정한 것 2~3개" (go/SKILL.md:140, since 2026-10-01), so only max (max/SKILL.md:33-38) and fix (fix/SKILL.md:59-63) lack it; defaults the fix agent picks (sizes, colours) are never reported. Intended result: one short line in the max and fix final messages (and/or hd reply --detail) naming defaults picked without asking. Constraints: short lines only; do not duplicate decisions.json. Timing: any time; pair with canvas-hidden-locked-stale-ids. Reference: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-4. Filing only; not authorization to implement.'
+  note_ko: '이유: create-canvas는 묻지 않고 고른 기본값으로 보고를 끝낸다. 2026-10-25 재확인: go 최종 메시지에는 이미 "하네스가 대신 정한 것 2~3개"가 있다(go/SKILL.md:140, 2026-10-01부터). 빠진 곳은 max(max/SKILL.md:33-38)와 fix(fix/SKILL.md:59-63)뿐이다. fix 에이전트가 고른 크기·색 같은 기본값은 알리지 않는다. 목표: max·fix 최종 메시지(또는 hd reply --detail)에 묻지 않고 고른 기본값 한 줄. 제약: 짧은 줄로만 쓴다. decisions.json과 중복하지 않는다. 시점: 아무 때나. canvas-hidden-locked-stale-ids와 묶는다. 근거: docs/eungshin/2026-10-22-create-canvas-comparison.md 2-4. 카드 기록만이며 구현 승인이 아니다.'
+  tags: [report, skills, deferred]
+  source: "Master 2026-10-22: create-canvas 비교검토 개선 작업을 다음에 진행할 수 있도록 Suggested에 올려줘 · 2026-10-25 재평가"
+  fit: medium
+  status: suggested
+- id: ab-review-process
+  title: A/B review process - hypothesis, fixed criteria, same conditions, blind judge, record and merge
+  title_ko: "A/B 비교 검토 절차 - 가설, 고정 기준, 같은 조건, 가린 판정, 기록·합치기"
+  note: 'Why: side-by-side cards alone end in picking whichever looks nicer. Nothing for comparing, judging or scoring alternatives exists yet (re-checked 2026-10-25). Intended result: (1) each variant states one hypothesis on one axis in its purpose; (2) 3-4 criteria from PRD goals, conventions.json and accessibility are fixed before comparing; (3) same data, palette and size with empty and error states as a state matrix - split view (6d5643a), per-card size (f19cfff) and the palette switch cover most of it; (4) a separate judge scores with names and order shuffled and gives reasons per criterion; (5) the result defaults to a merge, the decision goes to decisions.json, the losing variant is folded into a layer folder (acf96c0), and "A or B?" can be asked with question replies and the 결정 필요 counter (32f8291). Constraints: needs canvas-screen-variants first; the split view right pane is view-only, so pinning a variant there is new work. Timing (other session review 2026-10-25): after canvas-screen-variants and after 48c. Reference: docs/eungshin/2026-10-22-create-canvas-comparison.md section 3. Filing only; not authorization to implement.'
+  note_ko: '이유: 카드를 나란히 놓기만 하면 보기 좋은 쪽 고르기로 끝난다. 대안을 비교·판정·채점하는 장치는 아직 없다(2026-10-25 재확인). 목표: (1) 변형마다 축 하나의 가설 한 줄을 purpose에 쓴다. (2) PRD 목표, conventions.json, 접근성에서 기준 3~4개를 비교 전에 고정한다. (3) 같은 데이터·팔레트·크기로 보고 빈·오류 상태를 상태 행렬로 함께 본다 - 창 나누기(6d5643a), 카드별 크기(f19cfff), 팔레트 전환이 대부분을 맡는다. (4) 이름과 순서를 섞어 별도 판정자가 기준별 근거와 함께 채점한다. (5) 합치기를 기본 결과로 두고, 결정은 decisions.json에 남기고, 진 안은 레이어 폴더(acf96c0)로 접는다. "A냐 B냐"는 질문 답장과 결정 필요 카운터(32f8291)로 물을 수 있다. 제약: canvas-screen-variants가 먼저다. 창 나누기 오른쪽 칸은 보기 전용이라 변형을 고정해 보는 기능은 새로 만들어야 한다. 시점(다른 세션 검토 2026-10-25): canvas-screen-variants 뒤, 48c 뒤. 근거: docs/eungshin/2026-10-22-create-canvas-comparison.md 3절. 카드 기록만이며 구현 승인이 아니다.'
+  tags: [ab-review, process, decisions, deferred]
+  source: "Master 2026-10-22: a/b 비교 검토 프로세스에 어떤 개념적 프로세스를 넣으면 좋은 결과물을 낼 수 있는지 제안 · 2026-10-25 재평가"
+  fit: high
+  status: suggested
+_archived_suggestions:
+- id: canvas-card-name-copy
+  title: Canvas card names as "target · variant", click to copy the exact name
+  title_ko: "캔버스 카드 이름을 '대상 · 변형'으로, 이름을 누르면 정확히 복사"
+  superseded_by: "91d4f48 (request items carry screen=<id> · no=N, hd reply <screen>#<no> closes by number) + canvas-screen-variants (the target · variant caption)"
+  archived_at: "2026-10-25"
+  note_ko: '2026-10-25 재평가: "같은 것을 가리키기"는 화면 id·메모 번호가 이미 풀었다. 카드 제목은 캡션에서 고치는 값이라 안정된 식별자가 아니다. 변형 캡션만 canvas-screen-variants로 옮겼다.'
+- id: canvas-storage-contract
+  title: Canvas storage contract - new ids always show, stale ids ignored, versioned document
+  title_ko: "캔버스 저장소 계약 - 새 id는 늘 보이고, 낡은 id는 무시하고, 버전 붙은 문서"
+  superseded_by: "state file .hd-canvas.json (version/rev, 409 merge) + canvas-hidden-locked-stale-ids (the remaining gap)"
+  archived_at: "2026-10-25"
+  note_ko: '2026-10-25 재평가: 버전 붙은 상태 파일과 위치·폴더의 낡은 id 걸러내기는 반영됐다. 남은 숨김·잠금 빈틈은 새 카드로 옮겼다.'
