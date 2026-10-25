@@ -1660,7 +1660,6 @@ def test_click_selects_and_shows_links_shift_adds(dpage):
     dpage.wait_for_timeout(150)
     st = sel_state(dpage)
     assert st["picked"] == [] and not st["focusing"], st
-    assert "Shift" in dpage.text_content("#khint") and "누르면 연결" in dpage.text_content("#khint")
 
 
 @pytest.mark.area("tools")
@@ -1987,7 +1986,7 @@ def zoom_of(pg):
 @pytest.mark.area("menu", "dock", "tools", "motion")
 def test_view_and_window_menus(dpage):
     """H1·H2: 배율 칩 `72% ▾` = 보기 메뉴(전체 보기 0 · 100% 1 · 확대 · 축소 · 고른 화면에 맞추기) — 따로 있던 [전체 보기]·[전환] 버튼 없음.
-    H4·H11: [창 ▾] = 도구 막대·패널마다·판 아래 안내 켜고 끄기(체크) + 작업 영역 되돌리기, Tab = 패널 모두 숨기기.
+    H4·H11·S1b: [창 ▾] = 도구 막대·대화창·패널마다 켜고 끄기(체크) + 작업 영역 되돌리기, Tab = 패널 모두 숨기기.
     G4: 전환 메뉴 없음 — T = 글자 도구(E 도 그대로), 움직임 줄이기는 표시 패널 체크 하나."""
     errs = []
     dpage.on("pageerror", lambda e: errs.append(str(e)))
@@ -2028,7 +2027,7 @@ def test_view_and_window_menus(dpage):
     dpage.wait_for_selector("#wmenu:not([hidden])")
     rows = dpage.evaluate("[...document.querySelectorAll('#wmenu [data-w]')].map(r => [r.dataset.w, r.getAttribute('aria-checked'), r.textContent.trim()])")
     keys = [r[0] for r in rows]
-    assert keys[:2] == ["tools", "hint"] and set(["links", "show", "notes", "pending", "history", "layers"]) <= set(keys), rows
+    assert keys[:2] == ["tools", "chat"] and set(["links", "show", "notes", "pending", "history", "layers"]) <= set(keys), rows
     assert all(r[2] for r in rows), "줄마다 짧은 이름(H11)"
     assert all(r[1] == ("false" if r[0] == "theme" else "true") for r in rows), "체크 = 실제로 켜져 있는지(테마 패널은 처음엔 꺼짐)"
     dpage.click('#wmenu [data-w="tools"]')
@@ -2038,10 +2037,10 @@ def test_view_and_window_menus(dpage):
     assert dpage.get_attribute('#wmenu [data-w="history"]', "aria-checked") == "false"
     dpage.click('#wmenu [data-w="history"]')
     assert dpage.locator('#dock .dk-tab[data-p="history"]').count() == 1, "다시 켜면 그 패널이 열린다"
-    dpage.click('#wmenu [data-w="hint"]')
-    assert dpage.is_hidden("#khint")
+    dpage.click('#wmenu [data-w="chat"]')
+    assert dpage.is_hidden("#hdchat")
     dpage.click('#wmenu [data-act="reset"]')
-    assert dpage.is_visible("#tools") and dpage.is_visible("#khint"), "작업 영역 되돌리기"
+    assert dpage.is_visible("#tools") and dpage.is_visible("#hdchat"), "작업 영역 되돌리기"
     dpage.keyboard.press("Escape")
     dpage.wait_for_selector("#wmenu", state="hidden")
     # Tab = 패널 모두 숨기기 / 다시

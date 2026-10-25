@@ -36,7 +36,7 @@ def empty_point(pg):
     p = pg.evaluate("""() => { const r = document.getElementById('screens').getBoundingClientRect();
         for (let y = r.top + 30; y < r.bottom - 30; y += 17) for (let x = r.left + 30; x < r.right - 30; x += 19) {
           const e = document.elementFromPoint(x, y);
-          if (e && e.closest('#screens') && !e.closest('.card, #legend, .alabel, button, #khint')) return {x, y}; }
+          if (e && e.closest('#screens') && !e.closest('.card, #legend, .alabel, button, #hdchat, #ptabs')) return {x, y}; }
         return null; }""")
     assert p, "빈 자리를 못 찾음"
     return p

@@ -133,13 +133,12 @@ svg.lks path.lk { transition: opacity var(--duration-quick) var(--focus-ease); }
   .t-dropdown, #pop { animation: none !important; }
 }
 
-/* 7. 태그 · 툴팁 등장 (17-tooltip) — 선 위 태그 · 단축키 안내 */
+/* 7. 태그 · 툴팁 등장 (17-tooltip) — 선 위 태그 */
 .ltag.on { animation: hd-tt-in var(--tt-in-dur) var(--tt-in-ease) var(--tt-delay) backwards; }
 .ltag { transition: opacity var(--tt-out-dur) var(--tt-out-ease); }
-#khint { animation: hd-tt-in var(--tt-in-dur) var(--tt-in-ease) var(--tt-delay) backwards; }
 @keyframes hd-tt-in { from { opacity: 0; scale: var(--tt-scale); } to { opacity: 1; scale: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .ltag, #khint { transition: none !important; animation: none !important; }
+  .ltag { transition: none !important; animation: none !important; }
 }
 
 /* 애니메이션 끄기(전환 메뉴 체크, prefs.motion=false) — 움직임 줄이기와 같다 */

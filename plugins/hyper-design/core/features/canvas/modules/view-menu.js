@@ -1,8 +1,9 @@
 /* View — 위쪽 줄 메뉴 둘(조각 3, H1·H2·H4·H11).
    보기 메뉴 = 화면 아이콘 단추(#vbtn) 또는 배율 칩 `72% ▾`(#zoom)을 누르면 아이콘 줄: 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
    그 아래 창 나누기 줄(하나 · 좌우 2분할, 조각 6) + 동시 스크롤(나눴을 때만). 나누기 상태의 주인은 modules/viewport.js.
-   창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 판 아래 안내 · 패널마다 켜짐 체크(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
+   창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 대화창(S1b) · 패널마다 켜짐 체크(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
    창 상태의 주인은 modules/dock.js(도크와 같은 곳) — 여기는 의도만 보낸다(ctx.dock.dispatch).
+   대화창의 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on} 을 보내고 여기서 받는다(View 끼리 부르지 않음 — detail.done = true 로 받았음을 알린다).
    HD.viewMenu.mount(ctx) → {sync(dockState)}
    ctx = {$, esc, view: {fit, z100, zin, zout, pick, canPick()}, split: {state(), dispatch(a)}, dock: {state(), dispatch(a)}, icons: {패널: svg}, typing(e), modalOpen()} */
 (function () {
@@ -23,7 +24,7 @@ var SPLIT = [
 var SYNC = '<path d="M7 4v16M17 4v16"/><path d="M4 8l3-3 3 3M14 16l3 3 3-3"/>';
 var CHROME = [
   {w: 'tools', name: '도구 막대', svg: '<rect x="4" y="3" width="6" height="18" rx="2"/><path d="M7 7v.01M7 11v.01M7 15v.01"/>'},
-  {w: 'hint', name: '판 아래 안내', svg: '<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M6 17.5h8"/>'}
+  {w: 'chat', name: '대화창', svg: '<path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 4v-4H6a2 2 0 01-2-2z"/>'}
 ];
 
 function mount(ctx) {
@@ -87,7 +88,7 @@ function mount(ctx) {
     var st = ctx.dock.state(), w = b.dataset.w;
     if (b.dataset.act === 'reset') ctx.dock.dispatch({type: 'reset'});
     else if (b.dataset.act === 'bare') { close(); bare(!st.bare); return; }
-    else if (w === 'tools' || w === 'hint') ctx.dock.dispatch({type: 'chrome', part: w, on: st[w] === false});
+    else if (w === 'tools' || w === 'chat') ctx.dock.dispatch({type: 'chrome', part: w, on: st[w] === false});
     else if (w) ctx.dock.dispatch({type: st.closed.indexOf(w) < 0 ? 'close' : 'activate', id: w});
     renderWin();
   });
@@ -109,9 +110,14 @@ function mount(ctx) {
     var b = document.body.classList;
     b.toggle('bare', !!st.bare);
     b.toggle('no-tools', st.tools === false);
-    b.toggle('no-hint', st.hint === false);
+    b.toggle('no-chat', st.chat === false);
     if (!wmenu.hidden) renderWin();
   }
+  document.addEventListener('hd-chrome', function (e) {   // 대화창 숨기기 단추 등 — 창 상태 의도
+    var d = e.detail || {};
+    if (d.part !== 'chat' && d.part !== 'tools') return;
+    ctx.dock.dispatch({type: 'chrome', part: d.part, on: !!d.on}); d.done = true;
+  });
   sync(ctx.dock.state());
   return {sync: sync, close: close};
 }

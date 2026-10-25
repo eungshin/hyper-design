@@ -4,7 +4,9 @@
    도우미가 error 를 주면(Paseo 없음 등) 메뉴에 그 글. 고르기 실패 = 도우미의 한국어 까닭을 토스트, 칩은 그대로.
    자동: 열 때 보낼 곳이 없고(도우미 current 도 없음) HD.agents.suggest 가 하나를 찾으면 붙이고 토스트 — 붙어 있는 것은 바꾸지 않는다.
      사용자가 이 캔버스에서 '받는 곳 없음' 을 고르면 자동을 끈다(상태: ctx.local 키 ctx.key('hd-agent-off') = '1', 이 모듈만 — 에이전트를 고르면 지움).
-   상태: 열린 메뉴 · 고르는 중(이 모듈만). HD.feature('agents', {needs: ['api', '$', 'esc', 'toast']}) → {open(), close(), auto() → Promise} | {} (도우미 없음) */
+   다른 자리의 칩(하단 대화창 받는 곳 칩, S1b)은 document 에 의도 'hd-agent-pick' {anchor} 를 보낸다 → 같은 메뉴를 그 칩 옆(아래 자리가 모자라면 위)에 연다,
+     detail.done = true 로 받았음을 알린다. 열린 메뉴의 기준 칩에 aria-expanded.
+   상태: 열린 메뉴·기준 칩 · 고르는 중(이 모듈만). HD.feature('agents', {needs: ['api', '$', 'esc', 'toast']}) → {open(), close(), auto() → Promise} | {} (도우미 없음) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -39,11 +41,11 @@ function mount(ctx) {
   menu.id = 'amenu'; menu.className = 'wm'; menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', '보낼 곳'); menu.hidden = true;
   document.body.appendChild(menu);
 
-  var seq = 0, busy = false;
+  var seq = 0, busy = false, anchor = btn;
 
-  function place() {
-    var r = btn.getBoundingClientRect();
-    menu.style.top = (r.bottom + 6) + 'px';
+  function place() {                                 // 기준 칩 아래(오른쪽 끝 맞춤), 아래 자리가 모자라면 위로
+    var r = anchor.getBoundingClientRect(), h = menu.offsetHeight;
+    menu.style.top = (r.bottom + 6 + h > innerHeight - 8 && r.top - 6 - h >= 8 ? r.top - 6 - h : r.bottom + 6) + 'px';
     menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth)) + 'px';
   }
   function noneRow(cur) {
@@ -78,8 +80,11 @@ function mount(ctx) {
       menu.innerHTML = '<div class="ag-msg">' + esc(t) + '</div>'; place(); ctx.toast(t);
     });
   }
-  function open() { menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); load(); }
-  function close() { seq++; menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+  function open(at) {
+    if (anchor !== btn) anchor.setAttribute('aria-expanded', 'false');
+    anchor = at || btn; menu.hidden = false; anchor.setAttribute('aria-expanded', 'true'); load();
+  }
+  function close() { seq++; menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); anchor.setAttribute('aria-expanded', 'false'); }
 
   // 보낼 곳 바꾸기 — 성공하면 칩에 의도('hd-agent'), 실패하면 도우미 까닭을 토스트(칩 그대로)
   function attach(id, name) {
@@ -122,15 +127,19 @@ function mount(ctx) {
     });
   }
 
-  function toggle() { if (menu.hidden) open(); else close(); }
-  btn.addEventListener('click', toggle);
-  chip.addEventListener('click', toggle);
+  function toggle(at) { at = at || btn; if (menu.hidden || anchor !== at) open(at); else close(); }
+  btn.addEventListener('click', function () { toggle(btn); });
+  chip.addEventListener('click', function () { toggle(btn); });
+  document.addEventListener('hd-agent-pick', function (e) {   // 다른 자리의 받는 곳 칩(대화창) — 같은 메뉴를 그 옆에
+    var d = e.detail || {}; if (!d.anchor || !d.anchor.getBoundingClientRect) return;
+    d.done = true; toggle(d.anchor);
+  });
   menu.addEventListener('click', function (e) {
     var b = e.target.closest('button.ag-row');
     if (b) choose(b);
   });
   document.addEventListener('pointerdown', function (e) {
-    var t = e.target; if (menu.hidden || !t.closest || t.closest('#amenu, #aibtn, #aichip')) return;
+    var t = e.target; if (menu.hidden || !t.closest || t.closest('#amenu, #aibtn, #aichip') || anchor.contains(t)) return;
     close();
   }, true);
   addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) close(); });

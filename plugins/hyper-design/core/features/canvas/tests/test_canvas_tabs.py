@@ -37,8 +37,8 @@ def test_tabs_follow_served_order_add_current_and_open_in_this_tab(served, ctx):
             "받은 차례 · 모르는 이름은 빼고 · 지금 프로젝트는 끝에 더해 고른 탭으로"
         pg.wait_for_function("document.body.classList.contains('has-ptabs')")
         assert ("PUT", "/api/tabs", {"tabs": ["gym", "laundry", "cur"]}) in calls, "더한 차례를 남긴다"
-        box, khint = pg.locator("#ptabs").bounding_box(), pg.locator("#khint").bounding_box()
-        assert box["x"] > khint["x"] + khint["width"], "아래 왼쪽 안내와 겹치지 않는다(가운데)"
+        box, pane = pg.locator("#ptabs").bounding_box(), pg.locator("#screens").bounding_box()
+        assert box["x"] - pane["x"] <= 16, "판 아래 왼쪽(S1b — 가운데는 대화창)"
         with pg.expect_navigation(url=lambda u: "to=laundry" in u):
             pg.click("#ptabs .pt-tab[data-name='laundry']")
         assert ("POST", "/api/open", {"name": "laundry"}) in calls and ctx.pages == [pg]
@@ -164,8 +164,9 @@ def test_overflow_shows_arrows(served, ctx):
         assert pg.is_disabled("#ptabs .pt-arrow[data-dir='1']") and not pg.is_disabled("#ptabs .pt-arrow[data-dir='-1']"), "끝이면 그쪽 화살표는 끈다"
         pg.click("#ptabs .pt-arrow[data-dir='-1']")
         pg.wait_for_function("!document.querySelector('#ptabs .pt-arrow[data-dir=\"1\"]').disabled")
-        box, hint, pane = (pg.locator(s).bounding_box() for s in ("#ptabs", "#khint", "#screens"))
-        assert box["x"] >= hint["x"] + hint["width"] + 10 and box["x"] + box["width"] <= pane["x"] + pane["width"] - 11,             "넘쳐도 바는 아래 왼쪽 안내와 판 오른쪽 끝(도크 앞)을 비킨다"
+        box, chat, pane = (pg.locator(s).bounding_box() for s in ("#ptabs", "#hdchat", "#screens"))
+        assert box["x"] - pane["x"] <= 16 and (box["x"] + box["width"] <= chat["x"] - 11 or box["y"] + box["height"] <= chat["y"]), \
+            "넘쳐도 바는 판 아래 왼쪽에서 가운데 대화창 앞까지(아주 좁으면 대화창이 위로 비킨다)"
     finally:
         pg.close()
     assert not errors, errors

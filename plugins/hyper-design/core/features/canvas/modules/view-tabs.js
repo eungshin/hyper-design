@@ -1,4 +1,4 @@
-/* View — 아래쪽 프로젝트 탭 바(task 44, Xmind 시트 바 모양): 탭 하나 = 프로젝트 하나, 판 아래 가운데. 도우미가 없으면(file://) 만들지 않는다.
+/* View — 아래쪽 프로젝트 탭 바(task 44, Xmind 시트 바 모양): 탭 하나 = 프로젝트 하나, 판 아래 왼쪽(S1b — 가운데는 대화창). 도우미가 없으면(file://) 만들지 않는다.
    시작: GET /api/tabs + GET /api/projects → HD.tabs.bar(차례·지금 것 더하기, 더했으면 PUT /api/tabs 로 남김). 지금 탭 = 지금 캔버스(aria-selected).
    누르기 → POST /api/open {name} → 이 탭이 그 주소로 · '+' → 고르기 창(의도 'hd-pick-project') · 두 번 누르기 → 제자리 이름 바꾸기(Enter·blur 확정, Esc 취소,
    빈 값·같은 값 무시 = HD.tabs.rename) → POST /api/project {name, title} → 지금 것이면 의도 'hd-project-title'(머리 제목) · 끌기 → 차례 → PUT /api/tabs.
@@ -10,7 +10,7 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
-var CSS = '#ptabs{position:fixed;bottom:10px;left:50%;z-index:6;display:flex;align-items:center;gap:2px;' +
+var CSS = '#ptabs{position:fixed;bottom:10px;left:12px;z-index:6;display:flex;align-items:center;gap:2px;' +
     'height:32px;padding:3px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.14);font-size:12px;color:#3a3a37;-webkit-user-select:none;user-select:none}' +
   '#ptabs[hidden],body.bare #ptabs,body.modal-open #ptabs{display:none}' +
   'body.has-ptabs #toast{bottom:56px}' +
@@ -72,13 +72,15 @@ function mount(ctx) {
     document.body.classList.toggle('has-ptabs', !!names.length);
     place();
   }
-  function place() {                                // 판(#screens) 가운데, 아래 왼쪽 안내(#khint)와 겹치지 않게 — 규칙은 HD.tabs.place
+  function place() {                                // 판(#screens) 아래 왼쪽, 가운데 대화창(#hdchat, 보일 때만) 앞에서 멈춤 — 규칙은 HD.tabs.place
     if (nav.hidden) return;
-    var pane = $('#screens'), hint = $('#khint');
+    nav.dataset.need = Math.ceil(strip.scrollWidth + 34);   // 다 보이는 데 드는 폭(탭들 + '+' 26 + 안쪽 여백 6 + 사이 2) — 대화창이 읽고 폭을 줄여 준다
+    var pane = $('#screens'), chat = $('#hdchat');
     var pr = pane && pane.getClientRects().length ? pane.getBoundingClientRect() : {left: 0, right: innerWidth};
-    var hr = hint && hint.getClientRects().length ? hint.getBoundingClientRect().right : null;
-    nav.style.maxWidth = T.place(pr, hr, 0).max + 'px';
-    nav.style.left = T.place(pr, hr, nav.offsetWidth).left + 'px';
+    var cl = chat && chat.getClientRects().length ? chat.getBoundingClientRect().left : null;   // 숨긴 대화창(display:none)은 자리가 없다
+    var p = T.place(pr, cl);
+    nav.style.maxWidth = p.max + 'px';
+    nav.style.left = p.left + 'px';
     arrows();
   }
   function arrows() {
@@ -276,11 +278,11 @@ function mount(ctx) {
   });
   strip.addEventListener('scroll', arrows);
   addEventListener('resize', place);
-  if (window.ResizeObserver) {                       // 도크 폭·안내 글이 바뀌면 다시 놓는다
+  if (window.ResizeObserver) {                       // 도크 폭·대화창 크기·보이기가 바뀌면 다시 놓는다
     var ro = new ResizeObserver(function () { place(); });
-    ['#screens', '#khint'].forEach(function (sel) { var el = $(sel); if (el) ro.observe(el); });
+    ['#screens', '#hdchat'].forEach(function (sel) { var el = $(sel); if (el) ro.observe(el); });
   }
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);   // 글꼴이 늦게 오면 안내 글 폭이 바뀐다
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);   // 글꼴이 늦게 오면 탭 글 폭이 바뀐다
   prevB.addEventListener('click', function () { strip.scrollLeft -= Math.max(80, strip.clientWidth * 0.6); arrows(); });
   nextB.addEventListener('click', function () { strip.scrollLeft += Math.max(80, strip.clientWidth * 0.6); arrows(); });
   $('.pt-add', nav).addEventListener('click', function () {

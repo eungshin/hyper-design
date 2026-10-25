@@ -1,7 +1,7 @@
 /* ViewModel — 오른쪽 패널 도크 배치(포토샵 오른쪽 창처럼). DOM·저장소·메시지를 쓰지 않는다.
    상태 = {v:1, w:220..560, collapsed:bool, groups:[{tabs:[패널…], active:패널, h:무게}],
-          floats:[{tabs, active, x, y, w, h}], closed:[패널…], tools:bool, hint:bool, bare:bool}
-     tools·hint = 창 메뉴의 도구 막대·판 아래 안내 보이기(H4 — 작업 공간 상태라 여기, §8-1).
+          floats:[{tabs, active, x, y, w, h}], closed:[패널…], tools:bool, chat:bool, bare:bool}
+     tools·chat = 창 메뉴의 도구 막대·하단 대화창 보이기(H4·S1b — 작업 공간 상태라 여기, §8-1). false 만 숨김(깨진 값 = 보임).
      bare = 패널 모두 숨기기(Tab) — 저장하지 않는다(새로 열면 늘 보임).
      묶음(group) = 도크 안에 위아래로 쌓인 창 하나, 머리에 탭이 여럿. h 는 묶음끼리 나누는 높이 무게(합은 상관없음).
      떠 있는 창(float) = 판 위에 따로 뜬 창(x·y·w·h 는 판 기준 px). 목록 끝이 맨 위.
@@ -13,7 +13,7 @@
                          to = 'float' → x·y 에 떠 있는 창으로 빼기(fi 가 있으면 그 떠 있는 창에 합치기)
      float{fi, x?, y?, w?, h?}  떠 있는 창 옮기기·크기(최소 200×120)
      width{w} · heights{hs} · collapse{on}
-     chrome{part: 'tools'|'hint', on} · bare{on} · reset(작업 영역 기본으로)
+     chrome{part: 'tools'|'chat', on} · bare{on} · reset(작업 영역 기본으로)
    키 hd-dock(모든 캔버스 공용 — 작업 공간 배치라 화면 묶음과 상관없다). 저장소 함수는 밖에서 받는다.
    HD.dock = {KEY, PANELS, LABEL, defaults, normalize, reduce, visible, load, save} */
 (function () {
@@ -26,7 +26,7 @@ var HOME = {align: 'show'};                       // 나중에 생긴 패널: �
 var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마', align: '정렬'};
 
 function defaults() {
-  return {v: V, w: W0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, hint: true, bare: false,
+  return {v: V, w: W0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, chat: true, bare: false,
           groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show', 'align'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
 }
 function clampW(w) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : W0; }
@@ -37,7 +37,7 @@ function fbox(f) {
           w: Math.max(FW_MIN, num(f.w, FW)), h: Math.max(FH_MIN, num(f.h, FH))};
 }
 function copy(s) {
-  return {v: V, w: s.w, collapsed: s.collapsed, closed: s.closed.slice(), tools: s.tools !== false, hint: s.hint !== false, bare: !!s.bare,
+  return {v: V, w: s.w, collapsed: s.collapsed, closed: s.closed.slice(), tools: s.tools !== false, chat: s.chat !== false, bare: !!s.bare,
           groups: s.groups.map(function (g) { return {tabs: g.tabs.slice(), active: g.active, h: g.h}; }),
           floats: (s.floats || []).map(fbox)};
 }
@@ -52,7 +52,7 @@ function tidy(s) {
 function normalize(o) {
   if (!o || typeof o !== 'object' || !Array.isArray(o.groups)) return defaults();
   var seen = {}, s = {v: V, w: clampW(o.w), collapsed: o.collapsed === true, groups: [], floats: [], closed: [],
-                      tools: o.tools !== false, hint: o.hint !== false, bare: false};
+                      tools: o.tools !== false, chat: o.chat !== false, bare: false};
   var take = function (p) { if (PANELS.indexOf(p) < 0 || seen[p]) return false; seen[p] = 1; return true; };
   var old = function (t) { return t.map(function (p) { return p === 'hidden' ? 'layers' : p; }); };   // 조각 4: 숨긴 화면 패널 → 레이어(H7)
   o.groups.forEach(function (g) {
@@ -91,7 +91,7 @@ function reduce(state, a) {
   if (!a || (a.id != null && PANELS.indexOf(a.id) < 0)) return state;
   switch (a.type) {
     case 'chrome':
-      if (a.part !== 'tools' && a.part !== 'hint') return state;
+      if (a.part !== 'tools' && a.part !== 'chat') return state;
       s[a.part] = !!a.on; return s;
     case 'bare':
       s.bare = !!a.on; return s;

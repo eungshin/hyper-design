@@ -39,8 +39,8 @@ out.rename = [T.rename('가', '  새  이름 '), T.rename('가', '   '), T.renam
 out.step = [T.step(['a', 'b', 'c'], 'b', 1), T.step(['a', 'b', 'c'], 'c', 1), T.step(['a', 'b', 'c'], 'a', -1), T.step(['a'], 'a', 1),
             T.step(['a', 'b'], 'x', 1), T.step([], null, 1)];
 out.arrows = [T.arrows(0, 500, 500), T.arrows(0, 900, 500), T.arrows(200, 900, 500), T.arrows(400, 900, 500), T.arrows(399.5, 900, 500)];
-out.place = [T.place({left: 0, right: 1440}, 395, 300), T.place({left: 0, right: 1140}, 395, 500), T.place({left: 0, right: 1140}, 395, 2000),
-             T.place({left: 0, right: 1440}, null, 300), T.place({left: 0, right: 500}, 395, 300)];
+out.place = [T.place({left: 0, right: 1440}, null, 300), T.place({left: 0, right: 1440}, 600, 300), T.place({left: 0, right: 1440}, 600, 2000),
+             T.place({left: 0, right: 500}, 100, 300), T.place({left: 40, right: 1140}, null, 300), T.place({left: 0, right: 1440}, 2000, 300)];
 console.log(JSON.stringify(out));
 """
 
@@ -124,10 +124,12 @@ def test_arrows_only_when_overflowing(out):
     assert near["next"] is False, "반 픽셀 차이는 끝으로 본다(배율 반올림)"
 
 
-def test_place_centres_but_clears_hint_and_edge(out):
-    centred, pushed, capped, nohint, tiny = out["place"]
-    assert centred == {"left": 570, "max": 1021}, "넉넉하면 판 가운데"
-    assert pushed == {"left": 407, "max": 721}, "가운데면 안내와 겹칠 때 안내 오른쪽으로 민다"
-    assert capped == {"left": 407, "max": 721}, "넘치면 쓸 수 있는 폭까지(나머지는 ◀ ▶)"
-    assert nohint == {"left": 570, "max": 1416}, "안내가 없으면 판 양쪽 끝만"
-    assert tiny["max"] == 160 and tiny["left"] == 407, "좁아도 최소 폭은 남긴다(안내 오른쪽)"
+def test_place_bottom_left_and_stops_before_chat(out):
+    """S1b: 탭 바는 판 아래 왼쪽 — 가운데 대화창(왼쪽 끝 chatLeft)과 판 오른쪽 끝 앞에서 GAP 띄워 멈춘다(넘치면 ◀ ▶)."""
+    free, chat, capped, tiny, shifted, farchat = out["place"]
+    assert free == {"left": 12, "max": 1416}, "대화창이 없으면 판 왼쪽 끝부터 오른쪽 끝 앞까지"
+    assert chat == {"left": 12, "max": 576}, "대화창 왼쪽 끝 앞에서 멈춘다"
+    assert capped == chat, "넘쳐도 자리는 왼쪽 그대로, 폭은 쓸 수 있는 만큼"
+    assert tiny == {"left": 12, "max": 160}, "좁아도 최소 폭은 남긴다(대화창이 그 위로 비킨다)"
+    assert shifted == {"left": 52, "max": 1076}, "판 왼쪽 끝 기준"
+    assert farchat == free, "대화창이 판 밖(오른쪽)이면 판 끝까지"

@@ -280,21 +280,19 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 .wm-ck{width:14px;font-size:12px;text-align:center}
 .wm-row kbd{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:#888}
 .wm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
-body.no-tools #tools,body.no-hint #khint,body.bare #tools,body.bare #khint,body.bare #dock,body.bare #dklayer{display:none}
+body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #dklayer{display:none}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
 #pShow .lnshow{width:28px;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;display:grid;place-items:center;cursor:pointer;color:#444}
 #pShow .lnshow svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
 #pShow .lnshow[aria-pressed="false"]{color:#aaa;background:var(--ui-subtle,#f3f3f1)}
 
-/* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 · 단축키 안내 */
+/* 카드 위 주석 버튼: 화면 밖(카드 오른쪽 위), 캔버스 조작 모양 */
 .pres{position:absolute;bottom:calc(100% + 8px);right:0;z-index:2;min-width:44px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:#2b2b29;color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);display:none}
 .pres::before{content:"\25B6\00a0";font-weight:400;font-size:.8em}
 .pres::after{content:'';position:absolute;left:0;right:0;top:100%;height:10px}
 .card:hover .pres,.pres:focus-visible{display:block}
 .card.draft .pres{display:none!important}
-#khint{position:absolute;left:12px;bottom:10px;z-index:3;pointer-events:none;font-size:13px;color:#6b6b66;background:rgba(255,255,255,.82);border-radius:8px;padding:5px 10px;white-space:nowrap}
-body.modal-open #khint{display:none}
 /* 도구 막대(왼쪽): 손 = 기본(끌면 화면 이동) · 이동 = 카드를 끌어 옮기기. 단계마다 도구가 늘어난다 */
 #tools{position:absolute;left:12px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:4px;padding:6px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.14);cursor:default}
 body.modal-open #tools{z-index:21}                /* 크게 보기 = 모드(G5): 도구 막대는 덮개 위에 */
@@ -406,7 +404,6 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
 .vp2.drag{cursor:grabbing}
 .vp2-stage{position:absolute;left:0;top:0;transform-origin:0 0;width:max-content}
 .vp2 .pz{position:absolute;left:10px;bottom:8px;font-size:11.5px;color:#666;background:rgba(255,255,255,.88);border-radius:6px;padding:2px 6px;pointer-events:none;font-variant-numeric:tabular-nums}
-body.split-lr #khint{display:none}
 #dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #dock.folded{width:44px;align-items:center;padding-top:4px;gap:4px}
 #dklayer{position:absolute;inset:0;right:var(--dockw);z-index:24;pointer-events:none}
@@ -555,7 +552,6 @@ body.split-lr #khint{display:none}
       <div class="rows" id="rows"></div>
       <div class="foot" id="foot"></div>
     </div>
-    <div id="khint">누르면 연결 · Shift+클릭 여러 장 · 0 전체 · 두 번 눌러 크게 보기</div>
     <nav id="tools" aria-label="도구">
       <button type="button" class="tb" data-tool="hand" data-key="H" data-tip="화면 이동 (기본)|끌면 화면이 움직여요 · 누르면 크게 보기" aria-pressed="true" aria-label="화면 이동 (H)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4.5a1.5 1.5 0 013 0V12M14 11.5V6.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-4.6-2.2L3.6 15a1.5 1.5 0 012.3-1.9L8 15"/></svg></button>
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="카드 옮기기|화면을 끌어 자리를 바꿔요 · 누르면 크게 보기" aria-pressed="false" aria-label="카드 옮기기 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>

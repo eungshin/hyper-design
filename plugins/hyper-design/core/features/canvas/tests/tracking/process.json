@@ -816,6 +816,33 @@
         "test_canvas_blocks_b.py::test_insert_part_below_writes_a_neutral_skeleton_and_undo_restores (-n 4 부하)"
       ],
       "note": "apply_edits 는 한 묶음 안 같은 요소 move 를 하나로 겹쳐 씀 → 끌어 옮기기 k칸 = 쓰기 k번(되돌리기 k줄)"
+    },
+    {
+      "slice": "S1b 대화창 후속 (숨기기·창 메뉴 대화창 · #khint 지움 · 탭 바 아래 왼쪽 · 대화창 받는 곳 칩)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 12
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "screenshot",
+          "what": "1280+도크에서 탭 바가 대화창 앞 186px 로 줄어 둘째 탭이 ◀ ▶ 뒤로 — 탭 바 data-need 로 대화창이 폭을 줄여 줌 + 테스트에 화살표 없음 단언"
+        }
+      ],
+      "waste": "bash heredoc 이 따옴표 많은 파이썬 패치를 못 넘김 → 임시 파일 스크립트로",
+      "flaky": [
+        "test_canvas_instant.py::test_in_place_edit_shows_one_box_not_the_selection_box_over_it (-n 4 부하, 혼자 통과)",
+        "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 통과)"
+      ],
+      "note": "대화창 보이기 설정 = dock.js chat 칸(hd-dock), hint 칸은 없앰. 대화창은 위쪽 #aichip 을 비추고 의도 hd-agent-pick 으로 같은 메뉴를 연다"
     }
   ]
 }

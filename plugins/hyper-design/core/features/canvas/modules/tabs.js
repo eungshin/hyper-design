@@ -6,7 +6,8 @@
    move(names, name, slot) → names (slot = 원래 목록에서 끼울 자리 0..n) · slot(mids, x) → 끼울 자리(탭 가운데 x 들 기준)
    rename(old, input) → {ok:true, title} | {ok:false, why:'empty'|'same'} — 공백 정리, MAX 자에서 자름
    step(names, cur, dir ±1) → 이름|null(끝에서 돌아감) · arrows(scrollLeft, scrollWidth, clientWidth) → {over, prev, next}
-   place(pane{left, right}, hintRight|null, w) → {left, max} — 판 가운데, 단 아래 왼쪽 안내(hintRight)와 판 오른쪽 끝에서 GAP 띄움. max = 쓸 수 있는 가장 큰 폭 */
+   place(pane{left, right}, chatLeft|null) → {left, max} — 판 아래 왼쪽(판 왼쪽 끝 + GAP). max = 가운데 대화창 왼쪽 끝(chatLeft, 없으면 판 오른쪽 끝)
+     앞 GAP 까지의 폭, 적어도 MIN(그보다 좁으면 대화창이 탭 위로 비킨다 — view-chat). 왼쪽 고정이라 바 폭은 받지 않는다 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -80,14 +81,10 @@ function arrows(left, scrollW, clientW) {
 }
 
 var GAP = 12, MIN = 160;
-function place(pane, hint, w) {
+function place(pane, chat) {
   var lo = pane.left + GAP, hi = pane.right - GAP;
-  if (typeof hint === 'number' && isFinite(hint)) lo = Math.max(lo, Math.ceil(hint) + GAP);
-  var max = Math.max(MIN, hi - lo), ww = Math.min(Math.max(0, w || 0), max);
-  var left = (pane.left + pane.right) / 2 - ww / 2;
-  if (left + ww > hi) left = hi - ww;
-  if (left < lo) left = lo;
-  return {left: Math.ceil(left), max: Math.floor(max)};
+  if (typeof chat === 'number' && isFinite(chat)) hi = Math.min(hi, Math.floor(chat) - GAP);
+  return {left: Math.ceil(lo), max: Math.floor(Math.max(MIN, hi - lo))};
 }
 
 HD.tabs = {MAX: MAX, place: place, bar: bar, close: close, others: others, move: move, slot: slot, rename: rename, step: step, arrows: arrows};

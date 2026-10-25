@@ -392,18 +392,13 @@ def test_gym_annotate_button(gpage):
 
 
 @pytest.mark.area("input")
-def test_gym_shortcut_hint(gpage):
-    hint = gpage.locator("#khint")
-    assert hint.is_visible()
-    assert hint.text_content().strip() == "누르면 연결 · Shift+클릭 여러 장 · 0 전체 · 두 번 눌러 크게 보기"   # 재작업 S3
-    hb, pr = hint.bounding_box(), gpage.locator("#screens").bounding_box()
-    assert hb["x"] < pr["x"] + 40 and hb["y"] + hb["height"] > pr["y"] + pr["height"] - 40
+def test_gym_no_shortcut_hint(gpage):
+    """S1b: 아래 왼쪽 단축키 안내 줄(#khint)은 지웠다 — 그 자리는 프로젝트 탭 바. 누르면 크게 보기·Esc 는 그대로."""
+    assert gpage.locator("#khint").count() == 0
     gpage.evaluate("document.querySelector('#rows .cover').dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}))")
     gpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert not hint.is_visible()
     gpage.keyboard.press("Escape")
-    gpage.wait_for_timeout(150)
-    assert hint.is_visible()
+    gpage.wait_for_function("document.getElementById('modal').hidden")
 
 
 # ---------------------------------------------------------------- canvas-focus-v2
