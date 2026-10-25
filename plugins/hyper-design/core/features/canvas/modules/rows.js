@@ -7,7 +7,10 @@
    target(names, name) → {into, where: 'above'|'below'} | {error} — 줄만 걷기 때 화면이 갈 줄: 위 줄, 첫 줄이면 아래 줄(사용자 결정 ①)
    checkName(names, from, to) → {name} | {name, same: true} | {error} — 앞뒤 빈칸을 자른 새 이름, 빈 이름·80자 넘음·같은 이름 줄·없는 줄은 이유
    rekeyPos(pos, live) → {pos, changed} — 옮긴 카드 자리(card-pos {id: {dx, dy, g}})의 줄 이름 g 를 지금 줄(live {id: 줄 이름})로 옮긴 새 값(S1c).
-     줄 이름 바꾸기·줄만 걷기 뒤 셸이 부른다 — 새로고침 뒤 loadCardPos 가 g 가 다른 자리를 버리지 않게. live 에 없는 카드는 그대로, 입력은 고치지 않는다 */
+     줄 이름 바꾸기·줄만 걷기 뒤 셸이 부른다 — 새로고침 뒤 loadCardPos 가 g 가 다른 자리를 버리지 않게. live 에 없는 카드는 그대로, 입력은 고치지 않는다
+   space(rows, {base, clear}) → [px] — 줄 사이 띄우기(t51-8, Figma 섹션: 아래 줄 제목은 위 줄 내용과 겹치지 않는다). rows = 줄마다 {bottom, over}(같은 판 좌표:
+     bottom = 그 줄 카드가 차지한 아래 끝, over = 그 줄 카드 아래 펼친 설명의 가장 아래 끝) → 줄마다 덧붙일 아래 여백(정수 ≥ 0) = over + clear 가
+     bottom + base(기본 줄 사이)를 넘는 만큼. 깨진 값·base/clear 없음 = 0 · CLEAR = 설명 끝과 아래 줄 제목 사이 최소 띄움(px) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -63,5 +66,16 @@ function rekeyPos(pos, live) {
   return {pos: out, changed: changed};
 }
 
-HD.rows = {plan: plan, target: target, checkName: checkName, rekeyPos: rekeyPos};
+var CLEAR = 40;                                       // 펼친 설명 그림자(14px) + 숨 쉴 틈
+function num(v) { return typeof v === 'number' && isFinite(v); }
+function space(rows, opt) {
+  rows = Array.isArray(rows) ? rows : [];
+  var base = opt && opt.base, clear = opt && opt.clear, ok = num(base) && num(clear);
+  return rows.map(function (r) {
+    if (!ok || !r || !num(r.bottom) || !num(r.over)) return 0;
+    return Math.max(0, Math.ceil(r.over + clear - r.bottom - base - 1e-6));
+  });
+}
+
+HD.rows = {plan: plan, target: target, checkName: checkName, rekeyPos: rekeyPos, space: space, CLEAR: CLEAR};
 })();

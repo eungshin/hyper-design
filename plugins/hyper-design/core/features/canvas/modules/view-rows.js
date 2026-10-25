@@ -1,6 +1,9 @@
 /* View — 판의 화면 줄(섹션): 그리기·새 데이터에 맞추기(51-1)와 줄 제목으로 고르기·이름 바꾸기·지우기·줄만 걷기(51-4).
    HD.viewRows.mount(ctx) → {html(rows) → 줄 전체 HTML, polHtml(pol, cls) → 카드 아래 정책 줄 HTML,
-                             sync(rows, has(id)) → {removed: [이름], added: [새로 만든 카드 요소]}}
+                             sync(rows, has(id)) → {removed: [이름], added: [새로 만든 카드 요소]}, space()}
+   space(): 줄 사이 띄우기(t51-8) — 카드 아래 설명(.cbody)은 고를 때만 펼쳐져 판 배치를 밀지 않으므로(task 31), 줄마다 펼친 설명이 들어갈 자리를 늘 비워 둔다
+     (고르기로 아래 줄이 움직이지 않게). 접힌 카드도 잠깐 펼쳐 재고(그리기 전 같은 틱에서 되돌림) 계획은 HD.rows.space(Model), 그 값을 .flow 아래 여백으로.
+     옮긴 카드(card-pos)는 제 자리(slot) 기준. 셸이 카드 글이 바뀐 뒤·줄 높이가 바뀐 뒤 부른다 · '정책 N개 더' 열고 닫기는 여기서 듣는다
    ctx = {rowsEl, $, $$, esc, warn(msg)}
    sync: 계획은 HD.rows.plan(Model). 걷은 줄은 이름별로 떼어 두었다가 같은 이름이 돌아오면(되살리기) 그 요소를 다시 끼운다 — 셸이 떼어 둔 카드(gone)가 제 상자로
    돌아가게. 처음 보는 줄은 rows 의 화면 중 has(id) 가 아닌 것(판에도·떼어 둔 곳에도 없음)으로 카드를 만든다. 붙이기(iframe 싣기·자리·크기)는 셸.
@@ -60,7 +63,35 @@ function mount(ctx) {
     });
     return {removed: p.remove, added: added};
   }
-  return {html: html, polHtml: polHtml, sync: sync};
+  var FOLD = ['capfold-d', 'capfold-p'];
+  function space() {
+    var fs = flows().filter(function (f) { return f.parentNode === ctx.rowsEl; });
+    if (!fs.length) return;
+    var k = ctx.rowsEl.offsetHeight ? ctx.rowsEl.getBoundingClientRect().height / ctx.rowsEl.offsetHeight : 1;   // 화면 px → 판 px(배율)
+    if (!(k > 0)) k = 1;
+    var top = ctx.rowsEl.getBoundingClientRect().top, y = function (r) { return (r - top) / k; }, folded = [];
+    fs.forEach(function (f) { $$('.card', f).forEach(function (c) {
+      var had = FOLD.filter(function (n) { return c.classList.contains(n); });
+      if (had.length) { folded.push([c, had]); had.forEach(function (n) { c.classList.remove(n); }); }
+    }); });
+    var rows = fs.map(function (f) {
+      var cs = $('.cards', f); if (!cs) return null;
+      var bottom = y(cs.getBoundingClientRect().bottom), over = bottom;
+      $$('.card', f).forEach(function (c) {
+        var b = $(':scope > .cbody', c); if (!b || !b.offsetHeight) return;
+        over = Math.max(over, y(b.getBoundingClientRect().bottom) - (parseFloat(c.style.top) || 0));   // 옮긴 카드 = 제 자리 기준
+      });
+      return {bottom: bottom, over: over};
+    });
+    folded.forEach(function (x) { x[1].forEach(function (n) { x[0].classList.add(n); }); });
+    var base = parseFloat(getComputedStyle(fs[0]).paddingTop) || 0;
+    HD.rows.space(rows, {base: base, clear: HD.rows.CLEAR}).forEach(function (px, i) {
+      var v = px ? px + 'px' : '';
+      if (fs[i].style.paddingBottom !== v) fs[i].style.paddingBottom = v;
+    });
+  }
+  ctx.rowsEl.addEventListener('toggle', function (e) { if (e.target && e.target.matches && e.target.matches('details.more')) space(); }, true);
+  return {html: html, polHtml: polHtml, sync: sync, space: space};
 }
 
 HD.viewRows = {mount: mount};

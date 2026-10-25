@@ -271,3 +271,65 @@ def test_picked_row_descriptions_do_not_cover_next_row_heading(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+# ---------------------------------------------------------------- 줄 사이 = 위 줄 펼친 설명까지(t51-8, Figma 섹션: 제목은 위 섹션 내용과 겹치지 않는다)
+LONG = "하는 일을 하나 고른다. 오른쪽 카드가 그 직업으로 무엇을 먼저 보여 줄지 한 줄로 말한다.\n" \
+       "목록에 없으면 9번 직접 입력(짧은 입력칸)으로 적는다.\n숫자키 1~9 로 바로 고르고 Enter 로 다음.\n고른 직업은 나중에 설정에서 바꿀 수 있다."
+LONGER = LONG + "\n직업마다 먼저 보여 줄 사전이 다르다 — 대학원생은 논문 용어, 개발자는 기술 문서.\n" \
+                "고르지 않고 다음을 누르면 '기타'로 두고 넘어간다.\n이 화면은 온보딩 세 단계 중 첫째다."
+# 아래 줄 제목 상자와 겹치는 위 줄 카드·펼친 설명(.cbody)·반영 대기 표시 — [id, 무엇, 겹친 높이]
+OVERLAPS = """([up, down]) => { const fl = [...document.querySelectorAll('#rows .flow')], f = fl.find(x => x.querySelector('.glabel').textContent === up);
+  const g = fl.find(x => x.querySelector('.glabel').textContent === down).querySelector('.glabel').getBoundingClientRect(), out = [];
+  for (const c of f.querySelectorAll('.card')) for (const [what, e] of [['card', c], ['cbody', c.querySelector(':scope > .cbody')], ['capmark', c.querySelector(':scope > .capmark')]]) {
+    if (!e || !e.offsetHeight) continue; const r = e.getBoundingClientRect();
+    const h = Math.min(r.bottom, g.bottom) - Math.max(r.top, g.top), w = Math.min(r.right, g.right) - Math.max(r.left, g.left);
+    if (h > 0 && w > 0) out.push([c.dataset.id, what, Math.round(h)]); }
+  return out; }"""
+DESC_H = "() => { const b = document.querySelector('.card[data-id=\"job\"] > .cbody'); return b ? b.offsetHeight : 0; }"
+
+
+@pytest.fixture()
+def long_out(out):
+    import json
+    sj = _sj(out)
+    next(s for s in sj["screens"] if s["id"] == "job")["purpose"] = LONG
+    (out / "screens.json").write_text(json.dumps(sj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(out)], capture_output=True, text=True, encoding="utf-8",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    assert r.returncode == 0, r.stderr
+    return out
+
+
+@pytest.mark.area("tools", "layers")
+def test_next_row_heading_clears_long_descriptions_of_row_above_also_after_data_refresh(ctx, long_out):
+    import json, urllib.request
+    srv, pg, errors = _open(ctx, long_out)
+    try:
+        assert pg.evaluate(OVERLAPS, [SET, TRY]) == [], "고르지 않아도 겹치지 않는다"
+        _head(pg, SET).click()                          # 그 줄 카드 모두 고르기 = 설명·정책을 모두 펼친다
+        pg.wait_for_timeout(200)
+        h0 = pg.evaluate(DESC_H)
+        assert h0 > 150, f"긴 설명이 펼쳐진 장면이어야 한다: {h0}"
+        assert pg.evaluate(OVERLAPS, [SET, TRY]) == [], "아래 줄 제목은 위 줄 펼친 설명과 겹치지 않는다"
+        assert pg.evaluate(OVERLAPS, ["로그인", SET]) == []
+        if SHOTS:                                       # 눈으로: 카드 하나가 화면 높이 반쯤 되게 확대(t51-3 증거와 같은 장면)
+            from test_canvas_v2 import zoom_to
+            zoom_to(pg, "job", 330)
+            pg.screenshot(path=os.path.join(SHOTS, "t51-8-long-description.png"))
+        # 다른 곳의 쓰기(도우미 /api/apply) → 실시간 알림 → 새 데이터로 설명이 더 길어진다
+        req = urllib.request.Request(srv.url.split("/index.html")[0] + "/api/apply", method="POST",
+                                     data=json.dumps({"edits": [{"id": "t518", "screen": "job", "edit": "purpose", "value": LONGER}]}).encode("utf-8"),
+                                     headers={"Content-Type": "application/json", "X-HD-Token": srv.token})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            assert r.status == 200
+        pg.wait_for_function("() => (document.querySelector('.card[data-id=\"job\"] .fdesc') || {}).textContent.includes('세 단계 중 첫째')", timeout=20000)
+        pg.wait_for_timeout(300)
+        assert pg.evaluate(DESC_H) > h0, "설명이 길어졌다"
+        assert pg.evaluate(OVERLAPS, [SET, TRY]) == [], "새 데이터로 설명이 길어져도 아래 줄이 그만큼 내려간다"
+        if SHOTS:
+            pg.screenshot(path=os.path.join(SHOTS, "t51-8-after-refresh.png"))
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

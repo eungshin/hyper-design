@@ -6,8 +6,8 @@
 
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
-| `modules/rows.js` | Model | 줄 맞추기 계획 + 줄 = 섹션 검사. 상태 없음. `HD.rows = {plan(have [{group, n}], want [이름]) → {remove, insert: [{group, before}]}, target(names, name) → {into, where}|{error}, checkName(names, from, to) → {name, same?}|{error}}` |
-| `modules/view-rows.js` | View | 줄(`.flow`·`.glabel`·카드) HTML 과 새 데이터에 맞추기. 상태 = 걷어 둔 줄 요소(이름별, 되살리기 때 다시 끼움). `HD.viewRows.mount({rowsEl, $, $$, esc, warn})` → `{html(rows), polHtml(pol, cls), sync(rows, has(id)) → {removed, added}}`. 등록부가 아니라 셸이 바로 붙인다 — 첫 그리기가 `HD.mountAll` 보다 먼저라서 |
+| `modules/rows.js` | Model | 줄 맞추기 계획 + 줄 = 섹션 검사. 상태 없음. `HD.rows = {plan(have [{group, n}], want [이름]) → {remove, insert: [{group, before}]}, target(names, name) → {into, where}|{error}, checkName(names, from, to) → {name, same?}|{error}, space(rows [{bottom, over}], {base, clear}) → [px], CLEAR}` |
+| `modules/view-rows.js` | View | 줄(`.flow`·`.glabel`·카드) HTML 과 새 데이터에 맞추기. 상태 = 걷어 둔 줄 요소(이름별, 되살리기 때 다시 끼움). `HD.viewRows.mount({rowsEl, $, $$, esc, warn})` → `{html(rows), polHtml(pol, cls), sync(rows, has(id)) → {removed, added}, space()}`. 등록부가 아니라 셸이 바로 붙인다 — 첫 그리기가 `HD.mountAll` 보다 먼저라서 |
 | `view-rows.js` 등록부 기능 `rowHeads`(51-4) | View | 줄 제목 = 섹션. 상태 = 고른 줄 이름 하나(저장 안 함). ctx = `rowsEl · $ · $$ · api · record · toast · selected · warn`(공통 칸만, 셸 줄 0). 의도 보냄: `hd-row-pick {ids}` · `hd-row-delete {ids}` · `hd-rows-changed {renamed?}` / 받음: `hd-row-rename {from, to}` · `hd-row-dissolve {name}` |
 | `modules/layers.js` · `view-layers.js` | Model · View | 레이어 줄 id = `HD.layers.rowId(이름)`(= `'row:' + 이름`, 예전 `'g'+차례` 는 view-layers 가 바꾼다) · `renameRow(folded, from, to)` = 접힘을 새 이름으로. 줄 항목: 이름 두 번 누르기 = 이름 바꾸기, 올리면 [줄만 걷기], 오른쪽 메뉴 = 이름 바꾸기 · 줄만 걷기 · 줄 화면 모두 삭제. `hd-row-pick` → `ctx.pick` · `hd-row-delete` → `ctx.del`(셸 deleteCards = 기존 지우기 길) |
 | 셸 VS `data()` | — | 지운 카드 떼기 → `RW.sync(nd.rows)` → 떼어 둔 카드 제자리 → 새 카드 자리·크기·숨김 → 폴더·레이어 다시(기존 길) |
@@ -26,6 +26,7 @@
 - 줄만 걷기(Ctrl+Backspace · 제목 오른쪽 메뉴 · 레이어 줄): 그 줄 화면은 판에 보이는 위 줄로, 첫 줄이면 아래 줄로(사용자 결정 ①). 위 줄이면 그 줄 화면 뒤, 아래 줄이면 앞에 붙이고(screens.json 차례도 같게 — 빌드가 같은 차례로 그린다) groups 에서 이름만 뺀다. 줄이 하나뿐이면 거절. 걷은 뒤 그 화면들이 골라진 채
 - 판을 먼저 바꾸고(제목 글 · 카드 옮기기) 도우미 답이 실패면 되돌리고 토스트. 되돌리기 = `/api/restore`(그 뒤 파일이 바뀌었으면 409 → 토스트), 다시 하기 = 같은 쓰기를 새 stamp 로. 도우미 없이(file://) 열면 쓰지 않고 토스트
 - 모양: 제목 hover = `--ui-badge-soft` 바탕, 고른 줄·고치는 중 = `--ui-mark` 테두리(`--ts` 배율), 메뉴 = `--ui-*` 만
+- 줄 사이(t51-8, Figma 섹션): 아래 줄 제목은 위 줄 카드 아래 펼친 설명(`.cbody`, 고를 때만 펼침 · 판 배치를 밀지 않는 겹침)과 겹치지 않는다. 고르기로 줄이 움직이지 않게 펼친 설명 자리를 늘 비워 둔다 — 줄마다 `over + CLEAR(40) - bottom - base(.flow padding-top)` 만큼 그 `.flow` 아래 여백(`HD.rows.space`). 셸이 카드 글을 다시 그린 뒤(`paintCardText` — 새 데이터·메모·반영 대기)·처음·글꼴 뒤·줄 높이가 바뀐 뒤 `RW.space()`, '정책 N개 더' 열고 닫기는 View 가 듣는다. 옮긴 카드는 제 자리 기준
 - 옮긴 카드 자리(`card-pos`)는 줄 이름(`g`)을 든다 — 이름 바꾸기·줄만 걷기(그 되돌리기·실패 포함) 뒤 셸이 `hd-rows-changed` 를 듣고 `HD.rows.rekeyPos` 로 키를 옮겨, 새로고침 뒤에도 제자리(S1c d3e0a23).
 
 ## 고치면 돌릴 것

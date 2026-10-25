@@ -1812,6 +1812,7 @@ function paintCardText(ids) {
     }
   });
   foldCards(ids);
+  RW.space();                                       // 카드 글이 바뀌면 줄 사이도(펼친 설명 자리, t51-8)
 }
 function polPending(id) { return HD.caption.pending(NS.list(), id, (ORIG[id] || {}).policies || []); }   // 그 화면의 반영 대기 정책 목록(없으면 null)
 // 판의 카드 아래 글 접기(task 31): 고르지 않은 카드 = 제목만(+ 반영 대기 표시) · 고른 카드·빈 레이아웃 = 다 — 보일 칸 = caption.shown, 그리기 = CAP.fold
@@ -2068,6 +2069,7 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
 }});
 foldCards();                                         // 처음: 고르지 않은 카드는 제목만(task 31)
+RW.space();                                          // 줄 사이 = 위 줄 펼친 설명까지(t51-8)
 function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 여러 장이면 화면마다 같은 메모(memo-batch)
   var bar = $('#selbar'); if (BK) setTimeout(BK.place, 0);   // 요소 막대는 카드 막대가 놓인 뒤 그것을 비켜서(task 49a)
   if (!bar || !SL) return;
@@ -2596,11 +2598,12 @@ home();
 loadVisible();
 var hashTab = (location.hash || '').slice(1);
 if (hashTab === 'foundation' || hashTab === 'components') showTab(hashTab);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { drawArrows(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); });
 if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 와서 줄 높이가 바뀌면 화살표를 다시
   var roRaf = 0, roH = 0;
   new ResizeObserver(function () {
-    if (rowsEl.offsetHeight === roH) return; roH = rowsEl.offsetHeight;
+    if (rowsEl.offsetHeight === roH) return;
+    RW.space(); roH = rowsEl.offsetHeight;          // 줄 높이가 바뀌면(카드 크기·글꼴) 줄 사이도 다시(t51-8)
     cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
   }).observe(rowsEl);
 }
