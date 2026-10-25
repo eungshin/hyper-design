@@ -1,6 +1,6 @@
 """49c 바로 반영 편집 — 순수 규칙(node, 브라우저 없음).
 
-HD.reorder(reorder.js): 형제 상자 위 포인터 → 끼울 자리(세로 목록 = y · 가로 줄·격자 = x) · 끼울 선 · 위/아래 옮기기 목록.
+HD.reorder(reorder.js): 형제 상자 위 포인터 → 끼울 자리(세로 목록 = y · 가로 줄·격자 = x) · 끼울 선 · 놓기 계획(51-5: 옮기기 = move op:to 한 번, Alt = 복제 + 옮기기) · 복사본 경로.
 HD.optimistic(optimistic.js): 먼저 보인 편집 → 도우미 답으로 남김/되돌림 · 중간 쓰기의 다시 싣기 건너뛰기(hold) · 알림 글.
 HD.swap(swap.js) 덧: 같은 내용 = 'silent'(알약·겹치기 없이) — 그 카드에서 글자를 고치는 중이면 아님.
 HD.blocks(blocks.js) 덧: 막대에서 ↑·↓ 를 빼고(단축키·메뉴는 그대로) 끌기 손잡이 켜짐.
@@ -35,6 +35,10 @@ out.gridLines = [R.line(2, grid), R.line(4, grid), R.line(1, grid)];
 out.lineBad = [R.line(4, col), R.line(-1, col), R.line(0, [])];
 out.moves = [R.moves(0, 3), R.moves(2, 0), R.moves(1, 1), R.moves(1, 2), R.moves(0, 1), R.moves(3, 1), R.moves(-1, 2)];
 out.targets = [R.target(0, 3), R.target(2, 0), R.target(1, 2)];
+// 놓기 계획(51-5): 끌기 한 번 = 쓰기 하나(move op:to) · 제자리(앞·뒤 틈) = 없음 · Alt = 복제(+ 그 자리로 옮기기, 바로 뒤면 복제만)
+out.plans = [R.plan(0, 3, false), R.plan(2, 0, false), R.plan(1, 1, false), R.plan(1, 2, false), R.plan(1.5, 3, false), R.plan(-1, 2, false), R.plan(0, -1, false)];
+out.copies = [R.plan(0, 3, true), R.plan(2, 0, true), R.plan(1, 2, true), R.plan(1, 1, true), R.plan(-1, 0, true)];
+out.copyPath = [R.copyPath('body > ul:nth-of-type(1) > li:nth-of-type(2)'), R.copyPath('main > p.lead:nth-of-type(9)'), R.copyPath('#hero'), R.copyPath(''), R.copyPath(null)];
 // 낙관 상태
 let s = O.initial();
 const s0 = s;
@@ -64,7 +68,7 @@ out.outcome = [
   O.outcome({applied: ['n1']}, []),
   O.outcome({error: 'too large'}, ['n1'])
 ];
-out.failText = [O.failText('요소 옮기기', '맨 아래', 1, 3), O.failText('글자 고치기', '', 0, 1)];
+out.failText = [O.failText('요소 옮기기', '맨 아래'), O.failText('글자 고치기', ''), O.partText('복제해 옮기기', '겹침')];
 // 같은 내용 = silent
 const ready = {phase: 'ready'};
 out.next = [
@@ -88,7 +92,7 @@ out.grip = [B.grip(h, {}).on, B.grip(h, {app: true}).on, B.grip(Object.assign({}
 const P = 'main > p:nth-of-type(2)';
 out.item = [O.item({edit: 'remove', path: P}), O.item({edit: 'duplicate', path: P}), O.item({edit: 'move', op: 'up', path: P}), O.item({edit: 'move', op: 'down', path: P}),
             O.item({edit: 'text', value: '새 글', path: P}), O.item({edit: 'attr', op: 'href', value: '#', path: P}), O.item({edit: 'remove'}), O.item({edit: 'move', op: 'left', path: P}),
-            O.item(null), O.item({edit: 'link', op: 'cut', path: P})];
+            O.item(null), O.item({edit: 'link', op: 'cut', path: P}), O.item({edit: 'move', op: 'to', to: 0, path: P}), O.item({edit: 'move', op: 'to', to: '2', path: P})];
 console.log(JSON.stringify(out));
 """
 
@@ -143,10 +147,25 @@ def test_drop_line_in_a_grid_marks_the_row_end_not_the_gap_between_rows(r):
     assert mid["dir"] == "v" and mid["x"] == 94, mid                        # 같은 줄 두 칸 사이 (90 + 100) / 2 − 1
 
 
-# ---------------------------------------------------------------- 칸 → 옮기기 목록
+# ---------------------------------------------------------------- 칸 → 놓기 계획(51-5)
 def test_drop_index_becomes_the_up_down_moves_the_helper_understands(r):
     assert r["moves"] == [["down", "down"], ["up", "up"], [], [], [], ["up", "up"], []]
     assert r["targets"] == [2, 0, 1]
+
+
+def test_drop_plan_is_one_move_to_write_and_skips_the_gaps_beside_the_element(r):
+    # 0 → 셋째 뒤 = 자리 2 · 2 → 맨 앞 = 자리 0 · 1 의 바로 앞·뒤 틈 = 제자리(쓰기 없음) · 정수 아닌 자리·모르는 from = 없음
+    assert r["plans"] == [{"to": 2, "writes": 1}, {"to": 0, "writes": 1}, None, None, None, None, None]
+
+
+def test_alt_drop_plan_duplicates_then_moves_the_copy_or_only_duplicates_right_after(r):
+    # 복사본은 원본 바로 뒤(from+1)에 생기고, 그 자리(놓은 틈 = 원래 목록의 slot)로 옮긴다 — 원본은 제자리
+    assert r["copies"] == [{"dup": True, "to": 3, "writes": 2}, {"dup": True, "to": 0, "writes": 2},
+                           {"dup": True, "to": None, "writes": 1}, {"dup": True, "to": 1, "writes": 2}, None]
+
+
+def test_copy_path_is_the_next_same_tag_sibling_of_the_helper_path(r):
+    assert r["copyPath"] == ["body > ul:nth-of-type(1) > li:nth-of-type(3)", "main > p.lead:nth-of-type(10)", None, None, None]
 
 
 # ---------------------------------------------------------------- 낙관 상태
@@ -181,9 +200,10 @@ def test_outcome_keeps_only_when_every_id_was_applied(r):
     assert g == {"kept": False, "why": "too large"}
 
 
-def test_fail_text_names_the_reason_and_partial_moves(r):
-    assert r["failText"][0] == "요소 옮기기 — 파일에 쓰지 못해 되돌렸어요 (3칸 중 1칸만 옮겼어요): 맨 아래"
+def test_fail_text_names_the_reason_and_a_half_done_alt_drag(r):
+    assert r["failText"][0] == "요소 옮기기 — 파일에 쓰지 못해 되돌렸어요: 맨 아래"
     assert r["failText"][1].startswith("글자 고치기 — 파일에 쓰지 못해 되돌렸어요: ") and r["failText"][1].endswith("않았어요")
+    assert r["failText"][2] == "복제해 옮기기 — 복제는 썼지만 그 자리로 옮기지 못해 원본 바로 뒤에 두었어요: 겹침"
 
 
 # ---------------------------------------------------------------- 같은 내용 = 교체 생략
@@ -210,4 +230,4 @@ def test_grip_is_off_for_app_cards_root_and_lonely_elements(r):
 def test_item_maps_remove_dup_move_text_to_palette_opt_items_and_others_to_none(r):
     p = "main > p:nth-of-type(2)"
     assert r["item"] == [{"path": p, "remove": True}, {"path": p, "dup": True}, {"path": p, "move": "up"}, {"path": p, "move": "down"},
-                         {"path": p, "text": "새 글"}, None, None, None, None, None]
+                         {"path": p, "text": "새 글"}, None, None, None, None, None, {"path": p, "to": 0}, None]

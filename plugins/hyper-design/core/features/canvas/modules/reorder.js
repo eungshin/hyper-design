@@ -1,7 +1,11 @@
-/* Model — 끌어서 순서 바꾸기 규칙(task 49c): 형제 상자들 위 포인터 → 끼울 자리(slot) · 끼울 선 · 위/아래 옮기기 목록. DOM·저장소·메시지를 쓰지 않는다.
+/* Model — 끌어서 순서 바꾸기 규칙(task 49c·51-5): 형제 상자들 위 포인터 → 끼울 자리(slot) · 끼울 선 · 놓기 계획(옮기기 = move op:to 한 번 · Alt = 복제). DOM·저장소·메시지를 쓰지 않는다.
    rects = 같은 부모의 형제 요소 상자(문서 차례, {x, y, w, h} — 화면 좌표든 틀 좌표든 한 가지로) · slot = 끼울 자리 0..n(k = k번째 형제 앞, n = 맨 뒤)
    HD.reorder = {slot(pt{x, y}, rects) → 0..n | -1(형제 없음), line(slot, rects) → {x, y, w, h, dir:'h'|'v'} | null, target(from, slot) → 옮긴 뒤 자리,
-                 moves(from, slot) → ['up'…] | ['down'…] | [](제자리) — 도우미 move op(up|down = 옆 형제와 맞바꿈)를 차례로} */
+                 moves(from, slot) → ['up'…] | ['down'…] | [](제자리) — 칸 수·방향(도우미 없을 때의 반영 대기 · 셸이 아직 읽는 dirs),
+                 plan(from, slot, copy) → null(제자리·잘못된 자리) | {to, writes:1}(move op:to — 쓰기·되돌리기 하나) | {dup:true, to:자리|null, writes:1|2}
+                   (Alt = 원본은 제자리, 복사본을 놓은 틈에: 도우미 duplicate 는 복사본을 원본 바로 뒤(from+1)에 두므로 틈이 바로 뒤면 복제만, 아니면 복사본을 to 로 옮기는 쓰기 하나 더 —
+                    apply_edits 한 묶음은 모든 패치를 같은 원문에서 고르므로 복사본 경로가 없고 두 패치가 겹쳐 한 묶음으로 못 보낸다),
+                 copyPath(path) → 복제 뒤 복사본 경로 | null — 도우미 경로(태그:nth-of-type 사슬)의 마지막 번호 + 1(복사본 = 바로 뒤 같은 태그)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -53,5 +57,17 @@ function moves(from, s) {
   return out;
 }
 
-HD.reorder = {slot: slot, line: line, target: target, moves: moves};
+function whole(n) { return typeof n === 'number' && isFinite(n) && Math.floor(n) === n; }
+function plan(from, s, copy) {
+  if (!whole(from) || !whole(s) || from < 0 || s < 0) return null;
+  if (copy) return s === from + 1 ? {dup: true, to: null, writes: 1} : {dup: true, to: s, writes: 2};
+  if (s === from || s === from + 1) return null;      // 앞·뒤 틈 = 제자리
+  return {to: target(from, s), writes: 1};
+}
+function copyPath(path) {
+  var m = typeof path === 'string' ? /^(.*:nth-of-type\()(\d+)\)$/.exec(path) : null;
+  return m ? m[1] + (+m[2] + 1) + ')' : null;
+}
+
+HD.reorder = {slot: slot, line: line, target: target, moves: moves, plan: plan, copyPath: copyPath};
 })();

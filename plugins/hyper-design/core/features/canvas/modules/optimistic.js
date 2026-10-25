@@ -1,11 +1,11 @@
 /* Model — 낙관 반영 상태(task 49c): 화면에 먼저 보인 요소 편집(글자·지우기·복제·옮기기)이 도우미 답을 기다리는 동안 → 남김(kept) | 되돌림(reverted). DOM·저장소·메시지를 쓰지 않는다.
-   상태 = {ops: {tag: {screen, steps, done, phase:'pending'|'kept'|'reverted', why}}} — tag 하나 = 화면에 먼저 보인 변경 하나(옮기기 k칸 = steps k, 도우미 쓰기 k번)
+   상태 = {ops: {tag: {screen, steps, done, phase:'pending'|'kept'|'reverted', why}}} — tag 하나 = 화면에 먼저 보인 변경 하나(steps = 도우미 쓰기 수: 끌어 옮기기 1 · Alt 복제해 옮기기 1|2, 51-5)
    reduce(s, a) → 새 상태(바뀐 게 없으면 같은 객체): start{tag, screen, steps≥1} · step{tag}(쓰기 하나 끝) · keep{tag} · revert{tag, why} · end{tag}(치움)
    outcome(res, ids) → {kept, why} — /api/apply 답에 ids 가 모두 applied 면 남김, 아니면 되돌림(why = 도우미가 준 까닭 첫 줄 | 기본 글)
    hold(s, screen) → bool — 그 화면에 아직 보낼(또는 답을 기다리는) 쓰기가 지금 것 말고 더 있다 = 이번 다시 싣기는 건너뛴다(중간 모습으로 깜빡이지 않게)
-   phase(s, tag) → 'pending'|'kept'|'reverted'|null · failText(label, why, done, steps) → 알림 글
-   item(note) → palette.js hd-opt 항목 | null — 화면에 먼저 보일 수 있는 편집(지우기 {path, remove} · 복제 {path, dup} · 옮기기 {path, move} · 글자 {path, text}), 나머지·경로 없음 = null(49d)
-   HD.optimistic = {initial, reduce, outcome, hold, phase, failText, item, WHY} */
+   phase(s, tag) → 'pending'|'kept'|'reverted'|null · failText(label, why) → 알림 글 · partText(label, why) → Alt 복제는 썼지만 옮기기를 못 함(51-5)
+   item(note) → palette.js hd-opt 항목 | null — 화면에 먼저 보일 수 있는 편집(지우기 {path, remove} · 복제 {path, dup} · 옮기기 {path, move:up|down} · 자리로 옮기기 {path, to}(op 'to', 정수) · 글자 {path, text}), 나머지·경로 없음 = null(49d)
+   HD.optimistic = {initial, reduce, outcome, hold, phase, failText, partText, item, WHY} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -50,19 +50,18 @@ function hold(s, screen) {
 
 function phase(s, tag) { return s && has(s.ops, tag) ? s.ops[tag].phase : null; }
 
-function failText(label, why, done, steps) {
-  var part = steps > 1 && done > 0 ? ' (' + steps + '칸 중 ' + done + '칸만 옮겼어요)' : '';
-  return label + ' — 파일에 쓰지 못해 되돌렸어요' + part + ': ' + (why || WHY);
-}
+function failText(label, why) { return label + ' — 파일에 쓰지 못해 되돌렸어요: ' + (why || WHY); }
+function partText(label, why) { return label + ' — 복제는 썼지만 그 자리로 옮기지 못해 원본 바로 뒤에 두었어요: ' + (why || WHY); }
 
 function item(n) {
   if (!n || typeof n.path !== 'string' || !n.path) return null;
   if (n.edit === 'remove') return {path: n.path, remove: true};
   if (n.edit === 'duplicate') return {path: n.path, dup: true};
+  if (n.edit === 'move' && n.op === 'to') return typeof n.to === 'number' && n.to >= 0 && Math.floor(n.to) === n.to ? {path: n.path, to: n.to} : null;
   if (n.edit === 'move') return n.op === 'up' || n.op === 'down' ? {path: n.path, move: n.op} : null;
   if (n.edit === 'text') return {path: n.path, text: String(n.value == null ? '' : n.value)};
   return null;
 }
 
-HD.optimistic = {initial: initial, reduce: reduce, outcome: outcome, hold: hold, phase: phase, failText: failText, item: item, WHY: WHY};
+HD.optimistic = {initial: initial, reduce: reduce, outcome: outcome, hold: hold, phase: phase, failText: failText, partText: partText, item: item, WHY: WHY};
 })();

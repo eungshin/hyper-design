@@ -33,10 +33,12 @@
     {type:'hd-inline', path, tag} → 그 요소 하나만 contenteditable(글꼴·크기 그대로, 글 전체 선택) · {type:'hd-inline-on', tag, screen} 로 알림(없으면 캔버스는 예전 글 칸).
       Enter = 저장 · Shift+Enter = 줄바꿈(br) · Esc = 취소(원래 글로) · 요소 밖으로 나가기(blur) = 저장. 끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?}
       (ok:false = 취소·그대로·못 고침 — 원래 글 그대로. text = 글(br = \n, 공백 하나로) · 바뀐 글은 helper.py 글 바꾸기와 같은 모양(글 + br)으로 남기고 tag 로 되돌릴 수 있다)
-    {type:'hd-opt', tag, items:[{path, text} | {path, dup:true} | {path, move:'up'|'down', n?} | {path, remove:true}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
+    {type:'hd-opt', tag, items:[{path, text} | {path, dup:true, to?} | {path, move:'up'|'down', n?} | {path, to} | {path, remove:true}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
+      to(51-5) = 형제 요소(kids() 규칙 = helper.py SIB_SKIP + 캔버스가 넣은 것 뺌) 사이 자리 — {path, to} = 그 요소를 옮긴 뒤 자리 to(helper move op:to 와 같은 뜻) ·
+      {path, dup:true, to} = 원본은 제자리, 복사본을 원래 형제 목록의 to 번째 앞(끝이면 맨 뒤)에(Alt 끌기) — hit 은 복사본
       remove(49d) = 그 요소를 문서에서 떼어 둔다(숨김이 아님 — 도우미가 쓴 새 파일과 나무가 같아 교체가 조용하다) · hit 은 null · 되돌리면 제자리로
     {type:'hd-opt-undo', tag} → 그 tag 의 바꿈을 처음대로 · {type:'hd-sibs', path, tag} → {type:'hd-sibs', tag, index, rects:[형제 상자…]}(형제 = sib() 규칙, 화면 CSS px)
-    고르기(select) 도구로 고른 요소를 누른 채 4px 넘게 끌면 {type:'hd-grab', phase:'start'|'move'|'end'|'cancel', x, y}(화면 CSS px) — 놓은 뒤 클릭은 먹는다
+    고르기(select) 도구로 고른 요소를 누른 채 4px 넘게 끌면 {type:'hd-grab', phase:'start'|'move'|'end'|'cancel', x, y, alt}(화면 CSS px, alt = Alt 누름 — 끄는 중 Alt 를 누르고 떼도 move 로 알림, 51-5) — 놓은 뒤 클릭은 먹는다
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
@@ -406,6 +408,14 @@
   function stripIds(cp) {                             // 복사본과 그 안의 id·data-region 은 뺀다(helper.py _strip_ids)
     [cp].concat(Array.prototype.slice.call(cp.querySelectorAll('[id],[data-region]'))).forEach(function (n) { n.removeAttribute('id'); n.removeAttribute('data-region'); });
   }
+  function placeAt(node, list, to, parent) {         // list(node 뺀 형제 요소) 의 to 번째 앞 | to = 길이면 마지막 뒤 — 자리가 밖이면 false
+    to = +to;
+    if (!parent || !(to >= 0) || to > list.length || Math.floor(to) !== to) return false;
+    if (to < list.length) parent.insertBefore(node, list[to]);
+    else if (list.length) parent.insertBefore(node, list[list.length - 1].nextSibling);
+    else parent.appendChild(node);
+    return true;
+  }
   function opt(tag, items) {                          // 점선 없이 바로 — 경로는 모두 바꾸기 전 문서에서 찾는다(도우미도 한 원문에서 고른다)
     var els = (items || []).map(function (it) { return find(it.path); }), ok = true, first = null;
     (items || []).forEach(function (it, i) {
@@ -413,7 +423,14 @@
       if (!el) { ok = false; return; }
       if (it.dup) {
         var cp = el.cloneNode(true); stripIds(cp);
-        el.parentNode.insertBefore(cp, el.nextSibling); optRec(tag, {el: el, added: cp});
+        if (it.to == null) el.parentNode.insertBefore(cp, el.nextSibling);
+        else if (!placeAt(cp, kids(el.parentElement), it.to, el.parentNode)) { ok = false; return; }
+        optRec(tag, {el: el, added: cp});
+        if (it.to != null) { if (!first) first = cp; return; }   // Alt 끌기 = 복사본이 골라진다(Figma)
+      } else if (it.to != null) {                    // 자리로 옮기기(51-5) — 끌기 한 번
+        var back = {el: el, back: {parent: el.parentNode, next: el.nextSibling}};
+        if (!placeAt(el, kids(el.parentElement).filter(function (c) { return c !== el; }), it.to, el.parentNode)) { ok = false; return; }
+        optRec(tag, back);
       } else if (it.move) {
         var q = {el: el, back: {parent: el.parentNode, next: el.nextSibling}}, n = Math.max(1, +it.n || 1), moved = 0;
         for (var k = 0; k < n; k++) {
@@ -510,15 +527,23 @@
     if (!grab) return;
     if (!grab.on) {
       if (Math.abs(e.clientX - grab.x) + Math.abs(e.clientY - grab.y) < 4) return;
-      grab.on = true; send({type: 'hd-grab', screen: screenId(), phase: 'start', x: grab.x, y: grab.y});
+      grab.on = true; send({type: 'hd-grab', screen: screenId(), phase: 'start', x: grab.x, y: grab.y, alt: e.altKey});
     }
-    send({type: 'hd-grab', screen: screenId(), phase: 'move', x: e.clientX, y: e.clientY});
+    grab.cx = e.clientX; grab.cy = e.clientY;
+    send({type: 'hd-grab', screen: screenId(), phase: 'move', x: e.clientX, y: e.clientY, alt: e.altKey});
   }, true);
+  function grabAlt(e) {                               // 끄는 중 Alt 누름·뗌 = 복제 표시를 바로(포인터를 움직이지 않아도, 51-5) — 브라우저 메뉴로 새지 않게
+    if (!grab || !grab.on || e.key !== 'Alt') return;
+    e.preventDefault();
+    send({type: 'hd-grab', screen: screenId(), phase: 'move', x: grab.cx == null ? grab.x : grab.cx, y: grab.cy == null ? grab.y : grab.cy, alt: e.type === 'keydown'});
+  }
+  addEventListener('keydown', grabAlt, true);
+  addEventListener('keyup', grabAlt, true);
   function grabEnd(e) {
     var g = grab; grab = null;
     if (!g || !g.on) return;
     grabbed = e.type === 'pointerup';
-    send({type: 'hd-grab', screen: screenId(), phase: e.type === 'pointerup' ? 'end' : 'cancel', x: e.clientX, y: e.clientY});
+    send({type: 'hd-grab', screen: screenId(), phase: e.type === 'pointerup' ? 'end' : 'cancel', x: e.clientX, y: e.clientY, alt: e.altKey});
   }
   addEventListener('pointerup', grabEnd, true);
   addEventListener('pointercancel', grabEnd, true);

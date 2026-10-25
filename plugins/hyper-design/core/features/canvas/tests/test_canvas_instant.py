@@ -2,7 +2,8 @@
 
 - 글자(T): 고른 요소 하나만 그 자리에서 contenteditable(글꼴·크기 그대로, 글 칸 #tedit 없음) · Esc = 원래 글 · Shift+Enter = 줄바꿈 · Enter = 저장 → 화면은 바로, 파일은 뒤에서.
   쓴 뒤 크게 보기 틀은 다시 싣지 않는다(같은 내용 — 두 번 깜빡임 없음).
-- 끌어서 순서 바꾸기: 막대 손잡이 [⠿] 를 끌면 끼울 선 #eldrop · 놓으면 화면 순서가 바로, 파일은 도우미 move 두 번 뒤 같은 순서.
+- 끌어서 순서 바꾸기: 막대 손잡이 [⠿] 를 끌면 끼울 선 #eldrop · 놓으면 화면 순서가 바로, 파일은 도우미 move op:to 한 번(기록 한 줄, 되돌리기 한 번 — 51-5).
+- Alt 끌기(51-5): 끄는 중 '+' 배지 · 놓으면 복사본이 그 자리에(원본은 제자리), 파일도 같게.
 - 도우미가 거절(applied:[])하면 먼저 보인 복제를 되돌리고 까닭을 알린다.
 규칙은 test_canvas_unit_instant.py(unit). 스크린샷 = HD_SHOTS_49C(기본 %TEMP%/claude/t49c).
 """
@@ -18,6 +19,14 @@ SHOTS = Path(os.environ.get("HD_SHOTS_49C", Path(tempfile.gettempdir()) / "claud
 H1 = "h1.title"
 TILE = ".tile-grid > button:nth-of-type(%d)"
 TILES_JS = "() => [...document.querySelectorAll('.tile-grid > button')].map(b => b.textContent.replace(/\\d+$/, '').trim())"
+
+
+SHOTS51 = Path(os.environ.get("HD_SHOTS_51_5", Path(tempfile.gettempdir()) / "claude" / "t51-5"))
+
+
+def shot51(pg, name):
+    SHOTS51.mkdir(parents=True, exist_ok=True)
+    pg.screenshot(path=str(SHOTS51 / name))
 
 
 def shot(pg, name):
@@ -110,36 +119,106 @@ def test_text_tool_edits_in_place_and_writes_without_reloading_the_view(ctx, out
     pg.close()
 
 
+def _hist(o):
+    d = o / ".hd-history"
+    return len([x for x in d.iterdir() if x.is_dir()]) if d.is_dir() else 0
+
+
+def _applies(pg):
+    calls = []
+    pg.on("request", lambda r: calls.append(json.loads(r.post_data or "{}")) if r.url.endswith("/api/apply") and r.method == "POST" else None)
+    return calls
+
+
+def _grip_drag(pg, mf, to_sel, frac, alt=False, mid=None):
+    """손잡이를 눌러 to_sel 칸의 가로 frac 자리로 끌어 놓기 — alt = 놓을 때까지 Alt · mid(pg) = 놓기 직전에 부를 것(스크린샷)."""
+    g = pg.locator("#elbar .eb-grip").bounding_box()
+    t = _in_modal(pg, mf, to_sel)
+    pg.mouse.move(g["x"] + g["width"] / 2, g["y"] + g["height"] / 2)
+    pg.mouse.down()
+    if alt:
+        pg.keyboard.down("Alt")
+    pg.mouse.move(t["x"] + t["w"] * frac, t["y"] + t["h"] / 2, steps=10)
+    pg.wait_for_selector("#eldrop:not([hidden])", timeout=3000)
+    if mid:
+        mid(pg)
+    pg.mouse.up()
+    if alt:
+        pg.keyboard.up("Alt")
+
+
 @pytest.mark.area("helper", "modal", "tools")
-def test_drag_grip_moves_an_element_two_places_down_on_screen_and_in_file(ctx, out):
+def test_drag_two_places_is_one_write_one_history_row_and_one_undo(ctx, out):
+    """51-5(F20): 끌어 옮기기 한 번 = 도우미 쓰기 하나(move op:to) = 기록 한 줄 — 되돌리기 한 번에 원래 순서."""
+    before = _job(out)
     srv = _serve(out)
     pg, errors = _open(ctx, srv.url)
+    calls = _applies(pg)
     try:
         mf = _modal(pg)
         src0 = pg.get_attribute("#mframe", "src")
         _pick(pg, mf, TILE % 1)
         assert not pg.is_visible('#elbar [data-act="up"]') and not pg.is_visible('#elbar [data-act="down"]'), "↑·↓ 는 막대에서 빠졌다"
-        shot(pg, "drag-before.png")
-        g = pg.locator("#elbar .eb-grip").bounding_box()
-        t3 = _in_modal(pg, mf, TILE % 3)
-        pg.mouse.move(g["x"] + g["width"] / 2, g["y"] + g["height"] / 2)
-        pg.mouse.down()
-        pg.mouse.move(t3["x"] + t3["w"] * 0.8, t3["y"] + t3["h"] / 2, steps=10)
-        pg.wait_for_selector("#eldrop:not([hidden])", timeout=3000)
-        assert pg.get_attribute("#eldrop", "data-slot") == "3", "셋째 칸 오른쪽 반 = 셋째 뒤"
-        shot(pg, "drag-line.png")
-        pg.mouse.up()
+        h0 = _hist(out)
+        def mid(p):
+            assert p.get_attribute("#eldrop", "data-slot") == "3", "셋째 칸 오른쪽 반 = 셋째 뒤"
+            assert p.is_hidden("#eldrop-copy"), "Alt 없이 = 복제 표시 없음"
+            shot(p, "drag-line.png")
+        _grip_drag(pg, mf, TILE % 3, 0.8, mid=mid)
         assert pg.is_hidden("#eldrop")
         want = ["대학원생·연구원", "어학 시험 준비", "대학생"]
         assert mf.evaluate(TILES_JS)[:3] == want, "놓으면 화면 순서가 바로"
         _wait_file(pg, out, lambda s: s.index("대학원생·연구원") < s.index("어학 시험 준비") < s.index("대학생<") < s.index("개발자·엔지니어"),
                    "파일 순서가 화면과 같지 않다")
-        pg.wait_for_timeout(2000)                          # 둘째 쓰기의 다시 불러오기 + 같은 내용 견주기
-        assert pg.get_attribute("#mframe", "src") == src0, "중간·마지막 다시 싣기 모두 건너뜀(같은 내용)"
+        pg.wait_for_function("document.querySelector('#hlist li.now .hs') && document.querySelector('#hlist li.now .hs').textContent === '파일에 씀'", timeout=20000)
+        pg.wait_for_timeout(1500)                          # 쓴 뒤 다시 불러오기 + 같은 내용 견주기
+        assert [[(e["edit"], e.get("op"), e.get("to")) for e in c["edits"]] for c in calls] == [[("move", "to", 2)]], ("/api/apply 한 번, move op:to 하나", calls)
+        assert _hist(out) == h0 + 1, "기록(.hd-history) 한 줄"
+        assert pg.evaluate("[...document.querySelectorAll('#hlist li')].filter(l => (l.textContent || '').indexOf('요소 옮기기') >= 0).length") == 1, "기록 목록에 한 줄"
+        assert pg.get_attribute("#mframe", "src") == src0, "다시 싣지 않는다(같은 내용)"
         assert mf.evaluate(TILES_JS)[:3] == want
-        pg.wait_for_function("document.querySelector('#elbar') && !document.querySelector('#elbar').hidden", timeout=3000)   # 옮긴 요소가 다시 골라져 있다
-        assert "대학생" in mf.evaluate("(p) => { const m = window.__hdRules.find(p); return m ? m.textContent : ''; }", pg.get_attribute("#elbar", "data-path"))
         shot(pg, "drag-after.png")
+        pg.keyboard.press("Control+z")
+        _wait_file(pg, out, lambda s: s == before, "되돌리기 한 번 = 원래 순서")
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("helper", "modal", "tools")
+def test_alt_drag_puts_a_copy_at_the_slot_and_keeps_the_original(ctx, out):
+    """51-5(F21): 놓을 때 Alt = 복제해 놓기 — 끄는 중 '+' 배지·copy 커서, 놓으면 복사본이 그 자리에(원본은 제자리), 파일도 같은 순서.
+    도우미 쓰기 = duplicate → 복사본 move op:to(한 묶음으로 못 보냄 — 기록 두 줄)."""
+    srv = _serve(out)
+    pg, errors = _open(ctx, srv.url)
+    calls = _applies(pg)
+    try:
+        mf = _modal(pg)
+        _pick(pg, mf, TILE % 1)
+        n0 = mf.evaluate("() => document.querySelectorAll('.tile-grid > button').length")
+
+        def mid(p):
+            p.wait_for_selector("#eldrop-copy:not([hidden])", timeout=2000)
+            assert p.evaluate("document.body.classList.contains('hd-drag-copy')"), "Alt 를 누른 동안 복제 표시"
+            assert p.evaluate("getComputedStyle(document.body).cursor") == "copy"
+            assert p.get_attribute("#eldrop", "data-slot") == "3"
+            shot51(p, "alt-drag-mid.png")
+        _grip_drag(pg, mf, TILE % 3, 0.8, alt=True, mid=mid)
+        assert pg.is_hidden("#eldrop-copy") and not pg.evaluate("document.body.classList.contains('hd-drag-copy')")
+        tiles = mf.evaluate(TILES_JS)
+        assert len(tiles) == n0 + 1 and tiles[:4] == ["대학생", "대학원생·연구원", "어학 시험 준비", "대학생"], ("복사본이 셋째 뒤에 바로, 원본은 제자리", tiles)
+        _wait_file(pg, out, lambda s: s.count("대학생<") == 2 and s.index("대학생<") < s.index("대학원생·연구원") < s.index("어학 시험 준비") < s.rindex("대학생<") < s.index("개발자·엔지니어"),
+                   "파일에 복사본이 그 자리에 없다")
+        for _ in range(100):
+            if len(calls) == 2:
+                break
+            pg.wait_for_timeout(100)
+        assert [[e["edit"] for e in c["edits"]] for c in calls] == [["duplicate"], ["move"]], calls
+        assert calls[1]["edits"][0]["op"] == "to" and calls[1]["edits"][0]["to"] == 3, calls[1]
+        pg.wait_for_timeout(1500)
+        assert mf.evaluate(TILES_JS)[:4] == ["대학생", "대학원생·연구원", "어학 시험 준비", "대학생"]
+        shot51(pg, "alt-drag-after.png")
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors
@@ -300,6 +379,44 @@ def test_async_apply_whose_build_fails_reverts_the_optimistic_change(ctx, out):
         assert len(calls) == 2
         SHOTS.mkdir(parents=True, exist_ok=True)
         pg.screenshot(path=str(Path(tempfile.gettempdir()) / "claude" / "t47-4b" / "async-build-failed.png"))
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("helper", "modal", "tools")
+def test_drag_whose_async_build_fails_puts_the_order_back(ctx, out):
+    """51-5 + 47-4b: 끌어 옮기기 쓰기(move op:to)의 뒤 빌드가 깨지면 build.failed 로 먼저 보인 순서를 거두고 까닭을 알린다."""
+    import subprocess as sp
+    srv = _serve(out)
+    calls = []
+
+    def broken(o):
+        calls.append(1)
+        return sp.CompletedProcess([], 1, "", "시험용 빌드 실패") if len(calls) == 1 else sp.CompletedProcess([], 0, "", "")
+    pg, errors = _open(ctx, srv.url)
+    try:
+        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        mf = _modal(pg)
+        before = _job(out)
+        _pick(pg, mf, TILE % 1)
+        srv.session.builder._run = broken
+        _grip_drag(pg, mf, TILE % 3, 0.8)
+        assert mf.evaluate(TILES_JS)[:3] == ["대학원생·연구원", "어학 시험 준비", "대학생"], "놓으면 화면은 바로"
+        pg.wait_for_function("(document.getElementById('toast') || {}).textContent.indexOf('시험용 빌드 실패') >= 0", timeout=10000)
+        assert "되돌렸어요" in pg.text_content("#toast")
+        _wait_file(pg, out, lambda s: s == before, "도우미가 파일을 되돌렸다")
+        for _ in range(60):
+            fr = next(f for f in pg.frames if f.parent_frame and f.frame_element().get_attribute("id") == "mframe")
+            try:
+                if fr.evaluate(TILES_JS)[:3] == ["대학생", "대학원생·연구원", "어학 시험 준비"]:
+                    break
+            except Exception:                              # 다시 싣는 중
+                pass
+            pg.wait_for_timeout(100)
+        else:
+            raise AssertionError("되돌린 순서가 보이지 않는다")
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors

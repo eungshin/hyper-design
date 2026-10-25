@@ -7,7 +7,9 @@
    Figma 고르기 키(51-2, 막대가 떠 있고 입력 칸·메뉴 밖): Enter = 글자면 [글자](그 자리 고치기), 아니면 첫 자식(hd-down) · Shift+Enter = [상위] · Tab/Shift+Tab = 다음·앞 형제(hd-sib, 끝에서 돈다).
    화면 메시지(palette.js): hd-up → hd-upchain · hd-down·hd-sib → hd-hop · 다시 실린 화면의 hd-here → hd-find → hd-found. 부품 목록 = ctx.api GET /api/parts(도우미 없으면 AI 요청).
    끌어서 순서 바꾸기(49c): 손잡이 [⠿] 를 누른 채 끌기 · 크게 보기에서 고른 요소를 눌러 끌기(palette.js hd-grab) → 화면에 hd-sibs(형제 상자) → 끼울 선 #eldrop(HD.reorder.slot·line)
-     → 놓으면 fn('reorder', sel + {dirs: HD.reorder.moves(…), from, to}) — 같은 부모 안만. Esc = 끌기 취소
+     → 놓으면 fn('reorder', sel + {dirs, from, to, h: sel.h + {drop: {from, slot, copy}}}) — 같은 부모 안만. Esc = 끌기 취소
+     Alt(51-5): 놓을 때 Alt 를 누르고 있으면 복제해 놓기(원본은 제자리) — 끄는 중 Alt = 커서 copy + 끼울 선 옆 '+' 배지 #eldrop-copy. 도우미 없으면 거절(토스트).
+       셸은 아직 OP.moves(…, h, dirs) 만 넘기므로 놓기 계획은 h.drop 에 싣는다(dirs 는 셸의 빈 목록 거르기를 지나게 — 51-3 이 셸을 h.drop 으로 바꿀 때까지)
    HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), onAct(fn), onPick(fn), wrote(res, list)} */
 (function () {
 'use strict';
@@ -25,7 +27,9 @@ var CSS =
   '#elbar button.eb-grip{cursor:grab;padding:2px 5px;touch-action:none}' +
   '#elbar.dragging button.eb-grip,body.hd-dragging-el,body.hd-dragging-el *{cursor:grabbing!important}' +
   '#eldrop{position:fixed;z-index:37;pointer-events:none;background:#2563eb;border-radius:2px;box-shadow:0 0 0 2px rgba(255,255,255,.9)}' +
-  '#eldrop[hidden]{display:none}' +
+  '#eldrop[hidden],#eldrop-copy[hidden]{display:none}' +
+  '#eldrop-copy{position:fixed;z-index:38;pointer-events:none;width:18px;height:18px;border-radius:50%;background:#2563eb;color:#fff;font:700 15px/18px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.3)}' +
+  'body.hd-dragging-el.hd-drag-copy,body.hd-dragging-el.hd-drag-copy *{cursor:copy!important}' +
   '#elpop .ep-acts{display:flex;flex-direction:column;gap:2px}' +
   '#elpop .ep-act{border:0;background:none;text-align:left;color:#1c1c1c;border-radius:6px;padding:6px 8px;font:600 12.5px system-ui,sans-serif;cursor:pointer}' +
   '#elpop .ep-act:hover{background:#f0f0f0}' +
@@ -54,7 +58,9 @@ function mount(ctx) {
   pop.id = 'elpop'; pop.setAttribute('role', 'dialog'); pop.hidden = true;
   var dropLine = document.createElement('div');
   dropLine.id = 'eldrop'; dropLine.hidden = true; dropLine.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine);
+  var copyBadge = document.createElement('div');
+  copyBadge.id = 'eldrop-copy'; copyBadge.hidden = true; copyBadge.textContent = '+'; copyBadge.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine); document.body.appendChild(copyBadge);
 
   function reader() { return document.documentElement.dataset.hdTab === 'reader'; }
   function items() { return B.bar(cur.h, {app: cur.app}); }
@@ -287,34 +293,46 @@ function mount(ctx) {
     var f = cur.frame && cur.frame(), w = f && f.contentWindow;
     if (!w) { ctx.toast('이 화면에 물을 수 없어요 — 다시 골라 주세요'); return false; }
     closePop();
-    dr = {sel: cur, f: f, win: w, tag: 'sibs:' + (++seq), rects: null, from: -1, slot: -1, pt: null, by: by};
+    dr = {sel: cur, f: f, win: w, tag: 'sibs:' + (++seq), rects: null, from: -1, slot: -1, pt: null, by: by, copy: false};
     bar.classList.add('dragging'); document.body.classList.add('hd-dragging-el');
     try { w.postMessage({type: 'hd-sibs', path: cur.h.path, tag: dr.tag}, '*'); } catch (e) { dragStop(); ctx.toast('이 화면에 물을 수 없어요'); return false; }
     return true;
   }
-  function dragAt(pt) {                               // pt = 틀 좌표
+  function copyMode(on) {                             // Alt = 복제해 놓기 표시(커서 copy · '+' 배지) — 끄는 중에만
     if (!dr) return;
+    dr.copy = !!on;
+    document.body.classList.toggle('hd-drag-copy', dr.copy);
+    dropLine.dataset.copy = dr.copy ? '1' : '';
+    if (dr.pt) dragAt(dr.pt);
+  }
+  function dragAt(pt, alt) {                          // pt = 틀 좌표 · alt = 그 포인터 사건의 Alt(모르면 undefined)
+    if (!dr) return;
+    if (alt !== undefined && !!alt !== dr.copy) { dr.pt = pt; copyMode(alt); return; }
     dr.pt = pt;
+    var b = frameBox(dr.f);
+    copyBadge.style.left = (b.ox + pt.x * b.sc + 12) + 'px'; copyBadge.style.top = (b.oy + pt.y * b.sc + 10) + 'px';
+    copyBadge.hidden = !dr.copy;
     if (!dr.rects) return;
     dr.slot = R.slot(pt, dr.rects);
-    var ln = dr.slot >= 0 ? R.line(dr.slot, dr.rects) : null, still = R.moves(dr.from, dr.slot).length === 0;
+    var ln = dr.slot >= 0 ? R.line(dr.slot, dr.rects) : null, still = !R.plan(dr.from, dr.slot, dr.copy);
     if (!ln) { dropLine.hidden = true; return; }
-    var b = frameBox(dr.f);
     dropLine.style.left = (b.ox + ln.x * b.sc) + 'px'; dropLine.style.top = (b.oy + ln.y * b.sc) + 'px';
     dropLine.style.width = Math.max(2, ln.w * b.sc) + 'px'; dropLine.style.height = Math.max(2, ln.h * b.sc) + 'px';
     dropLine.dataset.slot = String(dr.slot); dropLine.dataset.dir = ln.dir; dropLine.style.opacity = still ? '.35' : '1';   // 제자리 = 흐리게
     dropLine.hidden = false;
   }
   function dragStop() {
-    dr = null; dropLine.hidden = true; dropLine.dataset.slot = '';
-    bar.classList.remove('dragging'); document.body.classList.remove('hd-dragging-el');
+    dr = null; dropLine.hidden = true; dropLine.dataset.slot = ''; dropLine.dataset.copy = ''; copyBadge.hidden = true;
+    bar.classList.remove('dragging'); document.body.classList.remove('hd-dragging-el', 'hd-drag-copy');
   }
   function dragDrop() {
     var d = dr; dragStop();
     if (!d || !d.rects || d.from < 0 || d.slot < 0 || !cur || cur !== d.sel) return;
+    var p = R.plan(d.from, d.slot, d.copy);
+    if (!p) return;                                    // 제자리
+    if (p.dup && !(ctx.api && ctx.api.on)) { ctx.toast('Alt 로 복제해 놓기는 도우미로 열었을 때만 돼요 — [복제] 뒤 끌어 옮겨 주세요'); return; }
     var dirs = R.moves(d.from, d.slot);
-    if (!dirs.length) return;                          // 제자리
-    run('reorder', {dirs: dirs, from: d.from, to: R.target(d.from, d.slot)});
+    run('reorder', {dirs: dirs.length ? dirs : ['down'], from: d.from, to: p.to, h: Object.assign({}, d.sel.h, {drop: {from: d.from, slot: d.slot, copy: d.copy}})});
   }
   function screenPt(e) { var b = frameBox(dr.f); return {x: (e.clientX - b.ox) / b.sc, y: (e.clientY - b.oy) / b.sc}; }
   bar.addEventListener('pointerdown', function (e) {
@@ -323,12 +341,14 @@ function mount(ctx) {
     e.preventDefault();
     if (!dragStart('grip')) return;
     try { gp.setPointerCapture(e.pointerId); } catch (err) { console.warn('[hd] 손잡이 포인터 잡기 실패 — ' + err); }
-    dragAt(screenPt(e));
+    dragAt(screenPt(e), e.altKey);
   });
-  bar.addEventListener('pointermove', function (e) { if (dr && dr.by === 'grip') dragAt(screenPt(e)); });
-  bar.addEventListener('pointerup', function (e) { if (dr && dr.by === 'grip') { dragAt(screenPt(e)); dragDrop(); } });
+  bar.addEventListener('pointermove', function (e) { if (dr && dr.by === 'grip') dragAt(screenPt(e), e.altKey); });
+  bar.addEventListener('pointerup', function (e) { if (dr && dr.by === 'grip') { dragAt(screenPt(e), e.altKey); dragDrop(); } });
   bar.addEventListener('pointercancel', function () { if (dr && dr.by === 'grip') dragStop(); });
   addEventListener('keydown', function (e) { if (dr && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dragStop(); } }, true);
+  var altKey = function (e) { if (dr && e.key === 'Alt') { e.preventDefault(); e.stopPropagation(); copyMode(e.type === 'keydown'); } };   // 끄는 중 Alt 누름·뗌(포인터를 움직이지 않아도)
+  addEventListener('keydown', altKey, true); addEventListener('keyup', altKey, true);
   addEventListener('message', function (e) {
     var d = e.data; if (!d || typeof d !== 'object') return;
     if (d.type === 'hd-sibs' && dr && d.tag === dr.tag && e.source === dr.win) {
@@ -337,11 +357,11 @@ function mount(ctx) {
       if (dr.pt) dragAt(dr.pt);
     } else if (d.type === 'hd-grab' && cur && cur.frame) {   // 크게 보기: 고른 요소를 화면 안에서 눌러 끌기
       var f = cur.frame(); if (!f || e.source !== f.contentWindow) return;
-      var pt = {x: +d.x || 0, y: +d.y || 0};
-      if (d.phase === 'start') { if (dragStart('frame')) dragAt(pt); }
+      var pt = {x: +d.x || 0, y: +d.y || 0}, alt = d.alt === undefined ? undefined : !!d.alt;
+      if (d.phase === 'start') { if (dragStart('frame')) dragAt(pt, alt); }
       else if (!dr || dr.by !== 'frame') return;
-      else if (d.phase === 'move') dragAt(pt);
-      else if (d.phase === 'end') { dragAt(pt); dragDrop(); }
+      else if (d.phase === 'move') dragAt(pt, alt);
+      else if (d.phase === 'end') { dragAt(pt, alt); dragDrop(); }
       else dragStop();
     }
   });

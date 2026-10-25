@@ -1,12 +1,12 @@
 /* View — 바로 반영(task 49c·49d): 글자(그 자리 contenteditable)·지우기·복제·옮기기·끌어 옮기기를 화면 틀에 먼저 보이고, 도우미 /api/apply 답이 오면 남기거나(applied) 되돌린다(applied:[]·오류).
    규칙(남김/되돌림 판정·건너뛸 다시 싣기·알림 글)은 HD.optimistic(Model), 옮길 칸 목록은 HD.reorder(Model). 편집 메모 모양은 HD.edits(note·say) 그대로 — /api/apply 약속은 바꾸지 않는다.
    화면 메시지(palette.js): hd-inline → hd-inline-on · hd-inline-done · hd-opt → hd-opt-done · hd-opt-undo. tag 하나 = 화면에 먼저 보인 변경 하나(모든 틀에 같은 tag).
-   옮기기 k칸 = 도우미 move(up|down = 옆 형제와 맞바꿈)를 차례로 k번(앞 답의 paths 로 다음 경로) — apply_edits 는 한 묶음 안 같은 요소의 move 를 하나로 겹쳐 쓴다.
-     중간 쓰기의 다시 싣기는 건너뛴다(hold) · 중간에 실패하면 화면을 실제로 쓴 칸까지만 되돌린다.
+   끌어 옮기기(51-5) = 도우미 move op:to 쓰기 하나(되돌리기 한 줄) · Alt 끌기 = duplicate → 복사본 move op:to(쓰기 2, 틈이 원본 바로 뒤면 1 — 한 묶음으로는 못 보냄, reorder.plan).
+     둘째 쓰기 전 다시 싣기는 건너뛴다(hold) · 옮기기만 실패하면 화면도 파일처럼(복사본 = 원본 바로 뒤) + partText.
    상태 = 진행 중 변경(HD.optimistic reduce) + 화면마다 '방금 낙관 반영함'(take 가 한 번 읽고 지움) + 열린 글자 고치기(tag 마다). 저장 없음.
    async apply(47-4b): 답이 async 면 받은 편집 id 를 빌드 확인까지 기억 — built(ids)(build.done) 가 지우고, reverted(ids, why)(build.failed) → 그 변경을 거두고(hd-opt-undo) 토스트,
      되돌린 것 중 내 것 id 목록을 돌려준다(셸이 그 화면을 다시 싣는다 — 파일은 도우미가 이미 되돌림).
-   HD.viewOptimistic.mount(ctx) → {built(ids), reverted(ids, why) → [id], inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
+   HD.viewOptimistic.mount(ctx) → {built(ids), reverted(ids, why) → [id], inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where)(h.drop = {from, slot, copy} — 51-5), hold(screen), take(screen), typing(where)}
    ctx = {on() → 도우미로 바로 쓰나, write(label, list) → Promise<res>(view-sync write), queue(label, list, msg)(반영 대기로 — 도우미 없음·연결 끊김),
           frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(고른 요소를 옮긴 자리로 · 그 자리 글자 고치기를 마치거나 취소한 뒤 그 요소를 다시 — 판·크게 보기, 51-2), warn(msg)} */
 (function () {
@@ -32,8 +32,8 @@ function mount(ctx) {
   function plain(list) { list.forEach(function (n) { delete n.opt; }); return list; }
 
   // 화면에 먼저 보인 변경 tag 를 도우미에 쓰기 — 남김 | 되돌림(+알림) | 연결 끊김(되돌리고 반영 대기로)
-  function settle(label, screen, tag, notes) {
-    st = O.reduce(st, {type: 'start', tag: tag, screen: screen, steps: 1});
+  function settle(label, screen, tag, notes, steps, offline) {   // offline() = 도우미에 닿지 않을 때 반영 대기로 넣는 길(없으면 그 메모 그대로)
+    st = O.reduce(st, {type: 'start', tag: tag, screen: screen, steps: steps || 1});
     fresh[screen] = true;
     return ctx.write(label, notes).then(function (res) {
       st = O.reduce(st, {type: 'step', tag: tag});
@@ -48,7 +48,7 @@ function mount(ctx) {
       each(screen, {type: 'hd-opt-undo', tag: tag});
       end(tag);
       warn('[hd] 바로 반영: 도우미에 쓰지 못했어요 — ' + (e && e.message || e));
-      ctx.queue(label, plain(notes), label + ' — 도우미에 닿지 않아 화면을 되돌리고 반영 대기로 남겼어요');
+      if (offline) offline(); else ctx.queue(label, plain(notes), label + ' — 도우미에 닿지 않아 화면을 되돌리고 반영 대기로 남겼어요');
       return {kept: false, why: O.WHY, offline: true};
     });
   }
@@ -69,7 +69,7 @@ function mount(ctx) {
       var p = pend[id]; if (!p) return;
       delete pend[id]; mine.push(id);
       each(p.screen, {type: 'hd-opt-undo', tag: p.tag});
-      if (!told[p.tag]) { told[p.tag] = 1; ctx.toast(O.failText(p.label, why, 0, 1), false, 8000); }
+      if (!told[p.tag]) { told[p.tag] = 1; ctx.toast(O.failText(p.label, why), false, 8000); }
     });
     return mine;
   }
@@ -80,7 +80,7 @@ function mount(ctx) {
     if (where === 'modal') waits[tag] = {screen: screen, where: where};
     each(screen, {type: 'hd-opt', tag: tag, items: items});
     return settle(label, screen, tag, notes.map(mark)).then(function (r) {
-      if (!r.kept && !r.offline) ctx.toast(O.failText(label, r.why, 0, 1), false, 6000);
+      if (!r.kept && !r.offline) ctx.toast(O.failText(label, r.why), false, 6000);
       return r;
     });
   }
@@ -91,41 +91,75 @@ function mount(ctx) {
     return it ? run(label, screen, [n], [it], where) : null;
   }
 
-  // 끌어 옮기기: 같은 쪽으로 dirs.length 칸 — 화면은 한 번에, 도우미는 한 칸씩 차례로
+  // 끌어 옮기기(51-5): h.drop = {from, slot, copy}(view-blocks 가 놓을 때 붙임) → HD.reorder.plan
+  //   옮기기 = move op:to 쓰기 하나(되돌리기 한 줄) · Alt = duplicate 쓰기 → (틈이 바로 뒤가 아니면) 복사본을 그 자리로 move op:to 쓰기 하나 더
+  //   dirs(위/아래 칸 목록)는 셸이 아직 넘기는 것 — 도우미에 닿지 않으면(네트워크) 그 칸 수만큼 위/아래 반영 대기로(셸의 도우미 없음 길과 같은 모양)
   function moves(label, screen, h, dirs, where) {
-    var dir = dirs[0], n = dirs.length, tag = newTag('mv'), path = h.path, done = 0;
-    if (!n || dirs.some(function (d) { return d !== dir; })) { warn('[hd] 끌어 옮기기: 한쪽 방향 칸 목록이 아니에요 — ' + dirs.join(',')); return Promise.resolve({kept: false}); }
+    var d = h && h.drop, p = d ? HD.reorder.plan(d.from, d.slot, !!d.copy) : null;
+    if (!p) { warn('[hd] 끌어 옮기기: 놓은 자리(h.drop)가 없거나 제자리예요 — ' + JSON.stringify(d || null)); return Promise.resolve({kept: false}); }
+    return p.dup ? copyTo(screen, h, p, where) : moveTo(label, screen, h, p.to, dirs, where);
+  }
+  function hit(h, path) { return {path: path, text: h.text, rect: h.rect, quote: h.quote}; }
+  function toNote(screen, h, path, to) {
+    var x = E.note(screen, hit(h, path), '요소 옮기기 — 이 요소를 같은 부모의 형제 요소 사이 ' + (to + 1) + '번째 자리로');
+    x.edit = 'move'; x.op = 'to'; x.to = to; return mark(x);
+  }
+  function moveTo(label, screen, h, to, dirs, where) {
+    var x = toNote(screen, h, h.path, to);
+    var tag = newTag('mv');
     if (where === 'modal') waits[tag] = {screen: screen, where: where};
-    each(screen, {type: 'hd-opt', tag: tag, items: [{path: h.path, move: dir, n: n}]});
-    st = O.reduce(st, {type: 'start', tag: tag, screen: screen, steps: n});
+    each(screen, {type: 'hd-opt', tag: tag, items: [{path: h.path, to: to}]});
+    return settle(label, screen, tag, [x], 1, function () {
+      var ds = (dirs || []).filter(function (v) { return v === 'up' || v === 'down'; });
+      ctx.queue(label, ds.map(function (v) { var n = E.note(screen, hit(h, h.path), E.say.move(v), v); n.edit = 'move'; return n; }),
+                label + ' — 도우미에 닿지 않아 화면을 되돌리고 반영 대기로 남겼어요');
+    }).then(function (r) {
+      if (!r.kept && !r.offline) ctx.toast(O.failText(label, r.why), false, 6000);
+      return r;
+    });
+  }
+  // Alt 끌기 = 복제해 옮기기: 화면은 한 번에(복사본을 놓은 틈에), 도우미는 duplicate → move op:to(복사본 = 도우미가 알려 준 원본 경로의 다음 같은 태그)
+  function copyTo(screen, h, p, where) {
+    var label = '요소 복제해 옮기기', tag = newTag('cp'), done = 0;
+    if (where === 'modal') waits[tag] = {screen: screen, where: where};
+    each(screen, {type: 'hd-opt', tag: tag, items: [{path: h.path, dup: true, to: p.to}]});
+    st = O.reduce(st, {type: 'start', tag: tag, screen: screen, steps: p.writes});
     fresh[screen] = true;
-    var note = function () {
-      var x = E.note(screen, {path: path, text: h.text, rect: h.rect, quote: h.quote}, E.say.move(dir), dir);
-      x.edit = 'move'; return mark(x);
-    };
-    var back = function (why) {                       // 실제로 쓴 칸까지만 남기고 나머지는 되돌린다
+    var dn = E.note(screen, hit(h, h.path), E.say.duplicate()); dn.edit = 'duplicate'; mark(dn);
+    var fail = function (why) {                       // 아무것도 못 씀 = 모두 되돌림
       st = O.reduce(st, {type: 'revert', tag: tag, why: why}); end(tag);
       each(screen, {type: 'hd-opt-undo', tag: tag});
-      if (done) each(screen, {type: 'hd-opt', tag: newTag('mvpart'), items: [{path: h.path, move: dir, n: done}]});
-      ctx.toast(O.failText(label, why, done, n), false, 6000);
-      return {kept: false, why: why, done: done};
+      ctx.toast(O.failText(label, why), false, 6000);
+      return {kept: false, why: why, done: 0};
     };
-    var step = function () {
-      var x = note();
-      return ctx.write(label, [x]).then(function (res) {
-        var oc = O.outcome(res, [x.id]);
-        if (!oc.kept) return back(oc.why);
-        done++; st = O.reduce(st, {type: 'step', tag: tag}); unbuilt([x], screen, tag, label, res);
-        if (done >= n) { st = O.reduce(st, {type: 'keep', tag: tag}); end(tag); return {kept: true, done: done}; }
-        var np = res.paths && res.paths[x.id];
-        if (!np) return back('옮긴 요소의 새 자리를 도우미가 알려 주지 않았어요');
-        path = np; return step();
-      }, function (e) {
-        warn('[hd] 끌어 옮기기: 도우미에 쓰지 못했어요 — ' + (e && e.message || e));
-        return back(O.WHY);
-      });
+    var half = function (why) {                       // 복제는 씀, 옮기기는 못 함 = 화면도 파일처럼(원본 바로 뒤 복사본)
+      st = O.reduce(st, {type: 'revert', tag: tag, why: why}); end(tag);
+      each(screen, {type: 'hd-opt-undo', tag: tag});
+      var pt = newTag('cphalf');
+      each(screen, {type: 'hd-opt', tag: pt, items: [{path: h.path, dup: true}]});
+      if (pend[dn.id]) pend[dn.id].tag = pt;          // 뒤 빌드가 깨지면 이 복사본을 거둔다
+      ctx.toast(O.partText(label, why), false, 8000);
+      return {kept: false, why: why, done: 1};
     };
-    return step();
+    return ctx.write(label, [dn]).then(function (res) {
+      var oc = O.outcome(res, [dn.id]);
+      if (!oc.kept) return fail(oc.why);
+      done = 1; st = O.reduce(st, {type: 'step', tag: tag}); unbuilt([dn], screen, tag, label, res);
+      if (p.to == null) { st = O.reduce(st, {type: 'keep', tag: tag}); end(tag); return {kept: true, done: 1}; }
+      var cp = HD.reorder.copyPath(res.paths && res.paths[dn.id]) || HD.reorder.copyPath(h.path);
+      if (!cp) return half('복사본 자리를 알 수 없어요(도우미가 새 경로를 알려 주지 않았어요)');
+      var mn = toNote(screen, h, cp, p.to);
+      return ctx.write(label, [mn]).then(function (r2) {
+        var o2 = O.outcome(r2, [mn.id]);
+        if (!o2.kept) return half(o2.why);
+        done = 2; st = O.reduce(st, {type: 'step', tag: tag}); unbuilt([mn], screen, tag, label, r2);
+        st = O.reduce(st, {type: 'keep', tag: tag}); end(tag);
+        return {kept: true, done: 2};
+      }, function (e) { warn('[hd] 복제해 옮기기: 옮기기를 쓰지 못했어요 — ' + (e && e.message || e)); return half(O.WHY); });
+    }, function (e) {
+      warn('[hd] 복제해 옮기기: 도우미에 쓰지 못했어요 — ' + (e && e.message || e));
+      return fail(O.WHY + ' — 다시 해 주세요');
+    });
   }
 
   // 그 자리 글자 고치기: 그 틀에 hd-inline → (hd-inline-on 없으면 fallback) → hd-inline-done 이면 다른 틀에도 같은 글 → 쓰기
@@ -160,7 +194,7 @@ function mount(ctx) {
     each(q.screen, {type: 'hd-opt', tag: q.tag, items: [{path: q.h.path, text: v}]}, q.f);
     repick(q);                                         // 고친 뒤에도 그 요소가 골라진 채(새 글 상자로)
     settle('글자 고치기', q.screen, q.tag, [mark(n)]).then(function (r) {
-      if (!r.kept && !r.offline) ctx.toast(O.failText('글자 고치기', r.why, 0, 1), false, 6000);
+      if (!r.kept && !r.offline) ctx.toast(O.failText('글자 고치기', r.why), false, 6000);
     });
   }
 
