@@ -4,10 +4,11 @@
 계약 = tests/protocol/events.json(모양 · 이어 받기 · reset). 상태: 고리(_ring) · newest id(_last) · 구독자들(_subs) — 주인은 이 객체 하나.
 버스는 세션마다 하나(허브 하나가 아니라): 상태·자물쇠·수명이 세션 것이고, 한 프로젝트가 바빠도 다른 프로젝트의 고리를 밀어내지 않는다.
 """
-import collections, json, threading, time
+import collections, json, sys, threading, time
 
 TYPES = ("screen.written", "notes.changed", "claim", "release", "ai.write", "build.started", "build.done", "build.failed",
-         "agent.hello", "agent.away", "agent.progress", "agent.reply", "request.sent")   # 47-5a: 접속·보내기
+         "agent.hello", "agent.away", "agent.progress", "agent.reply", "request.sent",   # 47-5a: 접속·보내기
+         "agent.transcript")                         # S3b: 터미널 대화 줄(대화 패널이 시간 차례로 섞는다)
 COMMON = ("id", "type", "ts", "project")
 RING = 256                                           # 이어 받기로 다시 줄 수 있는 최근 이벤트 수
 QUEUE_MAX = 512                                      # 구독자 하나가 이만큼 뒤처지면 닫는다(다시 붙어 이어 받기)
@@ -68,6 +69,7 @@ class EventBus:
         self._subs = set()
         self._lock = threading.Lock()
         self.closed = False
+        self.taps = []                               # (ev) → None — 구독자보다 먼저, 자물쇠 안에서(대화 기록 S3: 이벤트를 받은 탭이 GET /api/chat 하면 이미 있다)
 
     @property
     def last(self):
@@ -83,6 +85,11 @@ class EventBus:
             self._last += 1
             ev = dict({"id": self._last, "type": type_, "ts": int(self.clock() * 1000), "project": self.project}, **data)
             self._ring.append(ev)
+            for tap in self.taps:
+                try:
+                    tap(ev)
+                except Exception as e:                # noqa: BLE001 — 탭이 깨져도 알림은 나간다(한 줄 남김)
+                    print("[hd] 이벤트 탭이 실패했어요(%s): %s" % (type_, e), file=sys.stderr, flush=True)
             for s in list(self._subs):
                 s.put(ev)
                 if s.lagged:

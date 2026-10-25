@@ -77,7 +77,7 @@ function mount(ctx) {
     nav.dataset.need = Math.ceil(strip.scrollWidth + 34);   // 다 보이는 데 드는 폭(탭들 + '+' 26 + 안쪽 여백 6 + 사이 2) — 대화창이 읽고 폭을 줄여 준다
     var pane = $('#screens'), chat = $('#hdchat');
     var pr = pane && pane.getClientRects().length ? pane.getBoundingClientRect() : {left: 0, right: innerWidth};
-    var cl = chat && chat.getClientRects().length ? chat.getBoundingClientRect().left : null;   // 숨긴 대화창(display:none)은 자리가 없다
+    var cl = chat && !chat.classList.contains('docked') && chat.getClientRects().length ? chat.getBoundingClientRect().left : null;   // 숨긴 대화창(display:none)·대화 패널 안 대화창(S3)은 판 아래 자리가 없다
     var p = T.place(pr, cl);
     nav.style.maxWidth = p.max + 'px';
     nav.style.left = p.left + 'px';

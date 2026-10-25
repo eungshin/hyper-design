@@ -24,6 +24,12 @@ def shot(pg, name):
     pg.screenshot(path=str(SHOTS / name))
 
 
+# 대화 패널(S3)을 닫아 둔 작업 공간 — 입력창이 판 아래에 뜬다(패널 안 입력창은 test_canvas_chat_log.py). 테스트가 hd-dock 을 이미 두었으면 그대로
+BOTTOM = """(() => { try { if (!localStorage.getItem('hd-dock')) localStorage.setItem('hd-dock', JSON.stringify({v: 1, groups: [
+  {tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show', 'align'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}],
+  left: [], closed: ['theme', 'talk']})); } catch (e) {} })();"""
+
+
 def _serve(ctx, setup=None, extra=0):
     tmp = Path(tempfile.mkdtemp(prefix="hd-canvas-chat-"))
     out = tmp / "out"
@@ -45,6 +51,7 @@ def _serve(ctx, setup=None, extra=0):
     errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.out, pg.calls = out, []
+    pg.add_init_script(BOTTOM)                           # 이 파일은 판 아래 떠 있는 입력창(S1) — 대화 패널(S3)은 닫힌 채로 시작
     if setup:
         setup(pg)
     pg.goto(srv.url)

@@ -6,7 +6,9 @@
    Enter = 보내기 · Shift+Enter = 줄바꿈(한글 조합 중 Enter 는 무시) · Esc = 입력창에서 나가기. 크게 보기·다른 탭·읽기만 탭·Tab(bare)에서는 숨긴다.
    보이기 설정(S1b)의 주인은 dock.js(창 메뉴 '대화창', 키 hd-dock) — 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on:false} 만 보내고, 몸의 no-chat 표시로 숨는다.
    받는 곳 알약(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
-   자리: 판(도크 왼쪽) 아래 가운데. 프로젝트 탭 바(아래 왼쪽, view-tabs 가 이 창 앞에서 멈춤)가 좁은 창에서 최소 폭이라 겹칠 때만 그 위로 올린다.
+   대화 패널 안(S3): 의도 'hd-composer' {host}(view-chat-log — 대화 패널이 보이면 그 아래 칸, 아니면 null)를 받아 같은 #hdchat 을 그리로 옮긴다(.docked —
+     상태 줄·숨김 ⌄ 은 감춤, 진행은 패널이 보인다, '대화창' 숨김 설정은 떠 있는 창에만). 보낸 뒤 의도 'hd-chat-sent' {text, chips, screens, notes, agent} → 대화 패널이 기록.
+   자리: 판(#screens — 두 도크 사이) 아래 가운데. 프로젝트 탭 바(아래 왼쪽, view-tabs 가 이 창 앞에서 멈춤)가 좁은 창에서 최소 폭이라 겹칠 때만 그 위로 올린다.
    진행 줄(S2, 47-4b): document 'hd-event'(view-live)를 HD.chat.progress 로 — 보낸 요청 화면의 claim·AI 쓰기·release 를 줄 하나(마지막 상태)로. 저장하지 않음(새로고침 = 메모 상태 줄).
    받는 곳(47-5b): 알약 점은 #aichip[data-state](view-presence — 접속 중 초록 · 자리 비움 회색)를 따른다. 진행 줄은 이 요청의 메모 id 로 request.sent(via) →
      agent.progress(진행 글) → agent.reply 를 따라가고, 받는 곳 이름은 보낼 때의 알약 글(HD.chat.line opt.agentName).
@@ -17,7 +19,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
   '#hdchat{position:fixed;bottom:12px;left:50%;z-index:24;width:640px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
-  '#hdchat[hidden],body.no-chat #hdchat,body.modal-open #hdchat,body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
+  '#hdchat[hidden],body.no-chat #hdchat:not(.docked),body.modal-open #hdchat,body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
   // 상태 줄(진행 줄 S2) — 카드 위 20px 한 줄, 말이 없으면 숨김(S1c)
   '#hdchat .ch-line{display:flex;align-items:center;gap:6px;box-sizing:border-box;height:20px;margin:0 8px 4px;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(0,0,0,.08);font-size:12px;line-height:16px;color:var(--ui-badge,#5f5f5a);max-width:calc(100% - 16px);width:max-content;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}' +
   '#hdchat .ch-line[hidden]{display:none}' +
@@ -58,7 +60,12 @@ var CSS =
   '#hdchat .ch-send{flex:none;margin-left:auto;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:var(--ui-primary,#2b2b29);color:#fff;display:grid;place-items:center;cursor:pointer}' +
   '#hdchat .ch-send:disabled{background:#E4E4DF;color:var(--ui-muted,#8a8a85);cursor:default}' +
   '#hdchat .ch-send svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
-  'html body.has-chat:not(.no-chat):not(.bare):not(.modal-open) #toast{bottom:var(--hd-chat-top,120px)}';
+  'html body.has-chat:not(.no-chat):not(.bare):not(.modal-open):not(.chat-docked) #toast{bottom:var(--hd-chat-top,120px)}' +
+  // 대화 패널 안(S3): 같은 카드, 패널 폭 · 패널 아래 — 상태 줄(패널이 진행을 보인다)·숨김 ⌄(패널을 닫으면 된다)은 감춘다
+  '#hdchat.docked{position:static;transform:none;width:auto!important;max-width:none;z-index:auto}' +
+  '#hdchat.docked .ch-line,#hdchat.docked .ch-hide{display:none}' +
+  '#hdchat.docked .ch-chips[hidden]+textarea{padding-right:6px}' +
+  '#hdchat.docked textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';   // 좁은 패널에서 안내 글이 두 줄로 잘리지 않게
 
 function mount(ctx) {
   var C = HD.chat, prog = null, dismissed = {}, open = false, last = null, shownLine = null, chipSig = null, warned = {}, booted = false, tbSeen = false;
@@ -124,19 +131,22 @@ function mount(ctx) {
     lineEl.title = l.req + ' — ' + l.text;
     if (booted) { lineEl.classList.remove('pulse'); void lineEl.offsetWidth; lineEl.classList.add('pulse'); }   // 새 줄마다 한 번(움직임 줄이기면 CSS 가 끈다)
   }
+  var docked = false;
   function place() {
-    var dk = ctx.$('#dock'), right = innerWidth;
-    if (dk && dk.offsetParent !== null) { var r = dk.getBoundingClientRect(); if (r.width && r.left > innerWidth / 2) right = r.left; }   // 도크를 가리지 않게 그 왼쪽 가운데
+    if (docked) { root.style.width = root.style.left = root.style.bottom = ''; document.body.style.removeProperty('--hd-chat-top'); return; }   // 패널 안 = 패널이 자리를 정한다
+    var pane = ctx.$('#screens'), pr = pane && pane.getClientRects().length ? pane.getBoundingClientRect() : null;
+    var L = pr ? pr.left : 0, right = pr ? pr.right : innerWidth;   // 판(두 도크 사이)의 가운데 — 왼쪽 도크(S3)가 있어도
     // 탭 바(아래 왼쪽, data-need = 다 보이는 데 드는 폭 — view-tabs)는 이 창 앞에서 멈춘다 → 가운데는 그대로, 폭만 줄여(최소 360) 탭 자리를 준다.
     // 그래도 겹치면(아주 좁은 창) 그때만 탭 위로 비킨다
     var tb = ctx.$('#ptabs'), b = tb && tb.getClientRects().length ? tb.getBoundingClientRect() : null;
     if (tb && window.ResizeObserver && !tbSeen) { tbSeen = true; new ResizeObserver(function () { place(); }).observe(tb); }   // 탭은 늦게 실린다
     var need = b && b.width ? (+tb.dataset.need || 0) : 0;
-    var w = Math.min(640, right - 32);
-    if (need) w = Math.min(w, Math.max(360, right - 2 * (b.left + need + 12)));
+    var W = right - L, mid = L + W / 2;
+    var w = Math.min(640, W - 32);
+    if (need) w = Math.min(w, Math.max(360, W - 2 * (b.left - L + need + 12)));
     root.style.width = Math.max(240, w) + 'px';
-    root.style.left = (right / 2) + 'px';
-    root.style.bottom = (b && b.width && b.right > right / 2 - root.getBoundingClientRect().width / 2 ? innerHeight - b.top + 8 : 12) + 'px';
+    root.style.left = mid + 'px';
+    root.style.bottom = (b && b.width && b.right > mid - root.getBoundingClientRect().width / 2 ? innerHeight - b.top + 8 : 12) + 'px';
     var top = root.hidden || !root.offsetHeight ? 0 : innerHeight - root.getBoundingClientRect().top + 8;
     document.body.style.setProperty('--hd-chat-top', (top || 120) + 'px');   // 토스트는 대화창 위에
   }
@@ -176,6 +186,8 @@ function mount(ctx) {
       r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null,
       ids: last.ids.slice(), agent: window.__hdAgent || null, name: ai && ai.classList.contains('on') ? agentB.querySelector('span').textContent : null};   // 받는 곳(47-5b) = 보낼 때의 알약
     try { ctx.local.setItem(LKEY, JSON.stringify(last)); } catch (e) {}   // 저장 공간이 꽉 차도 이 창의 상태 줄은 그대로 보인다
+    document.dispatchEvent(new CustomEvent('hd-chat-sent', {detail: {text: text, notes: last.ids.slice(), agent: prog.name,   // 대화 패널(S3)이 기록한다
+      chips: chipsNow().map(function (c) { return c.label; }), screens: prog.screens.length ? prog.screens.slice() : []}}));
     render();
     return true;
   }
@@ -219,6 +231,16 @@ function mount(ctx) {
   ['pointerup', 'keyup'].forEach(function (t) { addEventListener(t, soon, true); });
   addEventListener('message', soon);                       // 요소 고르기는 화면의 답(hd-hit) 뒤에 정해진다
   addEventListener('resize', place);
+  document.addEventListener('hd-composer', function (e) {   // 대화 패널(S3)이 보이면 그 아래 칸으로, 아니면 판 아래로 — 같은 요소를 옮긴다
+    var d = e.detail || {}, h = d.host && d.host.nodeType === 1 ? d.host : null;
+    d.done = true;
+    if (h ? root.parentNode === h : (!docked && root.parentNode === document.body)) return;
+    var focus = document.activeElement === ta;
+    (h || document.body).appendChild(root);
+    docked = !!h; root.classList.toggle('docked', docked); document.body.classList.toggle('chat-docked', docked);
+    if (focus) ta.focus();
+    grow(); place();
+  });
   document.addEventListener('hd-event', function (e) {   // 서버 이벤트(view-live 의도, 47-4b) → 진행 줄: AI 작업 중 · 반영됨 · 끝 — 메모 답은 상태를 다시 읽은 뒤 1초 그리기가 붙인다
     if (!prog) return;
     var np = C.progress(prog.p, e.detail, prog.screens, prog.ids);

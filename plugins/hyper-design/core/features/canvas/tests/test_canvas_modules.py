@@ -376,7 +376,7 @@ def test_dock_model():
     assert out["reopen"] == "links+notes+show:show / theme,layers / false", "닫힌 패널을 부르면 마지막 묶음에 다시 열고 편다"
     assert out["w"] == [560, 220, 333]
     assert out["hs"] == [2, 0.5] and out["hsBad"]
-    assert out["vis"] == [["show"], []]
+    assert out["vis"] == [["talk", "show"], ["talk"]], "왼쪽 도크(대화, S3)는 오른쪽을 접어도 보인다"
     assert out["norm"] == "notes+show+layers:notes", "모르는 패널·겹친 패널은 버리고 빠진 패널은 마지막 묶음에"
     assert out["normClosed"] == ["links", "theme"]          # 테마는 처음엔 닫힌 패널(조각 5)
     assert out["round"] and out["bad"] == [out["defaults"]] * 3
@@ -386,7 +386,7 @@ def test_dock_model():
     assert out["fRect"] == "links+show:links || notes+layers:layers@11,50,200,9000", "최소 너비 200"
     assert out["fBack"] == "links+show:links | notes:notes || layers:layers@11,50,200,9000", "도크 끝에 끌어 넣으면 새 묶음"
     assert out["fLoneMove"].endswith("layers:layers@5,6,200,9000"), "혼자 뜬 창을 다시 빼면 그 창이 옮겨질 뿐"
-    assert out["fVis"] == ["layers", "show"] and out["fCol"], "도크를 접어도 떠 있는 창은 보인다"
+    assert out["fVis"] == ["talk", "layers", "show"] and out["fCol"], "도크를 접어도 떠 있는 창은 보인다"
     assert out["fTop"] == ["show", "layers"] and out["fCol2"], "누른 떠 있는 창이 맨 위로, 도크는 접힌 채"
     assert out["fClose"] == "links:links | notes:notes || layers:layers@5,6,200,9000 / theme,show"
     assert out["oldHidden"].startswith("links+layers+show+notes") and out["oldHidden"].endswith(":layers"), "예전 숨긴 화면 탭은 그 자리의 레이어 탭으로"

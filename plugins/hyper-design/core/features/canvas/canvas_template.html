@@ -276,11 +276,11 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 .vm-ib svg,.wm svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .wm{min-width:200px}
 .wm-row{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:0 10px 0 6px;border:0;border-radius:7px;background:none;font-size:13px;color:#2b2b29;cursor:pointer;text-align:left}
-.wm-row:hover{background:#F2F2EF}.wm-row[aria-checked="false"]{color:#888}
+.wm-row:hover{background:#F2F2EF}.wm-row[aria-checked="false"]{color:#888}.wm-row:disabled{opacity:.45;cursor:default;background:none}
 .wm-ck{width:14px;font-size:12px;text-align:center}
 .wm-row kbd{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:#888}
 .wm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
-body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #dklayer{display:none}
+body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #ldock,body.bare #dklayer{display:none}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
 #pShow .lnshow{width:28px;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;display:grid;place-items:center;cursor:pointer;color:#444}
@@ -400,19 +400,27 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 @property --dockw{syntax:'<length>';inherits:false;initial-value:0px}
 body{--dockw:0px}
 .panes,#screens,#modal,.pane,.vp2,#dklayer{--dockw:inherit}   /* .panes = 칸들의 부모(물려받는 사슬) */
-#screens{right:var(--dockw)}
-#modal{right:var(--dockw);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
+/* 왼쪽 도크(S3 대화 패널 자리) 너비 — --dockw 와 같은 방식(쓰는 칸만 물려받음) */
+@property --dockl{syntax:'<length>';inherits:false;initial-value:0px}
+body{--dockl:0px}
+.panes,#screens,#modal,.pane,.vp2,#dklayer{--dockl:inherit}
+#screens{right:var(--dockw);left:var(--dockl)}
+#modal{right:var(--dockw);left:var(--dockl);top:var(--hdh,0px)}   /* 위쪽 줄 아래부터 — 도크 위에 덮이지 않은 칸이 남지 않게 */
 #dock{position:absolute;right:0;top:0;bottom:0;z-index:25;background:#fff;border-left:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
-.pane{right:var(--dockw)}                          /* 모든 탭에서 도크 자리를 비킨다 — 테마 패널은 Foundation 에서도 쓴다(조각 5) */
+.pane{right:var(--dockw);left:var(--dockl)}       /* 모든 탭에서 도크 자리를 비킨다 — 테마 패널은 Foundation 에서도 쓴다(조각 5) */
+#ldock{position:absolute;left:0;top:0;bottom:0;z-index:25;background:#fff;border-right:1px solid #dcdcd7;display:flex;flex-direction:column;font-size:13px;cursor:default;-webkit-user-select:none;user-select:none}
+#ldock.empty{display:none}
+body.dk-dragging #ldock.empty{display:flex;width:28px;background:rgba(244,244,241,.92);border-right:2px dashed #b5b5b0}   /* 탭을 끄는 동안만 — 왼쪽에 놓을 자리 */
+#ldock .dk-edge{left:auto;right:-4px}
 /* ---------- 창 나누기(modules/viewport.js · view-viewport.js, 조각 6) — 좌우 2분할: 오른쪽 칸 = 보기 전용 복사본 ---------- */
-body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
-.vp2{position:absolute;top:0;bottom:0;left:calc(50% - var(--dockw) / 2);right:var(--dockw);overflow:hidden;background:inherit;border-left:1px solid #cfcfca;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
+.vp2{position:absolute;top:0;bottom:0;left:calc(50% + (var(--dockl) - var(--dockw)) / 2);right:var(--dockw);overflow:hidden;background:inherit;border-left:1px solid #cfcfca;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
 .vp2.drag{cursor:grabbing}
 .vp2-stage{position:absolute;left:0;top:0;transform-origin:0 0;width:max-content}
 .vp2 .pz{position:absolute;left:10px;bottom:8px;font-size:11.5px;color:#666;background:rgba(255,255,255,.88);border-radius:6px;padding:2px 6px;pointer-events:none;font-variant-numeric:tabular-nums}
-#dock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#dock svg,#ldock svg,.dk-f svg,.dk-ghost svg,.dk-menu svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #dock.folded{width:44px;align-items:center;padding-top:4px;gap:4px}
-#dklayer{position:absolute;inset:0;right:var(--dockw);z-index:24;pointer-events:none}
+#dklayer{position:absolute;inset:0;right:var(--dockw);left:var(--dockl);z-index:24;pointer-events:none}
 .dk-edge{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}
 .dk-edge:hover,.dk-edge.dk-act{background:linear-gradient(90deg,transparent 3px,#9a9a95 3px,#9a9a95 5px,transparent 5px)}
 .dk-g{display:flex;flex-direction:column;min-height:80px;overflow:hidden}
@@ -421,7 +429,7 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
 .dk-tabs{display:flex;align-items:flex-end;gap:2px;height:36px;padding:0 4px 0 6px;background:#F4F4F1;border-bottom:1px solid #e6e6e2;flex:none;min-width:0;overflow:hidden}
 .dk-grip{flex:1 1 0;min-width:0;align-self:stretch}
 .dk-f .dk-grip{cursor:move}
-.dk-tabs.dk-drop,#dock.dk-drop{box-shadow:inset 0 0 0 2px #8a8a85}.dk-tabs.dk-drop{background:#ECECE8}
+.dk-tabs.dk-drop,#dock.dk-drop,#ldock.dk-drop{box-shadow:inset 0 0 0 2px #8a8a85}.dk-tabs.dk-drop{background:#ECECE8}
 .dk-tab{display:flex;align-items:center;gap:5px;height:30px;padding:0 8px;border:0;border-radius:8px 8px 0 0;background:none;cursor:pointer;color:#6b6b66;font:600 13px system-ui,-apple-system,'Malgun Gothic',sans-serif;white-space:nowrap;touch-action:none;flex:none}
 .dk-tab.on{flex:0 1 auto;min-width:0}
 .dk-tab:hover{background:#ecece8}
@@ -577,6 +585,7 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
   <section class="pane" id="foundation" hidden><iframe class="doc" title="Foundation — 색·글자·여백" data-src="foundation.html"></iframe></section>
   <section class="pane" id="components" hidden><iframe class="doc" title="Components — 이 앱이 쓴 부품" data-src="components.html"></iframe></section>
   <aside id="dock" class="dk" aria-label="패널"></aside>
+  <aside id="ldock" class="dk empty" aria-label="왼쪽 패널"></aside>
   <div id="dklayer"></div>
 </main>
 <div id="dkhold" hidden>
@@ -613,6 +622,7 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
   <div class="dkp" id="pLayers" data-panel="layers"></div>
   <div class="dkp" id="pTheme" data-panel="theme"></div>
   <div class="dkp" id="pAlign" data-panel="align"></div>
+  <div class="dkp" id="pTalk" data-panel="talk"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="box" id="mwin">
@@ -865,10 +875,12 @@ function home() {
   ty = 0; apply();
 }
 function fit() {
-  var ex = cardExtent(), pw = pane.clientWidth, ph = pane.clientHeight;
+  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
+  var g = tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left + 8 - 16)) : 0;
+  var ex = cardExtent(), pw = pane.clientWidth - g, ph = pane.clientHeight;
   fitMin = Math.min(ZMIN, HD.viewport.fit(ex, pw, ph, 32).z);
   var c = HD.viewport.fit(ex, pw, ph, 32, clampZ);
-  z = c.z; tx = c.tx;
+  z = c.z; tx = c.tx + g;
   ty = Math.max(16, (ph - (ex.y1 - ex.y0) * z) / 2) - ex.y0 * z;   // 위 여백은 16 이상
   apply();
 }
@@ -1086,7 +1098,7 @@ setInterval(loadVisible, 5000);                     // 가만히 있어도 화�
 /* ---------- 크게 보기 ---------- */
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
 function sizeModal() {
-  var top = $('.hd').offsetHeight, dw = parseFloat(document.body.style.getPropertyValue('--dockw')) || 0;   // 덮개 = 위쪽 줄 아래 · 도크 왼쪽
+  var top = $('.hd').offsetHeight, dw = (parseFloat(document.body.style.getPropertyValue('--dockw')) || 0) + (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0);   // 덮개 = 위쪽 줄 아래 · 두 도크 사이
   var m = modalSize(), mw = m.w, mh = m.h;
   var s = Math.min(1, (innerHeight - top - 128 - 26) / mh, (innerWidth - dw - 16) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 26
   mscale = s;
@@ -1259,18 +1271,20 @@ var DOCK_ICON = {
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
   layers: '<svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
   align: '<svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/></svg>',
-  theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>'};
+  theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>',
+  talk: '<svg viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 4v-4H6a2 2 0 01-2-2z"/><path d="M8 9h8M8 12h5"/></svg>'};
 var VD = null, VMN = null, VP = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
-VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign')},
+VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), lroot: $('#ldock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
+                        absent: !!window.__hdHelper && /^https?:$/.test(location.protocol) ? [] : ['talk'],   // 대화 패널(S3)은 도우미로 열 때만 — 기록·진행이 도우미에 있다(VS.on 과 같은 규칙, VS 는 아래에서 붙음)
+                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign'), talk: $('#pTalk')},
                         title: function (id) { var sp = HD.edits.split(NS.list()); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
                           if (VMN) VMN.sync(st);
-                          var w = st.bare ? 0 : st.collapsed || !st.groups.length ? 44 : st.w;
-                          if (document.body.style.getPropertyValue('--dockw') === w + 'px') return;
-                          document.body.style.setProperty('--dockw', w + 'px');
+                          var w = st.bare ? 0 : st.collapsed || !st.groups.length ? 44 : st.w, lw = HD.dock.leftWidth(st);   // 왼쪽 도크(S3) — 비면 0
+                          if (document.body.style.getPropertyValue('--dockw') === w + 'px' && document.body.style.getPropertyValue('--dockl') === lw + 'px') return;
+                          document.body.style.setProperty('--dockw', w + 'px'); document.body.style.setProperty('--dockl', lw + 'px');
                           if (typeof scheduleVisible === 'function') scheduleVisible();
                         }});
 // 위쪽 줄 보기·창 메뉴 View(modules/view-menu.js, 조각 3) — 배율 칩 = 보기 메뉴, [창 ▾] = 도구 막대·패널 보이기(상태는 도크 모델)
@@ -1280,20 +1294,20 @@ VP = HD.viewViewport.mount({stage: stage, host: $('.panes'), cam: function () { 
   onChange: function () { placeSelbar(); scheduleVisible(); }});
 VMN = HD.viewMenu.mount({$: $, esc: esc, icons: DOCK_ICON, typing: typing, modalOpen: function () { return !modal.hidden; },
   split: {state: function () { return VP.state(); }, dispatch: function (a) { VP.dispatch(a); }},
-  dock: {state: function () { return VD.state(); }, dispatch: function (a) { VD.dispatch(a); }},
+  dock: {state: function () { return VD.state(); }, dispatch: function (a) { VD.dispatch(a); }, absent: function () { return VD.absent(); }},
   view: {fit: fit, z100: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, 1); },
          zin: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z * 1.25); },
          zout: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z / 1.25); },
          canPick: function () { return SL.ids().length > 0; },
          pick: function () { fitCards(SL.ids()); }}});
-function fitCards(ids) {                           // 그 카드들 범위가 판에 꽉 차게(여백 32) — 보기 메뉴 '고른 화면에 맞추기' · 레이어 누르기
+function fitCards(ids, maxZ) {                     // 그 카드들 범위가 판에 꽉 차게(여백 32) — 보기 메뉴 '고른 화면에 맞추기' · 레이어 누르기 · maxZ = 이보다 크게는 안 함(대화 턴 누르기)
   var cs = ids.map(function (id) { return VL.cardEl(id); }).filter(function (c) { return c && !c.classList.contains('hid'); });
   if (!cs.length) return;
   var ox = rowsEl.offsetLeft, oy = rowsEl.offsetTop, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   cs.forEach(function (c) { var r = c.getBoundingClientRect(), p = pane.getBoundingClientRect(), l = (r.left - p.left - tx) / z, t = (r.top - p.top - ty) / z;
     x0 = Math.min(x0, l); y0 = Math.min(y0, t); x1 = Math.max(x1, l + r.width / z); y1 = Math.max(y1, t + r.height / z); });
   var pw = pane.clientWidth, ph = pane.clientHeight;
-  z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0)));
+  z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0), maxZ || Infinity));
   tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
 }
 // 테마 패널 View(modules/view-theme.js · 규칙 modules/theme.js, 조각 5) — 위쪽 팔레트 대신(H10), 기본은 닫힘(창 메뉴로)
@@ -2532,6 +2546,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   rowsEl: rowsEl, CARD: CARD, title: function (id) { return titleOf(id); }, cardEl: function (id) { return VL.cardEl(id); },
   frameLoaded: function (id, f) { sendTo(f); sendPending(f, id); if (PN) PN.locate(id, f); },
   selected: function () { return SL.ids(); },
+  focus: function (ids) { fitCards(ids, z); },     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
   sendNotes: function (list) { if (sending) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); sendList(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},

@@ -10,6 +10,7 @@
   Ticker         — 세션 시계 스레드 하나(47-5a): 1초마다 presence.sweep · 한 시간마다 Archive.sweep(완료 메모 보관)
   Busy           — AI 작업 덮개 state.busy(claim · release) + 화면 파일 지켜보기(1초 mtime → seq — /api/files · /api/watch)
   AiUndo         — 덮개 동안 AI 가 쓴 화면 = 기록 한 줄 'AI 반영 · <화면>' + 되살리기 stamp(48c, GET /api/ai-writes)
+  ChatLog        — <out>/.hd-chat.jsonl 대화 기록(S3): 버스 탭으로 이벤트 → 기록 한 줄(모양·턴·한도 = chat_log.py) · GET/POST /api/chat
   Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep = 서버가 고르고 옮김, 고르기 = memo_archive.py)
   Builder        — 다시 빌드(한 번에 하나 — 동기 apply 의 빌드와 뒤 빌드가 겹치지 않게) · hd-data · 부품 견본 목록
   EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
@@ -20,6 +21,7 @@ import datetime, hashlib, json, os, pathlib, posixpath, secrets, shutil, subproc
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import board_text as BT  # 판 글 고치기·지우기 계획(순수 Model, t51-9)
 import build_canvas
+import chat_log as CL  # 대화 기록 한 줄 모양·턴·한도(순수 Model, S3)
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
@@ -1168,7 +1170,7 @@ class Queue:
                 _emit(self.bus, "notes.changed", rev=res["rev"])
                 by = body["reply"].get("by")                # 47-5a: 에이전트가 답했다(캔버스 대화창 · 접속 칩)
                 _emit(self.bus, "agent.reply", note=_str(res.get("note")), kind=str(body["reply"].get("kind")), screen=_str(res.get("screen")),
-                      agent=_str(by), status=res["status"])
+                      agent=_str(by), status=res["status"], text=CL.reply_text(body["reply"]))   # text = 대화 패널에 보일 답(S3)
             return code, res
 
 
@@ -1336,6 +1338,88 @@ class Archive:
         return len(picks)
 
 
+NL = chr(10)                                         # 기록 한 줄 끝(LF — 어느 OS 에서나 같은 파일)
+
+
+class ChatLog:
+    """<out>/.hd-chat.jsonl — 대화 기록(S3). tap(ev) = 버스 탭(구독자보다 먼저): 이벤트 → 기록 한 줄 덧붙이기 · post = 캔버스가 남기는 ask/undone ·
+    get(since). 규칙(모양·턴 붙이기·한도)은 chat_log.py, 여기는 파일만. 자기 자물쇠 하나(세션 자물쇠·버스는 잡지 않는다 — 탭은 버스 자물쇠 안에서 불린다).
+    한도를 넘으면 오래된 턴을 .hd-chat-archive.jsonl 끝에 붙이고 남은 것을 임시 파일 + os.replace 로."""
+
+    def __init__(self, out, clock=time.time, cap=CL.CAP, slack=CL.SLACK):
+        self.out, self.clock, self.cap, self.slack = pathlib.Path(out), clock, cap, slack
+        self.lock = threading.Lock()
+        self.recs, self.idx = None, None
+
+    @property
+    def path(self):
+        return self.out / CL.FILE
+
+    def _load(self):
+        if self.recs is not None:
+            return
+        lines = []
+        try:
+            if self.path.is_file():
+                lines = self.path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as e:
+            print("[hd] 대화 기록을 읽지 못했어요(%s) — 빈 기록으로 시작해요" % e, file=sys.stderr, flush=True)
+        self.recs, bad = CL.parse_lines(lines)
+        if bad:
+            print("[hd] 대화 기록에 깨진 줄 %d개를 건너뛰었어요: %s" % (bad, self.path), file=sys.stderr, flush=True)
+        self.idx = CL.index(self.recs)
+
+    def add(self, kind, fields, at=None):
+        """→ 남긴 기록 | None(버림·쓰기 실패)."""
+        at = int(self.clock() * 1000) if at is None else at
+        with self.lock:
+            self._load()
+            rec, self.idx = CL.assign(self.idx, kind, fields, at)
+            if rec is None:
+                return None
+            try:
+                with open(self.path, "a", encoding="utf-8", newline="") as f:
+                    f.write(CL.line(rec) + NL)
+            except OSError as e:
+                print("[hd] 대화 기록을 쓰지 못했어요(%s): %s" % (e, rec["kind"]), file=sys.stderr, flush=True)
+            self.recs.append(rec)
+            if CL.over(self.recs, self.cap, self.slack):
+                self._trim()
+            return rec
+
+    def _trim(self):
+        keep, old = CL.trim(self.recs, self.cap)
+        try:
+            with open(self.out / CL.ARCHIVE, "a", encoding="utf-8", newline="") as f:
+                f.write("".join(CL.line(r) + NL for r in old))
+            tmp = self.path.with_name(CL.FILE + ".tmp-%d" % os.getpid())
+            tmp.write_text("".join(CL.line(r) + NL for r in keep), encoding="utf-8", newline="")
+            _replace(tmp, self.path)
+        except OSError as e:
+            print("[hd] 오래된 대화를 보관으로 옮기지 못했어요(%s) — 그대로 둬요" % e, file=sys.stderr, flush=True)
+            return
+        self.recs = keep
+
+    def tap(self, ev):
+        got = CL.from_event(ev)
+        if got is not None:
+            self.add(got[0], got[1], ev.get("ts"))
+
+    def post(self, body):
+        got, err = CL.check_post(body)
+        if err:
+            return 400, {"error": err}
+        rec = self.add(*got)
+        if rec is None:
+            return 404, {"error": "그 대화 턴이 없어요", "reason": "unknown"}
+        return 200, {"record": rec}
+
+    def get(self, since):
+        with self.lock:
+            self._load()
+            return CL.since(self.recs, since, self.idx["seq"])
+
+
 PRESENCE_EVERY = 1.0                                 # 접속 임대 끝 보기(초)
 ARCHIVE_EVERY = 3600.0                               # 완료 메모 보관(초) — 캔버스 탭의 '한 시간에 한 번'과 같은 규칙, 탭이 없어도
 TICK = 0.5
@@ -1394,6 +1478,10 @@ class ProjectSession:
         self.queue = Queue(self.out, self.lock, agent, paseo, on_attach, self.events, self.presence, self.config)
         self.spawner = AD.PaseoSpawner(lambda: _paseo_cmd(paseo), enabled=bool(self.config.get("allow_spawn")))
         self.archive = Archive(self.out, self.lock, self.events)
+        self.chat = ChatLog(self.out)                # S3 대화 기록 — 이미 내는 이벤트를 탭으로 받아 한 줄씩
+        self.events.taps.append(self.chat.tap)
+        # ── S3b 자리: 터미널 대화(transcript) 펌프를 여기서 만든다 — 예) self.transcripts = TR.Pump(self.events.publish, …)
+        #    펌프는 'agent.transcript' {agent, entries} 를 publish 하고(events.TYPES 에 있음), 시계 일이면 아래 Ticker 목록에 (간격, fn) 을 더한다.
         self.ticker = Ticker([(PRESENCE_EVERY, self.presence.sweep), (ARCHIVE_EVERY, self.archive.sweep)])
 
     def open(self):

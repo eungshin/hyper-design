@@ -24,8 +24,8 @@ AREAS = {
     "layers": "레이어 패널: 줄·화면·판 글 나무, 숨김(눈)·잠금·검색·거르기·아래 막대",
     "theme": "테마 패널: 테마 고르기·복제·색 네 칸·대비 경고·이름/삭제(hd-themes)",
     "menu": "위쪽 보기 메뉴(배율 칩)·창 메뉴·Tab 패널 모두 숨기기",
-    "dock": "오른쪽 패널 도크: 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
-    "chat": "하단 대화창: 고른 카드·요소 칩·보내기(S1)",
+    "dock": "패널 도크(오른쪽·왼쪽 S3): 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
+    "chat": "하단 대화창: 고른 카드·요소 칩·보내기(S1) · 대화 패널(S3)",
     "dscard": "판 위 디자인 시스템 카드(S6)",
 }
 
@@ -41,7 +41,8 @@ SURFACES = {
     "board": ("판 위 줄 배치·겹침(판 글·DS 카드·화면 줄·하단 대화창·탭·카메라 첫 자리)",
               ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
                "test_canvas_artboard.py", "test_canvas_tabs.py", "test_canvas_rows.py",
-               "test_canvas_receivers.py", "test_canvas_board_text.py", "test_canvas_card_copy.py")),
+               "test_canvas_receivers.py", "test_canvas_board_text.py", "test_canvas_card_copy.py",
+               "test_canvas_chat_log.py")),
 }
 
 

@@ -17,7 +17,7 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var TYPES = ['screen.written', 'notes.changed', 'claim', 'release', 'ai.write', 'build.started', 'build.done', 'build.failed', 'reset',
-             'agent.hello', 'agent.away', 'agent.progress', 'agent.reply', 'request.sent'];   // 47-5b: 받는 곳 상태·진행 줄 — 할 일 없음(hd-event 로만 알림), 마지막 id 는 앞으로
+             'agent.hello', 'agent.away', 'agent.progress', 'agent.reply', 'request.sent', 'agent.transcript'];   // S3b 터미널 대화(대화 패널) · 47-5b: 받는 곳 상태·진행 줄 — 할 일 없음(hd-event 로만 알림), 마지막 id 는 앞으로
 var ECHO_MS = 4000, RECENT_MS = 1500, SEEN_MAX = 200, MAX_WAIT = 30000;
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
 

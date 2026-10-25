@@ -53,7 +53,15 @@ def get_files(s, q, body):
     return 200, s.busy.files(since)
 
 
-def _obj(fn):                                         # 본문이 JSON 객체여야 하는 주소 — 목록·글이면 400(47-2 2a: 전에는 body.get 에서 연결이 끊겼다)
+def get_chat(s, q, body):                             # S3 대화 기록 — since 뒤 기록(없으면 다)
+    try:
+        since = S.CL.parse_since(q.get("since", [None])[0])
+    except ValueError as e:
+        return 400, {"error": str(e)}
+    return 200, s.chat.get(since)
+
+
+def _obj(fn):                                        # 본문이 JSON 객체여야 하는 주소 — 목록·글이면 400(47-2 2a: 전에는 body.get 에서 연결이 끊겼다)
     def call(s, q, b):
         if not isinstance(b, dict):
             return 400, {"error": "JSON 객체가 아니에요({…} 모양으로 보내 주세요)"}
@@ -71,6 +79,8 @@ ROUTES = {
         "/api/parts": lambda s, q, b: (200, s.builder.parts()),
         "/agents": lambda s, q, b: (200, s.presence.list()),            # 47-5a 접속한 에이전트(/v1/p/<이름>/agents)
         "/api/presence": lambda s, q, b: (200, s.presence.list()),      # 옛 뿌리 별칭(/api/agents 는 Paseo 목록 + connected)
+        "/api/chat": get_chat,                                          # S3 대화 기록(.hd-chat.jsonl)
+        # ── S3b 자리: "/api/agents/transcript": <S3b 모듈의 get(s, q, b) → (200, {entries, cursor, source})> 를 이 줄에 등록한다
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
@@ -84,6 +94,7 @@ ROUTES = {
         "/api/claim": lambda s, q, b: s.busy.claim(b),
         "/api/release": lambda s, q, b: s.busy.release(b),
         "/api/archive": lambda s, q, b: s.archive.post(b),
+        "/api/chat": lambda s, q, b: s.chat.post(b),                    # S3 캔버스가 남기는 ask(보낸 글·칩) · undone(턴 되돌림)
         "/api/forward": _obj(lambda s, q, b: s.queue.send(b)),          # 47-5a: to · notes, 이벤트 또는 어댑터
         "/hello": lambda s, q, b: s.presence.hello(b),
         "/api/hello": lambda s, q, b: s.presence.hello(b),
