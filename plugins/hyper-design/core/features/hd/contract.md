@@ -2,6 +2,8 @@
 
 터미널 에이전트(Claude Code · Codex · Paseo 무엇이든)가 떠 있는 캔버스를 찾고, 메모를 번호·대상·상태와 함께 읽고, 구조 있는 답을 단다. 사용자가 메모를 붙여 넣을 일이 없게.
 
+> 47-3 부터 `hd.py` 는 `hd_sdk`(Hub·Project·Note·Event·HdError) 위 얇은 껍데기 — 객체·오류(`--json` 오류 = `{error, kind, next?}`)는 [hd_sdk/contract.md](hd_sdk/contract.md). 아래 명령·출력·종료 코드는 그대로.
+
 ```
 python $SK/features/hd/hd.py ls [--json]
 python $SK/features/hd/hd.py notes [<project>|--out PATH] [--open|--sent|--all] [--json]
