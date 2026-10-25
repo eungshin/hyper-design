@@ -1,7 +1,7 @@
 /* View — 프로젝트별 키 읽기·쓰기 주인(#228): 도우미로 열면 .hd-canvas.json 이 진실 원천이고 브라우저 저장소는 캐시, 아니면 브라우저 저장소 그대로.
    규칙(어떤 키·파일이 이기나·올리기·보낼 본문)은 modules/state-file.js(Model). 여기는 쓰기를 300ms 모아 PUT /api/state, 닫을 때 마저 보내기, 409 처리.
    409(다른 곳에서 바뀜 — hd reply·claim 은 rev 를 늘 올린다, #269) = 409 답의 서버 상태와 HD.saveMerge.resolve(Model)로 합친다:
-     보낸 이름이 서버에서 안 바뀌었으면(메모는 id 마다 칸끼리) 서버의 나머지를 받고 내 값을 지켜 새 rev 로 한 번 다시 보낸다
+     보낸 이름이 서버에서 안 바뀌었으면(메모는 id 마다 칸끼리, busy 는 카드마다) 서버의 나머지를 받고 내 값을 지켜 새 rev 로 한 번 다시 보낸다
      (받은 이름 중 notes·note-seq·busy 는 ctx.onExternal, 그 밖이 바뀌었으면 다시 보낸 뒤 다시 불러오기 — 잃는 것 없음).
      둘 다 바꾼 이름이 있거나 다시 보낸 것도 409 면 이번 변경은 버리고 잃은 것을 토스트로 말한 뒤 ctx.reload().
    쓰기 대기 표시(hd-unsent:<hash> = {base: rev, names}) — 파일에 닿았다고 확인 못 한 이름(모으는 중·보내는 중·닫을 때 보낸 것)을 브라우저 저장소에 남긴다.
@@ -15,7 +15,8 @@
    완료 메모 보관(#273): 쓰는 탭이 열 때와 그 뒤 한 시간에 한 번 HD.archive.pickArchive(Model) 로 고른 메모를 POST /api/archive {notes} →
      {ok} 일 때만 보낸 그대로인 메모를 notes 에서 빼고(HD.archive.without) 한 번 저장 + ctx.onExternal(['notes']). 실패 = [hd] 경고(다음 시간에 다시).
    두 탭(#274): BroadcastChannel('hd:' + hash) — 규칙은 HD.stateFile.tab(Model). 새 탭이 hello 를 알리고 쓰는 탭이 답하면 새 탭은 읽기만:
-     PUT·닫을 때 보내기·보관·쓰기 대기 표시를 하지 않고(새로 받기는 그대로), 프로젝트 키 쓰기는 버린다(토스트 한 번). 위쪽에 '다른 탭에서 열려 있어요 — 여기서 편집하기' 줄,
+     PUT·닫을 때 보내기·보관·쓰기 대기 표시를 하지 않고(새로 받기는 그대로), 역할을 <html data-hd-tab> + document 'hd-tab-role' {role} 로 알린다 —
+     편집은 view-read-only 가 처음부터 막고(흐린 조작부·aria-disabled·줄 가리키기), 그래도 닿은 프로젝트 키 쓰기는 버린다(토스트 한 번, 안전망). 위쪽에 '다른 탭에서 열려 있어요 — 여기서 편집하기' 줄,
      누르면 이 탭이 쓰는 탭(take — 다른 탭이 읽기만)이 되고, 읽기만일 때 버린 쓰기가 있었으면 파일 상태로 다시 불러온다. 정하기 전(tabWaitMs, 기본 150ms)에는 보내지 않는다.
    HD.viewStateSync.mount(ctx) → {mode, getItem(k), setItem(k, v), removeItem(k), flush(), rev(), poll()(지금 한 번 — 테스트·focus), role()('writer'|'reader'|'pending'), archive(force?)}
      mode = 'off'(file:// · 토큰 없음) | 'local'(스냅숏 깨짐) | 'file' | 'migrate'. off·local 이면 모든 키가 ctx.storage 그대로(던지는 것도 그대로)
@@ -212,7 +213,7 @@ function mount(ctx) {
   }
 
   function showBar(on) {                              // 읽기만인 탭 위쪽 줄 — 누르면 이 탭에서 편집
-    if (!on) { if (bar) bar.hidden = true; return; }
+    if (!on) { if (bar) { bar.hidden = true; bar.style.display = 'none'; } return; }   // 글 안 display:flex 가 hidden 을 이긴다 — 같이 끈다
     if (!bar) {
       bar = document.createElement('div'); bar.id = 'hd-tab-lock'; bar.setAttribute('role', 'status');
       bar.style.cssText = 'position:fixed;top:40px;left:50%;transform:translateX(-50%);z-index:45;background:var(--ui-primary);color:#fff;border-radius:10px;padding:7px 12px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);display:flex;gap:8px;align-items:center';
@@ -223,13 +224,14 @@ function mount(ctx) {
       bar.appendChild(t); bar.appendChild(btn);
       (document.body || document.documentElement).appendChild(bar);
     }
-    bar.hidden = false;
+    bar.hidden = false; bar.style.display = 'flex';
   }
   function tabEvent(ev) {
     var prev = tabS.role, r = S.tab(tabS, ev);
     tabS = r.s;
     if (r.send && chan) { try { chan.postMessage(r.send); } catch (e) { ctx.warn('[hd] 다른 탭에 알리지 못했어요: ' + (e && e.message || e)); } }
     if (tabS.role === prev) return;
+    announce(tabS.role);
     if (tabS.role === 'reader') {
       clearTimeout(timer); dirty = {};               // 정하기 전에 모은 것(시작 때 고친 값)은 쓰는 탭이 이미 가졌다
       showBar(true);
@@ -242,7 +244,11 @@ function mount(ctx) {
     if (prev === 'reader') poll();
     archive(false);
   }
-  function readOnly(k) {                              // 읽기만인 탭의 프로젝트 키 쓰기 — 버리고 한 번 알림
+  function announce(r) {                              // 역할을 화면에 알림 — 편집 막기(view-read-only)가 읽는다
+    try { document.documentElement.dataset.hdTab = r; document.dispatchEvent(new CustomEvent('hd-tab-role', {detail: {role: r}})); }
+    catch (e) { ctx.warn('[hd] 탭 역할을 알리지 못했어요: ' + (e && e.message || e)); }
+  }
+  function readOnly(k) {                              // 안전망 — 편집은 view-read-only 가 먼저 막는다. 그래도 닿은 쓰기는 버리고 한 번 알림
     dropped = true;
     ctx.warn('[hd] 다른 탭이 쓰는 중이라 버려요: ' + k);
     if (!roWarned) { roWarned = true; ctx.toast(READ_ONLY); }

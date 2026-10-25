@@ -232,25 +232,87 @@ def test_second_tab_is_read_only_until_take(browser, served):
         a.evaluate("window.__hdStay = 1"); b.evaluate("window.__hdStay = 1")
         fit_view(b)
         b.keyboard.press("v")
-        drag(b, visible_cover(b), 40, 0)                                # 읽기만인 탭의 편집 = 파일로 가지 않음
+        drag(b, visible_cover(b), 40, 0)                                # 읽기만인 탭의 편집 = 처음부터 막힘(V 가 안 먹어 손으로 판만 움직임) — 파일로 가지 않음
         b.wait_for_timeout(800)
         assert puts["b"] == 0, "읽기만인 탭은 PUT 하지 않는다"
-        b.click("#hd-tab-lock button")                                  # 여기서 편집하기 — 버린 쓰기가 있었으니 파일 상태로 다시 불러온다
+        b.click("#hd-tab-lock button")                                  # 여기서 편집하기 — 막았으니 버린 쓰기가 없어 다시 불러오지 않는다
         a.wait_for_selector("#hd-tab-lock:not([hidden])")
-        b.wait_for_function("window.__hdStay === undefined", timeout=5000)
-        b.wait_for_function("window.__hdReady !== undefined")
         b.wait_for_timeout(400)
-        assert b.locator("#hd-tab-lock").count() == 0 or b.locator("#hd-tab-lock").is_hidden(), "다시 연 탭이 계속 쓴다(먼저 탭이 읽기만이라 답하지 않음)"
-        fit_view(b)
+        assert b.evaluate("window.__hdStay") == 1, "버린 쓰기가 없으면 다시 불러오지 않는다"
+        assert b.locator("#hd-tab-lock").is_hidden(), "가져간 탭이 쓴다"
         b.keyboard.press("v")
         before = puts["a"]
         drag(b, visible_cover(b), 40, 0)
         assert _wait(b, lambda: puts["b"] >= 1), "이제 이 탭이 쓴다"
-        fit_view(a)
-        a.keyboard.press("v")
+        a.keyboard.press("v")                                           # 먼저 탭은 이제 읽기만 — V 도 끌기도 막힘
         drag(a, visible_cover(a), 30, 0)
         a.wait_for_timeout(800)
         assert puts["a"] == before, "가져간 뒤 먼저 탭은 PUT 하지 않는다"
+    finally:
+        c.close()
+    assert not errors, errors
+
+
+@pytest.mark.area("helper", "notes", "tools")
+def test_read_only_tab_blocks_edits_up_front_and_keeps_draft(browser, served):
+    """#274 후속 — 읽기만인 탭은 편집을 받아 놓고 버리지 않는다: 편집 도구·추가 단추는 흐리고 aria-disabled,
+    누르거나 키를 쳐도 바뀌지 않고 '여기서 편집하기' 줄을 가리킨다. 열어 둔 메모 칸의 글은 남아 있다가 가져오면 그대로 추가된다."""
+    from test_canvas_edit import visible_cover, tool
+    out, srv = served
+    _seed(out, [memo("m2", 2, T_LEAD, "작업 중")])
+    errors, puts = [], {"a": 0, "b": 0}
+
+    def count(name):
+        def fn(route):
+            if route.request.method == "PUT":
+                puts[name] += 1
+            return route.continue_()
+        return fn
+    toasts = """() => { window.__toasts = []; const t = document.getElementById('toast');
+        new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList: true, characterData: true, subtree: true}); }"""
+    file_texts = lambda: [n.get("note") for n in json.loads((out / ".hd-canvas.json").read_text(encoding="utf-8"))["state"].get("notes", [])]
+    c = browser.new_context(viewport={"width": 1440, "height": 1000})
+    try:
+        a = _open(c, srv, errors, [("**/api/state", count("a"))])
+        a.wait_for_timeout(300)
+        a.evaluate("window.__hdStay = 1")
+        fit_view(a)
+        a.keyboard.press("m")                                           # 쓰는 탭에서 메모 칸을 열고 글을 쓴다
+        cov = visible_cover(a)
+        a.mouse.click(cov["x"], cov["y"])
+        a.wait_for_selector("#pop:not([hidden])")
+        a.fill("#pnote", "초안 남김")
+        b = _open(c, srv, errors, [("**/api/state", count("b"))])
+        b.wait_for_selector("#hd-tab-lock:not([hidden])")
+        b.evaluate("window.__hdStay = 1"); b.evaluate(toasts)
+        mv = b.locator('#tools [data-tool="move"]')
+        assert mv.get_attribute("aria-disabled") == "true"
+        assert float(mv.evaluate("e => getComputedStyle(e).opacity")) < 0.5, "흐리게 보인다"
+        assert b.locator('#tools [data-tool="hand"]').get_attribute("aria-disabled") is None, "손(화면 이동)은 그대로"
+        assert b.locator("#padd").get_attribute("aria-disabled") == "true"
+        b.keyboard.press("v")
+        mv.click(force=True)
+        assert tool(b) == ["hand"], "읽기만인 탭은 편집 도구로 바뀌지 않는다"
+        assert any("여기서 편집하기" in t for t in b.evaluate("window.__toasts")), "편집 시도 = 줄을 가리킨다"
+        assert _wait(b, lambda: b.evaluate("!!(document.activeElement && document.activeElement.closest('#hd-tab-lock'))"), 1000), "줄의 단추로 초점"
+        b.click("#hd-tab-lock button")                                  # B 가 가져감 — 버린 쓰기가 없으니 다시 불러오지 않는다
+        a.wait_for_selector("#hd-tab-lock:not([hidden])")
+        assert b.evaluate("window.__hdStay") == 1, "막았으니 버린 것이 없다 — 다시 불러오지 않음"
+        assert a.evaluate("document.documentElement.dataset.hdTab") == "reader"
+        assert tool(a) == ["hand"], "읽기만이 되면 편집 도구는 손으로"
+        before = puts["a"]
+        a.locator("#padd").click(force=True)                            # 읽기만인 탭의 추가 = 막힘, 글은 칸에
+        a.focus("#pnote"); a.keyboard.press("Control+Enter")
+        a.wait_for_timeout(500)
+        assert a.is_visible("#pop") and a.input_value("#pnote") == "초안 남김", "쓴 글은 버리지 않는다"
+        assert "초안 남김" not in file_texts() and puts["a"] == before
+        a.click("#hd-tab-lock button")                                  # 다시 가져오면 그 칸 그대로 추가
+        b.wait_for_selector("#hd-tab-lock:not([hidden])")
+        assert a.evaluate("window.__hdStay") == 1
+        assert a.locator("#padd").get_attribute("aria-disabled") is None, "쓰는 탭이 되면 막기를 걷는다"
+        assert a.locator("#hd-tab-lock").is_hidden(), "쓰는 탭에는 줄이 없다"
+        a.click("#padd")
+        assert _wait(a, lambda: "초안 남김" in file_texts()), file_texts()
     finally:
         c.close()
     assert not errors, errors

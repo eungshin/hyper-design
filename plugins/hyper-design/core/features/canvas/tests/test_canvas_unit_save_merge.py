@@ -58,6 +58,22 @@ out.dropped = M.resolve(['hidden'], {hidden: ['x']}, {}, {hidden: ['x'], notes: 
 const frozen = JSON.stringify([base3, local3, server3]);
 M.resolve(['notes'], base3, local3, server3);
 out.pure = JSON.stringify([base3, local3, server3]) === frozen;
+// 10. busy(AI 작업 표시) — 카드마다 합친다(W3: 칩을 걷는 순간 hd claim 이 오면 409 → 다시 불러오기였다)
+const it = (via, since, extra) => Object.assign({via: via, since: since, file: 's.html', mtime: null}, extra || {});
+const busy = (items) => ({v: 1, items: items});
+// 10a. 내가 a 를 걷고, 서버에 b 새 덮개 → 둘 다 남는다(a 없음 + b 있음)
+out.busyOther = M.resolve(['busy'], {busy: busy({a: it('paseo', 100)})}, {busy: busy({})}, {busy: busy({a: it('paseo', 100), b: it('cli', 200, {by: 'ag'})})});
+// 10b. 같은 카드: 내가 걷고(base since 100) 서버가 새로 덮음(since 300) → 새 덮개가 이김
+out.busySameNewer = M.resolve(['busy'], {busy: busy({a: it('paseo', 100)})}, {busy: busy({})}, {busy: busy({a: it('cli', 300)})});
+// 10c. 같은 카드: 내가 걷고 서버는 같은 덮개의 칸만 바꿈(since 그대로) → 걷기가 이김
+out.busySameLift = M.resolve(['busy'], {busy: busy({a: it('paseo', 100)})}, {busy: busy({})}, {busy: busy({a: it('paseo', 100, {note: 'x'})})});
+// 10d. 같은 카드를 둘 다 다시 덮음 → since 가 큰 쪽(같으면 서버)
+out.busyBothMark = M.resolve(['busy'], {busy: busy({})}, {busy: busy({a: it('queue', 500)})}, {busy: busy({a: it('cli', 400)})});
+out.busyBothTie = M.resolve(['busy'], {busy: busy({})}, {busy: busy({a: it('queue', 400)})}, {busy: busy({a: it('cli', 400)})});
+// 10e. 서버가 걷음(hd release) · 내가 같은 카드에 새로 덮음(since 더 큼) → 내 새 덮개
+out.busyRelease = M.resolve(['busy'], {busy: busy({a: it('cli', 100)})}, {busy: busy({a: it('paseo', 900)})}, {busy: busy({})});
+// 10f. 깨진·없는 busy 는 빈 것으로
+out.busyBad = M.resolve(['busy'], {busy: 'x'}, {busy: busy({a: it('paseo', 1)})}, {busy: null});
 console.log(JSON.stringify(out));
 """
 
@@ -130,3 +146,16 @@ def test_name_lists_agree(out):   # #277 — 이름 목록 셋이 따로 놀지 
     assert body, "템플릿의 adoptState 를 찾지 못함"
     handled = set(re.findall(r"has\('([a-z-]+)'\)", body.group(1)))
     assert names - {"edit-log", "busy", "note-seq"} <= handled, "adoptState 가 다루지 않는 이름: %s" % (names - {"edit-log", "busy", "note-seq"} - handled)
+
+
+def test_busy_merges_per_card(out):   # 칩 걷기 + 같은 순간의 hd claim = 다시 보냄(다시 불러오지 않음)
+    o = out["busyOther"]
+    assert o["ok"] and o["state"]["busy"]["items"].keys() == {"b"}, o
+    assert "busy" in o["adopt"], "받은 덮개는 화면이 다시 읽는다"
+    assert out["busySameNewer"]["state"]["busy"]["items"]["a"]["via"] == "cli", "같은 카드 — 걷은 뒤 새로 온 덮개가 이김"
+    assert out["busySameLift"]["state"]["busy"]["items"] == {}, "같은 덮개(since 그대로)면 걷기가 이김"
+    assert out["busyBothMark"]["state"]["busy"]["items"]["a"]["via"] == "queue", "since 가 큰 쪽"
+    assert out["busyBothTie"]["state"]["busy"]["items"]["a"]["via"] == "cli", "같으면 서버"
+    assert out["busyRelease"]["state"]["busy"]["items"]["a"]["via"] == "paseo", "서버가 걷어도 내 새 덮개가 더 새것"
+    b = out["busyBad"]
+    assert b["ok"] and b["state"]["busy"] == {"v": 1, "items": {"a": {"via": "paseo", "since": 1, "file": "s.html", "mtime": None}}}

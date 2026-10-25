@@ -103,3 +103,43 @@ def test_claim_cover_without_reload_and_only_changed_card_reloads(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def test_lift_while_new_claim_arrives_resends_without_reload(ctx, out):
+    """W3 후속 — 칩을 걷는(×) 순간 다른 화면에 hd claim 이 오면 PUT 이 409. busy 는 카드마다 합쳐(save-merge.mergeBusy) 다시 보낸다:
+    내 걷기와 서버의 새 덮개가 둘 다 파일에 남고, 페이지는 다시 불러오지 않는다."""
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors, puts = [], []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    f = out / ".hd-canvas.json"
+    items = lambda: (json.loads(f.read_text(encoding="utf-8"))["state"].get("busy") or {}).get("items", {})
+
+    def claim_first(route):                                              # 걷기 PUT 이 닿기 직전에 다른 화면 claim = 그 PUT 은 409
+        if route.request.method == "PUT":
+            puts.append(1)
+            if len(puts) == 1:
+                post(srv, "/api/claim", {"screen": "usage", "by": "agent-2"})
+        return route.continue_()
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        post(srv, "/api/claim", {"screen": "job", "by": "agent-9"})
+        pg.wait_for_selector('.card[data-id="job"] .busy[data-via="cli"]', timeout=8000)
+        pg.evaluate("window.__hdStay = 1")                                # 다시 불러오면 사라진다
+        pg.route("**/api/state", claim_first)
+        pg.click('.card[data-id="job"] .busy [data-act="lift"]')
+        t = 0
+        while t < 8000 and not (set(items()) == {"usage"} and len(puts) >= 2):
+            pg.wait_for_timeout(100); t += 100                            # route 처리는 Playwright 호출 안에서만 돈다
+        assert set(items()) == {"usage"}, items()
+        assert len(puts) >= 2, "409 뒤 합쳐 다시 보냈다"
+        pg.wait_for_selector('.card[data-id="usage"] .busy[data-via="cli"]', timeout=4000)
+        assert pg.locator('.card[data-id="job"] .busy').count() == 0
+        pg.wait_for_timeout(1500)
+        assert pg.evaluate("window.__hdStay") == 1, "잃은 것이 없으니 다시 불러오지 않는다"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
