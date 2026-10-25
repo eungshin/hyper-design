@@ -128,3 +128,41 @@ def test_app_card_chip_lifts_on_hmr_or_reload_not_on_first_load(ctx, app_out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def test_app_card_error_shows_once_on_card_not_toast(ctx, app_out):
+    """W3 #280 후속 — 감싸개의 hd-here {error} 는 그 카드 화면 밑 한 줄(.cerr) · 같은 글은 한 번(경고도) · 토스트 아님 · 다시 잘 실리면 걷힘."""
+    out, url = app_out
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors, warns = [], []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.on("console", lambda m: m.type == "warning" and "앱 카드 job" in m.text and warns.append(m.text))
+    line = '.card[data-id="job"] .cerr'
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        fr = job_frame(pg, url)
+        pg.wait_for_timeout(300)
+        pg.evaluate("""() => { window.__toasts = []; const t = document.getElementById('toast');
+            new MutationObserver(() => window.__toasts.push(t.textContent)).observe(t, {childList: true, characterData: true, subtree: true}); }""")
+        for _ in range(3):
+            fr.evaluate("parent.postMessage({type: 'hd-here', screen: 'job', error: '/src/twin/stages.js: Failed to fetch'}, '*')")
+        pg.wait_for_selector(line, timeout=3000)
+        pg.wait_for_timeout(300)
+        assert pg.locator(line).count() == 1 and pg.text_content(line) == "⚠ /src/twin/stages.js: Failed to fetch"
+        assert pg.get_attribute(line, "role") == "alert"
+        assert len(warns) == 1, warns
+        assert not [t for t in pg.evaluate("window.__toasts") if "stages" in t], "토스트가 아니다"
+        assert pg.evaluate("""() => { const c = document.querySelector('.card[data-id="job"]'), e = c.querySelector('.cerr'), p = c.querySelector('.phone');
+            return e.previousElementSibling === p; }"""), "화면 바로 밑"
+        fr.evaluate("parent.postMessage({type: 'hd-here', screen: 'job', error: '/src/settings/store.js: nope'}, '*')")
+        pg.wait_for_function("(s) => (document.querySelector(s) || {}).textContent === '⚠ /src/settings/store.js: nope'", arg=line, timeout=3000)
+        assert len(warns) == 2
+        fr.evaluate("parent.postMessage({type: 'hd-here', screen: 'job'}, '*')")   # = 다시 잘 실림(palette.js 로드 알림)
+        pg.wait_for_selector(line, state="detached", timeout=3000)
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

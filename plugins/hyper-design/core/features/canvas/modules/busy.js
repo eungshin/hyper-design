@@ -17,7 +17,9 @@
    isApp(file) → 앱 카드인가(file 이 http(s) 개발 서버 주소 — mtime 이 없어 파일 규칙으로는 걷히지 않는다)
    shouldLift(item, event) → bool(#272) — 앱 카드 덮개를 걷는 신호. event = {kind: 'hmr'|'load', at: ms(판이 받은 시각), first?: 이 판에서 그 카드의 첫 로드}
      앱 카드만 · at > item.since 일 때만 · hmr(개발 서버가 그 페이지를 바꿈) = 걷기 · load = 첫 로드가 아니면 걷기(판 새로 고침·처음 보임은 AI 수정이 아님)
-   HD.busy = {VIA, MAX, initial, reduce, load, save, files, label, look, refresh, isApp, shouldLift} */
+   hereError(seen, d) → {seen(새 객체), show: 글|null, clear: bool} — 앱 카드 iframe 의 hd-here {error}(감싸개가 비공개 모듈을 못 읽음, #280).
+     seen = {화면 id: 지금 보인 글}. 같은 카드·같은 글이면 show null(한 번만) · 글은 공백 정리 + ERR_MAX 자(넘으면 …) · error 없는 hd-here(다시 잘 실림) = 그 카드 clear
+   HD.busy = {VIA, MAX, ERR_MAX, initial, reduce, load, save, files, label, look, refresh, isApp, shouldLift, hereError} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -81,6 +83,25 @@ function shouldLift(it, ev) {
   return false;
 }
 
+var ERR_MAX = 200;
+function hereError(seen, d) {
+  var cur = seen && typeof seen === 'object' ? seen : {}, none = {seen: cur, show: null, clear: false};
+  if (!d || d.type !== 'hd-here' || typeof d.screen !== 'string' || !d.screen) return none;
+  var id = d.screen, next;
+  if (d.error == null) {
+    if (!has(cur, id)) return none;
+    next = copy(cur); delete next[id];
+    return {seen: next, show: null, clear: true};
+  }
+  if (typeof d.error !== 'string') return none;
+  var t = d.error.replace(/\s+/g, ' ').trim(), cut = Array.from(t);
+  if (!t) return none;
+  if (cut.length > ERR_MAX) t = cut.slice(0, ERR_MAX - 1).join('').trim() + '…';
+  if (cur[id] === t) return none;
+  next = copy(cur); next[id] = t;
+  return {seen: next, show: t, clear: false};
+}
+
 function load(getItem, key, warn) {
   var raw, d, items = {}, k, it;
   function bad(why) { if (warn) warn('[hd] 덮개 상태(busy)가 깨져 비웠어요: ' + why); return initial(); }
@@ -138,5 +159,5 @@ function refresh(changed, opt) {
   return {cards: cards, modal: modal};
 }
 
-HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift};
+HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift, ERR_MAX: ERR_MAX, hereError: hereError};
 })();

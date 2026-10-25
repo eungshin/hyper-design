@@ -8,6 +8,8 @@
    크게 보기가 그 화면이면 ctx.reloadModal. wrote(ids) = 판이 방금 스스로 쓴·다시 실은 화면(5초 동안 다시 싣지 않음).
    앱 카드(#272): 카드 iframe 이 보낸 hd-here(palette.js 로드 · 감싸개 HMR {hmr:true}) → HD.busy 'here'(shouldLift). 화면 id = d.screen,
    보낸 창이 그 카드의 iframe 일 때만(크게 보기 등은 무시). 이 판에서 그 카드의 첫 로드는 first(걷지 않음). 걷어도 다시 싣지 않는다(이미 새 화면).
+   hd-here {error}(감싸개가 앱의 비공개 모듈을 못 읽음, #280) = 그 카드 화면 밑에 빨간 한 줄 .cerr(role=alert, title = 전체) + [hd] 경고 —
+     토스트가 아니고 카드마다 같은 글은 한 번(HD.busy.hereError), 그 카드가 다시 잘 실리면(error 없는 hd-here) 걷는다. 덮개는 걷지 않는다.
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids)}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
@@ -30,7 +32,8 @@ var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--ts,1));
   '.busy.bchip [data-act=lift]:hover,.busy.bchip [data-act=lift]:focus-visible{background:rgba(0,0,0,.09)}' +
   '@keyframes hd-bchip-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.busy.bchip .bspin{animation:none}}' +
   '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--ts,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
-  '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}';
+  '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}' +
+  '.card .cerr{margin-top:calc(8px * var(--ts,1));font:500 calc(12px * var(--ts,1))/1.35 system-ui,sans-serif;color:var(--ui-danger,#b42318);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}';
 
 function style() {
   if (typeof document === 'undefined' || document.getElementById('hd-busy-css')) return;
@@ -132,11 +135,28 @@ function mount(ctx) {
   // 앱 카드(#272) — 카드 iframe 의 hd-here 로 걷기(mtime 이 없는 카드)
   var loaded = {};                                    // 이 판에서 로드를 본 카드 id(첫 로드 = 판 새로 고침·처음 보임)
   function frameOf(id) { var c = ctx.cardEl(id), f = c && c.querySelector('iframe'); return f && f.contentWindow; }
+  var errSeen = {};                                   // 카드마다 보인 실패 글(HD.busy.hereError) — 같은 글은 한 번
+  function errLine(id, text) {                        // 카드 아래 작은 한 줄(.cerr) — 화면(.phone) 바로 밑, 제목 위
+    var c = ctx.cardEl(id), el = c && c.querySelector('.cerr');
+    if (!c) return;
+    if (text == null) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div'); el.className = 'cerr'; el.setAttribute('role', 'alert');
+      var ph = c.querySelector('.phone'); if (ph && ph.nextSibling) c.insertBefore(el, ph.nextSibling); else c.appendChild(el);
+    }
+    el.textContent = '⚠ ' + text; el.title = '앱 화면을 싣지 못했어요 — ' + text;
+  }
   function onHere(e) {
     var d = e.data;
-    if (!d || d.type !== 'hd-here' || typeof d.screen !== 'string' || !d.screen || d.error) return;   // error = 감싸개의 실패 알림(로드는 palette.js 가 따로 알린다)
+    if (!d || d.type !== 'hd-here' || typeof d.screen !== 'string' || !d.screen) return;
     var id = d.screen, w = frameOf(id);
     if (!w || w !== e.source) return;
+    var r = B.hereError(errSeen, d);                  // 감싸개의 실패 알림(#280) = 카드에 한 줄(토스트 아님) · 다시 잘 실리면 걷기
+    errSeen = r.seen;
+    if (r.show != null) { warn('[hd] 앱 카드 ' + id + ': ' + r.show); errLine(id, r.show); }
+    else if (r.clear) errLine(id, null);
+    else if (d.error != null && has(errSeen, id) && !(ctx.cardEl(id) || document).querySelector('.cerr')) errLine(id, errSeen[id]);   // 카드를 다시 그렸으면 다시 붙임(알림은 그대로 한 번)
+    if (d.error != null) return;                      // 실패 알림으로는 걷지 않는다(로드는 palette.js 가 따로 알린다)
     var kind = d.hmr ? 'hmr' : 'load', first = kind === 'load' && !has(loaded, id);
     if (kind === 'load') loaded[id] = 1;
     if (!has(st.items, id)) return;

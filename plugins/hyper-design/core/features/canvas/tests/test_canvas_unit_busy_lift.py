@@ -44,6 +44,16 @@ const gone = B.reduce(s, {type: 'here', id: 'w', kind: 'hmr', at: 200});
 out.hmrLifts = Object.keys(gone.items);
 out.staticKeeps = B.reduce(s, {type: 'here', id: 'a', kind: 'hmr', at: 200}) === s;
 out.missingKeeps = B.reduce(s, {type: 'here', id: 'zz', kind: 'hmr', at: 200}) === s;
+// 앱 카드 실패 알림(hd-here {error}, W3 #280) — 카드마다 같은 글은 한 번, 다시 잘 실리면 걷기
+const E = (seen, d) => B.hereError(seen, d);
+const e1 = E({}, {type: 'hd-here', screen: 'w', error: '  /src/twin/stages.js:\n  boom  '});
+const e2 = E(e1.seen, {type: 'hd-here', screen: 'w', error: '/src/twin/stages.js: boom'});
+const e3 = E(e2.seen, {type: 'hd-here', screen: 'w', error: '/src/settings/store.js: nope'});
+const e4 = E(e3.seen, {type: 'hd-here', screen: 'w'});
+const e5 = E(e4.seen, {type: 'hd-here', screen: 'w', hmr: true});
+const long = E({}, {type: 'hd-here', screen: 'x', error: 'a'.repeat(400)});
+out.err = {e1, e2, e3, e4, e5, longLen: Array.from(long.show).length, longEnd: long.show.slice(-1),
+  bad: [E({}, null), E({}, {type: 'other', screen: 'w', error: 'x'}), E({}, {type: 'hd-here', error: 'x'}), E({}, {type: 'hd-here', screen: 'w', error: '   '}), E(null, {type: 'hd-here', screen: 'w', error: 3})]};
 console.log(JSON.stringify(out));
 """
 
@@ -84,3 +94,14 @@ def test_reduce_here_lifts_only_by_rule(out):
     assert out["firstKeeps"] and out["earlyKeeps"]
     assert out["hmrLifts"] == ["a"], "앱 카드만 걷히고 정적 카드 덮개는 그대로"
     assert out["staticKeeps"] and out["missingKeeps"]
+
+
+def test_here_error_once_per_card_and_text(out):
+    e = out["err"]
+    assert e["e1"]["show"] == "/src/twin/stages.js: boom" and e["e1"]["seen"] == {"w": "/src/twin/stages.js: boom"}, "공백 정리"
+    assert e["e2"]["show"] is None and not e["e2"]["clear"], "같은 카드·같은 글 = 다시 띄우지 않음"
+    assert e["e3"]["show"] == "/src/settings/store.js: nope", "글이 바뀌면 다시"
+    assert e["e4"]["clear"] and e["e4"]["seen"] == {} and e["e4"]["show"] is None, "다시 잘 실리면 걷기"
+    assert not e["e5"]["clear"], "없는 것은 다시 걷지 않음"
+    assert e["longLen"] == 200 and e["longEnd"] == "…"
+    assert all(b["show"] is None and not b["clear"] for b in e["bad"]), e["bad"]
