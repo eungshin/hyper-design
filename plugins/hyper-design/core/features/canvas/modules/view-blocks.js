@@ -1,5 +1,5 @@
 /* View — 요소 막대(블록 편집, task 49a·49b): 고른 요소 옆 [상위][글자][속성][지우기][복제][↑][↓][바꾸기][아래에 넣기][메모] · 속성 칸 · 부품 고르기 · 단축키 · 쓴 뒤 같은 요소 다시 고르기.
-   규칙(켜짐·앱 = AI 요청·자리·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model).
+   규칙(켜짐·앱 = AI 요청·자리·너비/⋯·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model). 자리를 고를 때 같은 출처 화면의 둘레 글 상자를 읽어 넘긴다(못 읽으면 없이).
    상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형}
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
    편집 자체는 셸이 한다 — 단추는 onAct(fn) 로 받은 fn(act, sel) 하나로만 나간다(sel.attrs = 바꿀 속성 {이름: 값} · sel.part = 고른 부품 {key, title, ok}|null).
@@ -11,13 +11,19 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
-  '#elbar{position:fixed;z-index:35;display:flex;gap:2px;padding:3px;background:#1c1c1c;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.25);font:600 12.5px system-ui,sans-serif}' +
-  '#elbar[hidden],#elpop[hidden]{display:none}' +
-  '#elbar button{border:0;background:none;color:#fff;font:inherit;padding:5px 9px;border-radius:6px;cursor:pointer;white-space:nowrap}' +
+  '#elbar{position:fixed;z-index:35;display:flex;flex-wrap:nowrap;gap:1px;padding:2px;background:#1c1c1c;border-radius:7px;box-shadow:0 3px 10px rgba(0,0,0,.22);font:600 12px/16px system-ui,sans-serif;opacity:.82;transition:opacity .12s}' +
+  '#elbar:hover,#elbar:focus-within,#elbar.open{opacity:1}' +
+  '#elbar[hidden],#elpop[hidden],#elbar [hidden]{display:none}' +
+  '#elbar button{border:0;background:none;color:#fff;font:inherit;padding:2px 7px;border-radius:5px;cursor:pointer;white-space:nowrap}' +
   '#elbar button:hover{background:#3a3a3a}' +
   '#elbar button[aria-disabled="true"]{opacity:.35;cursor:not-allowed}' +
   '#elbar button.ask{color:#f5c26b}' +
-  '#elbar .eb-sep{width:1px;margin:4px 3px;background:#444}' +
+  '#elbar .eb-sep{width:1px;margin:3px 2px;background:#444}' +
+  '#elpop .ep-acts{display:flex;flex-direction:column;gap:2px}' +
+  '#elpop .ep-act{border:0;background:none;text-align:left;color:#1c1c1c;border-radius:6px;padding:6px 8px;font:600 12.5px system-ui,sans-serif;cursor:pointer}' +
+  '#elpop .ep-act:hover{background:#f0f0f0}' +
+  '#elpop .ep-act[aria-disabled="true"]{opacity:.4;cursor:not-allowed}' +
+  '#elpop .ep-act.ask{color:#8a5a00}' +
   '#elpop{position:fixed;z-index:36;min-width:240px;max-width:340px;max-height:60vh;overflow:auto;padding:10px;background:#fff;color:#1c1c1c;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28);font:13px system-ui,sans-serif}' +
   '#elpop .ep-h{font-weight:700;margin:0 0 8px}' +
   '#elpop label{display:block;margin:0 0 8px;color:#555;font-size:12px}' +
@@ -45,24 +51,65 @@ function mount(ctx) {
   function items() { return B.bar(cur.h, {app: cur.app}); }
   function paint() {
     bar.innerHTML = items().map(function (it) {
-      return (it.act === 'memo' || it.act === 'swap' ? '<span class="eb-sep"></span>' : '') +
+      return (it.act === 'memo' || it.act === 'swap' ? '<span class="eb-sep" data-for="' + it.act + '"></span>' : '') +
         '<button type="button" data-act="' + it.act + '"' + (it.on ? '' : ' aria-disabled="true"') + (it.ask ? ' class="ask" data-ask="1"' : '') +
         ' title="' + ctx.esc(it.title) + '" aria-label="' + ctx.esc(it.title) + '">' + ctx.esc(it.label) + '</button>';
-    }).join('');
+    }).join('') + '<button type="button" class="eb-more" data-more="1" title="단추 더 보기" aria-label="단추 더 보기" aria-haspopup="true" hidden>⋯</button>';
     bar.dataset.screen = cur.screen; bar.dataset.path = cur.h.path; bar.dataset.where = cur.where; bar.dataset.app = cur.app ? '1' : '';
   }
   function viewRect() {
     var v = cur && cur.view && cur.view();
     return v && v.w > 0 && v.h > 0 ? v : {x: 0, y: 0, w: innerWidth, h: innerHeight};
   }
+  // 막대가 요소 칸(blocks.barLimit)보다 넓으면 뒤 단추를 "⋯" 로 — 숨긴 단추는 ⋯ 를 누르면 목록(단축키는 그대로)
+  function fitBar(a, v) {
+    var bs = Array.prototype.slice.call(bar.querySelectorAll('button[data-act]')), more = bar.querySelector('.eb-more');
+    var sepOf = function (b) { return bar.querySelector('.eb-sep[data-for="' + b.dataset.act + '"]'); };
+    bs.forEach(function (b) { b.hidden = false; var sp = sepOf(b); if (sp) sp.hidden = false; });
+    if (more) more.hidden = false;
+    var cs = getComputedStyle(bar), pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0), gap = parseFloat(cs.columnGap) || 0;
+    var ws = bs.map(function (b) { var sp = sepOf(b); return b.offsetWidth + gap + (sp ? sp.offsetWidth + (parseFloat(getComputedStyle(sp).marginLeft) || 0) * 2 + gap : 0); });
+    var n = B.fit(ws, B.barLimit(a, v) - pad, more ? more.offsetWidth + gap : 0);
+    bs.forEach(function (b, i) { b.hidden = i >= n; var sp = sepOf(b); if (sp) sp.hidden = i >= n; });
+    if (more) more.hidden = n >= bs.length;
+    bar.dataset.more = bs.slice(n).map(function (b) { return b.dataset.act; }).join(' ');
+  }
+  // 둘레 글 상자(화면 좌표) — 같은 출처 화면만 읽는다(다른 출처·file:// 는 못 읽음 → null, 막대는 예전 자리 규칙). 글 마디·그림·입력 칸, 1초 동안 문서 좌표를 기억
+  var boxes = null;
+  function others(v) {
+    var f = cur && cur.frame && cur.frame(), doc = null;
+    if (!f) return null;
+    try { doc = f.contentDocument; } catch (e) { return null; }   // 다른 출처 — 읽을 수 없으면 글 상자 없이
+    if (!doc || !doc.body) return null;
+    var w = doc.defaultView, sx = w ? w.scrollX : 0, sy = w ? w.scrollY : 0;
+    if (!boxes || boxes.doc !== doc || boxes.sx !== sx || boxes.sy !== sy || Date.now() - boxes.at > 1000) {
+      var list = [], rg = doc.createRange(), tw = doc.createTreeWalker(doc.body, 4), n;
+      var push = function (r) { if (r.width > 0 && r.height > 0) list.push({x: r.left, y: r.top, w: r.width, h: r.height}); };
+      while ((n = tw.nextNode()) && list.length < 600) {
+        var pe = n.parentElement;
+        if (!/\S/.test(n.nodeValue) || !pe || /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(pe.tagName)) continue;
+        rg.selectNodeContents(n); push(rg.getBoundingClientRect());
+      }
+      Array.prototype.slice.call(doc.querySelectorAll('img,svg,input,textarea,select,video,canvas'), 0, 200).forEach(function (e) { push(e.getBoundingClientRect()); });
+      boxes = {doc: doc, sx: sx, sy: sy, at: Date.now(), list: list};
+    }
+    var fr = f.getBoundingClientRect(), sc = f.offsetWidth ? fr.width / f.offsetWidth : 1, ox = fr.left + f.clientLeft * sc, oy = fr.top + f.clientTop * sc;
+    return boxes.list.map(function (r) { return {x: ox + r.x * sc, y: oy + r.y * sc, w: r.w * sc, h: r.h * sc}; }).filter(function (r) {
+      return r.x < v.x + v.w && r.x + r.w > v.x && r.y < v.y + v.h && r.y + r.h > v.y;
+    });
+  }
   function place() {
     if (!cur) return;
     var a = cur.anchor && cur.anchor();
     if (!a || !a.w && !a.h) { bar.hidden = true; pop.hidden = true; return; }
     bar.hidden = false;
+    var v = viewRect(); fitBar(a, v);
     var sb = ctx.$('#selbar'), r = sb && !sb.hidden ? sb.getBoundingClientRect() : null;
-    var avoid = cur.avoid ? cur.avoid() : r ? {x: r.left, y: r.top, w: r.width, h: r.height} : null;   // 비킬 것: 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대
-    var p = B.place(a, {w: bar.offsetWidth, h: bar.offsetHeight}, viewRect(), avoid);
+    var tl = ctx.$('#tools'), tr = tl && !tl.hidden && tl.offsetWidth ? tl.getBoundingClientRect() : null;
+    var avoid = [cur.avoid ? cur.avoid() : r ? {x: r.left, y: r.top, w: r.width, h: r.height} : null,   // 비킬 것(절대): 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대 · 왼쪽 도구 막대 — 둘레 글은 무르게
+                 tr ? {x: tr.left, y: tr.top, w: tr.width, h: tr.height} : null];
+    var os = null; try { os = others(v); } catch (e) { console.warn('[hd] 요소 막대: 둘레 글 상자를 읽지 못했어요 — ' + (e && e.message || e)); }
+    var p = B.place(a, {w: bar.offsetWidth, h: bar.offsetHeight}, v, avoid, os);
     bar.style.left = p.x + 'px'; bar.style.top = p.y + 'px';
     bar.dataset.side = p.over ? 'over' : p.side || (p.below ? 'below' : 'above');
     if (!pop.hidden) placePop();
@@ -72,7 +119,16 @@ function mount(ctx) {
     var y = r.bottom + 6; if (y + pop.offsetHeight > innerHeight - 8) y = Math.max(8, r.top - pop.offsetHeight - 6);
     pop.style.left = x + 'px'; pop.style.top = y + 'px';
   }
-  function closePop() { pop.hidden = true; pop.innerHTML = ''; pop.dataset.kind = ''; }
+  function closePop() { pop.hidden = true; pop.innerHTML = ''; pop.dataset.kind = ''; bar.classList.remove('open'); }
+  function openMore() {                               // ⋯ = 막대에 들어가지 못한 단추들(같은 켜짐·까닭)
+    var hid = (bar.dataset.more || '').split(' ').filter(Boolean), its = items().filter(function (x) { return hid.indexOf(x.act) >= 0; });
+    if (!its.length) return;
+    pop.dataset.kind = 'more';
+    pop.innerHTML = '<div class="ep-acts">' + its.map(function (it) {
+      return '<button type="button" class="ep-act' + (it.ask ? ' ask' : '') + '" data-act="' + it.act + '"' + (it.on ? '' : ' aria-disabled="true"') + ' title="' + ctx.esc(it.title) + '">' + ctx.esc(it.label) + '</button>';
+    }).join('') + '</div>';
+    pop.hidden = false; bar.classList.add('open'); placePop();
+  }
   function show(sel) {
     if (!sel || !sel.h || !sel.h.path) { hide(); return; }
     closePop(); cur = sel; paint(); bar.hidden = false; place();
@@ -191,6 +247,7 @@ function mount(ctx) {
   pop.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
   bar.addEventListener('click', function (e) {
     e.stopPropagation();
+    if (e.target.closest('button[data-more]')) { if (pop.dataset.kind === 'more' && !pop.hidden) closePop(); else { closePop(); openMore(); } return; }
     var b = e.target.closest('button[data-act]'); if (b) fire(b.dataset.act);
   });
   pop.addEventListener('click', function (e) {
@@ -198,6 +255,7 @@ function mount(ctx) {
     var b = e.target.closest('button'); if (!b || !cur) return;
     if (b.dataset.ep === 'cancel') { closePop(); return; }
     if (b.dataset.ep === 'apply') { applyAttr(); return; }
+    if (b.classList.contains('ep-act')) { closePop(); fire(b.dataset.act); return; }
     if (b.classList.contains('ep-part')) {
       var p = (pop.parts || [])[+b.dataset.i], kind = pop.dataset.kind, ask = b.classList.contains('ask');
       closePop(); if (p) run(kind, {ask: ask, part: p});

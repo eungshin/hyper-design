@@ -6,8 +6,8 @@
 
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
-| `modules/blocks.js` | Model | 요소 막대 규칙 — 단추 차례·켜짐(`bar`)·앱 카드 판정(`isApp`, `build_canvas.DEV_URL` 과 같은 규칙)·단축키(`keyAct`)·앱 카드 요청 글(`askText`)·막대 자리(`place`)·상위 고르기(`parentPick`)·속성 허용 목록(`ATTRS`·`attrOk`·`attrFields`)·부품 요청 글(`partAsk`). 상태 없음 |
-| `modules/view-blocks.js` | View | `#elbar`·`#elpop`(속성 칸·부품 목록) 과 그 CSS. 상태 = 지금 고른 요소 하나 `{screen, h, app, where, anchor(), frame(), view?(), avoid?()}` + 따라갈 요소 하나(쓴 뒤 15초, 저장하지 않음). `HD.feature('blocks', {needs: ['$','toast','esc','api','cardEl']})` → `{show, hide(where?), place, sel, onAct(fn), onPick(fn), wrote(res, list)}` — 편집은 셸이 `onAct` 로 준 `blockAct` 하나로만 나가고, 상위·따라가기로 새로 고른 요소는 `onPick` 으로 셸이 그린다 |
+| `modules/blocks.js` | Model | 요소 막대 규칙 — 단추 차례·켜짐(`bar`)·앱 카드 판정(`isApp`, `build_canvas.DEV_URL` 과 같은 규칙)·단축키(`keyAct`)·앱 카드 요청 글(`askText`)·막대 자리(`place`)·막대 너비(`barLimit`·`fit`)·상위 고르기(`parentPick`)·속성 허용 목록(`ATTRS`·`attrOk`·`attrFields`)·부품 요청 글(`partAsk`). 상태 없음 |
+| `modules/view-blocks.js` | View | `#elbar`·`#elpop`(속성 칸·부품 목록·⋯ 목록) 과 그 CSS · 둘레 글 상자 읽기(같은 출처 화면만, 1초 기억). 상태 = 지금 고른 요소 하나 `{screen, h, app, where, anchor(), frame(), view?(), avoid?()}` + 따라갈 요소 하나(쓴 뒤 15초, 저장하지 않음). `HD.feature('blocks', {needs: ['$','toast','esc','api','cardEl']})` → `{show, hide(where?), place, sel, onAct(fn), onPick(fn), wrote(res, list)}` — 편집은 셸이 `onAct` 로 준 `blockAct` 하나로만 나가고, 상위·따라가기로 새로 고른 요소는 `onPick` 으로 셸이 그린다 |
 | `specimen_parts.py` | Model(Python) | 부품 견본(`components.html`·`specimens.html` 의 `section.spec[data-key]`) → 화면에 넣을 뼈대(`sections`·`skeleton`·`parts`·`markup`). 파일·네트워크 없음 — 읽기는 `helper.py` 가(`parts_of`·`apply_edits`) |
 | 셸 `blockAct`·`modalSel`·`elemMemo`·`pickElAt`·`appCard`·`setMode` | — | 요소 막대·요소 메뉴의 동작을 이미 있는 편집 길(`editScreenText`·`removeElement`·`addEdits`·`showPop`)로 잇기만 한다 — 그 길이 모두 셸 것이라 모듈로 빼면 셸 함수를 ctx 로 다 넘겨야 해서. `modalSel` = 크게 보기 고른 요소의 sel(셸 `mbox`·`mscale`·`mframe` 을 읽는다) |
 
@@ -18,7 +18,8 @@
 - 앱 카드(화면 `file` = 개발 서버 주소, 또는 고른 요소에 `src`): 파일을 바꾸는 단추는 모두 "AI에게 요청" — 메모 창에 요청 글을 채워 열고, 메모 대상에 `src` 가 남아 요청문에 `소스:` 줄. 파일·DOM 을 직접 고치지 않는다. `[상위]`·`[메모]` 는 그대로(고르기·메모라서)
 - 단축키(막대가 떠 있을 때, 입력 칸 밖): `[`(자판 자리 `BracketLeft` — 한글 자판도) 상위 · Alt+↑/↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기. Esc 는 풀기·창 닫기라 쓰지 않고, Ctrl+Shift+[ 는 프로젝트 탭
 - 읽기만인 탭(`<html data-hd-tab="reader">`)은 막대 단추를 흐리게, 누르면 알리기만(상위는 고르기라 됨)
-- 막대 자리(`place`): 요소 위(왼쪽 맞춤, 보이는 칸 오른쪽을 넘으면 오른쪽 맞춤) → 자리가 없거나 비킬 것과 겹치면 아래 → 오른쪽 옆 → 왼쪽 옆. 고른 요소 위에는 놓지 않는다(요소가 보이는 칸을 다 덮을 때만 겹침 `over`). 보이는 칸 = 크게 보기는 덮개 `#modal`(도크·위쪽 줄 위가 아님), 판은 판 칸. 비킬 것 = 크게 보기는 창 제목 막대(닫기), 판은 카드 선택 막대. 판 이동·확대(`placeSelbar`)마다 다시 놓는다. 크게 보기 안 스크롤 = 막대 걷기
+- 막대 자리(`place`, polish-1): 후보 = 위(왼쪽 맞춤 → 오른쪽 맞춤) → 아래(같은 차례) → 오른쪽 옆 → 왼쪽 옆. 단단한 규칙: 고른 요소 위에는 놓지 않는다(요소가 보이는 칸을 다 덮을 때만 겹침 `over`) · 보이는 칸 안 · 비킬 것(목록)과 겹치지 않음. 무른 규칙: 둘레 글 상자(`others` — 글 마디·그림·입력 칸, 고른 요소 안 것은 빼고)를 덮지 않는 첫 후보, 모두 덮으면 덮는 넓이가 가장 작은 후보(같으면 차례). 둘레 글은 같은 출처 화면(도우미 http)에서만 읽는다 — `file://`·앱 카드는 못 읽어 예전 차례 그대로. 보이는 칸 = 크게 보기는 덮개 `#modal`(도크·위쪽 줄 위가 아님), 판은 판 칸. 비킬 것 = 크게 보기는 창 제목 막대(닫기), 판은 카드 선택 막대 + 왼쪽 도구 막대 `#tools`(둘 다). 판 이동·확대(`placeSelbar`)마다 다시 놓는다. 크게 보기 안 스크롤 = 막대 걷기
+- 막대 모양(polish-1): 한 줄·낮게(약 24px), 마우스가 없으면 반투명(0.82, 올리거나 ⋯ 목록이 열리면 1). 너비 한도 = `barLimit` = 요소 너비(최소 220, 보이는 칸 −16) — 넘으면 뒤 단추부터 `⋯`(`data-more`) 로 넘기고(`fit`, 최소 1개), ⋯ 를 누르면 `#elpop` 에 넘긴 단추 목록(같은 켜짐·까닭·AI 요청). 단축키는 넘긴 단추도 그대로
 - 상위 고르기: 화면에 `hd-up` → 조상 hit 들(가까운 것부터 8개) → `parentPick` = 상자가 다른 첫 조상(같은 상자 = 감싸기만 한 요소는 건너뜀). 그 요소도 막대의 모든 편집(지우기·복제·옮기기·바꾸기)을 그대로 받는다 — 섹션 통째로
 - 바로 쓰기: 글자·지우기·복제·옮기기·속성·넣기·바꾸기는 `edits.instantOf` — 도우미가 있으면 누르는 즉시 파일에(되돌리기 = `/api/restore` 되살리기), 없으면 반영 대기(미리보기: 복제 = 점선 복사본, 옮기기 = 자리 바꿈, 속성 = 잠시 바꿈 — 넣기·바꾸기는 미리보기 없음)
 - 쓴 뒤 따라가기(49b): 도우미 `/api/apply` 답 `paths = {편집 id: 그 요소의 새 경로}`(그 화면에 요소 편집 하나일 때 — 옮긴 것·넣은/바꾼 부품·같은 요소) → `view-sync` `ctx.wrote` → 막대가 기억 → 다시 실린 틀(`?v=<stamp>`)의 `hd-here` 에 `hd-find` → `hd-found` 로 다시 고른다(판·크게 보기 모두, 48a 교체 틀). Alt+↑ 를 이어 눌러도 다시 고를 필요가 없다
@@ -38,4 +39,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/blocks.js` · `view-blocks.js` · `specimen_parts.py`(+ `tests/test_canvas_unit_blocks.py` · `test_canvas_unit_blocks_b.py` · 브라우저 `test_canvas_blocks.py` · `test_canvas_blocks_b.py`) · `helper.py` duplicate·move·attr·insert·replace·`/api/parts` | `unit or tools or modal or helper` |
+| `modules/blocks.js` · `view-blocks.js` · `specimen_parts.py`(+ `tests/test_canvas_unit_blocks.py` · `test_canvas_unit_blocks_b.py` · `test_canvas_unit_blocks_place.py` · 브라우저 `test_canvas_blocks.py` · `test_canvas_blocks_b.py` · `test_canvas_blocks_place.py`) · `helper.py` duplicate·move·attr·insert·replace·`/api/parts` | `unit or tools or modal or helper` |

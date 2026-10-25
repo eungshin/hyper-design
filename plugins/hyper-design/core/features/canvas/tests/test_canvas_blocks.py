@@ -41,8 +41,17 @@ def _pick_element(pg, xy):
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
 
 
+def _act(pg, act):
+    """막대 단추 누르기 — 요소 칸보다 넓어 "⋯" 로 넘어간 단추면 ⋯ 목록에서(polish-1)."""
+    if pg.is_visible('#elbar [data-act="%s"]' % act):
+        pg.click('#elbar [data-act="%s"]' % act)
+    else:
+        pg.click("#elbar [data-more]")
+        pg.click('#elpop .ep-act[data-act="%s"]' % act)
+
+
 def _bar(pg):
-    return pg.evaluate("[...document.querySelectorAll('#elbar button')].map(b => [b.dataset.act, b.textContent, b.getAttribute('aria-disabled') !== 'true', !!b.dataset.ask])")
+    return pg.evaluate("[...document.querySelectorAll('#elbar button[data-act]')].map(b => [b.dataset.act, b.textContent, b.getAttribute('aria-disabled') !== 'true', !!b.dataset.ask])")
 
 
 def _frame_until(pg, js, arg=None, sid="job"):
@@ -97,7 +106,7 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
         shot(pg, "board-elbar.png")
-        pg.click('#elbar [data-act="dup"]')
+        _act(pg, "dup")
         _wait_file(pg, out, lambda s: s.count('<h1 class="title">하는 일이 무엇인가요?</h1>') == 2, "복제가 파일에 바로 써지지 않았다")
         assert pg.evaluate("(" + NOTES_JS + ").length") == 0, "반영 대기로 남지 않는다"
         assert pg.is_hidden("#elbar"), "바뀐 카드의 고른 요소는 풀린다"
@@ -192,7 +201,7 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
     assert pg.get_attribute("#elbar", "data-where") == "modal"
     shot(pg, "modal-elbar.png")
-    pg.click('#elbar [data-act="down"]')
+    _act(pg, "down")
     wait_notes(pg, 2)
     assert notes_of(pg)[1]["edit"] == "move" and notes_of(pg)[1]["op"] == "down", notes_of(pg)
     mf.wait_for_function("() => document.querySelector('.lead').nextElementSibling === null || document.querySelector('.lead').previousElementSibling.classList.contains('tile-grid')", timeout=3000)
@@ -243,7 +252,7 @@ def test_app_card_bar_turns_edits_into_ai_requests(ctx, app_out):
     bar = _bar(pg)
     assert all(b[3] for b in bar if b[0] not in ("parent", "memo")) and not any(b[3] for b in bar if b[0] in ("parent", "memo")), ("앱 카드 = 편집 단추는 모두 AI 요청(상위·메모는 아님)", bar)
     shot(pg, "board-elbar-app.png")
-    pg.click('#elbar [data-act="dup"]')
+    _act(pg, "dup")
     pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
     assert pg.input_value("#pnote").startswith("요소 복제"), pg.input_value("#pnote")
     pg.click("#padd")

@@ -21,6 +21,7 @@ out.allButLeft = B.place(R(400, 300, 200, 20), S, V, null, [R(400, 276, 200, 18)
 out.least = B.place(A, S, V, null, [R(100, 290, 10, 4), R(100, 326, 300, 30), R(306, 300, 300, 30), R(0, 300, 99, 30)]);   // 어디든 겹침 → 가장 적게(위)
 out.inside = B.place(A, S, V, null, [R(110, 302, 50, 16)]);                      // 고른 요소 안 글은 비킬 것이 아님
 out.hard = B.place(A, S, V, R(0, 260, 1000, 40), [R(100, 326, 200, 18)]);         // 위는 창 제목 막대(단단) · 아래는 글 → 옆
+out.avoidList = B.place(R(100, 300, 260, 20), S, V, [R(0, 0, 1000, 10), R(340, 250, 40, 30)], [R(100, 276, 50, 18), R(100, 326, 300, 18)]);   // 비킬 것 여러 개(도구 막대) — 위 왼쪽 맞춤 = 글 · 위 오른쪽 맞춤 = 도구 막대 · 아래 = 글
 out.rightAlign = B.place(R(100, 300, 400, 20), {w: 150, h: 26}, V, null, [R(100, 276, 100, 18)]);   // 왼쪽 맞춤 위는 글 → 오른쪽 맞춤 위
 out.noOthers = B.place(A, S, V, null);                                           // 예전처럼(others 없음)
 out.bad = B.place(A, S, V, null, [null, {x: 'a'}, R(100, 276, 200, 18)]);        // 깨진 상자는 건너뜀
@@ -72,6 +73,11 @@ def test_text_inside_the_selected_element_is_not_an_obstacle(js):
 
 def test_window_title_bar_stays_hard_and_text_is_soft(js):
     assert js["hard"]["side"] == "right", ("위 = 창 제목 막대(절대 안 됨), 아래 = 글 → 옆", js["hard"])
+
+
+def test_every_hard_rect_in_an_avoid_list_is_respected(js):
+    p = js["avoidList"]
+    assert p["side"] == "right" and p["x"] == 100 + 260 + 6, ("위 왼쪽 맞춤 = 글 · 위 오른쪽 맞춤 = 도구 막대(단단) · 아래 = 글 → 옆", p)
 
 
 def test_right_aligned_above_is_tried_before_going_below(js):

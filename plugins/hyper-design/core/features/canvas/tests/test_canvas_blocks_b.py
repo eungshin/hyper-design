@@ -7,7 +7,7 @@ import pytest
 
 from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, zoom_to  # noqa: F401
 from test_canvas_text_remove import _open, _frame, _serve, out  # noqa: F401
-from test_canvas_blocks import _xy, _pick_element, _bar, _frame_until, _logged, _job, _wait_file, _modal, H1, TILE2
+from test_canvas_blocks import _act, _xy, _pick_element, _bar, _frame_until, _logged, _job, _wait_file, _modal, H1, TILE2
 
 SHOTS = Path(os.environ.get("HD_SHOTS_49B", Path(tempfile.gettempdir()) / "claude" / "t49b"))
 
@@ -87,7 +87,7 @@ def test_large_view_parent_button_and_bracket_key_walk_up_to_a_section(ctx, out)
     mf.click(TILE2)
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
     assert "tile" in _path(pg) and "nth-of-type(2)" in _path(pg), _path(pg)
-    pg.click('#elbar [data-act="parent"]')
+    _act(pg, "parent")
     _wait_path(pg, lambda p: p.endswith("div.tile-grid") or p.endswith("div.tile-grid:nth-of-type(1)"), "[상위] = 타일 묶음")
     shot(pg, "step2-modal-parent-grid.png")
     pg.keyboard.press("BracketLeft")
@@ -167,8 +167,8 @@ def test_attr_fields_write_img_alt_at_once_and_undo_restores(ctx, out):
     try:
         mf = _modal_helper(pg)
         mf.click(IMG)
-        pg.wait_for_selector('#elbar [data-act="attr"]', timeout=8000)
-        pg.click('#elbar [data-act="attr"]')
+        pg.wait_for_selector('#elbar [data-act="attr"]', state="attached", timeout=8000)
+        _act(pg, "attr")
         pg.wait_for_selector("#elpop:not([hidden]) input[data-name]", timeout=3000)
         names = pg.evaluate("[...document.querySelectorAll('#elpop input[data-name]')].map(i => [i.dataset.name, i.value])")
         assert names == [["src", "../assets/fluent/microscope.svg"], ["alt", ""]], ("허용 목록만(src·alt) — on*·style 없음", names)
@@ -197,7 +197,7 @@ def test_insert_part_below_writes_a_neutral_skeleton_and_undo_restores(ctx, out)
         mf = _modal_helper(pg)
         mf.click(".lead")
         pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
-        pg.click('#elbar [data-act="insert"]')
+        _act(pg, "insert")
         pg.wait_for_selector("#elpop .ep-part", timeout=5000)
         titles = pg.evaluate("[...document.querySelectorAll('#elpop .ep-part')].map(b => b.textContent)")
         assert "버튼" in titles and "입력 칸" in titles, titles
@@ -228,7 +228,7 @@ def test_replace_with_part_swaps_the_element(ctx, out):
         mf = _modal_helper(pg)
         mf.click(TILE2)
         pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
-        pg.click('#elbar [data-act="swap"]')
+        _act(pg, "swap")
         pg.wait_for_selector("#elpop .ep-part", timeout=5000)
         pg.locator("#elpop .ep-part", has_text="버튼").first.click()
         _wait_file(pg, out, lambda s: "대학원생·연구원<span" not in s and '<button class="btn primary">텍스트</button>' in s, "타일이 버튼 뼈대로 바뀐다")
@@ -246,7 +246,7 @@ def test_without_helper_parts_become_an_ai_request_memo(ctx, out):
     mf = _modal_helper(pg)
     mf.click(".lead")
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
-    pg.click('#elbar [data-act="insert"]')
+    _act(pg, "insert")
     pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
     assert pg.input_value("#pnote") == "이 자리에 부품 넣기 — 데이터는 화면에 맞게", pg.input_value("#pnote")
     shot(pg, "step5-fallback-memo.png")
