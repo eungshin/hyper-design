@@ -1,0 +1,86 @@
+{
+  "server": "one server (task 47-2) — the hub (hd.py home → home/home_server.py) opens each project as an in-process ProjectSession (home/registry.py); no helper process per project",
+  "auth": "Hub token (home.json, Home page) = hub routes, /v1/sessions, and any /v1/p/<name>/api/*. Session token (?hd= of the canvas URL) = that session's /v1/p/<name>/api/* and the old root /api/* (alias into the same session — the canvas JS still calls '/api/…'). Host must be 127.0.0.1:<port> or localhost:<port>.",
+  "errors": "JSON {error} everywhere except missing out files under /v1/p/<name>/ (static HTML 404, same as the helper). POST/PUT order: Host + token (403) → size (413) → known route (404) → JSON (400).",
+  "start_state": "hub + helper proj-a (as hub.json/helper.json) + proj-c (hdfix out: screens home, list; .hd-canvas.json rev 3) opened in the hub by POST /api/open before the replay; ${session} = proj-c's session token, ${hub} = hub token. Cases run in order and share state.",
+  "routes": [
+    {
+      "method": "GET", "path": "/v1/sessions", "callers": ["hd_client.hub_markers (hd ls, notes, reply, claim, open)"],
+      "request": "hub token", "response": "{sessions:[{pid, project, out, url, token, port, agent, started, prefix, hub:true}]}",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/v1/sessions", "token": "${hub}"},
+         "expect": {"status": 200, "json": {"sessions": {"$list": {"pid": "int", "project": "str", "out": "str", "url": "str", "token": "str", "port": "int", "agent": "str|null", "prefix": "str", "hub": {"$eq": true}}, "$min": 1}}}},
+        {"name": "session token is not enough", "request": {"method": "GET", "path": "/v1/sessions", "token": "${session}"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/v1/sessions", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/v1/p/<name>/", "callers": ["browser (canvas page — the URL /api/open returns)"],
+      "request": "no token", "response": "the canvas index.html with the same injections as the helper page; /v1/p/<name> (no slash) = 301 to the slash form",
+      "cases": [
+        {"name": "no slash redirects", "request": {"method": "GET", "path": "/v1/p/proj-c", "token": false}, "expect": {"status": 301}},
+        {"name": "page", "request": {"method": "GET", "path": "/v1/p/proj-c/", "token": false},
+         "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdHelper=true", "window.__hdKeyPath=", "window.__hdOut=", "window.__hdAgent=", "window.__hdState="]}},
+        {"name": "index.html", "request": {"method": "GET", "path": "/v1/p/proj-c/index.html?hd=${session}", "token": false}, "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdState="]}},
+        {"name": "screen file", "request": {"method": "GET", "path": "/v1/p/proj-c/screens/home.html", "token": false}, "expect": {"status": 200, "ctype": "text/html"}},
+        {"name": "dot file hidden", "request": {"method": "GET", "path": "/v1/p/proj-c/.hd-canvas.json", "token": false}, "expect": {"status": 404}},
+        {"name": "missing file", "request": {"method": "GET", "path": "/v1/p/proj-c/nope.html", "token": false}, "expect": {"status": 404}},
+        {"name": "project not open", "request": {"method": "GET", "path": "/v1/p/zz/", "token": false}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "bad host", "request": {"method": "GET", "path": "/v1/p/proj-c/", "token": false, "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/v1/p/<name>/api/*", "callers": ["SDK (47-3)", "hd_client (prefix of a hub marker)"],
+      "request": "session token or hub token — same routes and shapes as helper.json", "response": "as helper.json",
+      "cases": [
+        {"name": "state with the session token", "request": {"method": "GET", "path": "/v1/p/proj-c/api/state", "token": "${session}"}, "expect": {"status": 200, "json": {"rev": {"$eq": 3}, "state": {"notes": {"$list": "dict"}}}}},
+        {"name": "state with the hub token", "request": {"method": "GET", "path": "/v1/p/proj-c/api/state", "token": "${hub}"}, "expect": {"status": 200, "json": {"rev": "int", "state": "dict"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/v1/p/proj-c/api/state", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "wrong token", "request": {"method": "GET", "path": "/v1/p/proj-c/api/state", "token": "wrong"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "files", "request": {"method": "GET", "path": "/v1/p/proj-c/api/files", "token": "${session}"}, "expect": {"status": 200, "json": {"seq": "int", "changed": "list"}}},
+        {"name": "unknown", "request": {"method": "GET", "path": "/v1/p/proj-c/api/nope", "token": "${session}"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "project routes answer inside a session too", "request": {"method": "GET", "path": "/v1/p/proj-c/api/tabs", "token": "${session}"}, "expect": {"status": 200, "json": {"tabs": "list"}}}
+      ]
+    },
+    {
+      "method": "POST|PUT", "path": "/v1/p/<name>/api/*", "callers": ["SDK (47-3)", "hd_client"],
+      "request": "as helper.json", "response": "as helper.json",
+      "cases": [
+        {"name": "PUT state", "request": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "body": {"rev": 3, "state": {"hidden": ["list"]}}}, "expect": {"status": 200, "json": {"rev": {"$eq": 4}}}},
+        {"name": "claim", "request": {"method": "POST", "path": "/v1/p/proj-c/api/claim", "token": "${session}", "body": {"screen": "home", "by": "test"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 5}, "screen": {"$eq": "home"}, "file": "str"}}},
+        {"name": "release", "request": {"method": "POST", "path": "/v1/p/proj-c/api/release", "token": "${hub}", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"rev": "int", "released": {"$eq": true}}}},
+        {"name": "array body", "request": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": "${session}", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown with bad JSON", "request": {"method": "POST", "path": "/v1/p/proj-c/api/nope", "token": "${session}", "raw": "{"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/v1/p/proj-c/api/apply", "token": false, "body": {"edits": []}}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "too large", "request": {"method": "PUT", "path": "/v1/p/proj-c/api/state", "token": "${session}", "size": 2097153}, "expect": {"status": 413, "json": {"error": "str"}}},
+        {"name": "project not open", "request": {"method": "POST", "path": "/v1/p/zz/api/apply", "token": "${hub}", "body": {"edits": []}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "ANY", "path": "/api/* (old root, session token)", "callers": ["canvas JS (view-state-sync, view-sync, view-tabs, view-home, view-projects, view-agents, view-blocks, shell /api/files · /api/watch)"],
+      "request": "X-HD-Token = the session token → that session (alias); hub token → hub routes as hub.json", "response": "as helper.json",
+      "cases": [
+        {"name": "state via alias", "request": {"method": "GET", "path": "/api/state?since=0", "token": "${session}"}, "expect": {"status": 200, "json": {"rev": "int", "state": "dict"}}},
+        {"name": "hub token keeps hub meaning", "request": {"method": "GET", "path": "/api/state", "token": "${hub}"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "apply via alias", "request": {"method": "POST", "path": "/api/apply", "token": "${session}", "body": {"edits": []}}, "expect": {"status": 200, "json": {"applied": {"$eq": []}, "stamp": "null"}}},
+        {"name": "watch via alias", "request": {"method": "POST", "path": "/api/watch", "token": "${session}", "body": {"files": ["screens/home.html"]}}, "expect": {"status": 200, "json": {"mtimes": {"screens/home.html": "num"}}}},
+        {"name": "projects via alias (proj-c running, same-origin url)", "request": {"method": "GET", "path": "/api/projects", "token": "${session}"},
+         "expect": {"status": 200, "json": {"$list": {"name": "str", "state": "str", "url": "str|null"}, "$min": 3}}},
+        {"name": "home via alias = this hub", "request": {"method": "GET", "path": "/api/home", "token": "${session}"}, "expect": {"status": 200, "json": {"url": "str"}}},
+        {"name": "open itself via alias (reused)", "request": {"method": "POST", "path": "/api/open", "token": "${session}", "body": {"name": "proj-c"}},
+         "expect": {"status": 200, "json": {"name": {"$eq": "proj-c"}, "url": "str", "reused": {"$eq": true}}}},
+        {"name": "open via the hub (reused)", "request": {"method": "POST", "path": "/api/open", "token": "${hub}", "body": {"name": "proj-c"}},
+         "expect": {"status": 200, "json": {"name": {"$eq": "proj-c"}, "url": "str", "reused": {"$eq": true}}}},
+        {"name": "tabs via alias", "request": {"method": "PUT", "path": "/api/tabs", "token": "${session}", "body": {"tabs": ["proj-c"]}}, "expect": {"status": 200, "json": {"tabs": {"$eq": ["proj-c"]}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/v1/p/<name>/api/stop", "callers": ["hd_client.stop (hd stop) on a hub marker"],
+      "request": "{}", "response": "{stopping:true}, then that session closes (the hub keeps running) — must stay last",
+      "cases": [
+        {"name": "stop the session", "request": {"method": "POST", "path": "/v1/p/proj-c/api/stop", "token": "${session}", "body": {}}, "expect": {"status": 200, "json": {"stopping": {"$eq": true}}}},
+        {"name": "hub still answers", "request": {"method": "GET", "path": "/api/tabs", "token": "${hub}"}, "expect": {"status": 200, "json": {"tabs": "list"}}}
+      ]
+    }
+  ]
+}

@@ -73,6 +73,9 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--shortcut [--deskt
 - `canvas/helper.py` 추가분 · 표지 쓰기·지우기(주인) · `/api/reply`(상태 파일 쓰기는 기존 `_state_write` 하나로) · 시작 때 프로젝트 목록에 넣기(`hd_client.register`, 실패해도 한 줄 남기고 계속) · `write_marker` `reply_post` `hd_home` · 왕복 라우트 `/api/stop`(정상 종료) · `/api/attach`(`srv.agent` 하나가 보낼 곳의 주인, 표지 agent 고쳐 씀 `marker_agent`) · `GET /api/projects` · `/api/open`(`hd_client` 를 부를 뿐 — 복사 없음) · `attach_post` `open_post` `marker_agent` · 덮개 `/api/claim`·`/api/release`(상태 파일 쓰기는 `_state_save` 하나) `claim_post` `release_post` · 화면 파일 지켜보기 `FileWatch`(seq·바뀐 화면, I/O 없음) `scan` `_watch_loop`(1초, `server_close` 가 멈춤) `GET /api/files`
 - `skills/open/SKILL.md` · 인자 없음 → `hd projects` 후 한 번 묻기 · 이름/경로 → `hd open` · 새로 → PRD 한 번 묻고 `/hyper-design:go` 로 넘긴 뒤 `hd save --out`
 
+## 서버 하나 (task 47-2)
+`markers()` = 파일 표지(옛 helper.py) + `hub_markers()`(허브 안 세션 — `home.json` 의 허브에 `GET /v1/sessions`, 허브 프로세스 안이면 `LOCAL` 로 HTTP 없이). 허브 표지는 `prefix` `/v1/p/<이름>` 과 `hub:true` — `_base` 가 prefix 를 붙이고, `stop` 은 그 세션만 닫는다(허브 pid 는 끄지 않음). `open_project` = `resolve` → 떠 있는 것 → 허브가 있으면 `open_in_hub`(POST /api/open) → 없으면 옛 도우미 띄우기.
+
 ## 책임 게이트
 canvas `contract.md` 의 책임 게이트를 그대로 따른다(층 · 상태마다 주인 하나 · 오류 탐지: 실패는 한 줄로 알리고 종료 코드 1, 깨진 표지는 건너뜀, 깨진 상태 파일은 오류로 알림 · 새 Model 규칙은 unit 테스트).
 

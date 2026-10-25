@@ -26,6 +26,13 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 - `GET /api/home`(도우미만) → `{url}` — 허브가 답하지 않으면 `hd.py home --no-browser` 를 떼어 띄우고 10초까지 기다림, 실패 500
 - 허브 주소 = `http://127.0.0.1:<port>/?hd=<token>` · 페이지 `<head>` 에 `window.__hdHub=true; window.__hdToken="…"`
 
+## 서버 하나 (task 47-2) — 허브가 프로젝트 세션을 품는다
+- 허브 프로세스 하나 = 홈 + 모든 프로젝트. `registry.py` `ProjectRegistry`(Client) 가 프로젝트마다 `canvas/session.py` `ProjectSession` 을 열고 닫는다(이름 → 세션, 상태 주인 = 이것). 목록·탭·별표·휴지통 파일은 그대로 `hd_client`·`home_client` 가 주인
+- 열기(`/api/open`·`/api/new` = `Ctx.opener` = `registry.open`): 이 허브에 열려 있으면 그것 · 따로 떠 있는 옛 도우미가 있으면 그것(한 out 에 쓰는 프로세스 하나) · 아니면 build_ref 빌드 뒤 세션. 휴지통에 넣으면 그 세션을 닫는다(`Ctx.closer`)
+- 주소: `/v1/p/<이름>/`(캔버스 페이지 · out 파일 · `/v1/p/<이름>/api/*` — 세션 토큰 또는 허브 토큰, 라우트는 도우미와 같은 `canvas/router.py`) · 옛 `/api/*` + 세션 토큰 = 그 세션(캔버스 JS 그대로) · 허브 토큰 = 홈 API · `GET /v1/sessions`(허브 토큰) = 열린 세션 표지. `/v1/p/<이름>`(빗금 없음) = 301 · 안 열린 이름 = 404 `{error}`
+- 세션이 쓰는 `<out>/.hd-helper.json` = `{url, pid(허브), port, token(세션)}` — 옛 helper.py 둘째 시작을 막고 `live_record`·스킬이 닿는다. 그 기록의 지난 도우미 포트가 비어 있으면 같은 세션을 그 포트에서도 낸다(별칭). 닫을 때 처음 기록으로 되돌림
+- 본문 차례: Host + 토큰(403) → 크기(허브 1 MB · 세션 2 MB, 413) → 아는 주소(404) → JSON(400). 고정: `canvas/tests/protocol/hub.json`·`helper.json`(옛 주소) · `v1.json`(새 주소)
+
 ## 썸네일
 헤드리스 Edge(없으면 Chrome) `--headless=new --screenshot --window-size=1260,780 --virtual-time-budget=6000 --hide-scrollbars` 로 `<out>/index.html`(file://). 낡음 = 그림 없음 또는 max(`.hd-canvas.json`, `index.html` mtime) 보다 오래됨(`home_model.thumb_stale`), 없어진 out·index.html 없음은 건너뜀. 한 번에 하나, 같은 이름은 한 번만 줄 섬, 요청을 막지 않음. 실패는 `[hd]` 한 줄(다음 예약 때 다시). 브라우저 없음 = 그림 없음(한 번 알림). 한 장 약 20초.
 
@@ -45,6 +52,7 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 - `home_api` · 라우트 · 상태 없음 · Ctx(hub, agent, port, after_rows, picker) · `route` `open_post` `new_post` `project_post` `forget_post` `reveal_post` `pick_post` `tabs_put` `home_get` `with_thumb`
 - `home_server` · 허브 HTTP · 서버 하나(토큰·Thumbs) · `make_hub` `serve` `bind`
 - `thumb` · 썸네일 줄·일꾼 · 줄(이름 집합) · `find_browser` `render` `stale` `Thumbs`
+- `registry` · 열린 세션들 · 이름 → ProjectSession(+ 별칭 포트·처음 기록) · 허브 포트·주소 · `open` `close` `close_all` `get` `by_token` `markers` `ctx`
 - `shortcut` · .lnk · 아이콘 · 없음 · `desktop` `pythonw` `badge_png` `ico_bytes` `make_icon` `write_shortcut` `read_shortcut`
 - `canvas/helper.py` 추가분 · `/api/projects`·`/api/open`·새 라우트를 `home_api.route` 로(`srv.home_ctx`), `PUT /api/tabs`. `open_post` 는 `home_api.open_post` 를 부르기만
 

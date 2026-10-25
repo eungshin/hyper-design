@@ -25,10 +25,13 @@ import home_model as M  # noqa: E402
 
 class Ctx:
     """서버마다 다른 것: hub(허브인가) · agent()(보낼 Paseo 에이전트) · port()(썸네일 주소의 허브 포트) ·
-    after_rows(rows)(허브: 낡은 썸네일 그리기 예약) · picker()(허브: 폴더 고르기 → 경로 | None)."""
+    after_rows(rows)(허브: 낡은 썸네일 그리기 예약) · picker()(허브: 폴더 고르기 → 경로 | None) ·
+    opener(이름, agent) → (항목, 표지, reused)(허브: 그 프로세스 안 세션으로 열기 — 없으면 hd_client.open_project, task 47-2) ·
+    home_url() → 허브 주소(허브 안 세션의 /api/home — 없으면 허브를 찾거나 띄움) · closer(이름)(휴지통·잊기 때 열린 세션 닫기)."""
 
-    def __init__(self, hub, agent=lambda: None, port=lambda: None, after_rows=None, picker=None):
+    def __init__(self, hub, agent=lambda: None, port=lambda: None, after_rows=None, picker=None, opener=None, home_url=None, closer=None):
         self.hub, self.agent, self.port, self.after_rows, self.picker = hub, agent, port, after_rows, picker
+        self.opener, self.home_url, self.closer = opener, home_url, closer
 
 
 def thumb_path(name):
@@ -67,8 +70,8 @@ def projects_get(ctx):
     return 200, rows
 
 
-def open_post(body, agent=None):
-    """hd open 과 같은 hd_client.open_project(브라우저 없음) → 탭 끝에 더함."""
+def open_post(body, agent=None, opener=None):
+    """hd open 과 같은 hd_client.open_project(브라우저 없음 — 허브 안이면 opener) → 탭 끝에 더함."""
     name = _name(body)
     if name is None:
         return 400, {"error": "name: 프로젝트 이름 또는 out 경로가 없어요"}
@@ -76,7 +79,7 @@ def open_post(body, agent=None):
     if hd_model.agent_error(a):
         return 400, {"error": hd_model.agent_error(a)}
     try:
-        e, m, reused = C.open_project(name, a)
+        e, m, reused = (opener or C.open_project)(name, a)
     except C.NotFound as x:
         return 404, {"error": str(x)}
     except C.HdError as x:
@@ -85,7 +88,7 @@ def open_post(body, agent=None):
     return 200, {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
 
 
-def new_post(body, agent=None):
+def new_post(body, agent=None, opener=None):
     if not isinstance(body, dict):
         return 400, {"error": "JSON 객체가 아니에요"}
     title = body.get("title")
@@ -96,7 +99,7 @@ def new_post(body, agent=None):
     except C.HdError as x:
         return 400, {"error": str(x)}
     try:
-        _, m, _ = C.open_project(e["name"], agent)
+        _, m, _ = (opener or C.open_project)(e["name"], agent)
     except C.HdError as x:
         return 500, {"error": "프로젝트는 만들었지만 띄우지 못했어요(%s): %s" % (e["name"], x)}
     _tabs_add(e["name"])
@@ -118,6 +121,8 @@ def project_post(body, ctx):
         return 400, {"error": str(x)}
     if fields.get("trashed") is True:
         H.change_tabs(lambda t: M.tabs_drop(t, name))
+        if ctx.closer:
+            ctx.closer(name)                             # 휴지통에 넣은 프로젝트의 세션은 닫는다(허브, 47-2)
     return 200, {"row": with_thumb(row, ctx.port())}
 
 
@@ -172,7 +177,9 @@ def tabs_put(body):
         return 400, {"error": str(x)}
 
 
-def home_get():
+def home_get(ctx=None):
+    if ctx is not None and ctx.home_url:
+        return 200, {"url": ctx.home_url()}            # 허브 안 세션 — 자기 주소(47-2)
     try:
         return 200, {"url": H.ensure_hub()}
     except C.HdError as x:
@@ -195,16 +202,16 @@ def _route(method, path, body, ctx):
         if path == "/api/tabs":
             return 200, {"tabs": H.load_tabs()}
         if path == "/api/home" and not ctx.hub:
-            return home_get()
+            return home_get(ctx)
         return None
     if method == "PUT":
         return tabs_put(body) if path == "/api/tabs" else None
     if method != "POST":
         return None
     if path == "/api/open":
-        return open_post(body, ctx.agent())
+        return open_post(body, ctx.agent(), ctx.opener)
     if path == "/api/new":
-        return new_post(body, ctx.agent())
+        return new_post(body, ctx.agent(), ctx.opener)
     if path == "/api/project":
         return project_post(body, ctx)
     if path == "/api/forget":

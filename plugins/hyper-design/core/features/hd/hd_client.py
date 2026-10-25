@@ -27,7 +27,46 @@ def home():
 
 
 def markers():
-    """표지 전부(읽을 수 없는 것은 건너뜀) — 살아 있는지는 모른다."""
+    """표지 전부(읽을 수 없는 것은 건너뜀) — 살아 있는지는 모른다. 파일 표지(옛 도우미) + 허브 안 세션(hub_markers, task 47-2)."""
+    return file_markers() + hub_markers()
+
+
+# ---------------------------------------------------------------- 허브 안 세션(task 47-2 '서버 하나')
+LOCAL = None                                          # 허브 프로세스 안에서만: () → 열린 세션 표지들(ProjectRegistry.markers) — 자기에게 HTTP 를 보내지 않게
+HUB_FILE = "home.json"
+
+
+def hub_record():
+    """<HD_HOME>/home.json → {port, pid, url, token} | None(없음·깨짐·죽은 pid)."""
+    p = home() / HUB_FILE
+    try:
+        rec = hd_model.helper_record(json.loads(p.read_text(encoding="utf-8"))) if p.is_file() else None
+    except (OSError, ValueError):
+        return None
+    if not rec or not rec.get("port") or not rec.get("token") or not rec.get("pid") or not pid_alive(rec["pid"]):
+        return None
+    return rec
+
+
+def hub_markers():
+    """허브가 연 프로젝트 세션의 표지들 — {pid(허브), project, out, url, token(세션), port(허브), agent, prefix:/v1/p/<이름>, hub:true}.
+    허브 안이면 LOCAL(핑 없이 살아 있음 local:true), 밖이면 home.json 의 허브에 GET /v1/sessions. 허브가 없거나 답이 없으면 []."""
+    if LOCAL is not None:
+        return [dict(m, local=True) for m in LOCAL()]
+    rec = hub_record()
+    if rec is None:
+        return []
+    req = urllib.request.Request("http://127.0.0.1:%d/v1/sessions" % int(rec["port"]), headers={"X-HD-Token": rec["token"]})
+    try:
+        with urllib.request.urlopen(req, timeout=PING_TIMEOUT) as r:
+            rows = json.loads(r.read())
+    except (OSError, ValueError):
+        return []
+    return [m for m in rows.get("sessions", []) if isinstance(m, dict) and m.get("port") and m.get("token") and m.get("out")]         if isinstance(rows, dict) else []
+
+
+def file_markers():
+    """~/.hyper-design/active/<pid>.json 표지 전부(옛 helper.py 가 쓰고 지움)."""
     d = home() / "active"
     out = []
     for p in sorted(d.glob("*.json")) if d.is_dir() else []:
@@ -41,10 +80,12 @@ def markers():
 
 
 def _base(m):
-    return "http://127.0.0.1:%d" % int(m["port"])
+    return "http://127.0.0.1:%d" % int(m["port"]) + (m.get("prefix") or "")   # 허브 세션 = /v1/p/<이름> 아래
 
 
 def ping(m, timeout=PING_TIMEOUT):
+    if m.get("local"):                                # 이 허브 프로세스 안 세션 — 열려 있으면 살아 있다
+        return True
     req = urllib.request.Request(_base(m) + "/api/state", headers={"X-HD-Token": m["token"]})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -284,9 +325,8 @@ class TimedOut(HdError):
     code = 2
 
 
-def open_project(target, agent=None):
-    """이름 | out 경로 → (항목, 표지, reused). 떠 있으면 그 도우미, 아니면 빌드 후 떼어 띄움. 브라우저는 열지 않는다.
-    모르는 이름·없어진 out → NotFound, 빌드·띄우기 실패 → HdError. hd open 과 도우미 POST /api/open 이 같이 쓴다."""
+def resolve(target):
+    """이름 | out 경로 → (항목, out Path). out 경로가 목록에 없으면 넣는다. 모르는 이름·없어진 out → NotFound."""
     reg = load_projects()
     e = P.find(reg, target)
     if e is None and is_out(target):
@@ -298,8 +338,35 @@ def open_project(target, agent=None):
     o = pathlib.Path(e["out"])
     if not is_out(o):
         raise NotFound("'%s' 의 out 폴더가 없어요(없음): %s — 링크만 지우려면 hd forget %s" % (e["name"], o, e["name"]))
+    return e, o
+
+
+def open_in_hub(hub, e, agent=None):
+    """허브에 POST /api/open → (항목, 그 세션 표지, reused). 허브가 거절하면 HdError(모름 = NotFound)."""
+    body = {"name": e["name"]}
+    if agent:
+        body["agent"] = agent
+    code, res = call({"port": hub["port"], "token": hub["token"]}, "/api/open", body, timeout=120)
+    if code == 404:
+        raise NotFound(res.get("error", "모르는 프로젝트예요"))
+    if code != 200:
+        raise HdError("홈 서버가 열지 못했어요(%d): %s" % (code, res.get("error", "")))
+    k = P.key(abs_out(e["out"]))
+    m = next((x for x in hub_markers() if P.key(abs_out(x["out"])) == k), None)
+    if m is None:                                     # 허브가 따로 떠 있던 옛 도우미를 돌려줬다
+        m = serving(e["out"]) or {"url": res["url"], "pid": res.get("pid"), "agent": res.get("agent"), "out": e["out"]}
+    return e, m, bool(res.get("reused"))
+
+
+def open_project(target, agent=None):
+    """이름 | out 경로 → (항목, 표지, reused). 떠 있으면 그 도우미, 아니면 빌드 후 떼어 띄움. 브라우저는 열지 않는다.
+    모르는 이름·없어진 out → NotFound, 빌드·띄우기 실패 → HdError. hd open 과 도우미 POST /api/open 이 같이 쓴다."""
+    e, o = resolve(target)
     m = serving(o) or live_record(o)                   # 표지가 없어도 .hd-helper.json 의 도우미가 답하면 그것(#271 — 둘째를 띄우지 않는다)
     reused = m is not None
+    hub = None if reused or LOCAL is not None else hub_record()
+    if hub is not None:                                # 허브가 떠 있으면 그 안에서 연다(한 주소 — task 47-2). 옛 도우미 띄우기는 허브가 없을 때만
+        return open_in_hub(hub, e, agent)
     if not reused:
         code, tail = build(o)
         if code != 0:
@@ -431,6 +498,14 @@ def stop(m, wait=STOP_WAIT):
         code, _ = call(m, "/api/stop", {}, timeout=2)
     except HdError:
         code = None
+    if m.get("hub"):                                  # 허브 안 세션 — 그 세션만 닫는다(허브 pid 는 절대 끄지 않음)
+        k = P.key(abs_out(m["out"]))
+        end = time.time() + wait
+        while code == 200 and time.time() < end:
+            if not any(P.key(abs_out(x["out"])) == k for x in hub_markers()):
+                return "route"
+            time.sleep(0.1)
+        return "gone" if code != 200 else "route"
     if code == 200:
         end = time.time() + wait
         while time.time() < end:

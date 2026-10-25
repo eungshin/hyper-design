@@ -10,6 +10,7 @@ import hd_client as C  # noqa: E402
 import home_api as A  # noqa: E402
 import home_client as H  # noqa: E402
 import home_server as S  # noqa: E402
+import registry as RG  # noqa: E402
 
 PNG = b"\x89PNG\r\n\x1a\nfake"
 
@@ -63,6 +64,7 @@ def env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(H, "reveal", lambda out: revealed.append(out))
     monkeypatch.setattr(C, "open_project", fake_open)
+    monkeypatch.setattr(RG.ProjectRegistry, "open", lambda self, name, agent=None: fake_open(name, agent))   # 허브는 제 안 세션으로 연다(47-2)
     srv = S.make_hub(0, renderer=renderer, picker=lambda: picks.pop(0) if picks else None)
     t = threading.Thread(target=srv.serve_forever, daemon=True); t.start()
     hub = Hub(srv)
