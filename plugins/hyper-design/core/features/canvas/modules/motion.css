@@ -141,6 +141,37 @@ svg.lks path.lk { transition: opacity var(--duration-quick) var(--focus-ease); }
   .ltag { transition: none !important; animation: none !important; }
 }
 
+/* 8. 생성 중 빈 틀(S5, view-placeholder) — 무채색 쓸기 2.5s linear ∞ + 숨쉬기 2.5s opacity .3↔.85(Stitch aurora 값), 판 바깥 색은 --ui-* 만 */
+.card.hd-gen-on .phone { border: 0 !important; box-shadow: 0 0 0 1px var(--ui-line, #e3e3df) !important; }
+.card.hd-gen-on .blank { visibility: hidden; }
+.hd-gen-slot { position: absolute; overflow: hidden; border-radius: var(--card-r, 28px); background: var(--ui-surface, #fff); box-shadow: 0 0 0 1px var(--ui-line, #e3e3df); pointer-events: none; z-index: 2; }
+.hd-gen { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; background: var(--ui-line, #e3e3df); pointer-events: none; z-index: 1; }
+.hd-gen-sheen {
+  position: absolute; inset: 0; opacity: .3;
+  background: linear-gradient(110deg, transparent 25%, var(--ui-surface, #fff) 50%, transparent 75%) 0 0 / 250% 100% no-repeat;
+  animation: hd-gen-sweep 2.5s linear infinite, hd-gen-breath 2.5s ease-in-out infinite;
+}
+@keyframes hd-gen-sweep { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+@keyframes hd-gen-breath { 0%, 100% { opacity: .3; } 50% { opacity: .85; } }
+.hd-gen-msg {
+  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); padding: 0 24px;
+  display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--ts, 1)); text-align: center;
+  font: 600 calc(16px * var(--ts, 1))/1.3 system-ui, sans-serif; color: var(--ui-badge, #5f5f5a);
+}
+.hd-gen-s { font-weight: 400; font-size: calc(13px * var(--ts, 1)); color: var(--ui-muted, #8a8a85); }
+.hd-gen-s[hidden] { display: none; }
+.hd-gen-clear { display: none; pointer-events: auto; cursor: pointer; margin-top: calc(4px * var(--ts, 1)); padding: calc(4px * var(--ts, 1)) calc(12px * var(--ts, 1));
+  border: 1px solid var(--ui-line, #e3e3df); border-radius: 999px; background: var(--ui-surface, #fff); color: var(--ui-primary, #2b2b29); font: 500 calc(13px * var(--ts, 1)) system-ui, sans-serif; }
+.hd-gen[data-state="failed"] { background: var(--ui-surface, #fff); box-shadow: inset 0 0 0 2px var(--ui-line, #e3e3df); }
+.hd-gen[data-state="failed"] .hd-gen-sheen { display: none; }
+.hd-gen[data-state="failed"] .hd-gen-clear { display: inline-block; }
+.hd-gen[data-state="failed"] .hd-gen-msg { color: var(--ui-primary, #2b2b29); }
+#toast .hd-gen-view { margin-left: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .hd-gen-sheen { animation: none !important; opacity: .55; }
+}
+body.nomotion .hd-gen-sheen { opacity: .55; }
+
 /* 애니메이션 끄기(전환 메뉴 체크, prefs.motion=false) — 움직임 줄이기와 같다 */
 body.nomotion *, body.nomotion *::after { transition: none !important; animation: none !important; }
 body.nomotion #modal[hidden].is-closing { display: none; }
