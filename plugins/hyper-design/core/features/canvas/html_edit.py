@@ -227,20 +227,33 @@ def _dup_patch(src, el, path):
 
 
 def _move_patch(src, el, path, way):
-    """옮기기: 앞(up)·뒤(down) 형제 요소와 원문 조각 맞바꾸기 — 둘 사이 글·공백·주석은 제자리."""
-    if way not in ("up", "down"):
-        raise ValueError("옮길 방향은 up·down 이에요: %s" % way)
+    """옮기기: up·down = 앞·뒤 형제 요소와 맞바꿈 · 정수 = 형제 요소(script·style 등 빼고) 사이 그 자리로(49c 끌기 — 쓰기·되돌리기 하나).
+    둘 사이 글·공백·주석은 제자리 — 요소 원문만 돌아간다."""
     _block_ok(el, path, "옮길")
     sibs = [c for c in el.parent.children if c.tag not in SIB_SKIP]
     i = sibs.index(el)
-    j = i - 1 if way == "up" else i + 1
-    if j < 0:
-        raise ValueError("맨 위 요소라 더 위로 옮길 수 없어요: " + path)
-    if j >= len(sibs):
-        raise ValueError("맨 아래 요소라 더 아래로 옮길 수 없어요: " + path)
-    x, y = (sibs[j], el) if way == "up" else (el, sibs[j])
-    xa, xb, ya, yb = x.start, _end(x, path, "옮길"), y.start, _end(y, path, "옮길")
-    return xa, yb, src[ya:yb] + src[xb:ya] + src[xa:xb]
+    if way in ("up", "down"):
+        j = i - 1 if way == "up" else i + 1
+        if j < 0:
+            raise ValueError("맨 위 요소라 더 위로 옮길 수 없어요: " + path)
+        if j >= len(sibs):
+            raise ValueError("맨 아래 요소라 더 아래로 옮길 수 없어요: " + path)
+    elif isinstance(way, int) and not isinstance(way, bool):
+        j = way
+        if not 0 <= j < len(sibs):
+            raise ValueError("옮길 자리가 형제 범위(0~%d) 밖이에요: %d" % (len(sibs) - 1, j))
+        if j == i:
+            raise ValueError("이미 그 자리예요: " + path)
+    else:
+        raise ValueError("옮길 방향은 up·down 이나 자리 번호예요: %s" % (way,))
+    run = sibs[min(i, j):max(i, j) + 1]
+    ends = [_end(c, path, "옮길") for c in run]
+    order = [el] + run[:-1] if j < i else run[1:] + [el]
+    pieces = {id(c): src[c.start:e] for c, e in zip(run, ends)}
+    body = ""
+    for k, c in enumerate(order):
+        body += pieces[id(c)] + (src[ends[k]:run[k + 1].start] if k + 1 < len(run) else "")
+    return run[0].start, ends[-1], body
 
 
 # 블록 조립(task 49b): 속성 칸 — 허용 목록만(on*·style 은 절대), 스크립트 주소 거절. 같은 목록: palette.js ATTR_OK · blocks.js ATTRS
@@ -319,10 +332,9 @@ def _after(src, el, op, value, p):
         return None
     if op == "insert":
         return p[0] + (_end(el, "", "") - el.start) + len(_lead(src, el.start))
-    if op == "move" and value == "down":
-        sibs = [c for c in el.parent.children if c.tag not in SIB_SKIP]
-        y = sibs[sibs.index(el) + 1]
-        return p[0] + (_end(y, "", "") - y.start) + (y.start - _end(el, "", ""))
+    if op == "move" and (value == "down" or (isinstance(value, int) and not isinstance(value, bool)
+                                             and value > [c for c in el.parent.children if c.tag not in SIB_SKIP].index(el))):
+        return p[0] + len(p[2]) - (_end(el, "", "") - el.start)   # 뒤로 옮김 = 조각 끝에 그 요소
     return p[0] if op in ("move", "replace") else el.start
 
 
@@ -341,7 +353,7 @@ def edit_one(src, path, op, value):
 
 def edit_html(src, edits):
     """edits = [(path, op, value)] — op: text(요소 안 내용 전부를 value 로, '' = 비우기) | remove(요소 통째로) | link(value=도착 id) | cut
-    | duplicate(바로 뒤에 복사본, 복사본 id·data-region 뺌) | move(value = up|down, 형제와 맞바꿈)
+    | duplicate(바로 뒤에 복사본, 복사본 id·data-region 뺌) | move(value = up|down, 형제와 맞바꿈 | 정수 = 형제 요소 사이 그 자리로, 49c)
     | attr(value = {name, value} — 허용 목록만) | insert·replace(value = 부품 뼈대 마크업 — 도우미가 key 로 뽑은 것만, task 49b).
     원문 위치 기준으로 뒤에서부터 바꾼다. 같은 자리 두 편집 = 나중 것, 겹치는 자리(안팎) = ValueError."""
     tree, spans = Tree(src), {}

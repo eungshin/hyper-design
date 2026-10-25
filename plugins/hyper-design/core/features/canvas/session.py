@@ -148,6 +148,11 @@ def apply_edits(out, edits, stamp=None, build=None):
                 op = ("duplicate", None)
             elif kind == "move" and e.get("op") in ("up", "down"):
                 op = ("move", e["op"])
+            elif kind == "move" and e.get("op") == "to":   # 끌기 한 번 = 쓰기 하나(49c) — to = 형제 요소 사이 새 자리(0부터)
+                to = e.get("to")
+                if not isinstance(to, int) or isinstance(to, bool):
+                    raise ValueError("옮길 자리(to)가 정수가 아니에요: %r" % (to,))
+                op = ("move", to)
             elif kind == "attr":                        # 속성 칸(task 49b) — op = 속성 이름, value = 새 값(허용 목록은 _attr_patch)
                 op = ("attr", {"name": str(e.get("op") or ""), "value": e.get("value")})
             elif kind in ("insert", "replace"):         # 부품 넣기·바꾸기(task 49b) — value = 견본 key, 뼈대는 여기서 뽑는다(캔버스가 보낸 마크업은 쓰지 않음)

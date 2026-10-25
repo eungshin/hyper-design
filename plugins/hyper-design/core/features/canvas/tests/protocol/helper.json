@@ -168,7 +168,7 @@
     },
     {
       "method": "POST", "path": "/api/apply", "callers": ["modules/view-sync.js (Send: direct edits)"],
-      "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link, path?, value?, op?, to?, index?}]}",
+      "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link|duplicate|move|attr|insert|replace, path?, value?, op?, to?, index?}]} — move: op up|down (swap with a sibling) | op 'to' + to:<int index among element siblings, script/style/template/link/meta skipped> (one write, one undo — 49c drag)",
       "response": "{applied:[id], failed:[{id, reason}], stamp, changed:[screen], history} (stamp null and no history when nothing written)",
       "cases": [
         {"name": "ok + one failed", "request": {"method": "POST", "path": "/api/apply", "body": {"edits": [
@@ -176,6 +176,10 @@
             {"id": "e2", "screen": "zz", "edit": "text", "path": "body > h1", "value": "x"}]}},
          "save": {"stamp": "stamp"},
          "expect": {"status": 200, "json": {"applied": {"$eq": ["e1"]}, "failed": {"$list": {"id": "str", "reason": "str"}, "$min": 1}, "stamp": "str", "changed": {"$eq": ["home"]}, "history": "str"}}},
+        {"name": "move to an index = one write (49c drag)", "request": {"method": "POST", "path": "/api/apply", "body": {"edits": [
+            {"id": "m1", "screen": "list", "edit": "move", "op": "to", "to": 0, "path": "body > button"},
+            {"id": "m2", "screen": "list", "edit": "move", "op": "to", "to": "0", "path": "body > h1"}]}},
+         "expect": {"status": 200, "json": {"applied": {"$eq": ["m1"]}, "failed": {"$list": {"id": "str", "reason": "str"}, "$min": 1}, "stamp": "str", "changed": {"$eq": ["list"]}, "history": "str"}}},
         {"name": "nothing to write", "request": {"method": "POST", "path": "/api/apply", "body": {"edits": []}},
          "expect": {"status": 200, "json": {"applied": {"$eq": []}, "failed": {"$eq": []}, "stamp": "null", "changed": {"$eq": []}}}}
       ]
