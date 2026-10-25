@@ -2,7 +2,7 @@
 
 route(method, path, body, ctx) → (code, 답 객체) | None(이 모듈 주소가 아님). 토큰·Host 검사는 부르는 서버가 먼저 한다.
   GET  /api/projects            → [{name, title, out, state, url, pid, created, last_opened, starred, trashed, thumb}]
-  POST /api/open {name, agent?} → {name, out, url, pid, agent, reused} (탭 끝에 더함)
+  POST /api/open {name, agent?} → {name, out, url, pid, agent, reused, notice?} (탭 끝에 더함 · notice = 허브가 옛 코드 — 다시 켜면 반영)
   POST /api/new {title?}        → {name, title, url} — 빈 캔버스를 만들고 띄움(탭 끝에 더함)
   POST /api/project {name, title?, starred?, trashed?} → {row} (휴지통에 넣으면 탭에서 뺌)
   POST /api/forget {name}       → {ok} — 휴지통에 든 링크만(파일은 그대로)
@@ -85,7 +85,10 @@ def open_post(body, agent=None, opener=None):
     except C.HdError as x:
         return 500, {"error": str(x)}
     _tabs_add(e["name"])
-    return 200, {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+    res = {"name": e["name"], "out": e["out"], "url": m["url"], "pid": m.get("pid"), "agent": m.get("agent"), "reused": reused}
+    if m.get("notice"):
+        res["notice"] = m["notice"]                    # 허브가 옛 코드로 떠 있다(registry) — hd open 이 한 줄로 보인다
+    return 200, res
 
 
 def new_post(body, agent=None, opener=None):

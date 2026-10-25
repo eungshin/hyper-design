@@ -366,6 +366,27 @@
     var b = $('#banner'); b.hidden = false; b.textContent = '주소에 토큰이 없어요 — 터미널에서 hd home 으로 다시 여세요';
     console.error('[hd] home: ?hd= 토큰 없음');
   }
+  // 허브가 옛 코드로 떠 있다(서버가 __hdStale 를 끼움) — 띠 한 줄 + [다시 켜기]: 새 허브가 이 허브를 끄고 같은 포트로 뜨면 새 토큰의 홈으로 다시 연다
+  function restartHub(btn) {
+    btn.disabled = true; btn.textContent = '다시 켜는 중…';
+    var tries = 0;
+    function poll() {
+      if (++tries > 40) { btn.disabled = false; btn.textContent = '다시 켜기'; toast('허브가 다시 뜨지 않았어요 — 터미널에서 hd home --restart', {error: true}); return; }
+      fetch('/', {cache: 'no-store'}).then(function (r) { return r.text(); }).then(function (t) {
+        if (t.indexOf(JSON.stringify(TOKEN)) < 0 && t.indexOf('__hdToken') >= 0) location.replace('/');
+        else setTimeout(poll, 500);
+      }, function () { setTimeout(poll, 500); });   // 바뀌는 동안은 닿지 않는다 — 다시
+    }
+    api('POST', '/api/hub/restart', {}).then(function () { setTimeout(poll, 800); },
+      function (e) { btn.disabled = false; btn.textContent = '다시 켜기'; fail('허브 다시 켜기')(e); });
+  }
+  if (TOKEN && window.__hdStale) {
+    var sb = $('#banner'); sb.hidden = false; sb.textContent = '';
+    var st = document.createElement('span'); st.textContent = window.__hdStaleText || '새 버전이 있어요 — 허브를 다시 켜면 반영돼요';
+    var bt = document.createElement('button'); bt.type = 'button'; bt.textContent = '다시 켜기';
+    bt.addEventListener('click', function () { restartHub(bt); });
+    sb.appendChild(st); sb.appendChild(bt);
+  }
   window.HDHome = {state: S, reload: load};
   load();
 })();

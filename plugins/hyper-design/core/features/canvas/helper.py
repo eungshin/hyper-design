@@ -60,6 +60,9 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
   index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 
+코드 도장(code_stamp.py): 뜰 때 build_ref.code_stamp() 를 표지·.hd-helper.json 의 code 에 적는다(이 프로세스 안 Python 의 판) —
+  hd open·허브가 지금 도장과 견줘 옛 코드 도우미를 (쉬면) 끄고 새로 띄운다. 페이지를 줄 때마다 index.html 의 도장도 견줘 옛것이면 다시 빌드.
+
 구조(task 47-2): 이 파일 = CLI(main) · make_server(out 하나 서버) · 예전 이름 다시 내보내기.
   html_edit.py(Model — HTML 원문 고치기) · session.py(ProjectSession 과 부품: StateStore · History · Queue · Busy · Archive · Builder)
   · router.py(Router — 주소 → 세션 메서드, SessionHandler — 토큰·Host·크기 검사와 오류 모양)
@@ -69,6 +72,7 @@ import argparse, atexit, json, os, pathlib, signal, subprocess, sys, threading, 
 from http.server import ThreadingHTTPServer
 
 import build_canvas  # noqa: F401  — 예전 이름(helper.build_canvas)
+import build_ref
 import html_edit
 import router as R
 import session as S
@@ -92,6 +96,7 @@ import home_client  # noqa: E402
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
 BUILD_REF = HERE / "build_ref.py"                    # hd open 과 같은 빌더 — 저장소면 git HEAD 코드로(#278), 아니면 작업 트리
+CODE = None                                          # 이 도우미가 뜬 코드 도장(main 이 잰다 — 같은 프로세스 테스트는 None)
 BUILDER = BUILD                                      # 다시 빌드에 쓰는 것 — CLI(main)는 use_ref_build() 로 BUILD_REF. 같은 프로세스에서 make_server 를 쓰는 테스트는 작업 트리
 VOID = html_edit.VOID
 
@@ -220,7 +225,7 @@ def write_marker(out, srv, agent=None):
     p = d / ("%d.json" % os.getpid())
     p.write_text(json.dumps({"pid": os.getpid(), "project": hd_model.project_name(out.name, out.parent.name), "out": str(out),
                              "url": srv.url, "token": srv.token, "port": srv.server_address[1], "agent": agent or None,
-                             "started": _now()}, ensure_ascii=False), encoding="utf-8")
+                             "started": _now(), "code": CODE}, ensure_ascii=False), encoding="utf-8")
     return p
 
 
@@ -234,7 +239,8 @@ def start_check(out):
 
 
 def write_run(run, srv):
-    run.write_text(json.dumps({"url": srv.url, "pid": os.getpid(), "port": srv.server_address[1], "token": srv.token}), encoding="utf-8")
+    run.write_text(json.dumps({"url": srv.url, "pid": os.getpid(), "port": srv.server_address[1], "token": srv.token, "code": CODE}),
+                   encoding="utf-8")
 
 
 def leave_run(run, port):
@@ -263,7 +269,9 @@ def main(argv=None):
     ap.add_argument("--paseo-cmd", default=os.environ.get("HD_PASEO_CMD"))
     ap.add_argument("--no-open", action="store_true")
     a = ap.parse_args(argv)
+    global CODE
     use_ref_build()                                  # 실사용: hd open 과 같은 빌더(#278)
+    CODE = build_ref.code_stamp()                    # 이 프로세스가 뜬 코드 — 표지에 적어 옛 도우미를 알아보게
     out = pathlib.Path(a.out).resolve()
     if not (out / "index.html").is_file() or not (out / "screens.json").is_file():
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)
@@ -271,6 +279,7 @@ def main(argv=None):
     if live:
         sys.exit("이 out 은 이미 도우미가 떠 있어요(pid %s): %s — 그 주소를 쓰거나 `hd stop` 으로 끈 뒤 다시 띄우세요" % (live["pid"], live["url"]))
     srv = make_server(out, port_order(last, a.port), a.paseo_agent, a.paseo_cmd)
+    srv.session.code = build_ref.code_stamp          # 페이지를 줄 때 지금 코드와 견줌(옛 도장 index.html 이면 다시 빌드)
     marker = write_marker(out, srv, a.paseo_agent)
     srv.marker = marker
     atexit.register(lambda: marker.unlink(missing_ok=True))

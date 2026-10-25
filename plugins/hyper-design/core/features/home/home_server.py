@@ -8,10 +8,13 @@
 - 이벤트 흐름(47-4a) `/v1/p/<이름>/events` · 옛 뿌리 `/api/events` — 토큰은 머리글 또는 `?hd=`(EventSource), 처리는 canvas/router.py SessionHandler._events
 - `GET /v1/sessions`(허브 토큰) = 열린 세션 표지들 {sessions:[…]}(hd_client.hub_markers — hd ls·notes·reply·claim 이 허브를 거쳐 찾는다)
 - 본문 차례(POST·PUT): Host + 토큰(403) → 크기(413) → 아는 주소(404) → JSON(400) → 담당
-- 기록 <HD_HOME>/home.json {url, pid, port, token} — 살아 있고 답하면 다시 쓰고(브라우저만 엶), 죽었으면 덮어씀. 정상 종료 때 지움(세션도 모두 닫음)
+- 기록 <HD_HOME>/home.json {url, pid, port, token, code} — 살아 있고 답하면 다시 쓰고(브라우저만 엶), 죽었으면 덮어씀. 정상 종료 때 지움(세션도 모두 닫음)
+- 코드 도장(canvas/code_stamp.py): 허브가 옛 코드로 떠 있으면 홈 화면에 window.__hdStale(띠 '새 버전이 있어요' + [다시 켜기]) · hd home 이 한 줄.
+  스스로 끄지 않는다. POST /api/hub/stop(허브 토큰) = 정상 종료 · POST /api/hub/restart = `hd home --restart --port <지금 포트>` 를 떼어 띄움
+  (그것이 이 허브를 /api/hub/stop 으로 끄고 같은 포트로 뜬다 — 옛 허브라 그 주소가 없으면 python pid 만 강제 종료)
 - 주소 = http://127.0.0.1:<port>/?hd=<token>
 """
-import atexit, json, os, pathlib, re, secrets, signal, sys, threading, urllib.parse, webbrowser
+import atexit, json, os, pathlib, re, secrets, signal, subprocess, sys, threading, time, urllib.parse, webbrowser
 from http.server import ThreadingHTTPServer
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -24,6 +27,7 @@ import home_model as M  # noqa: E402
 import thumb as T  # noqa: E402
 import registry as RG  # noqa: E402  — 프로젝트 세션들(task 47-2) — canvas 폴더를 path 에 넣는다
 import router as R  # noqa: E402  — 세션 주소 처리(canvas/router.py)
+import code_stamp as CS  # noqa: E402  — 코드 도장(순수 Model, canvas — registry 가 path 에 넣음)
 
 PORT = 12270
 
@@ -66,8 +70,42 @@ def bind(handler, port):
         return Hub(("127.0.0.1", 0), handler)
 
 
-def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build=None, paseo=None):
-    """허브 서버(아직 돌지 않음) → srv(srv.url · srv.token · srv.thumbs · srv.registry). renderer·picker·page·build 는 테스트가 바꿔 끼운다."""
+HD_PY = HERE.parent / "hd" / "hd.py"
+STOP_WAIT = 10.0
+
+
+def spawn_restart(port):
+    """`hd home --restart --no-browser --port <port>` 를 떼어 띄운다(이 허브를 끄고 같은 포트로 새 코드 허브) — 출력은 <HD_HOME>/hub-restart.log."""
+    log = H.home() / "hub-restart.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        kw = {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    else:
+        kw = {"creationflags": 0, "start_new_session": True}
+    with open(log, "ab") as f:
+        subprocess.Popen([sys.executable, str(HD_PY), "home", "--restart", "--no-browser", "--port", str(int(port))], stdin=subprocess.DEVNULL,
+                         stdout=f, stderr=subprocess.STDOUT, close_fds=True, env=dict(os.environ, PYTHONIOENCODING="utf-8"), **kw)
+
+
+def stop_hub(rec, wait=STOP_WAIT):
+    """떠 있는 허브 끄기 → 'route'(POST /api/hub/stop 으로 스스로 끔) | 'kill'(그 주소가 없는 옛 허브 · 답 없음 — python pid 강제 종료) | 'gone' | 'other'."""
+    try:
+        code, _ = C.call({"port": rec["port"], "token": rec["token"]}, "/api/hub/stop", {}, timeout=3)
+    except C.HdError:
+        code = None
+    end = time.time() + wait
+    while code == 200 and time.time() < end:
+        if not C.pid_alive(rec["pid"]):
+            return "route"
+        time.sleep(0.1)
+    how = C.kill_pid(int(rec["pid"]))
+    while how == "kill" and time.time() < end + wait and C.pid_alive(rec["pid"]):
+        time.sleep(0.1)
+    return how
+
+
+def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build=None, paseo=None, restarter=None):
+    """허브 서버(아직 돌지 않음) → srv(srv.url · srv.token · srv.thumbs · srv.registry). renderer·picker·page·build·restarter 는 테스트가 바꿔 끼운다."""
     token = token or secrets.token_urlsafe(18)
     page = pathlib.Path(page or PAGE)
     thumbs = T.Thumbs(H.home() / "thumbs", renderer)
@@ -138,7 +176,8 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
             if not page.is_file():
                 return self._send(500, ("<!doctype html><meta charset=utf-8><p>홈 화면 파일이 없어요: %s" % page).encode("utf-8"),
                                   "text/html; charset=utf-8")
-            inject = "<script>window.__hdHub=true;window.__hdToken=%s;</script>" % json.dumps(token)
+            inject = "<script>window.__hdHub=true;window.__hdToken=%s;%s</script>" % (
+                json.dumps(token), "window.__hdStale=true;window.__hdStaleText=%s;" % json.dumps(CS.HUB_NOTICE) if reg.stale() else "")
             html = page.read_text(encoding="utf-8")
             html = html.replace("<head>", "<head>" + inject, 1) if "<head>" in html else inject + html
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
@@ -199,6 +238,16 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
                 return self._json(413, {"error": "본문이 너무 커요"})
             raw = self.rfile.read(n) if n else b""
             path = urllib.parse.urlparse(self.path).path
+            if method == "POST" and path == "/api/hub/stop":     # 정상 종료(hd home --restart 가 부름) — 답한 뒤 serve_forever 를 멈춘다
+                self._json(200, {"stopping": True})
+                threading.Thread(target=srv.shutdown, daemon=True).start()
+                return None
+            if method == "POST" and path == "/api/hub/restart":  # 홈 화면 [다시 켜기] — 새 허브가 이 허브를 끄고 같은 포트로
+                try:
+                    (restarter or spawn_restart)(srv.server_address[1])
+                except OSError as e:
+                    return self._json(500, {"error": "허브를 다시 켜지 못했어요: %s" % e})
+                return self._json(200, {"restarting": True})
             if path not in {"POST": A.POST_PATHS, "PUT": A.PUT_PATHS}[method]:
                 return self._json(404, {"error": "모르는 주소"})
             try:
@@ -238,15 +287,24 @@ def _stop(signum, frame):                              # SIGTERM·SIGBREAK → C
     raise KeyboardInterrupt
 
 
-def serve(port=None, no_browser=False, on_url=None):
-    """hd home 본체 → {url, reused}. 살아 있는 허브가 있으면 그 주소(브라우저만), 아니면 여기서 띄워 끝날 때까지 돈다."""
+def serve(port=None, no_browser=False, on_url=None, restart=False):
+    """hd home 본체 → {url, reused, stale?}. 살아 있는 허브가 있으면 그 주소(브라우저만 — 옛 코드면 stale), 아니면 여기서 띄워 끝날 때까지 돈다.
+    restart = 살아 있는 허브를 먼저 끄고(stop_hub) 같은 포트로 띄운다."""
     rec = H.live_hub()
+    if rec and restart:
+        how = stop_hub(rec)
+        warn("떠 있던 허브(pid %s)를 껐어요(%s) — 지금 코드로 다시 띄워요" % (rec["pid"], how))
+        port = rec["port"] if port is None else port
+        rec = None
     if rec:
         if not no_browser:
             webbrowser.open(rec["url"])
-        return {"url": rec["url"], "pid": rec["pid"], "reused": True}
+        res = {"url": rec["url"], "pid": rec["pid"], "reused": True}
+        if CS.stale(rec.get("code"), C.code_stamp()):
+            res["stale"] = True
+        return res
     srv = make_hub(default_port() if port is None else port)
-    H.write_hub(srv.url, srv.server_address[1], srv.token)
+    H.write_hub(srv.url, srv.server_address[1], srv.token, srv.registry.code)
     atexit.register(H.clear_hub)
     for name in ("SIGTERM", "SIGBREAK"):
         if hasattr(signal, name):

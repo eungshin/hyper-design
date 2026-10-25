@@ -23,9 +23,13 @@ screens.json:
  file = out 안 경로(기본 screens/<id>.html) 또는 이 PC 개발 서버 주소 http(s)://127.0.0.1|localhost[:포트]/…(앱 카드 — features/app, 링크 미리 뽑기 없음)
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
+코드 도장(code_stamp.py): index.html 의 <head> 에 <meta name="hd-code"> — 환경변수 HD_CODE_STAMP(build_ref 가 넘기는 git 나무 도장),
+없으면 빌드 입력(템플릿·모듈·motion.css·이 파일·palette.js) 내용 해시. 열기가 지금 도장과 견줘 옛 페이지를 다시 빌드한다.
 """
 import sys, os, json, re, html, pathlib, posixpath, shutil, urllib.parse
 from html.parser import HTMLParser
+
+import code_stamp
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
@@ -44,6 +48,22 @@ def modules():
     까닭: 모듈은 정의만 하고 서로를 mount 때 찾지만, View 는 읽힐 때 `HD.feature(...)` 로 자기를 등록할 수 있다 — 그때 등록부가 있어야 한다."""
     names = sorted(f.stem for f in MODULES_DIR.glob("*.js"))
     return [n for n in names if not n.startswith("view-")] + [n for n in names if n.startswith("view-")]
+
+
+def code_inputs():
+    """도장에 드는 빌드 입력 파일(작업 트리 내용 해시 — 저장소가 아닐 때)."""
+    return [TEMPLATE, *(MODULES_DIR / f"{n}.js" for n in modules()), MOTION_CSS, HERE / "build_canvas.py", HERE / "code_stamp.py", PALETTE_JS]
+
+
+def work_stamp():
+    """작업 트리 빌드 입력의 내용 도장 'w:…'(없는 파일은 뺌)."""
+    core = HERE.parents[1]
+    return code_stamp.content_stamp([(p.relative_to(core).as_posix(), p.read_bytes()) for p in code_inputs() if p.is_file()])
+
+
+def build_stamp():
+    """이 빌드가 index.html 에 적을 도장 — build_ref 가 넘긴 HD_CODE_STAMP, 없으면 작업 트리 내용."""
+    return os.environ.get("HD_CODE_STAMP") or work_stamp()
 
 
 def frame(out):
@@ -235,7 +255,7 @@ def build_index(out, m):
     lis = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
     nos = f'<noscript id="hd-links"><ul>{lis}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
-    tpl = inline_modules(tpl)
+    tpl = code_stamp.stamp_page(inline_modules(tpl), build_stamp())
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
     return len(m["screens"]), len(data["arrows"]), len(data_rows)
 

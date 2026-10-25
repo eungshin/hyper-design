@@ -8,6 +8,9 @@
   닫을 때 처음 것으로 되돌린다({port} 만 — 다음 helper.py 가 같은 포트로).
 - 옛 포트 별칭: 그 기록의 지난 도우미 포트를 열 수 있으면 같은 세션을 그 포트에서도 낸다(옛 주소·스킬의 curl 이 계속 닿게). 못 열면 [hd] 한 줄.
 - 표지 markers() = hd_client 의 표지 모양 + prefix(/v1/p/<이름>) · hub:true — hd ls·notes·reply·claim 이 허브를 거쳐 찾는다(hd_client.hub_markers).
+- 코드 도장(canvas/code_stamp.py): code = 이 허브가 뜬 코드. 열 때마다 지금 도장과 견줘 — 열린 세션의 옛 index.html = 다시 빌드(세션 refresh,
+  페이지를 줄 때도), 따로 떠 있는 옛 코드 도우미 = 쉬면 끄고 이 허브 세션으로(hd_client.freshen), 허브 자신이 옛것이면 답에 notice 한 줄
+  (허브는 스스로 끄지 않는다 — 홈 화면의 '다시 켜기' · hd home --restart).
 """
 import json, os, pathlib, sys, threading, urllib.parse
 from http.server import ThreadingHTTPServer
@@ -15,6 +18,7 @@ from http.server import ThreadingHTTPServer
 HERE = pathlib.Path(__file__).resolve().parent
 CANVAS = HERE.parent / "canvas"
 sys.path[:0] = [str(HERE), str(HERE.parent / "hd"), str(CANVAS)]
+import code_stamp as CS  # noqa: E402
 import hd_client as C  # noqa: E402
 import hd_projects as P  # noqa: E402
 import home_api as A  # noqa: E402
@@ -43,6 +47,7 @@ class ProjectRegistry:
     def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None):
         self.hub_port, self.hub_url, self.picker, self.paseo = hub_port, hub_url, picker, paseo
         self.build, self.after_rows = build or ref_build, after_rows
+        self.code = C.code_stamp()                   # 이 허브 프로세스가 뜬 코드 도장
         self.sessions = {}
         self.lock = threading.RLock()
 
@@ -68,7 +73,15 @@ class ProjectRegistry:
     def marker(self, sess):
         """hd_client 표지 모양 — prefix 가 있어 그 세션 주소로 부른다. local = 이 프로세스 안(핑 없이 살아 있음)."""
         return {"pid": os.getpid(), "project": sess.name, "out": str(sess.out), "url": self.url(sess), "token": sess.token,
-                "port": self.hub_port(), "agent": sess.queue.agent, "started": sess.started, "prefix": prefix(sess.name), "hub": True}
+                "port": self.hub_port(), "agent": sess.queue.agent, "started": sess.started, "prefix": prefix(sess.name), "hub": True,
+                "code": self.code}
+
+    def stale(self, current=None):
+        """이 허브가 옛 코드로 떠 있나(지금 도장을 모르면 아니라고)."""
+        return CS.stale(self.code, C.code_stamp() if current is None else current)
+
+    def _noticed(self, m, current):
+        return dict(m, notice=CS.HUB_NOTICE) if self.stale(current) else m
 
     def markers(self):
         with self.lock:
@@ -82,12 +95,16 @@ class ProjectRegistry:
 
     def open(self, target, agent=None):
         e, o = C.resolve(target)
+        current = C.code_stamp()
         with self.lock:
             sess = self._by_out(o)
             if sess is not None:
+                sess.refresh(current)                # 옛 코드로 구운 페이지 = 다시 빌드(허브 프로세스는 그대로 — 옛것이면 notice)
                 C.save_projects(P.touch(C.load_projects(), e["out"], C.now()))
-                return e, self.marker(sess), True
+                return e, self._noticed(self.marker(sess), current), True
             m = C.serving(o) or C.live_record(o)     # 따로 떠 있는 옛 도우미 — 같은 out 에 쓰는 프로세스를 둘로 만들지 않는다
+            if m is not None:
+                m = C.freshen(o, m, current)         # 옛 코드로 뜬 쉬는 도우미면 끄고(None) 아래에서 이 허브 세션으로
             if m is not None:
                 C.save_projects(P.touch(C.load_projects(), e["out"], C.now()))
                 return e, m, True
@@ -98,10 +115,11 @@ class ProjectRegistry:
                 C.warn("빌드 실패(%d) — 있던 index.html 로 열어요: %s" % (code, tail.splitlines()[-1] if tail else ""))
             sess = self._start(e["name"], o, agent)
         C.save_projects(P.touch(C.load_projects(), e["out"], C.now()))
-        return e, self.marker(sess), False
+        return e, self._noticed(self.marker(sess), current), False
 
     def _start(self, name, out, agent):
-        sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build, name=name).open()   # name = 이벤트의 project
+        sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build, name=name,
+                                code=lambda: C.code_stamp()).open()   # name = 이벤트의 project · code = 페이지를 줄 때 견줄 지금 도장
         sess.name, sess.started = name, C.now()
         sess.router = R.Router(home_ctx=self.ctx(sess), on_stop=lambda: threading.Thread(target=self.close, args=(name,), daemon=True).start())
         sess.record_before = self._read_record(sess.out)
@@ -165,7 +183,7 @@ class ProjectRegistry:
 
     def _write_record(self, sess):
         port = sess.alias.server_address[1] if sess.alias is not None else self.hub_port()
-        doc = {"url": self.url(sess), "pid": os.getpid(), "port": port, "token": sess.token}
+        doc = {"url": self.url(sess), "pid": os.getpid(), "port": port, "token": sess.token, "code": self.code, "hub": True}
         try:
             (sess.out / C.HELPER_FILE).write_text(json.dumps(doc), encoding="utf-8")
         except OSError as e:

@@ -74,7 +74,7 @@ def hub_path():
 
 
 def read_hub():
-    """home.json → {url, pid, port, token} | None(없음 · 깨짐 — 깨지면 [hd] 한 줄)."""
+    """home.json → {url, pid, port, token, code} | None(없음 · 깨짐 — 깨지면 [hd] 한 줄)."""
     p = hub_path()
     if not p.is_file():
         return None
@@ -83,11 +83,14 @@ def read_hub():
     except (OSError, ValueError) as e:
         C.warn("허브 기록을 읽지 못했어요(%s): %s" % (e, p))
         return None
-    return hd_model.helper_record(doc)
+    rec = hd_model.helper_record(doc)
+    if rec is not None and isinstance(doc, dict):
+        rec["code"] = doc.get("code") if isinstance(doc.get("code"), str) else None   # 그 허브가 뜬 코드 도장(옛 허브는 없음)
+    return rec
 
 
-def write_hub(url, port, token):
-    _write_json(hub_path(), {"url": url, "pid": os.getpid(), "port": port, "token": token})
+def write_hub(url, port, token, code=None):
+    _write_json(hub_path(), {"url": url, "pid": os.getpid(), "port": port, "token": token, "code": code})
 
 
 def clear_hub():

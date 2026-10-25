@@ -20,7 +20,9 @@
   hd claim <screen> [<name|path>] [--note TEXT] [--by ID]
                                           "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
   hd release <screen> [<name|path>]       덮개 걷기
-  hd home [--no-browser] [--port N]       홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server)
+  hd home [--no-browser] [--port N] [--restart]
+                                          홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server, 옛 코드면 한 줄 알림)
+                                          --restart = 떠 있는 허브를 끄고 지금 코드로 같은 포트에 다시 띄움
   hd home --shortcut [--desktop DIR]      바탕 화면에 'Hyper Design' 바로 가기(→ pythonw hd.py home)를 쓰고 끝
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
@@ -186,9 +188,10 @@ def cmd_home(a):
         return {"shortcut": str(lnk)}, "바로 가기를 만들었어요: %s" % lnk
     import home_server
     with S.client_errors():
-        res = home_server.serve(a.port, a.no_browser, on_url=lambda u: print(u, flush=True) if sys.stdout else None)
+        res = home_server.serve(a.port, a.no_browser, on_url=lambda u: print(u, flush=True) if sys.stdout else None, restart=a.restart)
     if res["reused"]:
-        return res, res["url"] + " (이미 떠 있음)"
+        stale = " · 새 버전이 있어요 — hd home --restart 로 다시 켜면 반영돼요" if res.get("stale") else ""
+        return res, res["url"] + " (이미 떠 있음)" + stale
     return res, "홈을 껐어요"
 
 
@@ -259,6 +262,7 @@ def parser():
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")
     hm.add_argument("--desktop", help="바로 가기를 쓸 폴더(기본 사용자 바탕 화면)")
+    hm.add_argument("--restart", action="store_true", help="떠 있는 허브를 끄고 지금 코드로 다시 띄움(같은 포트)")
     hm.add_argument("--port", type=int, default=None, help="허브 포트(기본 env HD_HUB_PORT | 12270, 막혔으면 빈 포트, 0 = 아무 빈 포트)")
     hm.set_defaults(fn=cmd_home)
     return ap

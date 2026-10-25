@@ -6,6 +6,8 @@
 도우미 띄우기(hd open): 떠 있는 것(표지 · <out>/.hd-helper.json 의 살아 있는 pid + 답하는 주소)이 있으면 그것 →
   아니면 build_ref.py 로 빌드 → helper.py 를 떼어 낸 프로세스로 → 표지가 생길 때까지 기다림.
   open_project 가 그 일 전부(브라우저 빼고) — hd open 과 도우미 POST /api/open 이 같이 쓴다.
+  다시 쓰기 전 코드 도장(canvas/code_stamp.py)을 견준다(freshen): 옛 도장 index.html = 다시 빌드 · 옛 코드로 뜬 도우미(표지 code ≠ 지금) = 쉬면 끄고 새로,
+  AI 덮개 중이면 그대로 두고 [hd] 한 줄. 허브 세션이면 허브(POST /api/open)가 같은 일을 한다.
 덮개: claim(POST /api/claim) · release(POST /api/release).
 왕복: stop(POST /api/stop → 표지·포트가 없어질 때까지, 안 되면 pid 강제 종료) · attach(POST /api/attach) · stream(SSE 이벤트 흐름 — 기다리기는 hd_sdk Project.wait/events, 47-4b).
 """
@@ -13,6 +15,11 @@ import datetime, json, os, pathlib, signal, socket, subprocess, sys, time, urlli
 
 import hd_model
 import hd_projects as P
+
+CANVAS = pathlib.Path(__file__).resolve().parent.parent / "canvas"
+if str(CANVAS) not in sys.path:                       # code_stamp(순수 Model) · build_ref(지금 코드 도장 재기)
+    sys.path.append(str(CANVAS))
+import code_stamp as CS  # noqa: E402
 
 STATE_FILE = ".hd-canvas.json"
 PING_TIMEOUT = 1.0
@@ -171,7 +178,6 @@ def stream(m, path, last=None, timeout=30):
 
 
 # ---------------------------------------------------------------- 프로젝트 목록 (링크만)
-CANVAS = pathlib.Path(__file__).resolve().parent.parent / "canvas"
 HELPER = CANVAS / "helper.py"
 BUILD_REF = CANVAS / "build_ref.py"
 START_WAIT = 10.0
@@ -269,7 +275,11 @@ def read_record(out):
     except (OSError, ValueError) as e:
         warn("도우미 기록을 읽지 못했어요(%s): %s" % (e, p))
         return None
-    return hd_model.helper_record(doc)
+    rec = hd_model.helper_record(doc)
+    if rec is not None and isinstance(doc, dict):
+        rec["code"] = doc.get("code") if isinstance(doc.get("code"), str) else None   # 그 도우미가 뜬 코드 도장(옛 도우미는 없음)
+        rec["hub"] = doc.get("hub") is True
+    return rec
 
 
 def pid_alive(pid):
@@ -292,7 +302,60 @@ def live_record(out, rec=None):
             return dict(mk, out=mk.get("out") or m["out"])
     except (OSError, ValueError):
         pass                                          # 표지가 없으면(다른 HD_HOME) 기록만으로
-    return dict(m, project=project_from(out), agent=None)
+    return dict(m, project=project_from(out), agent=None, code=rec.get("code"), hub=rec.get("hub") or None)
+
+
+# ---------------------------------------------------------------- 코드 도장(다시 열면 늘 지금 코드)
+_BUSY_SAID = set()                                    # 이 프로세스에서 '작업 중이라 그대로' 를 말한 out — 한 번만
+
+
+def code_stamp():
+    """지금 빌드가 쓸 캔버스 코드 도장(build_ref.code_stamp — 저장소면 git HEAD 의 core 나무) | None(재지 못함 = 판단하지 않음)."""
+    try:
+        import build_ref
+        return build_ref.code_stamp()
+    except Exception as e:                            # noqa: BLE001 — 도장을 못 재도 열기는 된다(옛 길: 다시 쓰기)
+        warn("코드 도장을 재지 못했어요(%s)" % e)
+        return None
+
+
+def page_code(out):
+    """<out>/index.html 이 품은 코드 도장 | None."""
+    try:
+        with open(pathlib.Path(out) / "index.html", encoding="utf-8", errors="replace") as f:
+            return CS.page_stamp(f.read(8192))
+    except OSError:
+        return None
+
+
+def is_busy(out):
+    """AI 덮개(state.busy)가 하나라도 있나 — 못 읽으면 쉬는 것으로(상태 파일이 깨졌으면 도우미가 따로 알린다)."""
+    try:
+        return bool(hd_model.busy_items(read_state(out)["state"].get("busy"))[0])
+    except HdError:
+        return False
+
+
+def freshen(out, m, current=None):
+    """떠 있는 서버 m 을 다시 쓰기 전 → m(그대로 · 페이지만 다시 빌드) | None(옛 코드로 뜬 쉬는 도우미를 껐다 — 부르는 쪽이 새로 띄움).
+    규칙은 code_stamp.reuse_verdict. 허브 세션(hub)은 끄지 않는다(그 프로세스가 같은 일을 한다)."""
+    current = code_stamp() if current is None else current
+    movable = not m.get("hub") and not m.get("local")
+    busy = movable and CS.stale(m.get("code"), current) and is_busy(out)
+    page = page_code(out)
+    v = CS.reuse_verdict(page, m.get("code"), current, busy=busy, movable=movable)
+    if v == "restart":
+        warn("옛 코드로 떠 있던 도우미(pid %s)를 끄고 지금 코드로 다시 띄워요: %s" % (m.get("pid"), out))
+        stop(m)
+        return None
+    if CS.page_after(v, page, current):
+        code, tail = build(out)
+        if code != 0:
+            warn("지금 코드로 다시 빌드하지 못했어요(%d) — 있던 index.html 로 열어요: %s" % (code, tail.splitlines()[-1] if tail else ""))
+    if v == "busy" and P.key(abs_out(out)) not in _BUSY_SAID:
+        _BUSY_SAID.add(P.key(abs_out(out)))
+        warn(CS.BUSY_NOTICE)
+    return m
 
 
 def build(out):
@@ -378,6 +441,9 @@ def open_in_hub(hub, e, agent=None):
     m = next((x for x in hub_markers() if P.key(abs_out(x["out"])) == k), None)
     if m is None:                                     # 허브가 따로 떠 있던 옛 도우미를 돌려줬다
         m = serving(e["out"]) or {"url": res["url"], "pid": res.get("pid"), "agent": res.get("agent"), "out": e["out"]}
+    if res.get("notice"):                             # 허브가 옛 코드로 떠 있다 — 한 줄
+        warn(res["notice"])
+        m = dict(m, notice=res["notice"])
     return e, m, bool(res.get("reused"))
 
 
@@ -386,9 +452,13 @@ def open_project(target, agent=None):
     모르는 이름·없어진 out → NotFound, 빌드·띄우기 실패 → HdError. hd open 과 도우미 POST /api/open 이 같이 쓴다."""
     e, o = resolve(target)
     m = serving(o) or live_record(o)                   # 표지가 없어도 .hd-helper.json 의 도우미가 답하면 그것(#271 — 둘째를 띄우지 않는다)
+    hub = None if LOCAL is not None else hub_record()
+    if m is not None and m.get("hub") and hub is not None:
+        return open_in_hub(hub, e, agent)              # 허브 세션 — 허브가 도장을 견주고 다시 빌드한다
+    if m is not None:
+        m = freshen(o, m)                              # 옛 페이지 = 다시 빌드 · 옛 코드로 뜬 쉬는 도우미 = 끔(None → 아래에서 새로)
     reused = m is not None
-    hub = None if reused or LOCAL is not None else hub_record()
-    if hub is not None:                                # 허브가 떠 있으면 그 안에서 연다(한 주소 — task 47-2). 옛 도우미 띄우기는 허브가 없을 때만
+    if not reused and hub is not None:                 # 허브가 떠 있으면 그 안에서 연다(한 주소 — task 47-2). 옛 도우미 띄우기는 허브가 없을 때만
         return open_in_hub(hub, e, agent)
     if not reused:
         code, tail = build(o)
