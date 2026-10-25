@@ -11,19 +11,20 @@ import argparse, io, pathlib, shutil, subprocess, sys, tarfile, tempfile
 HERE = pathlib.Path(__file__).resolve().parent
 CORE = HERE.parents[1]                                   # .../core
 REL = HERE.relative_to(CORE)                             # features/canvas
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: 창 없는 도우미(pythonw)가 부르면 자식(git·빌드)이 콘솔 창을 띄웠다 닫는다
 
 
 def git(*args, binary=False):
     """git -C CORE … → (종료 코드, 출력). git 이 없으면 (127, '')."""
     try:
-        r = subprocess.run(["git", "-C", str(CORE), *args], capture_output=True, text=not binary)
+        r = subprocess.run(["git", "-C", str(CORE), *args], capture_output=True, text=not binary, creationflags=NO_WINDOW)
     except OSError:
         return 127, b"" if binary else ""
     return r.returncode, (r.stdout if r.returncode == 0 else r.stderr)
 
 
 def run_build(script, out):
-    return subprocess.run([sys.executable, str(script), str(out)]).returncode
+    return subprocess.run([sys.executable, str(script), str(out)], creationflags=NO_WINDOW).returncode
 
 
 def main(argv=None):

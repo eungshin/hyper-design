@@ -78,3 +78,18 @@ def test_real_run_builds_from_head(tmp_path):
     assert r.returncode == 0, r.stderr
     html = (out / "index.html").read_text(encoding="utf-8")
     assert 'id="hd-data"' in html
+
+
+def test_children_open_no_console_window(monkeypatch):
+    """창 없는 도우미(pythonw)가 부르면 build_ref 도 pythonw — 그 자식(git·빌드)이 콘솔 창을 띄웠다 닫으면 편집마다 깜빡인다."""
+    sys.path.insert(0, str(CANVAS))
+    import build_ref
+    seen = []
+
+    def fake_run(args, **kw):
+        seen.append(kw.get("creationflags", 0))
+        return subprocess.CompletedProcess(args, 0, b"" if not kw.get("text") else "", "")
+    monkeypatch.setattr(build_ref.subprocess, "run", fake_run)
+    build_ref.git("rev-parse", "--show-prefix")
+    build_ref.run_build(CANVAS / "build_canvas.py", "out")
+    assert seen == [getattr(subprocess, "CREATE_NO_WINDOW", 0)] * 2
