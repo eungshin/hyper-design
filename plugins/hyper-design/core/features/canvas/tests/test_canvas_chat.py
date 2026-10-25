@@ -140,3 +140,30 @@ def test_element_chip_puts_element_path_in_request(live):
     text = queued(pg)
     assert f"screen=pay · path={path}" in text and "요청: 문구를 '결제하기'로" in text and "범위:" not in text, text
     assert text.count("screen=") == 1, "요소 칩이 있으면 그 화면의 화면 메모는 따로 나가지 않는다"
+
+
+def _rect(pg, sel):
+    return pg.evaluate("(s) => { const e = document.querySelector(s); if (!e || !e.offsetParent && getComputedStyle(e).position !== 'fixed' || e.hidden) return null;"
+                       " const r = e.getBoundingClientRect(); return r.width && r.height ? {l: r.left, t: r.top, r: r.right, b: r.bottom} : null; }", sel)
+
+
+def _hit(a, b):
+    return a and b and a["l"] < b["r"] and b["l"] < a["r"] and a["t"] < b["b"] and b["t"] < a["b"]
+
+
+@pytest.mark.parametrize("width", [1280, 2880])
+def test_chat_never_covers_hint_or_project_tabs(live, width):
+    pg = live
+    pg.set_viewport_size({"width": width, "height": 900 if width < 2000 else 2000})
+    pg.wait_for_selector("#hdchat .ch-box")
+    for tabs in (True, False):                           # 프로젝트 탭이 있을 때 · 없을 때(탭 줄이 없는 프로젝트)
+        if not tabs:
+            pg.evaluate("document.body.classList.remove('has-ptabs'); const t = document.querySelector('#ptabs'); if (t) t.hidden = true")
+        pg.evaluate("dispatchEvent(new Event('resize'))")
+        pg.wait_for_timeout(100)
+        chat, hint, ptabs = _rect(pg, "#hdchat"), _rect(pg, "#khint"), _rect(pg, "#ptabs")
+        assert chat and hint, (chat, hint)
+        assert not _hit(chat, hint), f"{width} tabs={tabs}: 대화창이 아래 도움말 줄을 가린다 {chat} {hint}"
+        assert not _hit(chat, ptabs), f"{width} tabs={tabs}: 대화창이 프로젝트 탭을 가린다 {chat} {ptabs}"
+        assert chat["b"] <= pg.viewport_size["height"]
+        shot(pg, f"s1-layout-{width}-{'tabs' if tabs else 'notabs'}.png")

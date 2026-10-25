@@ -9,7 +9,6 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
   '#hdchat{position:fixed;bottom:10px;left:50%;z-index:24;width:560px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
-  'body.has-ptabs #hdchat{bottom:56px}' +
   '#hdchat[hidden],body.modal-open #hdchat,body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
   '#hdchat .ch-line{display:flex;align-items:center;gap:6px;margin:0 6px 4px;padding:3px 10px;border-radius:8px;background:rgba(255,255,255,.92);box-shadow:0 1px 6px rgba(0,0,0,.10);font-size:12px;color:#5f5f5a;max-width:100%;width:max-content;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}' +
   '#hdchat .ch-line[hidden]{display:none}' +
@@ -94,6 +93,14 @@ function mount(ctx) {
     var w = Math.min(560, right - 32);
     root.style.width = Math.max(240, w) + 'px';
     root.style.left = (right / 2) + 'px';
+    // 아래 줄(도움말 #khint · 프로젝트 탭 #ptabs)과 가로로 겹치면 그 위로 올린다 — 그 줄들은 셸·탭 기능 것이라 건드리지 않고 이 창만 비킨다
+    var cw = root.getBoundingClientRect().width, L = right / 2 - cw / 2, R = right / 2 + cw / 2, bottom = 10;
+    ['#khint', '#ptabs'].forEach(function (sel) {
+      var el = ctx.$(sel); if (!el || el.hidden || getComputedStyle(el).display === 'none') return;
+      var b = el.getBoundingClientRect(); if (!b.width || !b.height) return;
+      if (b.right > L && b.left < R) bottom = Math.max(bottom, innerHeight - b.top + 8);
+    });
+    root.style.bottom = bottom + 'px';
     var top = root.hidden || !root.offsetHeight ? 0 : innerHeight - root.getBoundingClientRect().top + 8;
     document.body.style.setProperty('--hd-chat-top', (top || 120) + 'px');   // 토스트는 대화창 위에
   }
