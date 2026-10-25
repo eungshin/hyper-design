@@ -7,6 +7,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "hd" / "tes
 import hdfix  # noqa: E402
 import memo_archive as MA  # noqa: E402
 import write_record  # noqa: E402
+import ticker  # noqa: E402
 import session as S  # noqa: E402
 
 DAY = 86_400_000
@@ -69,7 +70,7 @@ def test_session_archive_sweep_publishes_notes_changed(tmp_path):
 
 def test_ticker_runs_each_task_when_due_and_survives_a_failing_task(capsys):
     seen = []
-    t = S.Ticker([(1.0, lambda: seen.append("a")), (10.0, lambda: seen.append("b")), (1.0, lambda: 1 / 0)])
+    t = ticker.Ticker([(1.0, lambda: seen.append("a")), (10.0, lambda: seen.append("b")), (1.0, lambda: 1 / 0)])
     t.step(100.0)
     assert seen == ["a", "b"], "처음 차례에 모두 한 번"
     t.step(100.5)

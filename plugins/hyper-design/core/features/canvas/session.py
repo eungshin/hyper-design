@@ -1,25 +1,23 @@
-"""Session — 프로젝트(out) 하나의 서버 쪽(task 47-2 에서 helper.py 를 쪼갬). 파일 I/O 는 여기, 규칙은 hd_model · helper_model, HTML 고치기는 html_edit.
+"""Session — 프로젝트(out) 하나의 조립 지점: 부품 객체를 만들고 잇는다 · 쓰기 자물쇠 하나 · 토큰 하나 · 페이지(index.html + window.__hdState) · 코드 도장 다시 빌드.
 
-객체(책임 하나씩 — canvas contract.md 책임 게이트):
-  ProjectSession — out 하나: 아래 부품을 만들고 잇는다 · 쓰기 자물쇠 하나 · 토큰 하나 · 페이지(index.html + window.__hdState)
-  StateStore     — <out>/.hd-canvas.json: rev · 합쳐 쓰기(409) · 자물쇠 없는 읽기(#271) · 깨진 파일 옮기기
-  History        — <out>/.hd-history: 쓰기마다 원본 + manifest(apply · delete) · 되살리기(restore, 409 changed-since) · 정리(prune)
-  Queue          — 보낸 메모: 보낼 곳(agent · Paseo 목록 5초 캐시 · 저장소) · 요청문 대기열 파일 + 받는 곳 고르기(send — 접속 중이면 request.sent 이벤트,
-                   아니면 AgentAdapter: adapters.py) · 에이전트 답(reply → agent.reply)
-  AgentPresence  — 접속한 에이전트(presence.py, 47-5a): hello·맥박·임대 끝 = away·진행 한 줄
-  Ticker         — 세션 시계 스레드 하나(47-5a): 1초마다 presence.sweep · 한 시간마다 Archive.sweep(완료 메모 보관)
-  Busy           — AI 작업 덮개 state.busy(claim · release) + 화면 파일 지켜보기(1초 mtime → seq — /api/files · /api/watch)
-  AiUndo         — 덮개 동안 AI 가 쓴 화면 = 기록 한 줄 'AI 반영 · <화면>' + 되살리기 stamp(48c, GET /api/ai-writes)
-  ChatLog        — <out>/.hd-chat.jsonl 대화 기록(S3): 버스 탭으로 이벤트 → 기록 한 줄(모양·턴·한도 = chat_log.py) · GET/POST /api/chat
-  Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep = 서버가 고르고 옮김, 고르기 = memo_archive.py)
-  Builder        — 다시 빌드(한 번에 하나 — 동기 apply 의 빌드와 뒤 빌드가 겹치지 않게) · hd-data · 부품 견본 목록
-  EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
-모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
+부품(모듈 하나씩 — canvas contract.md 책임 게이트):
+  StateStore     — state_store.py: <out>/.hd-canvas.json rev · 합쳐 쓰기(409) · 자물쇠 없는 읽기(#271) · 깨진 파일 옮기기
+  History        — history.py: 화면 파일 쓰기 하나씩 + 이벤트 · 쓰기 기록 .hd-history = write_record.py · 편집 적용(EDIT_OPS) = screen_edits.py · 줄 = board_rows.py
+  Queue          — send_queue.py: 보낸 메모 · 보낼 곳(agent · Paseo 목록 5초 캐시 · 저장소) · 대기열 파일 + 받는 곳 고르기 · 에이전트 답
+  AgentPresence  — presence.py(47-5a): hello·맥박·임대 끝 = away·진행 한 줄
+  Ticker         — ticker.py(47-5a): 세션 시계 — 간격(PRESENCE_EVERY · ARCHIVE_EVERY · TRP.EVERY)은 여기서 정한다
+  Busy · AiUndo  — busy.py · ai_undo.py: AI 작업 덮개 + 화면 파일 지켜보기 · 덮개 동안 AI 가 쓴 화면 되돌리기(48c)
+  ChatLog        — chat_store.py: <out>/.hd-chat.jsonl 대화 기록(S3, 버스 탭)
+  Archive        — note_archive.py: <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep)
+  Builder        — builder.py: 다시 빌드 하나씩 · hd-data · 부품 견본 목록
+  EventBus       — events.py(47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
+상태: 토큰 · 붙은 코드 도장 함수(code) · 포기한 도장(_gave_up) — 나머지 상태는 부품마다 주인 하나.
+부르는 곳: helper.make_server(CLI 도우미) · home.registry(허브) · router(주소 → 부품 메서드). 모듈 함수 예전 이름은 helper.py 가 부품 모듈에서 다시 내보낸다.
+오류 탐지: 시작 정리·도장 재기·다시 빌드가 실패해도 [hd] 한 줄 뒤 있던 index.html 로 보인다(페이지를 못 주지는 않는다).
 """
-import json, os, pathlib, secrets, sys, threading, time, urllib.parse
+import json, os, pathlib, secrets, sys, threading, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
-import board_data
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import presence as PR  # 접속한 에이전트(task 47-5a)
@@ -27,14 +25,14 @@ import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import transcript_pump as TRP  # 터미널 대화 펌프(S3b — 출처는 transcripts.py, 해석은 transcript_parse.py)
 from adapters import _paseo_cmd
 from ai_undo import AiUndo  # 48c AI 반영 되돌리기
+from builder import Builder  # 다시 빌드 하나씩 · hd-data · 부품 목록
 from busy import Busy  # AI 덮개 + 화면 파일 지켜보기
 from chat_store import ChatLog  # <out>/.hd-chat.jsonl 대화 기록(S3)
 from history import History  # 화면 파일 쓰기(apply · delete · 줄 · 되살리기)
 from note_archive import Archive  # <out>/.hd-notes-archive.jsonl
-from screen_edits import parts_of
 from send_queue import Queue  # 보낸 메모 · 보낼 곳 · 에이전트 답
 from state_store import StateStore, state_load  # <out>/.hd-canvas.json — out_io 가 hd 폴더를 sys.path 에 넣는다
-from write_record import run_build
+from ticker import Ticker  # 세션 시계
 
 import hd_model  # noqa: E402  — 프로젝트 이름(project_name)
 
@@ -43,62 +41,8 @@ def keypath(out):                                    # file:// 로 열었을 때
     return urllib.parse.urlparse((pathlib.Path(out).resolve() / "index.html").as_uri()).path
 
 
-# ---------------------------------------------------------------- 객체(task 47-2): out 하나 = ProjectSession 하나
-
-
-class Builder:
-    """다시 빌드 · hd-data · 부품 목록 — out 하나. run(out) = 빌드 하나(기본 작업 트리, CLI 도우미는 build_ref — helper 가 넘긴다)."""
-
-    def __init__(self, out, run=None):
-        self.out, self._run, self.lock = out, run or run_build, threading.Lock()
-
-    def run(self, out):                              # 빌드 하나씩(동기 apply 의 빌드 · 뒤 빌드 · 되돌린 뒤 빌드가 같은 index.html 을 쓴다)
-        with self.lock:
-            return self._run(out)
-
-    def build(self):
-        return self.run(self.out)
-
-    def data(self):
-        return board_data.index_data(self.out, json.loads((self.out / "screens.json").read_text(encoding="utf-8")))
-
-    def parts(self):
-        return parts_of(self.out)
-
-
 PRESENCE_EVERY = 1.0                                 # 접속 임대 끝 보기(초)
 ARCHIVE_EVERY = 3600.0                               # 완료 메모 보관(초) — 캔버스 탭의 '한 시간에 한 번'과 같은 규칙, 탭이 없어도
-TICK = 0.5
-
-
-class Ticker:
-    """세션 시계 — 일(간격 초, fn)마다 처음 한 번, 그 뒤 간격마다. step(now) 는 I/O 가 없다(unit), 스레드는 start()·close().
-    한 일이 실패해도 [hd] 한 줄 뒤 다른 일은 계속."""
-
-    def __init__(self, tasks, clock=time.monotonic):
-        self.tasks, self.clock = list(tasks), clock
-        self.next = [None] * len(self.tasks)
-        self.stop = threading.Event()
-
-    def step(self, now):
-        for i, (every, fn) in enumerate(self.tasks):
-            if self.next[i] is None or now >= self.next[i]:
-                self.next[i] = now + every
-                try:
-                    fn()
-                except Exception as e:                # noqa: BLE001 — 세션 시계는 멈추지 않는다(한 줄 남김)
-                    print("[hd] 세션 시계 일이 실패했어요(%s): %s" % (getattr(fn, "__name__", fn), e), file=sys.stderr, flush=True)
-
-    def start(self):
-        threading.Thread(target=self._loop, daemon=True).start()
-
-    def close(self):
-        self.stop.set()
-
-    def _loop(self):
-        while not self.stop.is_set():
-            self.step(self.clock())
-            self.stop.wait(TICK)
 
 
 class ProjectSession:
