@@ -87,7 +87,21 @@ def swapped(pg):
                          arg=JOB, timeout=10000)
 
 
-def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out):
+# 카드·화면 틀·그 안 iframe 의 보이는 높이(소수 둘째 자리) — 교체 앞뒤가 같아야 한다
+HEIGHTS = """(s) => { const c = document.querySelector(s), r = (e) => Math.round(e.getBoundingClientRect().height * 100) / 100;
+  return {card: r(c), phone: r(c.querySelector('.phone')), frame: r(c.querySelector('.phone iframe'))}; }"""
+
+
+def seed_size(out, size):
+    """카드마다 크기(task 46, 상태 이름 card-size) — 도우미가 index.html 에 끼워 넣는 상태 파일에 job 카드 크기를 미리 둔다."""
+    (out / ".hd-canvas.json").write_text(json.dumps({"version": 1, "rev": 1, "updated": "2026-10-25T00:00:00Z",
+                                                     "state": {"card-size": {"job": {"w": size[0], "h": size[1]}}}}), encoding="utf-8")
+
+
+@pytest.mark.parametrize("size", [None, (600, 500)], ids=["default-size", "custom-size"])
+def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out, size):
+    if size:
+        seed_size(out, size)
     srv = serve(out)
     pg = ctx.new_page()
     errors = []
@@ -95,8 +109,11 @@ def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out):
     pg.add_init_script(COUNT)
     try:
         open_board(pg, srv)
+        if size:
+            assert pg.get_attribute(JOB, "data-size") == "%d×%d" % size, "카드마다 크기(task 46)가 걸린 카드"
         pg.evaluate("window.__sameLoad = 1")
-        old_key = pg.evaluate("(s) => { const w = document.querySelector(s + ' .phone iframe').contentWindow; w.scrollTo(0, 240); return w.location.pathname + w.location.search; }", JOB)
+        h0 = pg.evaluate(HEIGHTS, JOB)
+        old_key =pg.evaluate("(s) => { const w = document.querySelector(s + ' .phone iframe').contentWindow; w.scrollTo(0, 240); return w.location.pathname + w.location.search; }", JOB)
         assert pg.evaluate("(s) => document.querySelector(s + ' .phone iframe').contentWindow.scrollY", JOB) == 240
         post(srv, "/api/claim", {"screen": "job"})        # AI 가 이 카드를 고치는 중
         pg.wait_for_selector(JOB + ' .busy[data-kind="working"]', timeout=8000)
@@ -115,6 +132,7 @@ def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out):
         assert tail[-1][1] - tail[-2][1] >= 150, f"옛 틀은 0.2초 겹쳐 보인 뒤에야 빠진다: {log}"
         new = pg.evaluate("""(s) => { const f = document.querySelector(s + ' .phone iframe'), w = f.contentWindow;
             return {y: w.scrollY, key: w.location.pathname + w.location.search, op: getComputedStyle(f).opacity, pos: getComputedStyle(f).position}; }""", JOB)
+        assert pg.evaluate(HEIGHTS, JOB) == h0, "교체해도 카드·틀 크기 그대로"
         assert new["y"] == 240, "스크롤 자리 그대로"
         assert new["op"] == "1" and new["pos"] == "static", "새 틀이 그 자리의 보통 틀이 된다"
         assert new["key"] != old_key and "hd-mode=board" in new["key"]
@@ -210,12 +228,17 @@ def test_changed_blocks_flash_and_before_after_and_badges_return(ctx, out):
         badges = "(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument; return d.querySelectorAll('[data-hd-links]').length; }"
         pg.wait_for_function(badges, arg=JOB, timeout=6000)
         n_badges = pg.evaluate(badges, JOB)
+        pg.wait_for_function("(s) => document.querySelector(s).classList.contains('xp')", arg=JOB, timeout=4000)   # 고른 긴 화면 = 펼침(view-links)
+        pg.wait_for_timeout(500)                          # 펼치기 전환(--resize-dur)이 끝난 크기
+        h0 = pg.evaluate(HEIGHTS, JOB)
         post(srv, "/api/claim", {"screen": "job"})
         pg.wait_for_selector(JOB + ' .busy[data-kind="working"]', timeout=8000)
+        pg.evaluate(TRACE, "job")                         # 옛 틀 표시 — swapped() 가 새 틀을 기다리게
         job = out / "screens" / "job.html"
         job.write_text(job.read_text(encoding="utf-8").replace("하는 일이 무엇인가요?", "무슨 일을 하세요?")
                        .replace('<div class="tile-grid"', '<p class="note">새 안내 한 줄</p><div class="tile-grid"'), encoding="utf-8")
         swapped(pg)
+        assert pg.evaluate(HEIGHTS, JOB) == h0, "펼친(고른 긴 화면) 카드도 교체 앞뒤 크기 그대로 — 새 틀이 옛 틀의 인라인 높이를 이어받는다"
         anim = """(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument;
             const a = (q) => { const el = d.querySelector(q); return el ? el.getAnimations().map(x => Object.keys(x.effect.getKeyframes()[0]).filter(k => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)).sort().join(',')) : null; };
             return {h1: a('h1.title'), note: a('p.note'), lead: a('p.lead'), tile: a('button.tile')}; }"""

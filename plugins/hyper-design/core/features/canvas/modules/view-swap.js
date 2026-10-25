@@ -203,11 +203,16 @@ function mount(ctx) {
     var fl = planFlash(f, n), snap = snapOf(f);       // 바뀐 곳(48b) — 옛 틀이 아직 있을 때
     if (snap) snaps[id] = snap; else delete snaps[id];
     if (fl) hideRise(fl);
+    // 크기는 옛 틀 그대로 — 셸·다른 View 가 옛 틀에 둔 인라인 style(긴 화면 펼치기 height 등)을 새 틀이 이어받는다(48b 탐침: 펼친 카드에서 새 틀만 680px)
+    var os = f.getAttribute('style');
+    if (os === null) n.removeAttribute('style'); else n.setAttribute('style', os);
     var finished = false;
     function finish() {
       if (finished) return; finished = true;
       f.remove();
       n.classList.remove('hd-swap-next', 'hd-swap-in'); n.removeAttribute('aria-hidden');
+      n.style.removeProperty('--hd-swap-ms'); if (!n.getAttribute('style')) n.removeAttribute('style');   // 겹치기용 값은 남기지 않는다
+      if (!n.getAttribute('class')) n.removeAttribute('class');
       delete live[id]; if (!Object.keys(live).length) watch(false);
       if (fl) runFlash(id, n, fl, L.loadedAt);
       emit(id, 'done', null, {before: !!snap});
