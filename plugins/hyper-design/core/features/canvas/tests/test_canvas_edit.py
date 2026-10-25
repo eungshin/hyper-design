@@ -1408,7 +1408,7 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.keyboard.press("v")
     dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
     dpage.wait_for_timeout(150)
-    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage)[1:] == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
+    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage)[1:] == ["메모", "숨기기", "삭제"], "여러 장이어도 메모(화면마다 같은 메모 — test_canvas_multi_memo)"
     n0 = len(notes_of(dpage))
     dpage.click('#selbar [data-act="del"]')
     wait_notes(dpage, n0 + 2)

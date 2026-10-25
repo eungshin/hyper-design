@@ -1900,13 +1900,13 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
 }});
 foldCards();                                         // 처음: 고르지 않은 카드는 제목만(task 31)
-function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 한 장일 때만
+function placeSelbar() {                             // 고른 카드들 위 가운데 · 메모는 여러 장이면 화면마다 같은 메모(memo-batch)
   var bar = $('#selbar'); if (!bar || !SL) return;
   var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
   if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden) { bar.hidden = true; return; }
   var x0 = 1e9, x1 = -1e9, y0 = 1e9;
   ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
-  $('[data-act="memo"]', bar).hidden = ids.length !== 1;
+  $('[data-act="memo"]', bar).hidden = false;
   var sz = $('[data-act="size"]', bar); sz.hidden = !AB; if (AB) { sz.textContent = AB.label(ids) + ' ▾'; sz.setAttribute('aria-label', '카드 크기 ' + AB.label(ids)); }
   bar.hidden = false;
   bar.hidden = false; bar.style.left = ((x0 + x1) / 2) + 'px';
@@ -1916,7 +1916,7 @@ $('#selbar').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;
   var ids = SL.ids();
   if (b.dataset.act === 'size') { if (AB) AB.popover(ids, b); }   // 크기 팝오버(task 46) — 고른 카드 모두에
-  else if (b.dataset.act === 'memo') openCardMemo(ids[0]);
+  else if (b.dataset.act === 'memo') openCardMemo(ids);
   else if (b.dataset.act === 'hide') { hide(ids, true); SL.dispatch({type: 'clear'}); }
   else if (b.dataset.act === 'del') deleteCards(ids);
 });
@@ -1967,9 +1967,9 @@ addEventListener('keydown', function (e) {           // Del · Backspace = 고�
   var ids = SL.ids(); if (!ids.length) return;
   e.preventDefault(); deleteCards(ids);
 });
-function openCardMemo(id) {                          // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body)
-  editing = null; draft = {screen: id, targets: [{path: 'body', text: titleOf(id), rect: null}]};
-  showPop({text: titleOf(id) + ' — 화면 전체', path: 'body', rect: null}, '', 'change');
+function openCardMemo(id) {                          // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body) · id 배열 = 고른 화면마다 같은 메모(memo-batch)
+  editing = null; draft = HD.memoBatch.draft([].concat(id), titleOf);
+  showPop({text: HD.memoBatch.label(draft), path: 'body', rect: null}, '', 'change');
 }
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
   var items = HD.edits.preview(NS.list(), id);       // 글자 고치기·요소 지우기(edits.js)
@@ -2066,7 +2066,10 @@ function showPop(item, note, intent, at, scope) {    // scope 없음 = 기본(�
   $('#ppath').textContent = item.path || '';
   $('#pnote').value = note || '';
   setIntent(intent || 'change');
-  setScope(scope || (item.path === 'body' ? 'screen' : 'element'));
+  var many = !editing && HD.memoBatch.multi(draft), sw = {};   // 여러 장 = '이 요소' 없음 · '이 화면' → '고른 화면 N개'
+  HD.memoBatch.scopes(many && draft, HD.annotation.SCOPES).forEach(function (s) { sw[s[0]] = s[1]; });
+  $$('#pscope button').forEach(function (b) { var w = sw[b.dataset.scope]; b.hidden = !w; if (w) b.textContent = w; });
+  setScope(scope || (many ? HD.memoBatch.defaultScope(draft) : item.path === 'body' ? 'screen' : 'element'));
   $('#padd').textContent = editing ? '저장' : '추가';
   var en = editing && NS.find(editing);
   pop.hidden = false; placePop(item.rect, at, en ? en.screen : draft && draft.screen);
@@ -2079,6 +2082,12 @@ function commitPop() {
   if (editing) {
     var n = NS.find(editing);
     if (n) { n.note = note; n.intent = intent; n.sent = false; setSc(n); }
+  } else if (draft && HD.memoBatch.multi(draft)) {   // 고른 화면마다 메모 하나(같은 batch) — 되돌리기 한 단계
+    var ms = HD.memoBatch.build(draft, {note: note, intent: intent, scope: scope}, function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); });
+    var put = function () { ms.forEach(function (m) { NS.add(m); }); saveNotes(); };
+    put();
+    record({label: '메모 ' + ms.length + '개', redo: put,
+            undo: function () { var ids = ms.map(function (m) { return m.id; }); NS.remove(function (x) { return ids.indexOf(x.id) >= 0; }); saveNotes(); }});
   } else if (draft) {
     var t0 = draft.targets[0], at = draft.screen;
     if (modal.hidden && PN) PN.focus(at);            // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
