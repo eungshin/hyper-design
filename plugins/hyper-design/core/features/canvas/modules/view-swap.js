@@ -13,10 +13,13 @@
        바뀐 블록 외곽선(OUTLINE_HOLD 뒤 OUTLINE_MS 사라짐) · 새 블록 RISE_MS ease 로 RISE_PX 아래에서 떠오름. 움직임 줄이기 = 숨기기·강조 모두 없음.
        WAAPI 라 판 모드 CSS(transition·animation 0초)에 막히지 않고, 화면 문서에 남는 것(class·style)이 없다. 다른 출처(앱 카드) = 강조 없음
      · 옛 화면 HTML 스냅숏(카드마다 마지막 교체 하나, 메모리만) — 'hd-swap-compare' {id, on} 을 받으면 새 틀 위에 iframe.hd-swap-before(srcdoc, 스크립트 없음)를 겹친다
-   의도: document 에 CustomEvent 'hd-swap' {id, phase: 'start'|'done'|'failed', why?, before?} — view-busy 가 "방금 반영됨 ✓" 칩(before = 전/후 보기 있음)·실패 줄을 그린다
+   - 같은 내용(49c): 옛 틀이 낙관 반영으로 먼저 바뀐 틀(iframe[data-hd-opt])이고 새 틀이 다 실렸을 때 나무가 같으면(HD.swap.same) 'silent' — 만지는 중이어도 알약·겹치기·강조 없이 바로 바꾼다
+       (그 카드에서 글자를 고치는 중 .card.hd-typing 이면 아님). done 의도에 silent:true · before:false(전/후 볼 것이 없다)
+   - same(frame, url) → Promise<bool> — 크게 보기 틀처럼 교체 길 밖의 틀: url 을 화면 밖 숨은 iframe 에 실어 지금 틀과 나무가 같은지(다른 출처·시간 초과 = false)
+   의도: document 에 CustomEvent 'hd-swap' {id, phase: 'start'|'done'|'failed', why?, before?, silent?} — view-busy 가 "방금 반영됨 ✓" 칩(before = 전/후 보기 있음)·실패 줄을 그린다
      (View 끼리 직접 부르지 않음) · 'start' = 실린 카드의 새 교체가 시작됨 · 'done' 뒤 view-links 가 그 카드 링크 표시를 다시 묻는다.
      받는 의도: 'hd-swap-compare' {id, on}(view-busy 의 [전/후])
-   가진 상태: 교체 작업(HD.swap reduce) · 카드마다 마지막 옛 화면 스냅숏 · 저장 없음. HD.feature('swap', {needs: ['warn'], mount(ctx) → {swap(id, frame, url), pending()}})
+   가진 상태: 교체 작업(HD.swap reduce) · 카드마다 마지막 옛 화면 스냅숏 · 저장 없음. HD.feature('swap', {needs: ['warn'], mount(ctx) → {swap(id, frame, url), pending(), same(frame, url)}})
    ctx = warn · prefs()? · frameLoaded(id, frame)?(셸 — 없으면 교체는 하되 [hd] 경고 한 번) */
 (function () {
 'use strict';
@@ -85,7 +88,8 @@ function mount(ctx) {
   function signals() {
     var pop = document.getElementById('pop'), ids = function (sel) { return Array.prototype.map.call(document.querySelectorAll(sel), function (c) { return c.dataset.id; }); };
     var memo = pop && !pop.hidden ? ids('.card.memo-target')[0] || null : null;
-    return {moving: ids('.card.moving'), caption: ids('.card.capopen'), memo: memo, edit: editId(), modal: modalId()};
+    var typing = ids('.card.hd-typing');              // 화면 안 글자를 그 자리에서 고치는 중(49c, view-optimistic 이 표시)
+    return {moving: ids('.card.moving'), caption: ids('.card.capopen'), memo: memo, edit: editId() || typing[0] || null, modal: modalId(), typing: typing};
   }
 
   // 바뀐 곳 보기(48b) — 화면 DOM → 나무(HD.swapDiff 가 읽는 꼴). 다른 출처면 null
@@ -189,7 +193,12 @@ function mount(ctx) {
   }
   function lazy(id, f, url) { f.removeAttribute('src'); f.setAttribute('data-src', url); emit(id, 'done'); }
 
-  function commit(id) {
+  function sameOf(a, b) {                            // 두 틀의 화면 나무가 같은가(49c) — 다른 출처·깨진 문서 = false
+    if (!HD.swapDiff) return false;
+    var A = treeOf(a), B = A && treeOf(b);
+    return !!(A && B) && S.same(HD.swapDiff.diff(A.root, B.root));
+  }
+  function commit(id, silent) {
     var L = live[id], job = st.jobs[id];
     if (!L || !job || job.phase !== 'ready') return;
     var f = L.old, n = L.next;
@@ -200,7 +209,7 @@ function mount(ctx) {
     }
     st = S.reduce(st, {type: 'end', id: id, seq: job.seq});
     L.done = true; clearTimeout(L.timer); if (L.pill) { L.pill.remove(); L.pill = null; }
-    var fl = planFlash(f, n), snap = snapOf(f);       // 바뀐 곳(48b) — 옛 틀이 아직 있을 때
+    var fl = silent ? null : planFlash(f, n), snap = silent ? null : snapOf(f);   // 바뀐 곳(48b) — 옛 틀이 아직 있을 때 · 같은 내용이면 강조·전/후 없음
     if (snap) snaps[id] = snap; else delete snaps[id];
     if (fl) hideRise(fl);
     // 크기는 옛 틀 그대로 — 셸·다른 View 가 옛 틀에 둔 인라인 style(긴 화면 펼치기 height 등)을 새 틀이 이어받는다(48b 탐침: 펼친 카드에서 새 틀만 680px)
@@ -215,14 +224,14 @@ function mount(ctx) {
       if (!n.getAttribute('class')) n.removeAttribute('class');
       delete live[id]; if (!Object.keys(live).length) watch(false);
       if (fl) runFlash(id, n, fl, L.loadedAt);
-      emit(id, 'done', null, {before: !!snap});
+      emit(id, 'done', null, silent ? {before: false, silent: true} : {before: !!snap});
     }
     // 보이기 직전에 셸의 load 뒤 일(테마·반영 대기·메모 자리) — 숨어 기다리는 동안 바뀐 메모도 새 화면에 실린다
     if (ctx.frameLoaded) ctx.frameLoaded(id, n);
     else if (!warnedHook) { warnedHook = true; warn('[hd] swap: 셸 ctx.frameLoaded 가 없어 새 화면에 테마·반영 대기·메모 자리를 보내지 못해요'); }
     requestAnimationFrame(function () { requestAnimationFrame(show); });   // 그 메시지가 한 번 그려진 뒤에 보인다
     function show() {
-      if (reduced()) { finish(); return; }              // 움직임 줄이기 = 바로
+      if (silent || reduced()) { finish(); return; }    // 같은 내용(49c)·움직임 줄이기 = 바로
       n.style.setProperty('--hd-swap-ms', S.FADE_MS + 'ms');
       n.classList.add('hd-swap-in');
       n.addEventListener('transitionend', finish, {once: true});
@@ -240,10 +249,12 @@ function mount(ctx) {
     card.appendChild(b); L.pill = b;
   }
   function decide(id) {
-    var job = st.jobs[id], step = S.next(job, {touching: S.touching(id, signals()), reduced: reduced()});
+    var job = st.jobs[id], sig = signals(), L = live[id];
+    var same = !!(job && job.phase === 'ready' && L && L.old.hasAttribute('data-hd-opt')) && sameOf(L.old, L.next);   // 먼저 바뀐 틀(낙관 반영, view-optimistic 표시)만 — AI 쓰기는 예전처럼 겹치기·알약
+    var step = S.next(job, {touching: S.touching(id, sig), reduced: reduced(), same: same, typing: sig.typing.indexOf(id) >= 0});
     if (step === 'wait') return;
     if (step === 'defer') { pill(id); watch(true); return; }
-    commit(id);
+    commit(id, step === 'silent');
   }
   function recheck() {                                 // 만지기가 끝났나 — 미룬 카드만
     obRaf = 0;
@@ -294,8 +305,23 @@ function mount(ctx) {
     var d = e.data, mf = document.getElementById('mframe');
     if (d && d.type === 'hd-here' && typeof d.screen === 'string' && mf && e.source === mf.contentWindow) modalHere = d.screen;
   });
+  function same(f, url) {                            // 교체 길 밖의 틀(크게 보기)이 url 과 같은 내용인가 — 화면 밖 숨은 틀에 실어 견준다(49c)
+    return new Promise(function (done) {
+      if (!f || typeof url !== 'string' || !url || !f.isConnected) { done(false); return; }
+      var n = document.createElement('iframe'), t = 0, end = function (v) { clearTimeout(t); if (n.parentNode) n.remove(); done(v); };
+      n.className = 'hd-swap-probe'; n.setAttribute('aria-hidden', 'true'); n.setAttribute('tabindex', '-1');
+      n.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden;pointer-events:none;width:' + (f.offsetWidth || 375) + 'px;height:' + (f.offsetHeight || 700) + 'px';
+      t = setTimeout(function () { warn('[hd] 같은 내용인지 견주지 못했어요(시간 초과) — 다시 싣는다'); end(false); }, S.LOAD_MS);
+      n.addEventListener('load', function () {
+        if (S.failed({status: navStatus(n)})) { end(false); return; }
+        requestAnimationFrame(function () { var v = false; try { v = sameOf(f, n); } catch (e) { warn('[hd] 같은 내용 견주기 실패 — ' + e); } end(v); });
+      });
+      n.src = url;
+      document.body.appendChild(n);
+    });
+  }
   style();
-  return {swap: swap, pending: function () { return S.pending(st); }};
+  return {swap: swap, pending: function () { return S.pending(st); }, same: same};
 }
 
 HD.feature('swap', {needs: ['warn'], mount: mount});

@@ -8,7 +8,7 @@ import pytest
 
 from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, zoom_to  # noqa: F401
 from test_canvas_edit import NOTES_JS, notes_of, wait_notes
-from test_canvas_text_remove import _open, _frame, _serve, out  # noqa: F401
+from test_canvas_text_remove import _open, _frame, _serve, inline_type, out  # noqa: F401
 
 SHOTS = Path(os.environ.get("HD_SHOTS_49A", Path(tempfile.gettempdir()) / "claude" / "t49a"))
 H1 = "h1.title"
@@ -100,9 +100,10 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         xy = _xy(pg, H1)
         _pick_element(pg, xy)
         bar = _bar(pg)
-        six = [b for b in bar if b[0] in ("text", "remove", "dup", "up", "down", "memo")]   # 49b 가 [상위]·[바꾸기]·[아래에 넣기]를 더함
-        assert [b[0] for b in six] == ["text", "remove", "dup", "up", "down", "memo"], bar
-        assert [b[1] for b in six] == ["글자", "지우기", "복제", "↑", "↓", "메모"] and all(b[2] and not b[3] for b in bar), bar
+        four = [b for b in bar if b[0] in ("text", "remove", "dup", "memo")]   # 49b 가 [상위]·[바꾸기]·[아래에 넣기]를 더함 · 49c 가 [↑][↓] 를 빼고 끌기 손잡이
+        assert [b[0] for b in four] == ["text", "remove", "dup", "memo"] and not [b for b in bar if b[0] in ("up", "down")], bar
+        assert [b[1] for b in four] == ["글자", "지우기", "복제", "메모"] and all(b[2] and not b[3] for b in bar), bar
+        assert pg.is_visible("#elbar .eb-grip"), "끌기 손잡이"
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
         shot(pg, "board-elbar.png")
@@ -154,9 +155,7 @@ def test_text_edit_writes_at_once_with_helper(ctx, out):
         xy = _xy(pg, H1)
         pg.keyboard.press("t")
         pg.mouse.click(*xy)
-        pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-        pg.fill("#tedit textarea", "바로 바뀐 제목")
-        pg.press("#tedit textarea", "Enter")
+        inline_type(pg, _frame(pg), H1, "바로 바뀐 제목")   # 그 자리에서(49c)
         _wait_file(pg, out, lambda s: '<h1 class="title">바로 바뀐 제목</h1>' in s, "글자가 [보내기] 없이 바로 써지지 않았다")
         assert pg.evaluate("(" + NOTES_JS + ").length") == 0, "반영 대기로 남지 않는다"
         _logged(pg)
@@ -185,8 +184,9 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     assert st["text"] is None and st["move"] is None and st["annotate"] is None, st
     pg.click('#tools [data-tool="text"]')                   # 글자 도구: 한 번 누르면 그 자리에서 고친다(더블클릭 아니어도)
     mf.click(H1)
-    pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-    pg.press("#tedit textarea", "Escape")
+    mf.wait_for_function("(s) => document.querySelector(s).isContentEditable", arg=H1, timeout=3000)   # 그 자리에서(49c)
+    pg.keyboard.press("Escape")
+    mf.wait_for_function("(s) => !document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
     mf.click(H1, button="right")                            # 오른쪽 클릭 = 판과 같은 요소 메뉴
     pg.wait_for_selector("#cmenu:not([hidden])", timeout=3000)
     items = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.childNodes[0].textContent)")
@@ -201,7 +201,7 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
     assert pg.get_attribute("#elbar", "data-where") == "modal"
     shot(pg, "modal-elbar.png")
-    _act(pg, "down")
+    pg.keyboard.press("Alt+ArrowDown")                    # ↓ 는 막대에서 빠지고 단축키로(49c)
     wait_notes(pg, 2)
     assert notes_of(pg)[1]["edit"] == "move" and notes_of(pg)[1]["op"] == "down", notes_of(pg)
     mf.wait_for_function("() => document.querySelector('.lead').nextElementSibling === null || document.querySelector('.lead').previousElementSibling.classList.contains('tile-grid')", timeout=3000)

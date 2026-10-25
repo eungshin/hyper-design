@@ -1,10 +1,12 @@
-/* View — 요소 막대(블록 편집, task 49a·49b): 고른 요소 옆 [상위][글자][속성][지우기][복제][↑][↓][바꾸기][아래에 넣기][메모] · 속성 칸 · 부품 고르기 · 단축키 · 쓴 뒤 같은 요소 다시 고르기.
+/* View — 요소 막대(블록 편집, task 49a·49b·49c): 고른 요소 옆 [⠿][상위][글자][속성][지우기][복제][바꾸기][아래에 넣기][메모] · 속성 칸 · 부품 고르기 · 단축키(Alt+↑/↓ 옮기기 포함) · 끌어서 순서 바꾸기 · 쓴 뒤 같은 요소 다시 고르기.
    규칙(켜짐·앱 = AI 요청·자리·너비/⋯·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model). 자리를 고를 때 같은 출처 화면의 둘레 글 상자를 읽어 넘긴다(못 읽으면 없이).
    상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형}
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
    편집 자체는 셸이 한다 — 단추는 onAct(fn) 로 받은 fn(act, sel) 하나로만 나간다(sel.attrs = 바꿀 속성 {이름: 값} · sel.part = 고른 부품 {key, title, ok}|null).
    상위·따라가기로 새 요소를 고르면 onPick(fn) 의 fn({screen, h, where}) — 셸이 그 자리 테두리·막대를 다시 그린다(View 끼리 부르지 않음).
    화면 메시지(palette.js): hd-up → hd-upchain · 다시 실린 화면의 hd-here → hd-find → hd-found. 부품 목록 = ctx.api GET /api/parts(도우미 없으면 AI 요청).
+   끌어서 순서 바꾸기(49c): 손잡이 [⠿] 를 누른 채 끌기 · 크게 보기에서 고른 요소를 눌러 끌기(palette.js hd-grab) → 화면에 hd-sibs(형제 상자) → 끼울 선 #eldrop(HD.reorder.slot·line)
+     → 놓으면 fn('reorder', sel + {dirs: HD.reorder.moves(…), from, to}) — 같은 부모 안만. Esc = 끌기 취소
    HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), onAct(fn), onPick(fn), wrote(res, list)} */
 (function () {
 'use strict';
@@ -19,6 +21,10 @@ var CSS =
   '#elbar button[aria-disabled="true"]{opacity:.35;cursor:not-allowed}' +
   '#elbar button.ask{color:#f5c26b}' +
   '#elbar .eb-sep{width:1px;margin:3px 2px;background:#444}' +
+  '#elbar button.eb-grip{cursor:grab;padding:2px 5px;touch-action:none}' +
+  '#elbar.dragging button.eb-grip,body.hd-dragging-el,body.hd-dragging-el *{cursor:grabbing!important}' +
+  '#eldrop{position:fixed;z-index:37;pointer-events:none;background:#2563eb;border-radius:2px;box-shadow:0 0 0 2px rgba(255,255,255,.9)}' +
+  '#eldrop[hidden]{display:none}' +
   '#elpop .ep-acts{display:flex;flex-direction:column;gap:2px}' +
   '#elpop .ep-act{border:0;background:none;text-align:left;color:#1c1c1c;border-radius:6px;padding:6px 8px;font:600 12.5px system-ui,sans-serif;cursor:pointer}' +
   '#elpop .ep-act:hover{background:#f0f0f0}' +
@@ -45,12 +51,16 @@ function mount(ctx) {
   bar.id = 'elbar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '고른 요소'); bar.hidden = true;
   var pop = document.createElement('div');
   pop.id = 'elpop'; pop.setAttribute('role', 'dialog'); pop.hidden = true;
-  document.body.appendChild(bar); document.body.appendChild(pop);
+  var dropLine = document.createElement('div');
+  dropLine.id = 'eldrop'; dropLine.hidden = true; dropLine.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine);
 
   function reader() { return document.documentElement.dataset.hdTab === 'reader'; }
   function items() { return B.bar(cur.h, {app: cur.app}); }
   function paint() {
-    bar.innerHTML = items().map(function (it) {
+    var g = B.grip(cur.h, {app: cur.app});
+    bar.innerHTML = '<button type="button" class="eb-grip" data-grip="1"' + (g.on ? '' : ' aria-disabled="true"') + ' title="' + ctx.esc(g.title) + '" aria-label="' + ctx.esc(g.title) + '">⠿</button>' +
+      B.shown(items()).map(function (it) {
       return (it.act === 'memo' || it.act === 'swap' ? '<span class="eb-sep" data-for="' + it.act + '"></span>' : '') +
         '<button type="button" data-act="' + it.act + '"' + (it.on ? '' : ' aria-disabled="true"') + (it.ask ? ' class="ask" data-ask="1"' : '') +
         ' title="' + ctx.esc(it.title) + '" aria-label="' + ctx.esc(it.title) + '">' + ctx.esc(it.label) + '</button>';
@@ -69,7 +79,8 @@ function mount(ctx) {
     if (more) more.hidden = false;
     var cs = getComputedStyle(bar), pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0), gap = parseFloat(cs.columnGap) || 0;
     var ws = bs.map(function (b) { var sp = sepOf(b); return b.offsetWidth + gap + (sp ? sp.offsetWidth + (parseFloat(getComputedStyle(sp).marginLeft) || 0) * 2 + gap : 0); });
-    var n = B.fit(ws, B.barLimit(a, v) - pad, more ? more.offsetWidth + gap : 0);
+    var gr = bar.querySelector('.eb-grip'), gw = gr ? gr.offsetWidth + gap : 0;
+    var n = B.fit(ws, B.barLimit(a, v) - pad - gw, more ? more.offsetWidth + gap : 0);
     bs.forEach(function (b, i) { b.hidden = i >= n; var sp = sepOf(b); if (sp) sp.hidden = i >= n; });
     if (more) more.hidden = n >= bs.length;
     bar.dataset.more = bs.slice(n).map(function (b) { return b.dataset.act; }).join(' ');
@@ -135,7 +146,7 @@ function mount(ctx) {
   }
   function hide(where) {
     if (where && cur && cur.where !== where) return;
-    cur = null; bar.hidden = true; closePop(); upWait = null;
+    cur = null; bar.hidden = true; closePop(); upWait = null; dragStop();
   }
   function run(a, extra) {
     var s = Object.assign({}, cur, extra || {});
@@ -243,10 +254,88 @@ function mount(ctx) {
     }
   });
 
+  // ---- 끌어서 순서 바꾸기(49c): 형제 상자(틀 좌표)를 화면에 묻고, 포인터(틀 좌표)로 끼울 자리 → 선. 같은 부모 안만
+  var R = HD.reorder, dr = null;
+  function frameBox(f) {                              // 틀 좌표 → 화면 좌표(크게 보기·판 카드 모두 — 틀이 줄어 있으면 그 배율)
+    var fr = f.getBoundingClientRect(), sc = f.offsetWidth ? fr.width / f.offsetWidth : 1;
+    return {ox: fr.left + f.clientLeft * sc, oy: fr.top + f.clientTop * sc, sc: sc || 1};
+  }
+  function dragStart(by) {                            // by = 'grip' | 'frame'(고른 요소를 화면 안에서 눌러 끌기)
+    if (!cur || !act || dr) return false;
+    var g = B.grip(cur.h, {app: cur.app});
+    if (reader()) { ctx.toast(RO); return false; }
+    if (!g.on) { ctx.toast(g.title); return false; }
+    var f = cur.frame && cur.frame(), w = f && f.contentWindow;
+    if (!w) { ctx.toast('이 화면에 물을 수 없어요 — 다시 골라 주세요'); return false; }
+    closePop();
+    dr = {sel: cur, f: f, win: w, tag: 'sibs:' + (++seq), rects: null, from: -1, slot: -1, pt: null, by: by};
+    bar.classList.add('dragging'); document.body.classList.add('hd-dragging-el');
+    try { w.postMessage({type: 'hd-sibs', path: cur.h.path, tag: dr.tag}, '*'); } catch (e) { dragStop(); ctx.toast('이 화면에 물을 수 없어요'); return false; }
+    return true;
+  }
+  function dragAt(pt) {                               // pt = 틀 좌표
+    if (!dr) return;
+    dr.pt = pt;
+    if (!dr.rects) return;
+    dr.slot = R.slot(pt, dr.rects);
+    var ln = dr.slot >= 0 ? R.line(dr.slot, dr.rects) : null, still = R.moves(dr.from, dr.slot).length === 0;
+    if (!ln) { dropLine.hidden = true; return; }
+    var b = frameBox(dr.f);
+    dropLine.style.left = (b.ox + ln.x * b.sc) + 'px'; dropLine.style.top = (b.oy + ln.y * b.sc) + 'px';
+    dropLine.style.width = Math.max(2, ln.w * b.sc) + 'px'; dropLine.style.height = Math.max(2, ln.h * b.sc) + 'px';
+    dropLine.dataset.slot = String(dr.slot); dropLine.dataset.dir = ln.dir; dropLine.style.opacity = still ? '.35' : '1';   // 제자리 = 흐리게
+    dropLine.hidden = false;
+  }
+  function dragStop() {
+    dr = null; dropLine.hidden = true; dropLine.dataset.slot = '';
+    bar.classList.remove('dragging'); document.body.classList.remove('hd-dragging-el');
+  }
+  function dragDrop() {
+    var d = dr; dragStop();
+    if (!d || !d.rects || d.from < 0 || d.slot < 0 || !cur || cur !== d.sel) return;
+    var dirs = R.moves(d.from, d.slot);
+    if (!dirs.length) return;                          // 제자리
+    run('reorder', {dirs: dirs, from: d.from, to: R.target(d.from, d.slot)});
+  }
+  function screenPt(e) { var b = frameBox(dr.f); return {x: (e.clientX - b.ox) / b.sc, y: (e.clientY - b.oy) / b.sc}; }
+  bar.addEventListener('pointerdown', function (e) {
+    var gp = e.target.closest && e.target.closest('button[data-grip]');
+    if (!gp || e.button !== 0 || gp.getAttribute('aria-disabled') === 'true') return;
+    e.preventDefault();
+    if (!dragStart('grip')) return;
+    try { gp.setPointerCapture(e.pointerId); } catch (err) { console.warn('[hd] 손잡이 포인터 잡기 실패 — ' + err); }
+    dragAt(screenPt(e));
+  });
+  bar.addEventListener('pointermove', function (e) { if (dr && dr.by === 'grip') dragAt(screenPt(e)); });
+  bar.addEventListener('pointerup', function (e) { if (dr && dr.by === 'grip') { dragAt(screenPt(e)); dragDrop(); } });
+  bar.addEventListener('pointercancel', function () { if (dr && dr.by === 'grip') dragStop(); });
+  addEventListener('keydown', function (e) { if (dr && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dragStop(); } }, true);
+  addEventListener('message', function (e) {
+    var d = e.data; if (!d || typeof d !== 'object') return;
+    if (d.type === 'hd-sibs' && dr && d.tag === dr.tag && e.source === dr.win) {
+      if (!Array.isArray(d.rects) || !(d.index >= 0)) { dragStop(); ctx.toast('이 요소의 형제를 찾지 못했어요 — 다시 골라 주세요'); return; }
+      dr.rects = d.rects; dr.from = d.index;
+      if (dr.pt) dragAt(dr.pt);
+    } else if (d.type === 'hd-grab' && cur && cur.frame) {   // 크게 보기: 고른 요소를 화면 안에서 눌러 끌기
+      var f = cur.frame(); if (!f || e.source !== f.contentWindow) return;
+      var pt = {x: +d.x || 0, y: +d.y || 0};
+      if (d.phase === 'start') { if (dragStart('frame')) dragAt(pt); }
+      else if (!dr || dr.by !== 'frame') return;
+      else if (d.phase === 'move') dragAt(pt);
+      else if (d.phase === 'end') { dragAt(pt); dragDrop(); }
+      else dragStop();
+    }
+  });
+
   bar.addEventListener('pointerdown', function (e) { e.stopPropagation(); });   // 판 끌기·고르기 풀기로 새지 않게
   pop.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
   bar.addEventListener('click', function (e) {
     e.stopPropagation();
+    var gp = e.target.closest('button[data-grip]');
+    if (gp) {                                          // 손잡이는 끌기 — 꺼진 손잡이를 누르면 까닭
+      if (reader()) ctx.toast(RO); else if (gp.getAttribute('aria-disabled') === 'true') ctx.toast(B.grip(cur.h, {app: cur.app}).title);
+      return;
+    }
     if (e.target.closest('button[data-more]')) { if (pop.dataset.kind === 'more' && !pop.hidden) closePop(); else { closePop(); openMore(); } return; }
     var b = e.target.closest('button[data-act]'); if (b) fire(b.dataset.act);
   });

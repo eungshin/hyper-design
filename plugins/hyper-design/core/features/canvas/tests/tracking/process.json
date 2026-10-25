@@ -782,6 +782,40 @@
         "test_canvas_blocks_b.py::test_replace_with_part_swaps_the_element (-n 4 부하)"
       ],
       "note": "둘레 글 상자는 같은 출처 화면(도우미 http)에서만 읽음 — file:// 는 예전 자리 차례"
+    },
+    {
+      "slice": "49c 바로 반영 편집 (그 자리 글자·끌어 옮기기·낙관 반영·같은 내용 교체 생략)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 3,
+        "minutes": 25
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "screenshot",
+          "what": "격자에서 끼울 선이 줄 사이 가로 선으로 그려짐 — line() 줄 끝 규칙 + unit"
+        },
+        {
+          "by": "old-test",
+          "what": "같은 내용 silent 를 모든 교체에 걸어 AI 쓰기(주석만 바뀜)의 겹치기·알약이 사라짐 — 낙관 반영한 틀(data-hd-opt)만"
+        },
+        {
+          "by": "old-test",
+          "what": "글 비우기: 그 자리 고치기에서 아무것도 안 치고 Enter = 그대로 — 테스트가 Backspace 로 지움"
+        }
+      ],
+      "waste": "area -n 4 에서 test_insert_part_below… 한 번 시간 초과(혼자 통과) · 랜덤 포트 4045(ERR_UNSAFE_PORT)로 한 번 실패",
+      "flaky": [
+        "test_canvas_blocks_b.py::test_insert_part_below_writes_a_neutral_skeleton_and_undo_restores (-n 4 부하)"
+      ],
+      "note": "apply_edits 는 한 묶음 안 같은 요소 move 를 하나로 겹쳐 씀 → 끌어 옮기기 k칸 = 쓰기 k번(되돌리기 k줄)"
     }
   ]
 }

@@ -650,6 +650,7 @@ var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.mo
   r.setProperty('--modal-w', MW + 'px'); r.setProperty('--modal-h', MH + 'px'); r.setProperty('--modal-r', (cr + 2) + 'px');
 })(document.documentElement.style, D.radius == null ? 28 : D.radius);
 var BK = null;                                   // 요소 막대(modules/view-blocks.js · 규칙 blocks.js, task 49a) — 기능 등록부로 아래에서 붙는다
+var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
 function sizeOf(id) { return AB ? AB.of(id) : {w: CARD.w, h: CARD.h, custom: false}; }   // 카드 크기를 읽는 곳 하나(없으면 프로젝트 카드 크기)
 function wOf(el) { var c = el && el.closest ? el.closest('.card') : null; return c ? sizeOf(c.dataset.id).w : CARD.w; }   // 카드 안 배율 = 실제 폭 / 그 카드 폭
@@ -1614,7 +1615,7 @@ function blockAct(act, s) {
     var a = s.at || null, r = !a && s.anchor ? s.anchor() : null; if (r) a = {x: r.x + r.w, y: r.y};   // 메모 창 = 그 요소 오른쪽 위
     done(); elemMemo(id, h, s.ask ? HD.blocks.askText(act, h) : '', inModal, a); return;
   }   // 앱 카드 = 파일 대신 AI 에게(소스 줄)
-  if (act === 'text') { editScreenText(id, h, inModal); return; }
+  if (act === 'text') { done(); editScreenText(id, h, inModal); return; }   // 그 자리에서 고치기(49c) — 막대는 걷는다(글을 덮지 않게)
   if (act === 'swap' || act === 'insert') {          // 부품 바꾸기·넣기(task 49b) — 뼈대를 뽑을 수 있으면 도우미가 바로, 아니면 AI 요청 메모(견본 글은 넣지 않음)
     var pt = s.part || null;
     if (!pt || !pt.ok || s.ask || !VS.on) { var r2 = s.anchor ? s.anchor() : null; done(); elemMemo(id, h, HD.blocks.partAsk(act, pt && pt.title), inModal, r2 ? {x: r2.x + r2.w, y: r2.y} : null); return; }
@@ -1631,9 +1632,18 @@ function blockAct(act, s) {
   done();
   if (act === 'remove') { removeElement(id, h); return; }
   if (lockGuard([id])) return;
+  if (act === 'reorder') {                           // 끌어서 순서 바꾸기(49c) — 같은 부모 안 k칸 = 도우미 move 를 차례로 k번(바로 반영) · 도우미 없음 = 옮기기 반영 대기 k개
+    var dirs = (s.dirs || []).filter(function (d) { return d === 'up' || d === 'down'; }), rl = '요소 옮기기';
+    if (!dirs.length) return;
+    if (OP && VS.on) { OP.moves(rl, id, h, dirs, s.where); return; }
+    addEdits(rl, dirs.map(function (d) { var x = editNote(id, h, HD.edits.say.move(d), d); x.edit = 'move'; return x; }), '요소를 옮겼어요 — 반영 대기');
+    return;
+  }
   var dup = act === 'dup', n = editNote(id, h, dup ? HD.edits.say.duplicate() : HD.edits.say.move(act), dup ? '' : act);
   n.edit = dup ? 'duplicate' : 'move';
-  addEdits(dup ? '요소 복제' : act === 'up' ? '요소 위로 옮기기' : '요소 아래로 옮기기', [n], (dup ? '요소를 복제했어요' : '요소를 옮겼어요') + ' — 반영 대기');
+  var lb = dup ? '요소 복제' : act === 'up' ? '요소 위로 옮기기' : '요소 아래로 옮기기';
+  if (OP && VS.on) { OP.run(lb, id, [n], [dup ? {path: h.path, dup: true} : {path: h.path, move: act}], s.where); return; }   // 화면 먼저, 도우미는 뒤에서(49c)
+  addEdits(lb, [n], (dup ? '요소를 복제했어요' : '요소를 옮겼어요') + ' — 반영 대기');
 }
 function elemMemo(id, h, note, inModal, at) {         // 요소 하나에 메모 창(note = 미리 채울 요청 글) — 판 = 그 자리 옆, 크게 보기 = 고른 요소 아래
   var it = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null};
@@ -1789,10 +1799,14 @@ function openCaption(el, focus) {                   // el = 카드 안 아무 �
   CAP.open(c, focus);
 }
 var tedCtx = null;
-function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소 자리에 고치기 칸(판 위 카드 또는 크게 보기)
+function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소만 그 자리에서 고치기(49c, palette.js hd-inline) — 앱 카드·답 없는 화면(옛 palette.js)은 글 칸(textBox)
   closeCmenu(); endPick();
   if (lockGuard([id])) return;
   if (h.textOk === false) { toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요'); return; }   // helper.py edit_html 과 같은 규칙(palette.js textOk)
+  if (!appCard(id) && OP && OP.inline(id, h, inModal ? 'modal' : 'board', function () { textBox(id, h, inModal); })) { clearElbox(); return; }
+  textBox(id, h, inModal);
+}
+function textBox(id, h, inModal) {                   // 예전 글 칸(textarea) — 그 요소 자리 위에 띄운다
   var c = inModal ? null : VL.cardEl(id), ph = inModal ? mbox : c ? $('.phone', c) : null; if (!ph) return;
   var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / wOf(c), q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
@@ -2288,7 +2302,7 @@ function swapCard(id, f, url) {
   f.removeAttribute('src'); f.setAttribute('data-src', url);
 }
 var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: window.__hdAgent || null, on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
-  toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { addEdits(label, list, null, null, true); },
+  toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { list = list.filter(function (n) { return !n.opt; }); if (list.length) addEdits(label, list, null, null, true); },   // 바로 반영(49c)의 실패는 화면을 되돌리고 알렸다 — 반영 대기로 다시 넣지 않는다
   wrote: function (res, list) { if (BK) BK.wrote(res, list); },   // 쓴 뒤 고른 요소 따라가기(task 49b) — 다시 실린 카드에서 막대가 같은 요소로
   request: function (list) { return HD.edits.request(list, outDir(), AB ? AB.sizes() : null); },
   data: function (nd, changed, v) {                  // 쓴 뒤 새 데이터: 선·이름은 새로, 바뀐 카드만 다시 싣는다(E17) — 보던 자리·배율·고른 것 그대로
@@ -2297,14 +2311,30 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     (nd.rows || []).forEach(function (r) { r.screens.forEach(function (sc) { live[sc.id] = sc; ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; }); });
     $$('.card:not(.draft)', rowsEl).forEach(function (c) { var id = c.dataset.id; if (!live[id]) { gone[id] = {el: c, at: c.nextSibling, box: c.parentNode}; c.remove(); } });
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
-    changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) swapCard(id, f, live[id].file + '?v=' + v); });
+    changed.forEach(function (id) { if (OP && OP.hold(id)) return; var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) swapCard(id, f, live[id].file + '?v=' + v); });   // hold = 같은 화면에 바로 반영 쓰기가 더 남음(중간 모습으로 깜빡이지 않게, 49c)
     if (selEl && changed.indexOf(selEl.card.dataset.id) >= 0) unselectEl();   // 바뀐 카드의 고른 요소는 자리가 달라졌다(task 49a)
-    if (!modal.hidden && mscreen && live[mscreen] && changed.indexOf(mscreen) >= 0) { if (BK) BK.hide('modal'); mframe.src = live[mscreen].file + '?v=' + v; }   // 크게 보기도 새 파일로
+    if (!modal.hidden && mscreen && live[mscreen] && changed.indexOf(mscreen) >= 0 && !(OP && (OP.hold(mscreen) || OP.typing('modal')))) {   // 크게 보기도 새 파일로
+      var mu = live[mscreen].file + '?v=' + v, mgo = function () { if (BK) BK.hide('modal'); mframe.src = mu; };
+      if (OP && OP.take(mscreen) && FT && FT.swap && FT.swap.same) {   // 방금 바로 반영한 화면 = 이미 보이는 내용이면 다시 싣지 않는다(두 번 깜빡임 없음, 49c)
+        var mwas = mframe.getAttribute('src');
+        FT.swap.same(mframe, mu).then(function (same) { if (!same && !modal.hidden && mframe.getAttribute('src') === mwas) mgo(); });
+      } else mgo();
+    }
     paintCardText(); drawArrows(); scheduleVisible();
     pruneFolders(); if (LY) LY.render();
     if (VB) { VB.render(); VB.wrote(changed); }          // 방금 스스로 다시 실은 카드 — 도우미의 바뀐 화면 알림으로 또 싣지 않게
     if (PR) PR.check();
   }});
+// 바로 반영(modules/view-optimistic.js, task 49c) — 글자·복제·옮기기를 화면 틀에 먼저, 도우미 답이 실패면 되돌림. 쓰기·반영 대기·틀 찾기·막대 다시 고르기만 넘긴다
+OP = HD.viewOptimistic ? HD.viewOptimistic.mount({on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
+  queue: function (l, list, msg) { addEdits(l, list, msg, null, true); }, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
+  frames: function (id) {                            // 그 화면의 실린 틀(판 카드 · 크게 보기) — 교체 중 숨은 틀·전/후 겹침은 빼고
+    var out = [];
+    cardsOf([id]).forEach(function (c) { $$('.phone iframe', c).forEach(function (f) { if (!f.hasAttribute('data-src') && !f.classList.contains('hd-swap-next') && !f.classList.contains('hd-swap-before')) out.push({f: f, where: 'board'}); }); });
+    if (!modal.hidden && mscreen === id) out.push({f: mframe, where: 'modal'});
+    return out;
+  },
+  picked: function (id, hit, where) { if (where === 'modal' && BK && !modal.hidden && id === mscreen) BK.show(modalSel(id, hit)); }}) : null;
 // AI 수정 중 덮개 View(modules/view-busy.js · 상태 modules/busy.js, Q2b) — 터미널로 넘긴 화면에 덮개, 그 화면 파일이 바뀌면 걷고 그 카드만 다시(도우미로 열었을 때만)
 var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id); },
   watch: function (files) {

@@ -1,6 +1,7 @@
 /* Model — 요소 막대 규칙(블록 편집, task 49a·49b): 고른 요소에 띄울 단추·켜짐·앱 카드면 AI 요청·단축키·막대 자리·상위 고르기·속성 칸·부품 요청 글. DOM·저장소·메시지를 쓰지 않는다.
    h = palette.js hd-hit 답 {path, text, full, textOk, prev, next, root, up, tag, attrs, rect, src?} · o = {app}(앱 카드 = 개발 서버 주소 화면, 또는 h.src 가 있음)
-   HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}], isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [ 상위),
+   HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 — 요소 메뉴·단축키), shown(items) → 막대에 보일 것(↑·↓ 는 단축키·메뉴만, 49c),
+                grip(h, o) → {on, title} — 끌어서 순서 바꾸기 손잡이(49c: 앱 카드·화면 뿌리·형제 없음 = 꺼짐), isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [ 상위),
                 askText(act, h) → 요청 글(앱 카드), place(anchor, size, view, avoid, others?) → {x, y, below, side, over}(others = 둘레 글 상자, 무르게 비킴), parentPick(h, chain) → 고를 상위 hit|null,
                 barLimit(anchor, view) → 막대 최대 너비, fit(widths, limit, more) → 막대에 남길 단추 수(나머지는 ⋯),
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글} */
@@ -63,6 +64,16 @@ function bar(h, o) {
     var w = why(act, h);
     return {act: act, label: s.label, title: w || s.title, on: !w, ask: false};
   });
+}
+
+var OFF_BAR = {up: 1, down: 1};                     // 막대에서 뺀 단추(49c) — 끌어서 옮기기 손잡이가 대신, Alt+↑/↓·요소 메뉴는 그대로
+function shown(items) { return (Array.isArray(items) ? items : []).filter(function (it) { return it && !OFF_BAR[it.act]; }); }
+function grip(h, o) {
+  h = h || {}; o = o || {};
+  if (o.app || (h.src && h.src.file)) return {on: false, title: '앱 카드는 끌어서 옮길 수 없어요 — 메모로 AI에게 요청하세요'};
+  if (h.root) return {on: false, title: WHY.root};
+  if (h.prev === false && h.next === false) return {on: false, title: '옮길 형제 요소가 없어요'};
+  return {on: true, title: '끌어서 순서 바꾸기 (Alt+↑/↓)'};
 }
 
 function keyAct(e) {
@@ -144,6 +155,6 @@ function fit(widths, limit, more) {
   return Math.max(Math.min(1, widths.length), n);
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, isApp: isApp, keyAct: keyAct, askText: askText, place: place, parentPick: parentPick,
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, askText: askText, place: place, parentPick: parentPick,
              attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, barLimit: barLimit, fit: fit};
 })();

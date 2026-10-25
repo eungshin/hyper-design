@@ -26,6 +26,13 @@
     {type:'hd-up', path, tag} → {type:'hd-upchain', tag, path, chain:[조상 hd-hit 칸…](가까운 것부터 8개)} ·
     {type:'hd-find', path, tag} → 문서가 다 실린 뒤 {type:'hd-found', tag, …hd-hit 칸}(없으면 path null) — 쓴 뒤 같은 요소 다시 고르기 ·
     hd-pending 항목 {path, attr, value}(허용 목록 속성을 잠시 바꿈).
+  바로 반영(task 49c — 캔버스가 화면을 먼저 바꾸고 도우미 답이 실패면 되돌린다):
+    {type:'hd-inline', path, tag} → 그 요소 하나만 contenteditable(글꼴·크기 그대로, 글 전체 선택) · {type:'hd-inline-on', tag, screen} 로 알림(없으면 캔버스는 예전 글 칸).
+      Enter = 저장 · Shift+Enter = 줄바꿈(br) · Esc = 취소(원래 글로) · 요소 밖으로 나가기(blur) = 저장. 끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?}
+      (ok:false = 취소·그대로·못 고침 — 원래 글 그대로. text = 글(br = \n, 공백 하나로) · 바뀐 글은 helper.py 글 바꾸기와 같은 모양(글 + br)으로 남기고 tag 로 되돌릴 수 있다)
+    {type:'hd-opt', tag, items:[{path, text} | {path, dup:true} | {path, move:'up'|'down', n?}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
+    {type:'hd-opt-undo', tag} → 그 tag 의 바꿈을 처음대로 · {type:'hd-sibs', path, tag} → {type:'hd-sibs', tag, index, rects:[형제 상자…]}(형제 = sib() 규칙, 화면 CSS px)
+    고르기(select) 도구로 고른 요소를 누른 채 4px 넘게 끌면 {type:'hd-grab', phase:'start'|'move'|'end'|'cancel', x, y}(화면 CSS px) — 놓은 뒤 클릭은 먹는다
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
@@ -231,18 +238,20 @@
   }
   function target(e) { var t = e.target; return t && t.nodeType === 1 && t !== box ? t : null; }
   document.addEventListener('mousemove', function (e) {
-    if (!picking) return;
+    if (!picking || inEdit(e)) return;
     var t = target(e); if (!t || t === last) return;
     last = t; send({type: 'hd-hover', rect: showBox(t)});
   }, true);
-  function block(e) { if (!picking) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+  function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
+  function block(e) { if (!picking || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
   ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit', 'dblclick'].forEach(function (ev) { document.addEventListener(ev, block, true); });
   document.addEventListener('click', function (e) {
-    if (!picking) return;
+    if (!picking || inEdit(e)) return;
     block(e);
+    if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
-    if (pickMode === 'select') { sendHit(t, false, 'hd-sel'); return; }   // 크게 보기 고르기 도구 → 요소 막대
+    if (pickMode === 'select') { selEl = linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel'); return; }   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
 
@@ -353,6 +362,142 @@
       return INLINE.test(t) && (t === 'br' || t === 'wbr' || !!c.textContent.trim());
     });
   }
+  /* ---------- 바로 반영(task 49c): 그 자리 글자 고치기 · 먼저 바꾸고 tag 로 되돌리기 · 형제 상자 · 고른 요소 끌기 ---------- */
+  var inl = null, opts = {}, selEl = null, grab = null, grabbed = false;
+  function plainOf(el) {                              // 요소 글 → 저장할 글: 글 마디의 공백은 하나로, br(·고치며 생긴 div/p 줄) = \n — helper.py 가 \n 을 br 로 쓴다
+    var out = '';
+    (function walk(n) {
+      for (var c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) out += c.nodeValue.replace(/[\s ]+/g, ' ');
+        else if (c.nodeType === 1) {
+          var t = c.tagName.toLowerCase();
+          if (t === 'br') out += '\n';
+          else { if ((t === 'div' || t === 'p') && out && out.slice(-1) !== '\n') out += '\n'; walk(c); }
+        }
+      }
+    })(el);
+    return out.replace(/ *\n */g, '\n').replace(/ {2,}/g, ' ').trim();
+  }
+  function setText(el, v) {                           // 글 + br — helper.py 글 바꾸기와 같은 모양
+    while (el.firstChild) el.removeChild(el.firstChild);
+    String(v == null ? '' : v).split('\n').forEach(function (line, i) {
+      if (i) el.appendChild(document.createElement('br'));
+      if (line) el.appendChild(document.createTextNode(line));
+    });
+  }
+  function keepKids(el) { return Array.prototype.map.call(el.childNodes, function (k) { return k.cloneNode(true); }); }
+  function putKids(el, kids) { while (el.firstChild) el.removeChild(el.firstChild); kids.forEach(function (k) { el.appendChild(k.cloneNode(true)); }); }
+  function optRec(tag, q) { (opts[tag] = opts[tag] || []).push(q); }
+  function optUndo(tag) {
+    if (inl && inl.tag === tag) inlineEnd(false);
+    (opts[tag] || []).reverse().forEach(function (q) {
+      if (q.added && q.added.parentNode) q.added.parentNode.removeChild(q.added);
+      if (q.back) q.back.parent.insertBefore(q.el, q.back.next && q.back.next.parentNode === q.back.parent ? q.back.next : null);
+      if (q.kids) putKids(q.el, q.kids);
+    });
+    delete opts[tag];
+    reBox();
+  }
+  function reBox() { if (box && box.style.display === 'block' && selEl && selEl.isConnected) showBox(selEl); }   // 고른 테두리가 옮긴·되돌린 요소를 따라가게
+  function stripIds(cp) {                             // 복사본과 그 안의 id·data-region 은 뺀다(helper.py _strip_ids)
+    [cp].concat(Array.prototype.slice.call(cp.querySelectorAll('[id],[data-region]'))).forEach(function (n) { n.removeAttribute('id'); n.removeAttribute('data-region'); });
+  }
+  function opt(tag, items) {                          // 점선 없이 바로 — 경로는 모두 바꾸기 전 문서에서 찾는다(도우미도 한 원문에서 고른다)
+    var els = (items || []).map(function (it) { return find(it.path); }), ok = true, first = null;
+    (items || []).forEach(function (it, i) {
+      var el = els[i];
+      if (!el) { ok = false; return; }
+      if (it.dup) {
+        var cp = el.cloneNode(true); stripIds(cp);
+        el.parentNode.insertBefore(cp, el.nextSibling); optRec(tag, {el: el, added: cp});
+      } else if (it.move) {
+        var q = {el: el, back: {parent: el.parentNode, next: el.nextSibling}}, n = Math.max(1, +it.n || 1), moved = 0;
+        for (var k = 0; k < n; k++) {
+          var to = sib(el, it.move === 'up' ? -1 : 1); if (!to) break;
+          el.parentNode.insertBefore(el, it.move === 'up' ? to : to.nextSibling); moved++;
+        }
+        if (moved < n) ok = false;
+        if (moved) optRec(tag, q);
+      } else if (it.text != null) {
+        if (!textOk(el)) { ok = false; return; }
+        optRec(tag, {el: el, kids: keepKids(el)}); setText(el, it.text);
+      } else return;
+      if (!first) first = el;
+    });
+    reBox();
+    send({type: 'hd-opt-done', screen: screenId(), tag: tag || '', ok: ok, hit: first ? hitMsg(first, 'hd-opt-done') : null});
+  }
+  function inlineKey(e) {
+    e.stopPropagation();                               // 화면 스크립트의 단축키로 새지 않게
+    if (e.isComposing || e.keyCode === 229) return;    // 한글 조합 중 Enter = 조합 끝내기
+    if (e.key === 'Enter') { e.preventDefault(); if (e.shiftKey) document.execCommand('insertLineBreak'); else inlineEnd(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); inlineEnd(false); }
+  }
+  function inlinePaste(e) {                           // 붙여 넣기 = 글만(서식·요소 없이)
+    var t = e.clipboardData && e.clipboardData.getData('text/plain');
+    if (t == null) return;
+    e.preventDefault(); document.execCommand('insertText', false, t);
+  }
+  function inlineBlur() { if (inl) inlineEnd(true); }
+  function inlineStart(d) {
+    if (inl) inlineEnd(true);
+    var el = find(d.path), tag = d.tag || '';
+    if (!el || !textOk(el)) { send({type: 'hd-inline-done', screen: screenId(), tag: tag, ok: false, why: el ? 'text' : 'missing', path: d.path || null}); return; }
+    inl = {el: el, tag: tag, kids: keepKids(el), was: plainOf(el), ce: el.getAttribute('contenteditable'), o: el.style.outline, oo: el.style.outlineOffset};
+    if (box) box.style.display = 'none';
+    el.setAttribute('contenteditable', 'true');
+    el.style.outline = '2px solid #2563eb'; el.style.outlineOffset = '2px';
+    el.addEventListener('keydown', inlineKey, true); el.addEventListener('paste', inlinePaste); el.addEventListener('blur', inlineBlur);
+    el.focus({preventScroll: true});
+    try { var r = document.createRange(); r.selectNodeContents(el); var sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); } catch (e) { console.warn('[hd] 글 전체를 고르지 못함 — ' + e); }
+    send({type: 'hd-inline-on', screen: screenId(), tag: tag, path: d.path});
+  }
+  function inlineEnd(save) {
+    var q = inl; if (!q) return; inl = null;
+    var el = q.el;
+    el.removeEventListener('keydown', inlineKey, true); el.removeEventListener('paste', inlinePaste); el.removeEventListener('blur', inlineBlur);
+    if (q.ce === null) el.removeAttribute('contenteditable'); else el.setAttribute('contenteditable', q.ce);
+    el.style.outline = q.o; el.style.outlineOffset = q.oo;
+    try { var sl = getSelection(); if (sl && sl.anchorNode && el.contains(sl.anchorNode)) sl.removeAllRanges(); } catch (e) { console.warn('[hd] 선택 풀기 실패 — ' + e); }
+    if (document.activeElement === el) el.blur();
+    var v = plainOf(el), path = pathOf(el);
+    if (!save || v === q.was) {                        // 취소·그대로 = 원래 마디로
+      putKids(el, q.kids);
+      send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: false, why: save ? 'same' : 'cancel', path: path, text: q.was, old: q.was});
+      return;
+    }
+    setText(el, v); optRec(q.tag, {el: el, kids: q.kids});
+    send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: true, path: path, text: v, old: q.was});
+  }
+  function sibsOf(d) {
+    var el = find(d.path), p = el && el.parentElement, list = [];
+    if (p) Array.prototype.forEach.call(p.children, function (c) {
+      if (c === el || (!SIB_SKIP.test(c.tagName.toLowerCase()) && !c.hasAttribute('data-hd-dup') && !c.hasAttribute('data-hd-pick') && !c.hasAttribute('data-hd-links'))) list.push(c);
+    });
+    send({type: 'hd-sibs', screen: screenId(), tag: d.tag || '', path: d.path || null, index: el ? list.indexOf(el) : -1, rects: list.map(rectOf)});
+  }
+  addEventListener('pointerdown', function (e) {   // window 단계 = block() 보다 먼저 · 고른 요소를 눌러 끌기(크게 보기 고르기 도구) — 끼울 자리는 캔버스가 그린다
+    grab = null;
+    if (!picking || pickMode !== 'select' || !selEl || !selEl.isConnected || inEdit(e) || e.button !== 0) return;
+    if (!(e.target && e.target.nodeType === 1 && selEl.contains(e.target))) return;
+    grab = {x: e.clientX, y: e.clientY, on: false};
+  }, true);
+  addEventListener('pointermove', function (e) {
+    if (!grab) return;
+    if (!grab.on) {
+      if (Math.abs(e.clientX - grab.x) + Math.abs(e.clientY - grab.y) < 4) return;
+      grab.on = true; send({type: 'hd-grab', screen: screenId(), phase: 'start', x: grab.x, y: grab.y});
+    }
+    send({type: 'hd-grab', screen: screenId(), phase: 'move', x: e.clientX, y: e.clientY});
+  }, true);
+  function grabEnd(e) {
+    var g = grab; grab = null;
+    if (!g || !g.on) return;
+    grabbed = e.type === 'pointerup';
+    send({type: 'hd-grab', screen: screenId(), phase: e.type === 'pointerup' ? 'end' : 'cancel', x: e.clientX, y: e.clientY});
+  }
+  addEventListener('pointerup', grabEnd, true);
+  addEventListener('pointercancel', grabEnd, true);
   var pend = [];
   function pending(items) {                           // 반영 대기: 글 = 안의 마디를 떼어 두고 새 글로 · 지우기 = 숨김 — 다음 호출에서 처음대로(떼어 둔 마디를 그대로 되돌림)
     pend.reverse().forEach(function (q) {
@@ -437,7 +582,7 @@
   send({type: 'hd-here', screen: screenId()});
   var editOn = false;
   document.addEventListener('dblclick', function (e) {    // 크게 보기에서 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸
-    if (!editOn || picking || !window.parent || window.parent === window) return;
+    if (!editOn || picking || inEdit(e) || !window.parent || window.parent === window) return;
     var el = leafOf(e.target); if (!el) return;
     e.preventDefault(); e.stopPropagation();
     sendHit(el, true, 'hd-dbl');
@@ -465,6 +610,10 @@
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
     else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
     else if (d.type === 'hd-pending') pending(d.items);
+    else if (d.type === 'hd-inline') inlineStart(d);
+    else if (d.type === 'hd-opt') opt(d.tag, d.items);
+    else if (d.type === 'hd-opt-undo') optUndo(d.tag);
+    else if (d.type === 'hd-sibs') sibsOf(d);
     else if (d.type === 'hd-up') {                     // 상위 고르기(task 49b) → {type:'hd-upchain', tag, path, chain}
       var ue = find(d.path);
       send({type: 'hd-upchain', screen: screenId(), tag: d.tag || '', path: d.path || null, chain: ue ? upChain(ue) : []});

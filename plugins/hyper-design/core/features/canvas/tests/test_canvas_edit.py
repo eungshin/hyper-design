@@ -937,13 +937,13 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
     sc = ph["width"] / dpage.evaluate("JSON.parse(document.getElementById('hd-data').textContent).card?.w || 375")
     x, y = ph["x"] + leaf["x"] * sc, ph["y"] + leaf["y"] * sc
     n0 = len(notes_of(dpage))
-    dpage.keyboard.press("e")                        # 글자 도구(재작업 S5): 글자 위를 한 번 누르면 그 자리에서 고친다
+    dpage.keyboard.press("e")                        # 글자 도구(재작업 S5): 글자 위를 한 번 누르면 그 자리에서 고친다(49c — 그 요소만 contenteditable)
     dpage.mouse.click(x, y)
-    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-    assert dpage.input_value("#tedit textarea") == leaf["text"]
-    assert dpage.evaluate("document.getElementById('modal').hidden")
-    dpage.fill("#tedit textarea", "바뀐 글자")
-    dpage.press("#tedit textarea", "Enter")
+    fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 1", timeout=3000)
+    assert fr.evaluate("document.querySelector('[contenteditable]').textContent.trim()") == leaf["text"]
+    assert dpage.evaluate("document.getElementById('modal').hidden") and dpage.evaluate("document.getElementById('tedit').hidden")
+    dpage.keyboard.type("바뀐 글자")
+    dpage.keyboard.press("Enter")
     wait_notes(dpage, n0 + 1)
     n = notes_of(dpage)[-1]
     assert n["screen"] == "job" and "바뀐 글자" in n["note"] and n["text"].startswith(leaf["text"][:20]), n
@@ -973,8 +973,10 @@ def test_element_menu_edit_text(dpage):
     dpage.mouse.click(c["x"], c["y"], button="right")
     dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /글자 고치기/.test(b.textContent))", timeout=3000)
     pick(dpage, "글자 고치기")
-    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    fr = frame_of(dpage, c["id"])                    # 그 자리에서(49c) — 그 카드 화면의 요소 하나가 contenteditable
+    fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 1", timeout=3000)
     dpage.keyboard.press("Escape")
+    fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 0", timeout=3000)
     assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc 는 고치기를 취소"
 
 
@@ -1210,10 +1212,10 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     n0 = len(notes_of(dpage))
     old = fr.locator("h1").text_content().strip()
     fr.locator("h1").dblclick()
-    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-    assert dpage.input_value("#tedit textarea") == old
-    dpage.fill("#tedit textarea", "크게 보기에서 고침")
-    dpage.press("#tedit textarea", "Enter")
+    fr.locator("h1[contenteditable]").wait_for(timeout=3000)   # 그 자리에서(49c)
+    assert dpage.evaluate("document.getElementById('tedit').hidden")
+    dpage.keyboard.type("크게 보기에서 고침")
+    dpage.keyboard.press("Enter")
     wait_notes(dpage, n0 + 1)
     assert notes_of(dpage)[-1]["screen"] == "job"
     fr.locator("h1", has_text="크게 보기에서 고침").wait_for(timeout=3000)
@@ -1475,8 +1477,9 @@ def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
     dpage.keyboard.press("e")
     x, y = el_point(dpage, ph, fr, "h1")
     dpage.mouse.click(x, y)
-    dpage.wait_for_selector("#tedit:not([hidden])", timeout=3000)
+    fr.wait_for_function("document.querySelector('h1').isContentEditable", timeout=3000)   # 그 자리에서(49c)
     dpage.keyboard.press("Escape")
+    fr.wait_for_function("!document.querySelector('h1').isContentEditable", timeout=3000)
     dpage.keyboard.press("h")
     assert tool(dpage) == ["hand"], "닫은 뒤 첫 단축키부터 먹힌다"
     dpage.keyboard.press("0")

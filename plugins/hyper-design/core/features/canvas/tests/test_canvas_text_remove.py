@@ -68,11 +68,23 @@ def _h1_xy(pg):
 
 
 def _edit_text(pg, xy, value):
-    pg.keyboard.press("e")                               # 글자 도구: 글자 위를 한 번 누르면 그 자리에서 고친다
+    pg.keyboard.press("e")                               # 글자 도구: 글자 위를 한 번 누르면 그 요소만 그 자리에서 고친다(49c — 글 칸 없음)
     pg.mouse.click(*xy)
-    pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-    pg.fill("#tedit textarea", value)
-    pg.press("#tedit textarea", "Enter")
+    inline_type(pg, _frame(pg), H1, value)
+    assert pg.is_hidden("#tedit")
+
+
+def inline_type(pg, fr, sel, value):
+    """49c 그 자리 글자 고치기: 그 요소가 contenteditable 이 될 때까지 → 글 전체를 바꿔 쓰고(\n = Shift+Enter) Enter."""
+    fr.wait_for_function("(s) => { const e = document.querySelector(s); return !!e && e.isContentEditable; }", arg=sel, timeout=3000)
+    for i, line in enumerate(value.split("\n")):
+        if i:
+            pg.keyboard.press("Shift+Enter")
+        if line:
+            pg.keyboard.type(line)
+    if not value:
+        pg.keyboard.press("Backspace")                   # 다 지우기 = 글 비우기
+    pg.keyboard.press("Enter")
 
 
 def _h1_in_file(o):
@@ -191,7 +203,7 @@ def test_remove_with_helper_writes_the_file_and_undo_restores_it(ctx, out):
 
 
 @pytest.mark.area("tools", "modal")
-def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: 두 번 눌러 연 고치기 칸의 '요소 지우기'
+def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: 두 번 누르면 그 자리 고치기(49c — 글 칸·그 안 '요소 지우기' 없음) · 지우기는 요소 메뉴
     pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
     pg.keyboard.press("0")
     pg.evaluate("document.querySelector('.card[data-id=\"job\"] .pres').click()")
@@ -199,11 +211,14 @@ def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: �
     mf = next(f for f in pg.frames if f.parent_frame and f.frame_element().get_attribute("id") == "mframe")
     mf.wait_for_selector(H1, timeout=5000)
     mf.dblclick(H1)
-    pg.wait_for_selector("#tedit:not([hidden])", timeout=3000)
-    pg.click("#tedel")
+    mf.wait_for_function("(s) => document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
+    assert pg.evaluate("document.getElementById('tedit').hidden"), "글 칸이 뜨지 않는다"
+    pg.keyboard.press("Escape")
+    mf.wait_for_function("(s) => !document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
+    mf.click(H1, button="right")
+    pg.locator("#cmenu button", has_text="요소 지우기").first.click()
     wait_notes(pg, 1)
     assert notes_of(pg)[0]["edit"] == "remove"
-    assert pg.evaluate("document.getElementById('tedit').hidden")
     mf.wait_for_function("(s) => getComputedStyle(document.querySelector(s)).display === 'none'", arg=H1, timeout=3000)
     assert not errors, errors
     pg.close()
