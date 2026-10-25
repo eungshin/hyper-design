@@ -162,7 +162,7 @@
       "method": "GET", "path": "/api/parts", "callers": ["modules/view-blocks.js (Components part picker, task 49b)"],
       "request": "-", "response": "{parts:[{key, title, ok}]} from out/components.html | {parts:[], error} when there is no components.html",
       "cases": [
-        {"name": "no components.html", "request": {"method": "GET", "path": "/api/parts"}, "expect": {"status": 200, "json": {"parts": {"$eq": []}, "error": "str"}}},
+        {"name": "ok (page load rebuilt the stale fixture, so components.html exists — 47-7; the missing-file answer {parts:[], error} is unit-tested in test_canvas_unit_blocks_b)", "request": {"method": "GET", "path": "/api/parts"}, "expect": {"status": 200, "json": {"parts": {"$list": {"key": "str", "title": "str", "ok": "bool"}}}}},
         {"name": "no token", "request": {"method": "GET", "path": "/api/parts", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
       ]
     },

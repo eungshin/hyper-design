@@ -33,6 +33,7 @@ def plant(root, stub):
     d = root / "plugins" / "hyper-design" / "core" / "features" / "canvas"
     d.mkdir(parents=True)
     shutil.copyfile(BUILD_REF, d / "build_ref.py")
+    shutil.copyfile(BUILD_REF.parent / "code_stamp.py", d / "code_stamp.py")   # build_ref 가 불러 쓰는 도장 모듈(47-7)
     (d / "build_canvas.py").write_text(stub, encoding="utf-8")
     return d
 
