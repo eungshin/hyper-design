@@ -80,7 +80,7 @@ function keyAct(e) {
   if (!e || typeof e.key !== 'string' || e.shift) return null;
   var mod = !!(e.ctrl || e.meta);
   if ((e.code === 'BracketLeft' || e.key === '[') && !mod && !e.alt) return 'parent';   // 자판 자리(한글 자판도) — Ctrl+Shift+[ 는 프로젝트 탭(view-tabs)
-  if (e.key === 'Delete' && !mod && !e.alt) return 'remove';
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !mod && !e.alt) return 'remove';   // Backspace 도(Figma)
   if (e.alt && !mod) return e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down' : null;
   if (mod && !e.alt && e.key.toLowerCase() === 'd') return 'dup';
   return null;

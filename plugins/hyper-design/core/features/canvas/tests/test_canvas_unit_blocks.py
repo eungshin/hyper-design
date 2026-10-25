@@ -211,7 +211,7 @@ def test_app_cards_turn_every_edit_into_an_ai_request(js):
 
 
 def test_keys_alt_arrows_move_ctrl_d_duplicates_delete_removes(js):
-    assert js["keys"] == ["up", "down", "dup", "dup", None, None, None, "remove", None]
+    assert js["keys"] == ["up", "down", "dup", "dup", None, None, None, "remove", "remove"]
 
 
 def test_ask_texts_are_requests(js):

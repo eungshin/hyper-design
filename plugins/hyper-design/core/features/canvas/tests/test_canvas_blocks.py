@@ -262,3 +262,18 @@ def test_app_card_bar_turns_edits_into_ai_requests(ctx, app_out):
     assert _job(app_out) == before, "앱 카드 파일은 건드리지 않는다"
     assert not errors, errors
     pg.close()
+
+
+@pytest.mark.area("tools")
+def test_backspace_on_a_picked_element_removes_the_element_not_the_card(ctx, out):
+    """요소를 고른 채 Backspace = 그 요소 지우기(Figma 처럼 Delete 와 같다) — 전에는 고른 카드 전체가 지워졌다(51 조사)."""
+    srv = _serve(out)
+    pg, errors = _open(ctx, srv.url)
+    try:
+        _pick_element(pg, _xy(pg, H1))
+        pg.keyboard.press("Backspace")
+        _wait_file(pg, out, lambda s: '<h1 class="title">' not in s, "Backspace 로 요소가 지워지지 않았다")
+        assert pg.locator('.card[data-id="job"]').count() == 1, "카드는 남는다"
+        assert (out / "screens" / "job.html").is_file(), "화면 파일은 남는다"
+    finally:
+        srv.shutdown(); srv.server_close()
