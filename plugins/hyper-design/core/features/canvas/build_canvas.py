@@ -29,6 +29,7 @@ screens.json:
 import sys, os, json, re, html, pathlib, shutil
 
 import board_data as BD
+import code_probe as CP
 import code_stamp
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -49,20 +50,9 @@ def modules():
     return [n for n in names if not n.startswith("view-")] + [n for n in names if n.startswith("view-")]
 
 
-def code_inputs():
-    """도장에 드는 빌드 입력 파일(작업 트리 내용 해시 — 저장소가 아닐 때)."""
-    return [TEMPLATE, *(MODULES_DIR / f"{n}.js" for n in modules()), MOTION_CSS, HERE / "build_canvas.py", HERE / "code_stamp.py", HERE / "links.py", HERE / "board_data.py", PALETTE_JS]
-
-
-def work_stamp():
-    """작업 트리 빌드 입력의 내용 도장 'w:…'(없는 파일은 뺌)."""
-    core = HERE.parents[1]
-    return code_stamp.content_stamp([(p.relative_to(core).as_posix(), p.read_bytes()) for p in code_inputs() if p.is_file()])
-
-
 def build_stamp():
     """이 빌드가 index.html 에 적을 도장 — build_ref 가 넘긴 HD_CODE_STAMP, 없으면 작업 트리 내용."""
-    return os.environ.get("HD_CODE_STAMP") or work_stamp()
+    return os.environ.get("HD_CODE_STAMP") or CP.work_stamp()
 
 
 esc = lambda x: html.escape(str(x if x is not None else ""))

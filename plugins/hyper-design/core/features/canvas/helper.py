@@ -60,7 +60,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   상태 파일 = {version:1, rev, updated, state:{notes, card-pos, edit-log, link-names, hidden, locked, folders, busy, …}} — 캔버스 프로젝트별 키의 진실 원천.
   index.html 을 줄 때 window.__hdState = {rev, state} 를 끼워 넣는다(캔버스는 동기로 읽는다). 쓰기는 임시 파일 + os.replace, 앞 것 하나는 .bak.
 
-코드 도장(code_stamp.py): 뜰 때 build_ref.code_stamp() 를 표지·.hd-helper.json 의 code 에 적는다(이 프로세스 안 Python 의 판) —
+코드 도장(code_stamp.py): 뜰 때 code_probe.current() 를 표지·.hd-helper.json 의 code 에 적는다(이 프로세스 안 Python 의 판) —
   hd open·허브가 지금 도장과 견줘 옛 코드 도우미를 (쉬면) 끄고 새로 띄운다. 페이지를 줄 때마다 index.html 의 도장도 견줘 옛것이면 다시 빌드.
 
 구조(task 47-2): 이 파일 = CLI(main) · make_server(out 하나 서버) · 예전 이름 다시 내보내기.
@@ -73,6 +73,7 @@ from http.server import ThreadingHTTPServer
 
 import build_canvas  # noqa: F401  — 예전 이름(helper.build_canvas)
 import build_ref
+import code_probe
 import html_edit
 import router as R
 import safe_port
@@ -272,7 +273,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     global CODE
     use_ref_build()                                  # 실사용: hd open 과 같은 빌더(#278)
-    CODE = build_ref.code_stamp()                    # 이 프로세스가 뜬 코드 — 표지에 적어 옛 도우미를 알아보게
+    CODE = code_probe.current()                      # 이 프로세스가 뜬 코드 — 표지에 적어 옛 도우미를 알아보게
     out = pathlib.Path(a.out).resolve()
     if not (out / "index.html").is_file() or not (out / "screens.json").is_file():
         sys.exit("index.html · screens.json 이 있는 out 폴더가 아니에요: %s" % out)
@@ -280,7 +281,7 @@ def main(argv=None):
     if live:
         sys.exit("이 out 은 이미 도우미가 떠 있어요(pid %s): %s — 그 주소를 쓰거나 `hd stop` 으로 끈 뒤 다시 띄우세요" % (live["pid"], live["url"]))
     srv = make_server(out, port_order(last, a.port), a.paseo_agent, a.paseo_cmd)
-    srv.session.code = build_ref.code_stamp          # 페이지를 줄 때 지금 코드와 견줌(옛 도장 index.html 이면 다시 빌드)
+    srv.session.code = code_probe.current            # 페이지를 줄 때 지금 코드와 견줌(옛 도장 index.html 이면 다시 빌드)
     marker = write_marker(out, srv, a.paseo_agent)
     srv.marker = marker
     atexit.register(lambda: marker.unlink(missing_ok=True))

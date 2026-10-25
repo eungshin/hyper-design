@@ -82,7 +82,7 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 `markers()` = 파일 표지(옛 helper.py) + `hub_markers()`(허브 안 세션 — `home.json` 의 허브에 `GET /v1/sessions`, 허브 프로세스 안이면 `LOCAL` 로 HTTP 없이). 허브 표지는 `prefix` `/v1/p/<이름>` 과 `hub:true` — `_base` 가 prefix 를 붙이고, `stop` 은 그 세션만 닫는다(허브 pid 는 끄지 않음). `open_project` = `resolve` → 떠 있는 것(허브 세션이면 `open_in_hub`, 아니면 `freshen`) → 허브가 있으면 `open_in_hub`(POST /api/open) → 없으면 옛 도우미 띄우기.
 
 ## 코드 도장 (47-7) — 다시 열면 늘 지금 코드
-- 지금 도장 = `hd_client.code_stamp()`(= `canvas/build_ref.code_stamp`, 저장소면 HEAD 의 core 나무). 재지 못하면 None = 판단하지 않음(옛 길: 그대로 다시 씀). 규칙은 순수 `canvas/code_stamp.py`(`reuse_verdict` · `page_after`)
+- 지금 도장 = `hd_client.code_stamp()`(= `canvas/code_probe.current`, 저장소면 HEAD 의 core 나무). 재지 못하면 None = 판단하지 않음(옛 길: 그대로 다시 씀). 규칙은 순수 `canvas/code_stamp.py`(`reuse_verdict` · `page_after`)
 - `hd open`·도우미 `/api/open` 이 떠 있는 옛 도우미를 다시 쓰기 전 `freshen(out, m)`: 페이지(`index.html` 의 `hd-code`)가 옛것 = 다시 빌드 · 프로세스(표지·`.hd-helper.json` 의 `code`)가 옛것이고 쉼 = `stop` 뒤 None → 새로 띄움(같은 포트 — `.hd-helper.json` 의 지난 포트) · 옛것이지만 AI 덮개(`state.busy`) 중 = 그대로 두고 페이지만 다시 빌드, `[hd]` 한 줄(`BUSY_NOTICE`, 이 프로세스에서 out 마다 한 번)
 - 허브 세션은 끄지 않는다(`movable` 아님) — 허브가 같은 일을 하고(home/contract.md), 허브 자신이 옛것이면 `/api/open` 답의 `notice` 를 `[hd]` 한 줄로
 - `hd home` 이 떠 있는 옛 허브를 다시 쓰면 주소 뒤 `· 새 버전이 있어요 — hd home --restart 로 다시 켜면 반영돼요`(`--json` `stale:true`). `--restart` = 떠 있는 허브를 `POST /api/hub/stop`(없는 옛 허브 = python pid 강제 종료)으로 끄고 같은 포트로 다시 띄움

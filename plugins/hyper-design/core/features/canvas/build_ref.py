@@ -9,15 +9,15 @@ python3 build_ref.py <out_dir> [--ref HEAD]
   sha 가 같으면 git archive·풀기 없이 그 사본으로 빌드한다(편집 한 번의 다시 빌드에서 약 1.5~5초). 다 풀었다는 표시 `.hd-ok` 가 있는 폴더만 다시 쓴다.
   만들 때는 `<sha>.tmp-<pid>` 에 풀고 이름을 바꾼다(동시에 둘이 풀면 늦은 쪽이 제 것을 지움). 쓸 때마다 표시 시각을 새로 하고,
   최근에 쓴 KEEP 개와 GRACE 초 안에 쓴 것 말고는 지운다(prune). 캐시를 쓸 수 없으면(폴더 못 만듦 등) 예전처럼 한 번 쓰고 지우는 임시 폴더로.
-- 코드 도장(code_stamp.py): code_stamp(ref) = 'g:<ref 의 core 나무 sha>' — 빌드에 HD_CODE_STAMP 로 넘겨 index.html 이 품는다.
-  열기(hd open · 허브)·도우미·허브 프로세스가 같은 함수로 '지금 코드'를 잰다. 저장소가 아니면 작업 트리 내용 도장(build_canvas.work_stamp).
+- 코드 도장(code_stamp.py): code_probe.current(ref) = 'g:<ref 의 core 나무 sha>' — 빌드에 HD_CODE_STAMP 로 넘겨 index.html 이 품는다.
+  재기는 code_probe.current(ref) — 열기(hd open · 허브)·도우미·허브 프로세스가 같은 함수로 '지금 코드'를 잰다. 저장소가 아니면 작업 트리 내용 도장(code_probe.work_stamp).
 """
 import argparse, io, os, pathlib, re, shutil, subprocess, sys, tarfile, tempfile, time
 
 HERE = pathlib.Path(__file__).resolve().parent
-if str(HERE) not in sys.path:                            # code_stamp · build_canvas(작업 트리 도장) — 다른 폴더에서 불러도
+if str(HERE) not in sys.path:                            # code_probe(지금 코드 도장 재기) — 다른 폴더에서 불러도
     sys.path.insert(0, str(HERE))
-import code_stamp as CS  # noqa: E402  — 도장 모양(순수 Model)
+import code_probe as CP  # noqa: E402  — 지금 코드 도장 재기(Edge)
 CORE = HERE.parents[1]                                   # .../core
 REL = HERE.relative_to(CORE)                             # features/canvas
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: 창 없는 도우미(pythonw)가 부르면 자식(git·빌드)이 콘솔 창을 띄웠다 닫는다
@@ -57,22 +57,6 @@ def run_build(script, out, stamp=None):
     return subprocess.run([sys.executable, str(script), str(out)], env=env, creationflags=NO_WINDOW).returncode
 
 
-def code_stamp(ref="HEAD"):
-    """지금 빌드가 쓸 캔버스 코드의 도장 — 저장소면 'g:<ref:core 나무 sha 앞 16>', 아니면(설치본) 작업 트리 내용 'w:…'. 재지 못하면 None."""
-    code, sha = git("rev-parse", "--verify", "--quiet", f"{ref}:./")
-    if code == 0:
-        return CS.tree_stamp(sha)
-    code, _ = git("rev-parse", "--show-prefix")
-    if code == 0:
-        return None                                      # 저장소인데 ref 가 없음 — 모름(헛 빌드를 하지 않게)
-    try:
-        import build_canvas
-        return build_canvas.work_stamp()
-    except (OSError, ImportError) as e:
-        print(f"[build_ref] 코드 도장을 재지 못했어요: {e}", file=sys.stderr)
-        return None
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description="커밋된 캔버스 코드로 <out>/index.html 을 만든다")
     ap.add_argument("out")
@@ -85,7 +69,7 @@ def main(argv=None):
         print("[build_ref] git 저장소가 아니에요 — 작업 트리의 build_canvas.py 로 빌드합니다", file=sys.stderr)
         return run_build(HERE / "build_canvas.py", out)
     prefix = prefix.strip()                              # 예: plugins/hyper-design/core/
-    stamp = code_stamp(a.ref)
+    stamp = CP.current(a.ref)
     script = cached(a.ref, prefix)
     if script is not None:
         return run_build(script, out, stamp)

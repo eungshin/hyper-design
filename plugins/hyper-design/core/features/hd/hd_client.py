@@ -17,8 +17,9 @@ import hd_model
 import hd_projects as P
 
 CANVAS = pathlib.Path(__file__).resolve().parent.parent / "canvas"
-if str(CANVAS) not in sys.path:                       # code_stamp(순수 Model) · build_ref(지금 코드 도장 재기)
+if str(CANVAS) not in sys.path:                       # code_stamp(순수 Model) · code_probe(지금 코드 도장 재기)
     sys.path.append(str(CANVAS))
+import code_probe as CP  # noqa: E402
 import code_stamp as CS  # noqa: E402
 
 STATE_FILE = ".hd-canvas.json"
@@ -310,10 +311,9 @@ _BUSY_SAID = set()                                    # 이 프로세스에서 '
 
 
 def code_stamp():
-    """지금 빌드가 쓸 캔버스 코드 도장(build_ref.code_stamp — 저장소면 git HEAD 의 core 나무) | None(재지 못함 = 판단하지 않음)."""
+    """지금 빌드가 쓸 캔버스 코드 도장(code_probe.current — 저장소면 git HEAD 의 core 나무) | None(재지 못함 = 판단하지 않음)."""
     try:
-        import build_ref
-        return build_ref.code_stamp()
+        return CP.current()
     except Exception as e:                            # noqa: BLE001 — 도장을 못 재도 열기는 된다(옛 길: 다시 쓰기)
         warn("코드 도장을 재지 못했어요(%s)" % e)
         return None
