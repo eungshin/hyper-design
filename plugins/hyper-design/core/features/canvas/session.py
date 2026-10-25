@@ -138,12 +138,66 @@ def _policies(v):
     return v
 
 
+# 화면 파일 편집 종류 → 파서 하나(e, ctx) → (op, 값). 새 종류 = 함수 하나 + 표 한 줄(apply_edits 는 고치지 않는다).
+# ctx = {out, files(화면 id → 파일), parts(부품 견본 글 | None, 처음 쓸 때 읽음)}. 받을 수 없으면 ValueError(한국어) — 그 편집 하나만 실패.
+def _cannot(e):                                      # 표에 없는 종류·op = 터미널로(캔버스가 AI 요청으로 돌린다)
+    return ValueError("바로 쓸 수 없는 편집(터미널로): %s/%s" % (e.get("edit"), e.get("op")))
+
+
+def _op_text(e, ctx):
+    return ("text", str(e.get("value", "")))
+
+
+def _op_remove(e, ctx):
+    return ("remove", None)
+
+
+def _op_duplicate(e, ctx):                           # 블록(task 49a)
+    return ("duplicate", None)
+
+
+def _op_move(e, ctx):
+    if e.get("op") in ("up", "down"):
+        return ("move", e["op"])
+    if e.get("op") == "to":                          # 끌기 한 번 = 쓰기 하나(49c) — to = 형제 요소 사이 새 자리(0부터)
+        to = e.get("to")
+        if not isinstance(to, int) or isinstance(to, bool):
+            raise ValueError("옮길 자리(to)가 정수가 아니에요: %r" % (to,))
+        return ("move", to)
+    raise _cannot(e)
+
+
+def _op_attr(e, ctx):                                # 속성 칸(task 49b) — op = 속성 이름, value = 새 값(허용 목록은 _attr_patch)
+    return ("attr", {"name": str(e.get("op") or ""), "value": e.get("value")})
+
+
+def _op_part(e, ctx):                                # 부품 넣기·바꾸기(task 49b) — value = 견본 key, 뼈대는 여기서 뽑는다(캔버스가 보낸 마크업은 쓰지 않음)
+    if ctx["parts"] is None:
+        ctx["parts"] = _parts_html(ctx["out"])
+    if ctx["parts"] is None:
+        raise ValueError("부품 견본(components.html)이 없어요")
+    return (e.get("edit"), specimen_parts.markup(ctx["parts"], str(e.get("value") or "")))
+
+
+def _op_link(e, ctx):
+    if e.get("op") == "link" and e.get("to") in ctx["files"]:
+        return ("link", e["to"])
+    if e.get("op") in ("cut", "untrigger"):
+        return ("cut", None)
+    raise _cannot(e)
+
+
+EDIT_OPS = {"text": _op_text, "remove": _op_remove, "duplicate": _op_duplicate, "move": _op_move, "attr": _op_attr,
+            "insert": _op_part, "replace": _op_part, "link": _op_link}
+
+
 def apply_edits(out, edits, stamp=None, build=None):
     out = pathlib.Path(out).resolve()
     sj = out / "screens.json"
     data = json.loads(sj.read_text(encoding="utf-8"))
     files = _screen_files(data)
-    applied, failed, html_ops, json_ops, owner, parts_html, paths = [], [], {}, [], {}, None, {}
+    applied, failed, html_ops, json_ops, owner, paths = [], [], {}, [], {}, {}
+    ctx = {"out": out, "files": files, "parts": None}   # parts = 부품 견본 글(넣기·바꾸기가 처음 부를 때 한 번 읽음)
     board = []                                       # 판 글(t51-9) — 화면이 아니라 screens.json story·people · decisions.json
     clones = []                                      # 카드 바로 복제(51-6) — screens.json 항목 + 화면 파일 하나 더
     for e in edits:
@@ -166,33 +220,10 @@ def apply_edits(out, edits, stamp=None, build=None):
                     kind = "policy-delete"
                 json_ops.append((eid, sid, kind if kind not in ("policy", "policy-delete") else (kind, e["index"]), v))
                 continue
-            if kind == "text":
-                op = ("text", str(e.get("value", "")))
-            elif kind == "remove":
-                op = ("remove", None)
-            elif kind == "duplicate":                   # 블록(task 49a)
-                op = ("duplicate", None)
-            elif kind == "move" and e.get("op") in ("up", "down"):
-                op = ("move", e["op"])
-            elif kind == "move" and e.get("op") == "to":   # 끌기 한 번 = 쓰기 하나(49c) — to = 형제 요소 사이 새 자리(0부터)
-                to = e.get("to")
-                if not isinstance(to, int) or isinstance(to, bool):
-                    raise ValueError("옮길 자리(to)가 정수가 아니에요: %r" % (to,))
-                op = ("move", to)
-            elif kind == "attr":                        # 속성 칸(task 49b) — op = 속성 이름, value = 새 값(허용 목록은 _attr_patch)
-                op = ("attr", {"name": str(e.get("op") or ""), "value": e.get("value")})
-            elif kind in ("insert", "replace"):         # 부품 넣기·바꾸기(task 49b) — value = 견본 key, 뼈대는 여기서 뽑는다(캔버스가 보낸 마크업은 쓰지 않음)
-                if parts_html is None:
-                    parts_html = _parts_html(out)
-                if parts_html is None:
-                    raise ValueError("부품 견본(components.html)이 없어요")
-                op = (kind, specimen_parts.markup(parts_html, str(e.get("value") or "")))
-            elif kind == "link" and e.get("op") == "link" and e.get("to") in files:
-                op = ("link", e["to"])
-            elif kind == "link" and e.get("op") in ("cut", "untrigger"):
-                op = ("cut", None)
-            else:
-                raise ValueError("바로 쓸 수 없는 편집(터미널로): %s/%s" % (kind, e.get("op")))
+            parse = EDIT_OPS.get(kind) if isinstance(kind, str) else None
+            if parse is None:
+                raise _cannot(e)
+            op = parse(e, ctx)
             f = (out / files[sid])
             if not _inside(out, f) or not f.is_file():
                 raise ValueError("out 밖이거나 없는 파일: %s" % files[sid])
