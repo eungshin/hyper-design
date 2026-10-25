@@ -84,7 +84,8 @@ def test_session_ticker_sweeps_presence_every_second_and_archives_hourly(tmp_pat
     out = hdfix.make_out(tmp_path / "w")
     sess = S.ProjectSession(out, build=lambda o: subprocess.CompletedProcess([], 0, "", ""))
     every = sorted(e for e, _ in sess.ticker.tasks)
-    assert every == [S.PRESENCE_EVERY, S.ARCHIVE_EVERY] and S.PRESENCE_EVERY == 1.0 and S.ARCHIVE_EVERY == 3600.0
+    assert every == sorted([S.PRESENCE_EVERY, S.TRP.EVERY, S.ARCHIVE_EVERY]) and S.PRESENCE_EVERY == 1.0 and S.ARCHIVE_EVERY == 3600.0
+    assert S.TRP.EVERY == 1.0, "터미널 대화 펌프도 1초마다(S3b)"
 
 
 # ---------------------------------------------------------------- 되돌린 쓰기의 기록 = 묘비
