@@ -2310,6 +2310,7 @@ addEventListener('keydown', function (e) {
 // 칸이 모자라거나 mount 가 던지면 그 기능만 빠지고 [hd] 오류 + 토스트(나머지는 붙음). 칸 뜻은 features.js 머리 주석
 var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
   rowsEl: rowsEl, CARD: CARD, title: function (id) { return titleOf(id); }, cardEl: function (id) { return VL.cardEl(id); },
+  frameLoaded: function (id, f) { sendTo(f); sendPending(f, id); if (PN) PN.locate(id, f); },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
   store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},
   local: {getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }},
