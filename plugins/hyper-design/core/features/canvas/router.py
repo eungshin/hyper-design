@@ -80,7 +80,8 @@ ROUTES = {
         "/agents": lambda s, q, b: (200, s.presence.list()),            # 47-5a 접속한 에이전트(/v1/p/<이름>/agents)
         "/api/presence": lambda s, q, b: (200, s.presence.list()),      # 옛 뿌리 별칭(/api/agents 는 Paseo 목록 + connected)
         "/api/chat": get_chat,                                          # S3 대화 기록(.hd-chat.jsonl)
-        # ── S3b 자리: "/api/agents/transcript": <S3b 모듈의 get(s, q, b) → (200, {entries, cursor, source})> 를 이 줄에 등록한다
+        "/api/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),   # S3b 터미널 대화(고른 에이전트만, 그 뒤 새 줄은 이벤트)
+        "/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),

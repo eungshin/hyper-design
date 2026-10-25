@@ -28,6 +28,7 @@ import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import memo_archive as MA  # 완료 메모 보관 고르기(순수 Model, task 47-5a)
 import presence as PR  # 접속한 에이전트(task 47-5a)
 import screen_copy as SC  # 카드 바로 복제 계획(순수 Model, 51-6)
+import transcript_pump as TRP  # 터미널 대화 펌프(S3b — 출처는 transcripts.py, 해석은 transcript_parse.py)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit_one
 
@@ -1480,9 +1481,8 @@ class ProjectSession:
         self.archive = Archive(self.out, self.lock, self.events)
         self.chat = ChatLog(self.out)                # S3 대화 기록 — 이미 내는 이벤트를 탭으로 받아 한 줄씩
         self.events.taps.append(self.chat.tap)
-        # ── S3b 자리: 터미널 대화(transcript) 펌프를 여기서 만든다 — 예) self.transcripts = TR.Pump(self.events.publish, …)
-        #    펌프는 'agent.transcript' {agent, entries} 를 publish 하고(events.TYPES 에 있음), 시계 일이면 아래 Ticker 목록에 (간격, fn) 을 더한다.
-        self.ticker = Ticker([(PRESENCE_EVERY, self.presence.sweep), (ARCHIVE_EVERY, self.archive.sweep)])
+        self.transcripts = TRP.pump_for(self, paseo)  # S3b 터미널 대화 — 고른·접속한 에이전트만, 'agent.transcript' 를 publish
+        self.ticker = Ticker([(PRESENCE_EVERY, self.presence.sweep), (ARCHIVE_EVERY, self.archive.sweep), (TRP.EVERY, self.transcripts.tick)])
 
     def open(self):
         state_load(self.out)                         # 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
