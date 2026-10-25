@@ -2139,7 +2139,7 @@ function showPop(item, note, intent, at, scope) {    // scope 없음 = 기본(�
   pop.hidden = false; placePop(item.rect, at, en ? en.screen : draft && draft.screen);
   $('#pnote').focus();
 }
-function hidePop() { pop.hidden = true; draft = null; editing = null; if (PP) PP.close(); drawPins(); }
+function hidePop() { if (pop.contains(document.activeElement)) document.activeElement.blur(); pop.hidden = true; draft = null; editing = null; if (PP) PP.close(); drawPins(); }
 function commitPop() {
   var note = $('#pnote').value.trim(), intent = curIntent(), scope = curScope();
   var setSc = function (n) { if (scope === 'element') delete n.scope; else n.scope = scope; };   // 이 요소 = 칸 없음(옛 메모와 같음)
