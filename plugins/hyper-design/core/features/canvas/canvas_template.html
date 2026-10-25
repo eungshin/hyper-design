@@ -2187,6 +2187,11 @@ function copySend(list, msg, warn) {                 // 복사가 된 때만 '�
 }
 // 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
 var gone = {};                                       // 파일에서 지운 카드: 떼어 두었다가 되살리면 제자리로
+// 바뀐 카드 다시 싣기 자리 하나(쓴 뒤·AI 덮개 걷힘 둘 다) — 등록부 기능 'swap' 이 swap(id, frame, url) 을 내주면 그것이 맡고, 없으면 비워 두고 보일 때 싣는다
+function swapCard(id, f, url) {
+  if (FT && FT.swap && FT.swap.swap) return FT.swap.swap(id, f, url);
+  f.removeAttribute('src'); f.setAttribute('data-src', url);
+}
 var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: window.__hdAgent || null, on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
   toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { addEdits(label, list, null, null, true); },
   request: function (list) { return HD.edits.request(list, outDir(), AB ? AB.sizes() : null); },
@@ -2196,7 +2201,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     (nd.rows || []).forEach(function (r) { r.screens.forEach(function (sc) { live[sc.id] = sc; ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; }); });
     $$('.card:not(.draft)', rowsEl).forEach(function (c) { var id = c.dataset.id; if (!live[id]) { gone[id] = {el: c, at: c.nextSibling, box: c.parentNode}; c.remove(); } });
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
-    changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) { f.removeAttribute('src'); f.setAttribute('data-src', live[id].file + '?v=' + v); } });
+    changed.forEach(function (id) { var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) swapCard(id, f, live[id].file + '?v=' + v); });
     paintCardText(); drawArrows(); scheduleVisible();
     pruneFolders(); if (LY) LY.render();
     if (VB) { VB.render(); VB.wrote(changed); }          // 방금 스스로 다시 실은 카드 — 도우미의 바뀐 화면 알림으로 또 싣지 않게
@@ -2210,7 +2215,7 @@ var VB = VS.on ? HD.viewBusy.mount({cardEl: function (id) { return VL.cardEl(id)
   },
   reload: function (ids) {
     var v = 'w' + Date.now();
-    ids.forEach(function (id) { var c = VL.cardEl(id), f = c && $('.phone iframe', c), b = c && $('.cover', c); if (f && b) { f.removeAttribute('src'); f.setAttribute('data-src', b.dataset.file + '?v=' + v); } });
+    ids.forEach(function (id) { var c = VL.cardEl(id), f = c && $('.phone iframe', c), b = c && $('.cover', c); if (f && b) swapCard(id, f, b.dataset.file + '?v=' + v); });
     scheduleVisible();
   },
   getItem: ST.getItem, setItem: ST.setItem,
