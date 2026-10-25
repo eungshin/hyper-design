@@ -78,3 +78,46 @@ def queue_prune(names, cutoff):
         if marks:
             gone += [n] + marks
     return gone
+
+
+# ---------------------------------------------------------------- AI 되돌리기(48c): 덮개(claim) 동안 그 화면 파일 쓰기를 기록 한 줄로
+AI_LABEL = "AI 반영 · %s"
+
+
+def ai_label(screen, title=None):
+    """기록 줄 글 — 'AI 반영 · <화면 제목 | id>'."""
+    t = title if isinstance(title, str) and title.strip() else screen
+    return AI_LABEL % t
+
+
+def ai_begin(track, screen, stamp, rel, before_sha, existed):
+    """claim → 새 추적. 이미 그 화면을 보고 있으면 그대로(처음 claim 때 모습 = AI 쓰기 전). → 새 추적(원래 것은 건드리지 않음)."""
+    if screen in track:
+        return track
+    return dict(track, **{screen: {"stamp": stamp, "rel": rel, "before": before_sha, "existed": bool(existed), "after": before_sha, "logged": False}})
+
+
+def ai_seen(track, screen, sha):
+    """그 화면 파일의 지금 sha → (새 추적, 'record'(처음 바뀜 — 기록 한 줄) | 'update'(또 바뀜 — 같은 줄의 되살리기 기준만) | None).
+    추적하지 않는 화면·같은 sha = 할 일 없음."""
+    e = track.get(screen)
+    if e is None or sha == e["after"]:
+        return track, None
+    act = "update" if e["logged"] else "record"
+    return dict(track, **{screen: dict(e, after=sha, logged=True)}), act
+
+
+def ai_end(track, screen):
+    """release → (새 추적, 끝난 항목 | None)."""
+    if screen not in track:
+        return track, None
+    rest = {k: v for k, v in track.items() if k != screen}
+    return rest, track[screen]
+
+
+def ai_since(log, since):
+    """기록 줄들 [{seq, …}] 과 since → {seq, writes}. since 없음·음수 = 기준만(writes []) — 캔버스가 처음 물을 때 옛 줄을 다시 받지 않게."""
+    seq = max([x["seq"] for x in log] or [0])
+    if since is None or since < 0:
+        return {"seq": seq, "writes": []}
+    return {"seq": seq, "writes": [x for x in log if x["seq"] > since]}

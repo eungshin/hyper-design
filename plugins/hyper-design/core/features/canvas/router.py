@@ -30,6 +30,14 @@ def get_state(s, q, body):
     return 200, s.store.get(since)
 
 
+def get_ai_writes(s, q, body):
+    since = _since_files(q)
+    if since is None:
+        return 400, {"error": "since: 정수가 아니에요"}
+    with s.lock:
+        return 200, s.ai.since(since)
+
+
 def get_files(s, q, body):
     since = _since_files(q)
     if since is None:
@@ -49,6 +57,7 @@ ROUTES = {
     "GET": {
         "/api/state": get_state,
         "/api/files": get_files,
+        "/api/ai-writes": get_ai_writes,
         "/api/agents": lambda s, q, b: (200, s.queue.agents(auto=q.get("auto", [""])[0] == "1")),
         "/api/archive": lambda s, q, b: (200, s.archive.get()),
         "/api/parts": lambda s, q, b: (200, s.builder.parts()),
@@ -57,7 +66,7 @@ ROUTES = {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
         "/api/apply": _obj(lambda s, q, b: s.history.apply(b.get("edits") or [])),
         "/api/delete": _obj(lambda s, q, b: s.history.delete([str(i) for i in b.get("screens") or []])),
-        "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""))),
+        "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""), keep=b.get("keep") is True, notify=b.get("notify") is True)),
         "/api/reply": lambda s, q, b: s.queue.reply(b),
         "/api/claim": lambda s, q, b: s.busy.claim(b),
         "/api/release": lambda s, q, b: s.busy.release(b),

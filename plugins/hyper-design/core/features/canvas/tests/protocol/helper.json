@@ -132,6 +132,16 @@
       ]
     },
     {
+      "method": "GET", "path": "/api/ai-writes", "callers": ["modules/view-ai-undo.js (2 s poll, 48c history rows)"],
+      "request": "?since=<seq> (missing or -1 = baseline)", "response": "{seq, writes:[{seq, stamp, screen, label, at}]} — one row per screen an agent changed while it held a claim (restore stamp = .hd-history like a direct write)",
+      "cases": [
+        {"name": "baseline", "request": {"method": "GET", "path": "/api/ai-writes"}, "expect": {"status": 200, "json": {"seq": "int", "writes": {"$eq": []}}}},
+        {"name": "since", "request": {"method": "GET", "path": "/api/ai-writes?since=0"}, "expect": {"status": 200, "json": {"seq": "int", "writes": {"$list": {"seq": "int", "stamp": "str", "screen": "str", "label": "str", "at": "str"}}}}},
+        {"name": "since not int", "request": {"method": "GET", "path": "/api/ai-writes?since=x"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/ai-writes", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/watch", "callers": ["canvas_template.html (AI busy cover end)"],
       "request": "{files:[relpath]}", "response": "{mtimes:{relpath: mtime | null}} (missing or outside out = null)",
       "cases": [
@@ -172,11 +182,12 @@
     },
     {
       "method": "POST", "path": "/api/restore", "callers": ["modules/view-sync.js (undo a write)"],
-      "request": "{stamp}", "response": "{restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since', path} | 404 {error, reason:'missing'}",
+      "request": "{stamp, keep?: true (snapshot first, answer redo stamp), notify?: true (watcher reports the restored screen)}", "response": "{restored:[relpath], changed:[screen], redo? (keep)} | 409 {error, reason:'changed-since', path} | 404 {error, reason:'missing'}",
       "cases": [
         {"name": "ok", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "${stamp}"}}, "expect": {"status": 200, "json": {"restored": {"$list": "str", "$min": 1}, "changed": {"$list": "str"}}}},
         {"name": "changed since", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "${stamp}"}}, "expect": {"status": 409, "json": {"error": "str", "reason": {"$eq": "changed-since"}, "path": "str"}}},
-        {"name": "missing", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "nope"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}}
+        {"name": "missing", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "nope"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}},
+        {"name": "missing with keep + notify (48c AI rows)", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "nope", "keep": true, "notify": true}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}}
       ]
     },
     {

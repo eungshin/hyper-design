@@ -6,6 +6,7 @@
   History        — <out>/.hd-history: 쓰기마다 원본 + manifest(apply · delete) · 되살리기(restore, 409 changed-since) · 정리(prune)
   Queue          — 보낸 메모: 보낼 곳(agent · Paseo 목록 5초 캐시 · 저장소) · 요청문 대기열 파일 + paseo send(forward) · 에이전트 답(reply)
   Busy           — AI 작업 덮개 state.busy(claim · release) + 화면 파일 지켜보기(1초 mtime → seq — /api/files · /api/watch)
+  AiUndo         — 덮개 동안 AI 가 쓴 화면 = 기록 한 줄 'AI 반영 · <화면>' + 되살리기 stamp(48c, GET /api/ai-writes)
   Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관
   Builder        — 다시 빌드 · hd-data · 부품 견본 목록
 모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
@@ -272,8 +273,9 @@ def delete_screens(out, ids, stamp=None, build=None):
     return {"deleted": gone, "cut": cut, "failed": failed, "stamp": w.stamp, "changed": changed}
 
 
-def restore(out, stamp, build=None):
-    """쓰기 하나 되살리기(2.2 D4) — manifest 의 파일이 쓴 직후 그대로일 때만. 아니면 아무것도 안 바꾸고 reason:'changed-since'."""
+def restore(out, stamp, build=None, keep=False):
+    """쓰기 하나 되살리기(2.2 D4) — manifest 의 파일이 쓴 직후 그대로일 때만. 아니면 아무것도 안 바꾸고 reason:'changed-since'.
+    keep = 되살리기 전 지금 파일을 새 기록으로 남기고 답에 redo(그 stamp) — 그 stamp 를 되살리면 다시 하기(48c AI 반영 줄)."""
     out = pathlib.Path(out).resolve()
     root = out / ".hd-history"
     hist = root / str(stamp or "")
@@ -289,6 +291,10 @@ def restore(out, stamp, build=None):
         if _sha(f) != info.get("after_sha"):
             return {"error": "그 뒤에 파일이 바뀌어 되돌릴 수 없어요: %s" % rel, "reason": "changed-since", "path": rel}
     now = {rel: (out / rel).read_bytes() if (out / rel).is_file() else None for rel in files}
+    w = _Writes(out, build=build) if keep else None
+    if w is not None:
+        for rel in files:
+            w.keep(out / rel)
     for rel, info in files.items():
         f = out / rel
         if info.get("before"):
@@ -304,8 +310,17 @@ def restore(out, stamp, build=None):
             else:
                 (out / rel).write_bytes(b)
         build(out)
+        if w is not None:
+            shutil.rmtree(w.hist, ignore_errors=True)
         return {"error": "캔버스 다시 빌드 실패 — 되돌림: " + (r.stderr or "")[-300:]}
-    return {"restored": sorted(files), "changed": m.get("changed") or []}
+    res = {"restored": sorted(files), "changed": m.get("changed") or []}
+    if w is not None:                                # 다시 하기 = 이 기록을 되살리기(같은 규칙: 그 뒤 파일이 바뀌면 409)
+        w.hist.mkdir(parents=True, exist_ok=True)
+        man = {rel: {"before": had, "after_sha": _sha(out / rel)} for rel, had in sorted(w.before.items())}
+        (w.hist / "manifest.json").write_text(json.dumps({"files": man, "changed": res["changed"], "by": m.get("by")}, ensure_ascii=False, indent=2),
+                                              encoding="utf-8")
+        res["redo"] = w.stamp
+    return res
 
 
 def _paseo_cmd(paseo=None):
@@ -785,8 +800,13 @@ class History:
     def delete(self, ids):
         return self._write(lambda: delete_screens(self.out, ids, build=self.builder.run))
 
-    def restore(self, stamp):
-        return self._write(lambda: restore(self.out, stamp, build=self.builder.run))
+    def restore(self, stamp, keep=False, notify=False):
+        """notify = 되살린 화면 파일을 지켜보기가 '바뀜'으로 알리게(그 카드를 캔버스가 다시 싣는다 — 48c 기록 패널의 AI 줄 되돌리기)."""
+        if notify:
+            with self.lock:
+                r = restore(self.out, stamp, build=self.builder.run, keep=keep)
+            return _code(r), r
+        return self._write(lambda: restore(self.out, stamp, build=self.builder.run, keep=keep))
 
     def prune(self):
         return prune(self.out)
@@ -830,17 +850,23 @@ class Queue:
 class Busy:
     """AI 작업 덮개 state.busy(claim · release, 상태 파일 자물쇠 안) + 화면 파일 지켜보기(1초마다 mtime → FileWatch seq)."""
 
-    def __init__(self, out, lock):
-        self.out, self.lock = out, lock
+    def __init__(self, out, lock, ai=None):
+        self.out, self.lock, self.ai = out, lock, ai
         self.watch, self.stop = FileWatch(), threading.Event()
 
     def claim(self, body):
         with self.lock:
-            return claim_post(self.out, body)
+            code, res = claim_post(self.out, body)
+            if code == 200 and self.ai is not None:
+                self.ai.begin(res["screen"], res["file"])   # 48c — AI 가 쓰기 전 모습
+        return code, res
 
     def release(self, body):
         with self.lock:
-            return release_post(self.out, body)
+            code, res = release_post(self.out, body)
+            if code == 200 and self.ai is not None:
+                self.ai.end(body["screen"])             # 48c — 마지막으로 보고 끝
+        return code, res
 
     def mtimes(self, files):
         return watch(self.out, files)
@@ -865,7 +891,71 @@ class Busy:
             with self.lock:                          # 도우미가 쓰는 중(apply 의 쓰기~빌드)에는 보지 않는다 — 다 쓴 뒤 absorb 가 기준을 옮긴다
                 m = scan(self.out, cache)
                 if m is not None:
-                    self.watch.tick(m)
+                    for sid in self.watch.tick(m):
+                        if self.ai is not None:
+                            self.ai.seen(sid)
+
+
+class AiUndo:
+    """48c AI 되돌리기 — 덮개(claim) 동안 그 화면 파일의 쓰기 전 모습을 .hd-history/<stamp>/ 에 남기고(직접 쓰기와 같은 모양),
+    바뀐 것을 보면 manifest(되살리기 기준 = 지금 파일) + 기록 줄 하나 'AI 반영 · <화면>'. 또 바뀌면 같은 줄의 기준만, release 로 끝.
+    아무것도 안 바뀌고 끝나면 남긴 모습을 지운다. 규칙은 helper_model.ai_*(순수), 여기는 파일만. 세션 자물쇠 안에서 부른다."""
+
+    def __init__(self, out):
+        self.out, self.track, self.log = out, {}, []
+
+    def begin(self, screen, rel):
+        if screen in self.track:
+            return
+        f = self.out / rel
+        if not _inside(self.out, f):
+            return
+        stamp = _stamp(datetime.datetime.now())
+        hist = self.out / ".hd-history" / stamp
+        try:
+            (hist / rel).parent.mkdir(parents=True, exist_ok=True)
+            if f.is_file():
+                shutil.copy2(f, hist / rel)
+        except OSError as e:
+            print("[hd] AI 쓰기 전 화면을 남기지 못했어요(%s) — 이 화면의 AI 반영은 되돌릴 수 없어요: %s" % (e, rel), file=sys.stderr, flush=True)
+            return
+        self.track = helper_model.ai_begin(self.track, screen, stamp, rel, _sha(f), f.is_file())
+
+    def seen(self, screen):
+        e = self.track.get(screen)
+        if e is None:
+            return None
+        self.track, act = helper_model.ai_seen(self.track, screen, _sha(self.out / e["rel"]))
+        if act is None:
+            return None
+        e = self.track[screen]
+        man = {"files": {e["rel"]: {"before": e["existed"], "after_sha": e["after"]}}, "changed": [screen], "by": "ai"}
+        try:
+            (self.out / ".hd-history" / e["stamp"] / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as x:
+            print("[hd] AI 반영 기록을 쓰지 못했어요(%s): %s" % (x, screen), file=sys.stderr, flush=True)
+            return None
+        if act == "record":
+            self.log.append({"seq": len(self.log) + 1, "stamp": e["stamp"], "screen": screen,
+                             "label": helper_model.ai_label(screen, self._title(screen)), "at": _now()})
+        return act
+
+    def end(self, screen):
+        self.seen(screen)
+        self.track, e = helper_model.ai_end(self.track, screen)
+        if e is not None and not e["logged"]:          # 안 바뀌었다 — 남긴 모습은 쓸 데가 없다
+            shutil.rmtree(self.out / ".hd-history" / e["stamp"], ignore_errors=True)
+        return e
+
+    def since(self, since):
+        return helper_model.ai_since(self.log, since)
+
+    def _title(self, screen):
+        try:
+            return next((x.get("title") for x in json.loads((self.out / "screens.json").read_text(encoding="utf-8")).get("screens", [])
+                         if x.get("id") == screen), None)
+        except (OSError, ValueError, AttributeError):
+            return None
 
 
 class Archive:
@@ -892,7 +982,8 @@ class ProjectSession:
         self.lock = threading.Lock()
         self.builder = Builder(self.out, build)
         self.store = StateStore(self.out, self.lock)
-        self.busy = Busy(self.out, self.lock)
+        self.ai = AiUndo(self.out)
+        self.busy = Busy(self.out, self.lock, self.ai)
         self.history = History(self.out, self.lock, self.builder, self.busy.absorb)
         self.queue = Queue(self.out, self.lock, agent, paseo, on_attach)
         self.archive = Archive(self.out, self.lock)
