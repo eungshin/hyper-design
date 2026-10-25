@@ -1839,6 +1839,7 @@ function removeElement(id, h) {                      // 요소 지우기(task 30
   closeCmenu();
   if (lockGuard([id])) return;
   var n = editNote(id, h, HD.edits.say.remove()); n.edit = 'remove';
+  if (OP && VS.on && OP.edit('요소 지우기', id, n)) return;   // 화면 먼저 떼어 두고 도우미는 뒤에서 — 거절이면 제자리로 + 알림(49d)
   addEdits('요소 지우기', [n], '요소를 지웠어요 — 반영 대기');
 }
 pane.addEventListener('dblclick', function (e) {
@@ -2036,7 +2037,7 @@ function cutIncoming(ids) {
 }
 addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
   if ((e.key !== 'Delete' && e.key !== 'Backspace') || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens') return;
-  if (selEl && e.key === 'Delete') { var se = selEl; e.preventDefault(); unselectEl(); removeElement(se.card.dataset.id, se.h); return; }   // 고른 요소 = 요소 지우기(task 30)
+  if (selEl) { var se = selEl; e.preventDefault(); unselectEl(); removeElement(se.card.dataset.id, se.h); return; }   // 고른 요소 = 요소 지우기(task 30) — Backspace 도(Figma · 카드 전체로 떨어지지 않게)
   var ids = SL.ids(); if (!ids.length) return;
   e.preventDefault(); deleteCards(ids);
 });

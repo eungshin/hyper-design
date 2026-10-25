@@ -93,3 +93,34 @@ def test_children_open_no_console_window(monkeypatch):
     build_ref.git("rev-parse", "--show-prefix")
     build_ref.run_build(CANVAS / "build_canvas.py", "out")
     assert seen == [getattr(subprocess, "CREATE_NO_WINDOW", 0)] * 2
+
+
+STUB_MARK = "import sys, pathlib\npathlib.Path(sys.argv[1], 'index.html').write_text('%s', encoding='utf-8')\n"
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git 없음")
+def test_extracted_ref_is_reused_while_the_tree_sha_is_the_same(tmp_path):
+    """49d: 다시 빌드마다 git archive + 풀기를 하지 않는다 — 풀어 둔 core 나무를 나무 sha 로 캐시(HD_BUILD_REF_CACHE)에 두고 sha 가 같으면 그대로 쓴다.
+    ref 가 움직이면(core 가 바뀐 새 커밋) 새로 풀어 새 코드로 빌드한다."""
+    root = tmp_path / "repo"
+    d = plant(root, STUB_MARK % "one")
+    git(root, "init", "-q"); git(root, "add", "."); git(root, "commit", "-q", "-m", "c1")
+    cache = tmp_path / "cache"
+    env = dict(ENV, HD_BUILD_REF_CACHE=str(cache))
+    out = tmp_path / "out"; out.mkdir()
+    r = run(d / "build_ref.py", out, env=env)
+    assert r.returncode == 0, r.stderr
+    assert (out / "index.html").read_text(encoding="utf-8") == "one"
+    ents = [p for p in cache.iterdir() if p.is_dir()]
+    assert len(ents) == 1 and (ents[0] / ".hd-ok").exists(), list(cache.iterdir())
+    cached = next(ents[0].rglob("build_canvas.py"))
+    cached.write_text(STUB_MARK % "cached", encoding="utf-8")            # 다시 풀면 사라질 표시 — 남아 있으면 캐시를 다시 쓴 것
+    r = run(d / "build_ref.py", out, env=env)
+    assert r.returncode == 0, r.stderr
+    assert (out / "index.html").read_text(encoding="utf-8") == "cached", "같은 sha = 풀어 둔 나무를 다시 쓴다"
+    (d / "build_canvas.py").write_text(STUB_MARK % "two", encoding="utf-8")
+    git(root, "commit", "-q", "-am", "c2")
+    r = run(d / "build_ref.py", out, env=env)
+    assert r.returncode == 0, r.stderr
+    assert (out / "index.html").read_text(encoding="utf-8") == "two", "ref 가 움직이면 새로 푼다"
+    assert len([p for p in cache.iterdir() if p.is_dir()]) == 2

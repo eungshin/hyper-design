@@ -843,6 +843,30 @@
         "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 통과)"
       ],
       "note": "대화창 보이기 설정 = dock.js chat 칸(hd-dock), hint 칸은 없앰. 대화창은 위쪽 #aichip 을 비추고 의도 hd-agent-pick 으로 같은 메뉴를 연다"
+    },
+    {
+      "slice": "49d 지우기 지연 (낙관 지우기 · build_ref 풀어 둔 ref 캐시)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 6
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "probe",
+          "what": "지우기 = 화면이 /api/apply(다시 빌드) 답까지 아무것도 안 보임 — 판 5.5초·크게 보기 8.4초 → 22~26ms"
+        }
+      ],
+      "waste": "probe 도우미 포트 정리(nohup 프로세스 pid 가 표지와 달라 포트 주인으로 끔) · 새 테스트의 파일 글 단언이 화면 안 같은 글 두 번을 못 봄",
+      "flaky": [],
+      "note": "40~50초는 이 사본에서 재현 안 됨 — 서버 쪽 다시 빌드가 거의 전부. 도우미가 빌드 전에 답하기는 47-4"
     }
   ]
 }

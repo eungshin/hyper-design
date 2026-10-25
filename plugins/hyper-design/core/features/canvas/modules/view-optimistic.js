@@ -1,10 +1,10 @@
-/* View — 바로 반영(task 49c): 글자(그 자리 contenteditable)·복제·옮기기·끌어 옮기기를 화면 틀에 먼저 보이고, 도우미 /api/apply 답이 오면 남기거나(applied) 되돌린다(applied:[]·오류).
+/* View — 바로 반영(task 49c·49d): 글자(그 자리 contenteditable)·지우기·복제·옮기기·끌어 옮기기를 화면 틀에 먼저 보이고, 도우미 /api/apply 답이 오면 남기거나(applied) 되돌린다(applied:[]·오류).
    규칙(남김/되돌림 판정·건너뛸 다시 싣기·알림 글)은 HD.optimistic(Model), 옮길 칸 목록은 HD.reorder(Model). 편집 메모 모양은 HD.edits(note·say) 그대로 — /api/apply 약속은 바꾸지 않는다.
    화면 메시지(palette.js): hd-inline → hd-inline-on · hd-inline-done · hd-opt → hd-opt-done · hd-opt-undo. tag 하나 = 화면에 먼저 보인 변경 하나(모든 틀에 같은 tag).
    옮기기 k칸 = 도우미 move(up|down = 옆 형제와 맞바꿈)를 차례로 k번(앞 답의 paths 로 다음 경로) — apply_edits 는 한 묶음 안 같은 요소의 move 를 하나로 겹쳐 쓴다.
      중간 쓰기의 다시 싣기는 건너뛴다(hold) · 중간에 실패하면 화면을 실제로 쓴 칸까지만 되돌린다.
    상태 = 진행 중 변경(HD.optimistic reduce) + 화면마다 '방금 낙관 반영함'(take 가 한 번 읽고 지움) + 열린 글자 고치기(tag 마다). 저장 없음.
-   HD.viewOptimistic.mount(ctx) → {inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
+   HD.viewOptimistic.mount(ctx) → {inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
    ctx = {on() → 도우미로 바로 쓰나, write(label, list) → Promise<res>(view-sync write), queue(label, list, msg)(반영 대기로 — 도우미 없음·연결 끊김),
           frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(크게 보기 고른 요소를 옮긴 자리로), warn(msg)} */
 (function () {
@@ -15,6 +15,11 @@ var ACK_MS = 1500;                                    // hd-inline-on 이 이 �
 function mount(ctx) {
   var O = HD.optimistic, E = HD.edits, st = O.initial(), seq = 0, fresh = {}, ins = {}, waits = {};   // ins = 열린 글자 고치기(tag 마다 — 틀이 앞 것을 저장으로 끝내고 답할 수 있게)
   var warn = ctx.warn || function (m) { console.warn(m); };
+  if (!document.getElementById('hd-opt-css')) {      // 그 자리 고치기 중인 카드 = 화면 안 파란 테두리 하나만 — 캔버스 hover 상자(점선·'글자' 이름표)가 글 위에 겹쳐 가렸다(사용자 10-25)
+    var css = document.createElement('style'); css.id = 'hd-opt-css';
+    css.textContent = '.card.hd-typing .elbox:not(.sel){display:none}';
+    document.head.appendChild(css);
+  }
 
   function newTag(k) { return k + ':' + Date.now().toString(36) + ':' + (++seq); }
   function post(f, msg) { try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); } catch (e) { warn('[hd] 바로 반영: 화면에 보내지 못했어요 — ' + (e && e.message || e)); } }
@@ -56,6 +61,12 @@ function mount(ctx) {
       if (!r.kept && !r.offline) ctx.toast(O.failText(label, r.why, 0, 1), false, 6000);
       return r;
     });
+  }
+
+  // 편집 메모 하나(지우기 등, 49d) — 화면 항목은 Model 이 고른다. 바로 반영할 수 없는 편집이면 null(셸이 예전 길로)
+  function edit(label, screen, n, where) {
+    var it = O.item(n);
+    return it ? run(label, screen, [n], [it], where) : null;
   }
 
   // 끌어 옮기기: 같은 쪽으로 dirs.length 칸 — 화면은 한 번에, 도우미는 한 칸씩 차례로
@@ -142,7 +153,7 @@ function mount(ctx) {
     }
   });
 
-  return {inline: inline, run: run, moves: moves,
+  return {inline: inline, run: run, edit: edit, moves: moves,
           hold: function (screen) { return O.hold(st, screen); },
           take: function (screen) { var v = !!fresh[screen]; delete fresh[screen]; return v; },
           typing: function (where) { return Object.keys(ins).some(function (k) { return ins[k].on && (!where || ins[k].where === where); }); }};

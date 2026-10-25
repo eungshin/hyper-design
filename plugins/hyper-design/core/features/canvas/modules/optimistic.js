@@ -1,10 +1,11 @@
-/* Model — 낙관 반영 상태(task 49c): 화면에 먼저 보인 요소 편집(글자·복제·옮기기)이 도우미 답을 기다리는 동안 → 남김(kept) | 되돌림(reverted). DOM·저장소·메시지를 쓰지 않는다.
+/* Model — 낙관 반영 상태(task 49c): 화면에 먼저 보인 요소 편집(글자·지우기·복제·옮기기)이 도우미 답을 기다리는 동안 → 남김(kept) | 되돌림(reverted). DOM·저장소·메시지를 쓰지 않는다.
    상태 = {ops: {tag: {screen, steps, done, phase:'pending'|'kept'|'reverted', why}}} — tag 하나 = 화면에 먼저 보인 변경 하나(옮기기 k칸 = steps k, 도우미 쓰기 k번)
    reduce(s, a) → 새 상태(바뀐 게 없으면 같은 객체): start{tag, screen, steps≥1} · step{tag}(쓰기 하나 끝) · keep{tag} · revert{tag, why} · end{tag}(치움)
    outcome(res, ids) → {kept, why} — /api/apply 답에 ids 가 모두 applied 면 남김, 아니면 되돌림(why = 도우미가 준 까닭 첫 줄 | 기본 글)
    hold(s, screen) → bool — 그 화면에 아직 보낼(또는 답을 기다리는) 쓰기가 지금 것 말고 더 있다 = 이번 다시 싣기는 건너뛴다(중간 모습으로 깜빡이지 않게)
    phase(s, tag) → 'pending'|'kept'|'reverted'|null · failText(label, why, done, steps) → 알림 글
-   HD.optimistic = {initial, reduce, outcome, hold, phase, failText, WHY} */
+   item(note) → palette.js hd-opt 항목 | null — 화면에 먼저 보일 수 있는 편집(지우기 {path, remove} · 복제 {path, dup} · 옮기기 {path, move} · 글자 {path, text}), 나머지·경로 없음 = null(49d)
+   HD.optimistic = {initial, reduce, outcome, hold, phase, failText, item, WHY} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -54,5 +55,14 @@ function failText(label, why, done, steps) {
   return label + ' — 파일에 쓰지 못해 되돌렸어요' + part + ': ' + (why || WHY);
 }
 
-HD.optimistic = {initial: initial, reduce: reduce, outcome: outcome, hold: hold, phase: phase, failText: failText, WHY: WHY};
+function item(n) {
+  if (!n || typeof n.path !== 'string' || !n.path) return null;
+  if (n.edit === 'remove') return {path: n.path, remove: true};
+  if (n.edit === 'duplicate') return {path: n.path, dup: true};
+  if (n.edit === 'move') return n.op === 'up' || n.op === 'down' ? {path: n.path, move: n.op} : null;
+  if (n.edit === 'text') return {path: n.path, text: String(n.value == null ? '' : n.value)};
+  return null;
+}
+
+HD.optimistic = {initial: initial, reduce: reduce, outcome: outcome, hold: hold, phase: phase, failText: failText, item: item, WHY: WHY};
 })();

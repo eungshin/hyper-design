@@ -30,7 +30,8 @@
     {type:'hd-inline', path, tag} → 그 요소 하나만 contenteditable(글꼴·크기 그대로, 글 전체 선택) · {type:'hd-inline-on', tag, screen} 로 알림(없으면 캔버스는 예전 글 칸).
       Enter = 저장 · Shift+Enter = 줄바꿈(br) · Esc = 취소(원래 글로) · 요소 밖으로 나가기(blur) = 저장. 끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?}
       (ok:false = 취소·그대로·못 고침 — 원래 글 그대로. text = 글(br = \n, 공백 하나로) · 바뀐 글은 helper.py 글 바꾸기와 같은 모양(글 + br)으로 남기고 tag 로 되돌릴 수 있다)
-    {type:'hd-opt', tag, items:[{path, text} | {path, dup:true} | {path, move:'up'|'down', n?}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
+    {type:'hd-opt', tag, items:[{path, text} | {path, dup:true} | {path, move:'up'|'down', n?} | {path, remove:true}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
+      remove(49d) = 그 요소를 문서에서 떼어 둔다(숨김이 아님 — 도우미가 쓴 새 파일과 나무가 같아 교체가 조용하다) · hit 은 null · 되돌리면 제자리로
     {type:'hd-opt-undo', tag} → 그 tag 의 바꿈을 처음대로 · {type:'hd-sibs', path, tag} → {type:'hd-sibs', tag, index, rects:[형제 상자…]}(형제 = sib() 규칙, 화면 CSS px)
     고르기(select) 도구로 고른 요소를 누른 채 4px 넘게 끌면 {type:'hd-grab', phase:'start'|'move'|'end'|'cancel', x, y}(화면 CSS px) — 놓은 뒤 클릭은 먹는다
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
@@ -418,6 +419,10 @@
         }
         if (moved < n) ok = false;
         if (moved) optRec(tag, q);
+      } else if (it.remove) {                        // 지우기(49d) — 떼어 두고 되돌리면 제자리로. 고른 테두리도 걷는다
+        optRec(tag, {el: el, back: {parent: el.parentNode, next: el.nextSibling}}); el.parentNode.removeChild(el);
+        if (box && selEl && !selEl.isConnected) box.style.display = 'none';
+        return;
       } else if (it.text != null) {
         if (!textOk(el)) { ok = false; return; }
         optRec(tag, {el: el, kids: keepKids(el)}); setText(el, it.text);

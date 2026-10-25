@@ -84,6 +84,11 @@ out.all = B.bar(h, {}).map(x => x.act);
 out.keys = [B.keyAct({key: 'ArrowUp', alt: true}), B.keyAct({key: 'ArrowDown', alt: true})];
 out.grip = [B.grip(h, {}).on, B.grip(h, {app: true}).on, B.grip(Object.assign({}, h, {root: true}), {}).on, B.grip(Object.assign({}, h, {prev: false, next: false}), {}).on,
             B.grip(Object.assign({}, h, {prev: false}), {}).on, B.grip(Object.assign({}, h, {src: {file: 'a.svelte'}}), {}).on];
+// 낙관 반영 항목(49d — 지우기 추가): 편집 메모 → palette.js hd-opt 항목 | null(바로 반영하지 않는 편집)
+const P = 'main > p:nth-of-type(2)';
+out.item = [O.item({edit: 'remove', path: P}), O.item({edit: 'duplicate', path: P}), O.item({edit: 'move', op: 'up', path: P}), O.item({edit: 'move', op: 'down', path: P}),
+            O.item({edit: 'text', value: '새 글', path: P}), O.item({edit: 'attr', op: 'href', value: '#', path: P}), O.item({edit: 'remove'}), O.item({edit: 'move', op: 'left', path: P}),
+            O.item(null), O.item({edit: 'link', op: 'cut', path: P})];
 console.log(JSON.stringify(out));
 """
 
@@ -199,3 +204,10 @@ def test_bar_hides_up_down_but_keeps_them_for_shortcuts_and_menu(r):
 
 def test_grip_is_off_for_app_cards_root_and_lonely_elements(r):
     assert r["grip"] == [True, False, False, False, True, False]
+
+
+# ---------------------------------------------------------------- 낙관 반영 항목(49d)
+def test_item_maps_remove_dup_move_text_to_palette_opt_items_and_others_to_none(r):
+    p = "main > p:nth-of-type(2)"
+    assert r["item"] == [{"path": p, "remove": True}, {"path": p, "dup": True}, {"path": p, "move": "up"}, {"path": p, "move": "down"},
+                         {"path": p, "text": "새 글"}, None, None, None, None, None]
