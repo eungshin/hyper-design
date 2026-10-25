@@ -1,7 +1,7 @@
 """판 위 라이브 카드 상한(task 35) Model — modules/live-cap.js 순수 함수 단위 테스트(node). 브라우저 없음.
 
 보이는·고른·크게 보기 카드는 내리지 않는다 · 화면 밖 15초 넘은 것만 · 실린 수가 K 이하가 될 때까지만 · 오래 안 본 것부터.
-LOD(figma-lite 1): 화면 위 너비가 MINW(120px) 아래인 카드는 싣지 않고, 실린 것은 바로 내린다 — 고른·크게 보기 카드는 그대로.
+LOD(figma-lite 1): 화면 위 너비가 MINW(48px) 아래인 카드는 싣지 않고, 실린 것은 바로 내린다 — 고른·크게 보기 카드는 그대로.
 """
 import json, shutil, subprocess, tempfile
 from pathlib import Path
@@ -28,7 +28,7 @@ out.allVisible = L.unload({loaded: ids(13), visible: ids(13), lastSeen: seen(13,
 out.neverSeen = L.unload({loaded: ['a', 'b', 'c'], visible: [], lastSeen: {b: now - 20000}, selected: [], modal: null, now, K: 1});
 out.knobs = L.unload({loaded: ['a', 'b'], visible: ['a'], lastSeen: {a: now, b: now}, selected: [], modal: null, now, K: 1, idle: 0});
 out.minw = L.MINW;
-out.readable = [L.readable(119), L.readable(120), L.readable(54), L.readable(390), L.readable(80, 60), L.readable(undefined), L.readable(NaN)];
+out.readable = [L.readable(47), L.readable(48), L.readable(30), L.readable(390), L.readable(80, 60), L.readable(undefined), L.readable(NaN)];
 out.small = L.unload({loaded: ['a', 'b', 'c', 'd'], visible: ['a', 'b', 'c', 'd'], small: ['a', 'b', 'c', 'e'], lastSeen: {}, selected: ['b'], modal: 'c', now});
 out.smallThenCap = L.unload({loaded: ids(13), visible: [], small: ['c12'], lastSeen: seen(13, 0), selected: [], modal: null, now});
 console.log(JSON.stringify(out));
@@ -81,8 +81,8 @@ def test_k_and_idle_can_be_passed(out):
     assert out["knobs"] == ["b"]
 
 
-def test_readable_threshold_is_on_screen_width_120(out):
-    assert out["minw"] == 120
+def test_readable_threshold_is_on_screen_width_48(out):
+    assert out["minw"] == 48
     assert out["readable"] == [False, True, False, True, True, True, True], "모르는 너비는 지금처럼 싣는다"
 
 

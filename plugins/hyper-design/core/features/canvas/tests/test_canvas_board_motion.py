@@ -82,7 +82,7 @@ def test_offscreen_cards_unload_over_cap_and_reload_on_return(pg):
 
 @pytest.mark.area("motion", "tools")
 def test_cards_below_readable_width_unload_selected_stays_and_reload_on_zoom_in(pg):
-    """LOD(figma-lite 1): 화면 위 너비가 HD.liveCap.MINW(120px) 아래인 카드는 iframe 을 내린다(틀·제목만) — 고른 카드는 그대로, 다시 크게 보면 다시 싣는다."""
+    """LOD(figma-lite 1): 화면 위 너비가 HD.liveCap.MINW(48px) 아래인 카드는 iframe 을 내린다(틀·제목만) — 고른 카드는 그대로, 다시 크게 보면 다시 싣는다."""
     pg.keyboard.press("0")
     pg.wait_for_function("() => [...document.querySelectorAll('#rows .card .phone iframe')].every(f => !f.hasAttribute('data-src'))", timeout=8000)
     pg.click('.card[data-id="job"] .cover')                                    # 한 번 = 고르기
@@ -90,11 +90,11 @@ def test_cards_below_readable_width_unload_selected_stays_and_reload_on_zoom_in(
     pr = pg.locator("#screens").bounding_box()
     pg.mouse.move(pr["x"] + 300, pr["y"] + 300)
     for _ in range(30):
-        if pg.locator('.card[data-id="job"] .phone').bounding_box()["width"] < 100:
+        if pg.locator('.card[data-id="job"] .phone').bounding_box()["width"] < 40:
             break
         pg.keyboard.down("Control"); pg.mouse.wheel(0, 120); pg.keyboard.up("Control")
         pg.wait_for_timeout(30)
-    assert pg.locator('.card[data-id="job"] .phone').bounding_box()["width"] < 120
+    assert pg.locator('.card[data-id="job"] .phone').bounding_box()["width"] < 48
     pg.wait_for_function("() => [...document.querySelectorAll('#rows .card .phone iframe')].filter(f => f.hasAttribute('data-src')).length >= 3", timeout=8000)
     st = {i: (s, d) for i, s, d in pg.evaluate(STATE)}
     assert not st["job"][1] and "hd-mode=board" in st["job"][0], "고른 카드는 작아도 그대로 라이브"
