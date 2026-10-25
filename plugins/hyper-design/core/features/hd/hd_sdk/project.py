@@ -1,11 +1,12 @@
 """Service — Project: 프로젝트 하나(out 폴더 + 그것을 띄운 서버 세션)에 하는 일. notes · reply · claim · release · apply · files · state ·
-attach · stop · wait · events(SSE, task 47-4b — wait 도 이벤트로 깨어나고 흐름이 없으면 폴링).
+attach · stop · wait · events(SSE, task 47-4b — wait 도 이벤트로 깨어나고 흐름이 없으면 폴링) ·
+접속(task 47-5a): hello(+ 맥박 스레드) · beat · bye · progress · agents · requests(나에게 온 request.sent 만).
 
 상태 = 표지(marker: {pid, project, out, url, token, port, agent, prefix?, hub?}) 하나 | None(파일만 — 도우미 없음). 쓰기는 늘 서버로
 (Transport), 읽기는 서버가 있으면 GET /api/state, 없으면 상태 파일(hd_client.read_state). 규칙은 hd_model(답 검사·찾기·덮개·에이전트 id).
 오류는 HdError 가족만 — 서버 거절은 errors.from_status, hd_client 오류는 transport.client_errors 가 바꾼다.
 """
-import pathlib, time
+import os, pathlib, time
 from urllib.parse import quote
 
 import hd_client as C
@@ -14,6 +15,7 @@ import hd_model as M
 from . import errors as E
 from .transport import HttpTransport, client_errors
 from . import sse
+from .presence import Heartbeat, whoami
 from .values import Note, Event
 
 POLL = 2.0
@@ -21,6 +23,9 @@ READ = 30.0                                          # 흐름 읽기 timeout(서
 RETRIES = 3                                          # 연달아 붙지 못하면 Offline(wait 는 폴링으로)
 BACKOFF_MAX = 10.0
 WAKE = ("open", "notes.changed", "claim", "release", "reset")   # wait 가 상태를 다시 보는 이벤트
+KINDS = ("paseo", "claude", "codex", "other")         # 서버 presence.KINDS 와 같게(protocol presence.json)
+PROGRESS_MAX = 200
+BEAT_MIN = 0.5
 
 
 def check_claim(screen, by=None, note=None):
@@ -48,6 +53,7 @@ class Project:
         self._own_transport = transport is None
         self.transport = transport if transport is not None else (HttpTransport(marker) if marker else None)
         self.finder = finder if finder is not None else (C.serving if self._own_transport else (lambda out: None))
+        self.me, self.heartbeat, self._hello_body = None, None, None   # 47-5a: hello 한 에이전트 id · 맥박 · 다시 보낼 hello 몸통
 
     # ------------------------------------------------------------ 누구
     @property
@@ -168,6 +174,104 @@ class Project:
         self._need()
         with client_errors():
             return C.stop(self.marker)
+
+    # ------------------------------------------------------------ 접속(task 47-5a, protocol presence.json)
+    def hello(self, id=None, name=None, kind=None, pid=None, listen=True, session=None, lease=None, beat=True):
+        """이 프로젝트에 접속 알리기 POST /hello → {agent, lease, beat, first}. id 를 안 주면 whoami(PASEO_AGENT_ID · CLAUDECODE · pid).
+        listen = request.sent 이벤트를 읽는다(requests()) — False 면 보이기만 하고 보내기는 어댑터(paseo 등)로.
+        session = claude 이어 받기 id(서버가 HD_CLAUDE_WAKE=1 일 때 claude -p --resume 으로 깨움). beat = 데몬 맥박 스레드(간격 = 서버가 권한 beat).
+        옛 서버(접속 라우트 없음) = NotYet."""
+        if id is None:
+            who = whoami(os.environ, os.getpid())
+            id, name, kind, pid = who["id"], name or who["name"], kind or who["kind"], pid if pid is not None else who["pid"]
+        if id is None or M.agent_error(id):
+            raise E.Invalid(M.agent_error(id) or "에이전트 id 가 없어요")
+        kind = kind or "other"
+        if kind not in KINDS:
+            raise E.Invalid("kind: %s 중 하나여야 해요" % "|".join(KINDS))
+        agent = {"id": id, "name": name or id, "kind": kind}
+        if pid is not None:
+            agent["pid"] = pid
+        agent["listen"] = bool(listen)
+        if session is not None:
+            agent["session"] = session
+        body = {"agent": agent}
+        if lease is not None:
+            body["lease"] = lease
+        res = self._hello(body)
+        self.me, self._hello_body = id, body
+        if self.heartbeat is not None:
+            self.heartbeat.stop()
+            self.heartbeat = None
+        if beat:
+            self.heartbeat = Heartbeat(self, max(BEAT_MIN, float(res.get("beat") or 10))).start()
+        return res
+
+    def _hello(self, body):
+        code, res = self._need().request("POST", "/hello", body)
+        if code == 404 and not (isinstance(res, dict) and res.get("reason")):
+            raise E.NotYet("이 서버는 접속 알리기를 몰라요(옛 도우미) — 서버를 다시 띄우면 돼요")
+        if code != 200:
+            raise E.from_status(code, res)
+        return res
+
+    def beat(self):
+        """맥박 한 번 POST /beat {id} → 답. 서버가 이 id 를 잊었으면(다시 떴음 — 404 unknown) hello 를 다시 보낸다."""
+        if not self.me:
+            raise E.HdError("먼저 hello 를 보내세요")
+        code, res = self._need().request("POST", "/beat", {"id": self.me})
+        if code == 404 and isinstance(res, dict) and res.get("reason") == "unknown":
+            return self._hello(self._hello_body)
+        if code != 200:
+            raise E.from_status(code, res)
+        return res
+
+    def bye(self):
+        """맥박을 멈추고 POST /bye {id} → {agent}(state away). hello 를 안 했으면 None."""
+        if self.heartbeat is not None:
+            self.heartbeat.stop()
+            self.heartbeat = None
+        if not self.me:
+            return None
+        return self._call("POST", "/bye", {"id": self.me})
+
+    def progress(self, text, screen=None, agent=None):
+        """진행 한 줄 POST /progress {text, agent?, screen?} → 이벤트 id. agent 기본 = hello 한 id(있으면 맥박도 됨).
+        서버가 그 id 를 모르면(hello 안 함) 보이기만 하는 hello(listen false, 맥박 없음) 뒤 한 번 더."""
+        if not isinstance(text, str) or not text.strip() or len(text.strip()) > PROGRESS_MAX:
+            raise E.Invalid("진행 글은 1–%d자여야 해요" % PROGRESS_MAX)
+        body = {"text": text.strip()}
+        aid = agent or self.me
+        if aid:
+            body["agent"] = aid
+        if screen:
+            body["screen"] = screen
+        code, res = self._need().request("POST", "/progress", body)
+        if code == 404 and isinstance(res, dict) and res.get("reason") == "unknown" and aid:
+            self._hello({"agent": {"id": aid, "name": aid, "kind": "other", "listen": False}})
+            code, res = self._need().request("POST", "/progress", body)
+        if code == 404 and not (isinstance(res, dict) and res.get("reason")):
+            raise E.NotYet("이 서버는 진행 알리기를 몰라요(옛 도우미)")
+        if code != 200:
+            raise E.from_status(code, res)
+        return res.get("event")
+
+    def agents(self):
+        """접속한 에이전트 GET /agents → [{id, name, kind, pid, state, listen, since, seen, lease, progress}]."""
+        code, res = self._need().request("GET", "/agents")
+        if code == 404:
+            raise E.NotYet("이 서버는 접속한 에이전트 목록을 몰라요(옛 도우미)")
+        if code != 200:
+            raise E.from_status(code, res)
+        return res.get("agents") or []
+
+    def requests(self, since=None, timeout=None, retries=RETRIES, clock=time.time, sleep=time.sleep):
+        """나에게 온 요청(request.sent, to = 내 id, via 'event') → Event generator(data: notes · text · path). 먼저 hello(listen true)."""
+        if not self.me:
+            raise E.HdError("먼저 hello 를 보내세요(받을 id 가 없어요)")
+        me = self.me
+        return (e for e in self.events(since, timeout, retries, clock, sleep)
+                if e.type == "request.sent" and e.data.get("to") == me and e.data.get("via") == "event")
 
     # ------------------------------------------------------------ 기다리기
     def wait(self, timeout, poll=POLL, clock=time.time, sleep=time.sleep):

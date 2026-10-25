@@ -21,7 +21,8 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 | `values.py` | Model(순수) | `Note` · `Event` | 값 객체. Note = `hd_model.rows` 줄 하나(키 순서 그대로, `ref` `is_open` `line`) · Event = events.json 의 `{id, type, ts, project, …}` | 없음(frozen) |
 | `sse.py` | Model(순수) | `frames` · `event_of` | SSE 줄 → frame(`retry`·주석·`: hb` 건너뜀, data 여러 줄) → `Event`(reset frame = `Event(type='reset', data{reason, last})`) | 없음 |
 | `transport.py` | Client 어댑터 | `HttpTransport` · `client_errors` | `request(method, path, body, timeout) → (code, 답)` = `hd_client.call` · `stream(path, last, timeout)` = `hd_client.stream`(SSE 줄) · hd_client 오류 → 가족 | 표지 하나 |
-| `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events | 표지 하나(attach·wait 가 고침) |
+| `presence.py` | Model(순수 whoami) + 맥박 | `whoami` · `Heartbeat` | 나는 누구(PASEO_AGENT_ID → paseo · CLAUDECODE=1 → claude-<pid> · 그 밖 agent-<pid>) · 맥박 한 번 `tick()`(서버가 잊었으면 hello 다시, 닿지 않으면 다음 차례) · 데몬 스레드 | 간격 · 실패 수 · 스레드 |
+| `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events · hello · beat · bye · progress · agents · requests | 표지 하나(attach·wait 가 고침) · me · heartbeat |
 | `hub.py` | Service | `Hub` | home.json 의 허브 · hello · new · canvases · project(고르기) · pick(고르기) · projects · open · save · forget | 없음(매번 hd_client 를 읽음) |
 | `text.py` | View | — | 사람용 줄(`hd_model.format_rows` · `format_canvases` · `hd_projects.format_rows` · `link_line` 을 부를 뿐) | 없음 |
 
@@ -36,7 +37,18 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 ## 아직 (다음 단계)
 - `Project.events(since=None, timeout=None, retries=3)`(47-4b) = SSE `<세션>/api/events`(모양 `canvas/tests/protocol/events.json`) → `Event` generator. 끊기면 마지막 id 를 Last-Event-ID 로 다시 붙고(0.5·1·2…초, 연달아 retries 번 넘게 실패 = `Offline`), reset 은 `Event('reset')` 으로 내고 그 `last` 부터 — 받는 쪽은 상태를 다시 읽는다. 흐름이 없는 옛 서버(404)·흐름을 못 여는 transport = `NotYet`. timeout = 그 초 뒤 끝(오류 없음).
 - `Project.wait` = 흐름이 열릴 때와 notes.changed·claim·release·reset 마다 상태를 다시 본다(타이머 없이 깨어남). 흐름이 없거나 끊겨 다시 못 붙으면 남은 시간 2초 `GET /api/state`(서버가 다시 뜨면 finder 로 새 표지).
-- `Hub.hello()` = 지금은 `GET /v1/sessions`(허브 토큰)로 닿는지·토큰이 맞는지만. 접속 알리기·맥박(AgentPresence)은 task 47-5 가 서버에 hello 라우트를 더할 때.
+## 접속 (task 47-5a, 서버 계약 `canvas/tests/protocol/presence.json`)
+```python
+p = Hub().hello("proj-a", id="me", kind="claude", session=None)   # = hub.pick("proj-a").hello(...) — 데몬 맥박 스레드(간격 = 서버가 권한 beat)
+for req in p.requests():             # 나에게 온 request.sent(via 'event') — 터미널 없이 받기
+    p.progress("홈 버튼 고치는 중", screen="home")
+    ...                              # req.data: text · notes · path
+p.bye()                              # 맥박 멈춤 + away
+```
+- `Hub.hello()`(인자 없음) = 예전 그대로 `GET /v1/sessions` 로 닿는지·토큰. 프로젝트나 who 를 주면 접속 알리기 → 그 `Project`
+- `Project.hello(id=None, name, kind, pid, listen=True, session, lease, beat=True)` — id 기본 = `whoami`. `listen=False` = 보이기만(보내기는 어댑터 — `hd attach` 가 이렇게). 옛 서버 = `NotYet`
+- `beat()` = `POST /beat`, 404 unknown 이면 hello 다시 · `bye()` · `progress(text, screen=None, agent=None)` → 이벤트 id(모르는 id 면 보이기만 hello 뒤 한 번 더) · `agents()` · `requests(since, timeout)`(hello 먼저)
+- CLI: `hd attach` 는 붙인 뒤 hello(kind paseo, listen false, 맥박 없음 — 실패해도 attach 는 됨) · `hd progress "<글>" [--screen] [--agent]`
 - `apply(…, async=True)` 는 47-4a 서버가 받으면 그대로 넘어간다(옵션을 몸통에 그대로 실음).
 
 ## 테스트

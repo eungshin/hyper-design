@@ -13,6 +13,9 @@
   hd stop [<name|path>]                   도우미 끄기(POST /api/stop, 답이 없으면 pid 강제 종료) — 링크는 그대로
   hd attach [--agent ID|none] [<name|path>]
                                           보내기 받을 Paseo 에이전트 바꾸기(다시 띄우지 않음, 기본 env PASEO_AGENT_ID, none = 떼기)
+                                          — 서버가 알면 접속 알리기(hello, listen false: 보내기는 그대로 paseo)도 한 번(47-5a)
+  hd progress "<글>" [<name|path>] [--screen ID] [--agent ID]
+                                          캔버스에 진행 한 줄(200자, agent 기본 env PASEO_AGENT_ID) — 접속 칩·대화창이 보여 줌
   hd wait [<name|path>] [--timeout S]     보낸(working) 메모가 생길 때까지 기다렸다가 hd notes 처럼 보여 줌 — 시간 넘으면 종료 코드 2
   hd claim <screen> [<name|path>] [--note TEXT] [--by ID]
                                           "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
@@ -129,6 +132,11 @@ def cmd_attach(a):
     p = _hub().pick(a.target)
     was = p.agent
     got = p.attach(agent)
+    if got:                                          # 47-5a: 접속 칩에 보이기(맥박 없음 — 임대가 끝나면 away). 옛 서버·실패는 조용히(attach 는 됐다)
+        try:
+            p.hello(got, kind="paseo", listen=False, beat=False)
+        except S.HdError:
+            pass
     return ({"project": p.name, "out": p.marker["out"], "pid": p.pid, "agent": got, "was": was},
             "%s · 보내기 → %s (전: %s)" % (p.name, got or "대기열 파일", was or "대기열 파일"))
 
@@ -156,6 +164,13 @@ def cmd_release(a):
     res = p.release(a.screen)
     return (dict(res, project=p.name, screen=a.screen),
             "%s · %s %s" % (p.name, a.screen, "덮개 걷음 (rev %s)" % res.get("rev") if res.get("released") else "덮개가 없어요(그대로)"))
+
+
+def cmd_progress(a):
+    p = _hub().pick(a.target)
+    ev = p.progress(a.text, screen=a.screen, agent=a.agent or os.environ.get("PASEO_AGENT_ID") or None)
+    return ({"project": p.name, "text": a.text.strip(), "screen": a.screen, "event": ev},
+            "%s · 진행: %s%s" % (p.name, a.text.strip(), " (%s)" % a.screen if a.screen else ""))
 
 
 def cmd_home(a):
@@ -234,6 +249,12 @@ def parser():
     rl.add_argument("screen", help="화면 id")
     rl.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     rl.set_defaults(fn=cmd_release)
+    pg = sub.add_parser("progress", parents=[common], help="캔버스에 진행 한 줄(접속 칩·대화창)")
+    pg.add_argument("text", help="한 줄(200자까지)")
+    pg.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    pg.add_argument("--screen", help="화면 id")
+    pg.add_argument("--agent", help="누가(기본 env PASEO_AGENT_ID)")
+    pg.set_defaults(fn=cmd_progress)
     hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")

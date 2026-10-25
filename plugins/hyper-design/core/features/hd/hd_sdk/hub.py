@@ -1,4 +1,4 @@
-"""Service — Hub: 서버 찾기(<HD_HOME>/home.json) · 떠 있는 캔버스 고르기 · 프로젝트 목록(링크) · 열기 · 새로 · hello.
+"""Service — Hub: 서버 찾기(<HD_HOME>/home.json) · 떠 있는 캔버스 고르기 · 프로젝트 목록(링크) · 열기 · 새로 · hello(닿기 · 프로젝트에 접속 알리기, 47-5a).
 
 상태 없음 — 매번 hd_client(표지·home.json·projects.json 의 주인)를 읽는다. 고르기 규칙은 hd_model.choose · hd_projects(같은 out = key 하나).
 오류는 HdError 가족만(transport.client_errors 가 hd_client 오류를 바꾼다). 홈 서버를 띄우는 일(hd home)은 여기 없다 — home/home_server.
@@ -52,9 +52,14 @@ class Hub:
             raise E.from_status(code, res, "홈 서버")
         return res
 
-    def hello(self):
-        """허브에 닿고 토큰이 맞는지 → {url, port, pid, sessions: 열린 세션 수}. 지금은 GET /v1/sessions 로 확인만 —
-        접속 알리기(AgentPresence)는 task 47-5 가 서버에 hello 라우트를 더할 때."""
+    def hello(self, project=None, **who):
+        """인자 없음 = 허브에 닿고 토큰이 맞는지 → {url, port, pid, sessions: 열린 세션 수}(GET /v1/sessions).
+        project(이름 | out | None = 떠 있는 하나) 또는 who(id · name · kind · pid · listen · session · lease · beat) 를 주면 = 그 프로젝트에 접속 알리기
+        (task 47-5a, Project.hello — 맥박 스레드 포함) → 그 Project(p.me · p.requests() · p.progress() · p.bye())."""
+        if project is not None or who:
+            p = self.pick(project)
+            p.hello(**who)
+            return p
         res = self._hub_call("GET", "/v1/sessions")
         rec = self.record or {}
         return {"url": rec.get("url"), "port": rec.get("port"), "pid": rec.get("pid"), "sessions": len(res.get("sessions") or [])}
