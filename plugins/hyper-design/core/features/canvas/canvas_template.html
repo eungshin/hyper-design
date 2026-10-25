@@ -1217,14 +1217,17 @@ function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setIt
 var LNKEY = 'hd-link-names:' + hashStr(KEYPATH), linkNames = {};
 function loadLinkNames() { try { linkNames = JSON.parse(ST.getItem(LNKEY) || '{}') || {}; } catch (e) { linkNames = {}; } }
 loadLinkNames();
-// 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버린다
+// 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버리고 정리한 목록을 다시 쓴다(modules/layer-flags.js — 잠금도 같은 규칙)
 var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
+function layerFlags(key, what) {                     // 저장된 id 목록 → 지금 있는 화면만(set) · 걸렀거나 깨졌으면 다시 씀
+  var r = HD.layerFlags.clean(ST.getItem(key), HD.layerFlags.live(D.rows, NS.list()));
+  if (r.bad) console.warn('[hd] ' + what + ' 목록이 깨져 비웠어요');
+  else if (r.dropped.length) console.warn('[hd] ' + what + ' 목록에서 없는 화면 ' + r.dropped.length + '개를 뺐어요: ' + r.dropped.join(', '));
+  if (r.changed) { try { ST.setItem(key, JSON.stringify(r.ids)); } catch (e) {} }   // 저장 실패는 state-sync 가 알린다
+  return r.set;
+}
 function loadHidden() {                              // 시작 때 · 기록 줄로 오갈 때(adoptState)
-  var raw = []; try { raw = JSON.parse(ST.getItem(HKEY) || '[]') || []; } catch (e) { raw = []; }
-  hidden = {};
-  var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = 1; });
-  live['@intro'] = live['@foot'] = live['@dscard'] = 1;                // 판 글도 레이어(H7)
-  (Array.isArray(raw) ? raw : []).forEach(function (id) { if (live[id]) hidden[id] = 1; });
+  hidden = layerFlags(HKEY, '숨긴 화면');
   $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
   $('#intro').hidden = !!hidden['@intro']; $('#foot').hidden = !!hidden['@foot'];
   if ($('#dscard')) $('#dscard').hidden = !!hidden['@dscard'];
@@ -1232,7 +1235,7 @@ function loadHidden() {                              // 시작 때 · 기록 줄
 loadHidden();
 // 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
 var LOCKKEY = 'hd-locked:' + hashStr(KEYPATH), locked = {};
-function loadLocked() { locked = {}; try { (JSON.parse(ST.getItem(LOCKKEY) || '[]') || []).forEach(function (id) { locked[id] = 1; }); } catch (e) { locked = {}; } }
+function loadLocked() { locked = layerFlags(LOCKKEY, '잠긴 화면'); }
 loadLocked();
 function lockGuard(ids) {                          // 잠긴 화면이 있으면 알리고 true
   var hit = ids.filter(function (id) { return locked[id]; }); if (!hit.length) return false;

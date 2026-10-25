@@ -752,6 +752,36 @@
         "busy_app 두 개가 area 에서 깨짐 — 48b 작업 중 파일(busy·view-busy·swap) 이 같은 작업 트리에 있어 내 것과 분리 못 함, main 에 알림"
       ],
       "note": "R56: 49a unit 4·브라우저 2 단언을 의도대로(막대가 커짐 · 상위·메모는 앱 카드에서도 요청 아님)"
+    },
+    {
+      "slice": "polish-1 요소 막대 자리·크기 + 숨김/잠금 옛 id 정리",
+      "commit": "(이 커밋 + 앞 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 5
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "막대가 오른쪽 맞춤 자리(x=39)로 가며 왼쪽 도구 막대 #tools 를 덮음 — 스크린샷으로 보고 unit(avoid 목록) 먼저"
+        },
+        {
+          "by": "old-test",
+          "what": "_bar 가 ⋯ 단추까지 셈 · 좁은 타일에서 [바꾸기] 가 ⋯ 로 넘어가 click 시간 초과 — _act 로 ⋯ 경유"
+        }
+      ],
+      "waste": "area -n 4 에서 test_replace_with_part_swaps_the_element 가 막대가 뜨기 전 8초 초과(부하) — 혼자 두 번 통과",
+      "flaky": [
+        "test_canvas_blocks_b.py::test_replace_with_part_swaps_the_element (-n 4 부하)"
+      ],
+      "note": "둘레 글 상자는 같은 출처 화면(도우미 http)에서만 읽음 — file:// 는 예전 자리 차례"
     }
   ]
 }
