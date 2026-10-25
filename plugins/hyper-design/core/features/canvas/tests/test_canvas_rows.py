@@ -104,8 +104,11 @@ def _wait(fn, timeout=20.0):
     import time
     end = time.time() + timeout
     while time.time() < end:
-        if fn():
-            return True
+        try:
+            if fn():
+                return True
+        except PermissionError:                        # Windows: 서버가 screens.json 을 바꿔 끼우는 그 순간엔 열 수 없다 — 다음 바퀴(빈·반쪽 파일은 이제 없다: out_io._write_json)
+            pass
         time.sleep(0.1)
     return False
 

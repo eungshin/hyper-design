@@ -25,9 +25,11 @@ def _screen_files(data):
 
 
 
-def _write_json(sj, data, raw):                      # 원래 들여쓰기·끝 줄바꿈을 따라 쓴다
-    sj.write_text(json.dumps(data, ensure_ascii=False, indent=2 if '\n  "' in raw else None) + ("\n" if raw.endswith("\n") else ""),
-                  encoding="utf-8", newline="")
+def _write_json(sj, data, raw):                      # 원래 들여쓰기·끝 줄바꿈을 따라 쓴다 — 임시 파일 뒤 바꿔 끼우기: 자물쇠 없이 읽는 쪽(/api/data·빌드)이 빈·반쪽 파일을 보지 않게
+    tmp = sj.with_name(sj.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2 if '\n  "' in raw else None) + ("\n" if raw.endswith("\n") else ""),
+                   encoding="utf-8", newline="")
+    _replace(tmp, sj)
 
 
 
