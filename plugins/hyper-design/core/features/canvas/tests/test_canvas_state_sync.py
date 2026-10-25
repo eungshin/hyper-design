@@ -140,8 +140,11 @@ def test_done_notes_archived_then_removed_once(browser, served):
         route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True, "count": 1}))
     c = browser.new_context(viewport={"width": 1440, "height": 1000})
     try:
-        pg = _open(c, srv, errors, [("**/api/archive", arch)])
-        pg.on("request", lambda r: "/api/state" in r.url and r.method == "GET" and gets.append(r.url))
+        def state(route):                                 # 페이지를 열기 전부터 — 실시간 흐름이 처음 열릴 때 묻는 한 번(view-live onopen)이 __hdReady 보다 빠를 수 있다
+            if route.request.method == "GET":
+                gets.append(route.request.url)
+            route.continue_()
+        pg = _open(c, srv, errors, [("**/api/archive", arch), ("**/api/state*", state)])
         f = out / ".hd-canvas.json"
         ids = lambda: [n["id"] for n in json.loads(f.read_text(encoding="utf-8"))["state"]["notes"]]
         assert _wait(pg, lambda: ids() == ["m2"]), ids()
