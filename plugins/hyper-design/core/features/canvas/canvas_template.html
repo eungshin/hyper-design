@@ -360,7 +360,7 @@ function fit() {
 pane.addEventListener('wheel', function (e) {
   e.preventDefault();
   if (VM) VM.stop();                               // 카메라 이동 중이면 바로 멈춤
-  closeCmenu();
+  CM.close();
   var r = pane.getBoundingClientRect(), k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? pane.clientHeight : 1;
   var dx = e.deltaX * k, dy = e.deltaY * k;
   if (e.ctrlKey || e.metaKey) { zoomAt(e.clientX - r.left, e.clientY - r.top, z * Math.exp(-dy * 0.0022)); return; }
@@ -406,7 +406,7 @@ pane.addEventListener('pointerdown', function (e) {
   if ((midBtn || rightBtn) && ptrs.size) return;
   if (midBtn) e.preventDefault();                               // 가운데 버튼 자동 스크롤을 막는다
   if (VM) VM.stop();
-  closeCmenu();
+  CM.close();
   justDragged = false;
   ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (ptrs.size === 1) {
@@ -449,7 +449,7 @@ pane.addEventListener('pointermove', function (e) {
     drag.moved = true; pane.classList.add('dragging');
     try { pane.setPointerCapture(e.pointerId); } catch (err) {}
   }
-  if (drag.moved && drag.cut) { drag.cut.push([e.clientX, e.clientY]); closeCmenu(); drawGhost(e.clientX, e.clientY); markCut(drag.cut); }
+  if (drag.moved && drag.cut) { drag.cut.push([e.clientX, e.clientY]); CM.close(); drawGhost(e.clientX, e.clientY); markCut(drag.cut); }
   else if (drag.moved && drag.trig) { drawGhost(e.clientX, e.clientY); EP.track(e.clientX, e.clientY); }
   else if (drag.moved && drag.card) {            // 이동 도구: 카드만 움직이고(판은 그대로) 화살표는 한 프레임에 한 번
     drag.group.forEach(function (id) {
@@ -615,7 +615,7 @@ modal.addEventListener('click', function (e) { if (e.target === modal) closeModa
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();
-  if (!cmenu.hidden) { closeCmenu(); return; }   // 떠 있는 메뉴가 먼저
+  if (CM.isOpen()) { CM.close(); return; }   // 떠 있는 메뉴가 먼저
   if (AB && AB.close()) return;                    // 새 화면 대화상자·크기 팝오버
   if (drag && drag.trig) { drag.trig = null; drag.off = true; EP.stop(); clearGhost(); return; }   // 트리거 끄는 중 = 잇기 취소(E11) — 놓을 때까지 판도 움직이지 않는다
   if (pickT) { endPick(); return; }
@@ -834,7 +834,7 @@ window.HDCanvas = {routeCurve: HD.route.routeCurve, style: HD.lineStyle,
 
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
 // 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
-var cmenu = $('#cmenu');
+var CM = HD.viewCmenu.mount({$: $, $$: $$, esc: esc, menu: $('#cmenu'), sub: $('#cmsub')});   // 우클릭 메뉴 View(modules/view-cmenu.js) — 항목은 아래 contextmenu 가 고른다
 function titleOf(id) { if (id === '@board') return '판 글'; var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
 function saveHidden() { try { ST.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
 function setHidden(ids, on) {
@@ -858,7 +858,7 @@ function renderHidden() {
   $('#thid').setAttribute('aria-label', '숨긴 화면 ' + n + '개');
   if (LY) LY.render();
 }
-function openHidl() { closeCmenu(); VD.activate('layers'); LY.only('hidden'); }   // 레이어 패널을 '숨긴 것만'으로(H7)
+function openHidl() { CM.close(); VD.activate('layers'); LY.only('hidden'); }   // 레이어 패널을 '숨긴 것만'으로(H7)
 function setLocked(ids, on) {
   ids.forEach(function (id) { if (on) locked[id] = 1; else delete locked[id]; });
   try { ST.setItem(LOCKKEY, JSON.stringify(Object.keys(locked))); } catch (e) {}
@@ -871,74 +871,6 @@ function lockCards(ids, on) {
   record({label: on ? '화면 잠그기' : '잠금 풀기', undo: function () { setLocked(ids, !on); }, redo: function () { setLocked(ids, on); }});
 }
 $('#thid').addEventListener('click', openHidl);
-function closeCmenu() { closeSub(); if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
-function openCmenu(x, y, head, items) {            // items: [{label, key?, act()} | {label, sub(cb)}(옆 목록 — cb([{label, act}]|null))] · '-' = 구분선 · {head} = 소제목
-  cmenu.tok = null; closeSub();
-  cmenu.innerHTML = (head ? '<div class="cmh">' + esc(head) + '</div>' : '') + items.map(function (it, i) {
-    return it === '-' ? '<hr>' : it.head ? '<div class="cmh sub">' + esc(it.head) + '</div>' :
-      '<button type="button" role="menuitem" data-i="' + i + '"' + (it.sub ? ' aria-haspopup="menu" aria-expanded="false"' : '') + '>' + esc(it.label) +
-      (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + (it.sub ? '<span class="sub" aria-hidden="true">▸</span>' : '') + '</button>';
-  }).join('');
-  cmenu.items = items;
-  cmenu.hidden = false; cmenu.classList.add('is-open');
-  cmenu.style.left = Math.max(8, Math.min(innerWidth - cmenu.offsetWidth - 8, x)) + 'px';
-  cmenu.style.top = Math.max(8, Math.min(innerHeight - cmenu.offsetHeight - 8, y)) + 'px';
-  var first = $('button', cmenu); if (first) first.focus({preventScroll: true});
-}
-cmenu.addEventListener('click', function (e) {
-  var b = e.target.closest('button[data-i]'); if (!b) return;
-  var it = cmenu.items[+b.dataset.i];
-  if (it.sub) { openSub(b, it, true); return; }
-  closeCmenu(); it.act();
-});
-// 옆 목록(51-3 '고르기 ▸', Figma F6 Select layer) — 올리거나 누르거나 → 키로 연다. 목록은 it.sub(cb) 가 늦게 줄 수 있다(화면에 조상 묻기)
-var cmsub = $('#cmsub');
-function closeSub() { if (cmsub.hidden) return; cmsub.hidden = true; cmsub.tok = null; $$('button[aria-expanded="true"]', cmenu).forEach(function (b) { b.setAttribute('aria-expanded', 'false'); }); }
-function openSub(b, it, focus) {
-  if (!cmsub.hidden && cmsub.from === b) { if (focus) { var f0 = $('button', cmsub); if (f0) f0.focus(); } return; }
-  var tok = cmsub.tok = {}; cmsub.from = b; b.setAttribute('aria-expanded', 'true');
-  var put = function (list) {
-    if (cmsub.tok !== tok || cmenu.hidden) return;
-    cmsub.items = list || [];
-    cmsub.innerHTML = list == null ? '<div class="cmh">찾는 중…</div>' : list.length ? list.map(function (x, i) {
-      return '<button type="button" role="menuitem" data-j="' + i + '"' + (x.title ? ' title="' + esc(x.title) + '"' : '') + '>' + esc(x.label) + '</button>'; }).join('') : '<div class="cmh">고를 요소가 없어요</div>';
-    cmsub.hidden = false;
-    var r = b.getBoundingClientRect(), w = cmsub.offsetWidth, x = r.right + 2 + w > innerWidth - 8 ? r.left - w - 2 : r.right + 2;
-    cmsub.style.left = Math.max(8, x) + 'px'; cmsub.style.top = Math.max(8, Math.min(innerHeight - cmsub.offsetHeight - 8, r.top - 5)) + 'px';
-    if (focus && list && list.length) $('button', cmsub).focus({preventScroll: true});
-  };
-  put(null);
-  it.sub(put);
-}
-cmenu.addEventListener('mouseover', function (e) {
-  var b = e.target.closest('button[data-i]'); if (!b) return;
-  var it = cmenu.items[+b.dataset.i];
-  if (it.sub) openSub(b, it, false); else closeSub();
-});
-cmsub.addEventListener('click', function (e) {
-  var b = e.target.closest('button[data-j]'); if (!b) return;
-  var x = cmsub.items[+b.dataset.j]; closeCmenu(); if (x) x.act();
-});
-cmsub.addEventListener('keydown', function (e) {
-  if (e.key === 'ArrowLeft' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); var f = cmsub.from; closeSub(); if (f) f.focus(); return; }
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  e.preventDefault();
-  var bs = $$('button', cmsub), i = bs.indexOf(document.activeElement);
-  bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus();
-});
-cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 항목 사이 이동 · → = 옆 목록
-  if (e.key === 'ArrowRight') { var sb = document.activeElement && document.activeElement.closest && document.activeElement.closest('button[data-i]'), si = sb && cmenu.items[+sb.dataset.i];
-    if (si && si.sub) { e.preventDefault(); openSub(sb, si, true); } return; }
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  e.preventDefault();
-  var bs = $$('button', cmenu), i = bs.indexOf(document.activeElement);
-  bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus();
-});
-document.addEventListener('pointerdown', function (e) {   // 밖을 누르면 닫기
-  var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
-  if (!cl('#cmenu') && !cl('#cmsub')) closeCmenu();
-}, true);
-addEventListener('resize', function () { closeCmenu(); });
 pane.addEventListener('contextmenu', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
   if (typing(e)) return;                           // 입력 칸은 브라우저 메뉴 그대로
@@ -949,7 +881,7 @@ pane.addEventListener('contextmenu', function (e) {
   var x = e.clientX, y = e.clientY, lkEl = cl('.alabel'), card = cl('.card');
   if (lkEl) {                                      // 선 태그 = 그 방향 연결 하나
     var lf = lkEl.getAttribute('data-from'), lt = lkEl.getAttribute('data-to');
-    openCmenu(x, y, '연결 → ' + titleOf(lt), [
+    CM.open(x, y, '연결 → ' + titleOf(lt), [
       {label: '이름 고치기', key: '더블클릭', act: function () { LN.rename(lf, lt); }},
       {label: '도착으로 가기', key: 'Ctrl+클릭', act: function () { VM.goLink(lf, lt); }},
       {label: '도착 바꾸기', act: function () { linksTo(lf, lt, function (its) { if (its.length) startPick(lf, its, x, y); }); }},
@@ -973,15 +905,14 @@ pane.addEventListener('contextmenu', function (e) {
       '-',
       {label: '숨기기' + suf, act: function () { hide(ids, true); SL.dispatch({type: 'clear'}); }},
       {label: '삭제' + suf, key: 'Del', act: function () { deleteCards(ids); }}]);
-    openCmenu(x, y, titleOf(id), cardItems);
-    var tok = cmenu.tok = {};                         // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
-    askHit(card, x, y, true, function (h) { if (cmenu.tok === tok && !cmenu.hidden && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
+    var tok = CM.open(x, y, titleOf(id), cardItems);   // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
+    askHit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(hidden).length;
   var items = [{label: '여기에 레이아웃', key: 'N', act: function () { newScreenAt(x, y); }}, {label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
   if (n) items.push('-', {label: '숨긴 화면 ' + n + '개', act: openHidl});
-  openCmenu(x, y, '', items);
+  CM.open(x, y, '', items);
 });
 addEventListener('keydown', function (e) {         // Space 를 누른 채 끌기 = 화면 이동(어느 도구든)
   if (e.code !== 'Space' || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens' || (e.target.closest && e.target.closest('.cm'))) return;
@@ -1099,7 +1030,7 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지
     els.push({label: m[0] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask ? '' : m[1], act: function () { blockAct(b.act, Object.assign({}, sel, {ask: b.ask})); }});
   });
   var pick = {label: '고르기', sub: function (put) { pickList(from, h, inModal, put); }};   // Figma Select layer ▸(51-3) — 맨 위
-  openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}, pick].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
+  CM.open(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}, pick].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
 }
 // '고르기 ▸' 목록: 그 요소 + 조상(같은 상자 감싸기는 건너뜀 — blocks.chainOf) · 고르면 판 = 그 카드만 고르고 그 요소 · 크게 보기 = 요소 막대
 function pickList(from, h, inModal, put) {
@@ -1193,7 +1124,7 @@ function finishTrig(tr, moved, cx, cy) {
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
       addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to), 'cut', h.to); })); }});
     items.push('-', {label: '취소', act: function () {}});
-    openCmenu(cx, cy, '연결 → 빈 곳', items);
+    CM.open(cx, cy, '연결 → 빈 곳', items);
   });
 }
 function cutHits(pts, from) {                        // 그은 선(화면 좌표, from 번째 마디부터) → 판 좌표로 바꿔 판의 선에 묻는다
@@ -1304,7 +1235,7 @@ var CAPX, CAP = HD.viewCaption.mount(CAPX = {
   onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(c ? [c.dataset.id] : null); if (BT) BT.place(); }   // 닫은 뒤에도 그 카드 글이 골라진 채(F14, t51-9)
 });
 function openCaption(el, focus) {                   // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
-  closeCmenu();
+  CM.close();
   var c = el && el.closest('.card'); if (!c) return;
   var id = c.dataset.id;
   if (lockGuard([id])) return;
@@ -1314,7 +1245,7 @@ function openCaption(el, focus) {                   // el = 카드 안 아무 �
 }
 var tedCtx = null;
 function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 요소만 그 자리에서 고치기(49c, palette.js hd-inline) — 앱 카드·답 없는 화면(옛 palette.js)은 글 칸(textBox)
-  closeCmenu(); endPick();
+  CM.close(); endPick();
   if (lockGuard([id])) return;
   if (h.textOk === false) { toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요'); return; }   // helper.py edit_html 과 같은 규칙(palette.js textOk)
   if (!appCard(id) && OP && OP.inline(id, h, inModal ? 'modal' : 'board', function () { textBox(id, h, inModal); })) { clearElbox(); return; }
@@ -1354,7 +1285,7 @@ $('textarea', tedit).addEventListener('blur', function () { closeTedit(true); })
 $('#tedel').addEventListener('mousedown', function (e) { e.preventDefault(); });   // 글 칸 blur(= 저장)보다 먼저 오지 않게
 $('#tedel').addEventListener('click', function () { var t = tedCtx; if (!t) return; closeTedit(false); removeElement(t.id, t.h); });
 function removeElement(id, h) {                      // 요소 지우기(task 30) — 편집 메모 edit:'remove' 하나 = 되돌리기 한 번. 도우미가 있으면 파일에 바로(instantOf)
-  closeCmenu();
+  CM.close();
   if (lockGuard([id])) return;
   var n = editNote(id, h, HD.edits.say.remove()); n.edit = 'remove';
   if (OP && VS.on && OP.edit('요소 지우기', id, n)) return;   // 화면 먼저 떼어 두고 도우미는 뒤에서 — 거절이면 제자리로 + 알림(49d)
