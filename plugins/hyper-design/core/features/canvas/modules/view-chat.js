@@ -1,9 +1,11 @@
 /* View — 하단 대화창(S1): 판 아래 가운데 입력창 · 고른 카드·요소 칩(×) · 마지막 요청 상태 한 줄. 규칙(칩·범위·메모 초안·상태 말)은 HD.chat(Model).
+   모양(S1c, tasks/52-composer '정한 모양'): 카드 한 장 = 칩 줄(고른 것이 있을 때만, 3개 넘으면 앞 2개 + 외 N개 — HD.chat.fold) · 입력칸(카드 폭 전체, 32→200px 뒤 얇은 스크롤)
+     · 도구 줄 28px(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽). 범위는 칩이 아니라 입력 안내 글(HD.chat.placeholder). 숨김 ⌄ = 카드 오른쪽 위, 올리거나 포커스일 때만. 상태 = 펼침 여부(저장 안 함).
    상태 = 지운 칩 표시(저장하지 않음) · 마지막 요청 {text, ids, at}(ctx.local 키 hd-chat-last:<해시>, 주인 이 파일). 메모·보내기는 셸 것 — ctx.sendNotes(list) 하나로만 나간다
    (위쪽 [보내기]와 같은 길: 도우미가 있으면 /api/forward, 없으면 복사). 고른 것은 ctx.selected()·ctx.picked() 로 읽기만, 덮개 상태(hd-busy)도 읽기만.
    Enter = 보내기 · Shift+Enter = 줄바꿈(한글 조합 중 Enter 는 무시) · Esc = 입력창에서 나가기. 크게 보기·다른 탭·읽기만 탭·Tab(bare)에서는 숨긴다.
    보이기 설정(S1b)의 주인은 dock.js(창 메뉴 '대화창', 키 hd-dock) — 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on:false} 만 보내고, 몸의 no-chat 표시로 숨는다.
-   받는 곳 칩(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
+   받는 곳 알약(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
    자리: 판(도크 왼쪽) 아래 가운데. 프로젝트 탭 바(아래 왼쪽, view-tabs 가 이 창 앞에서 멈춤)가 좁은 창에서 최소 폭이라 겹칠 때만 그 위로 올린다.
    진행 줄(S2, 47-4b): document 'hd-event'(view-live)를 HD.chat.progress 로 — 보낸 요청 화면의 claim·AI 쓰기·release 를 줄 하나(마지막 상태)로. 저장하지 않음(새로고침 = 메모 상태 줄).
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
@@ -12,56 +14,64 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
-  '#hdchat{position:fixed;bottom:10px;left:50%;z-index:24;width:560px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
+  '#hdchat{position:fixed;bottom:12px;left:50%;z-index:24;width:640px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
   '#hdchat[hidden],body.no-chat #hdchat,body.modal-open #hdchat,body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
-  '#hdchat .ch-line{display:flex;align-items:center;gap:6px;margin:0 6px 4px;padding:3px 10px;border-radius:8px;background:rgba(255,255,255,.92);box-shadow:0 1px 6px rgba(0,0,0,.10);font-size:12px;color:#5f5f5a;max-width:100%;width:max-content;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}' +
+  // 상태 줄(진행 줄 S2) — 카드 위 20px 한 줄, 말이 없으면 숨김(S1c)
+  '#hdchat .ch-line{display:flex;align-items:center;gap:6px;box-sizing:border-box;height:20px;margin:0 8px 4px;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(0,0,0,.08);font-size:12px;line-height:16px;color:var(--ui-badge,#5f5f5a);max-width:calc(100% - 16px);width:max-content;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}' +
   '#hdchat .ch-line[hidden]{display:none}' +
   '#hdchat .ch-line b{font-weight:600;color:var(--ui-primary,#2b2b29);overflow:hidden;text-overflow:ellipsis}' +
   '#hdchat .ch-line[data-stage="applied"] .ch-st,#hdchat .ch-line[data-stage="answered"] .ch-st{color:var(--ui-ok,#4f7d5f)}' +
   '#hdchat .ch-line[data-stage="decide"] .ch-st,#hdchat .ch-line[data-stage="unsent"] .ch-st{color:var(--ui-accent,#c2590a)}' +
   '#hdchat .ch-line.pulse{animation:hdChatPulse .6s ease-out}' +
   '@keyframes hdChatPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}' +
-  '@media (prefers-reduced-motion: reduce){#hdchat .ch-line.pulse{animation:none}}' +
-  '#hdchat .ch-box{background:#fff;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.16);padding:8px 8px 8px 10px}' +
-  '#hdchat .ch-top{display:flex;align-items:flex-start;gap:4px;margin-bottom:6px}' +
-  '#hdchat .ch-chips{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px}' +
-  '#hdchat .ch-hide{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:#8a8a85;cursor:pointer;display:grid;place-items:center}' +
-  '#hdchat .ch-hide:hover{background:#F2F2EF;color:#2b2b29}' +
-  '#hdchat .ch-hide svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
-  '#hdchat .ch-agent{flex:none;display:inline-flex;align-items:center;gap:5px;max-width:200px;height:30px;padding:0 9px;border:1px solid var(--ui-line,#e3e3df);border-radius:9px;background:#fff;color:#6b6b66;font:500 12px system-ui,sans-serif;cursor:pointer}' +
-  '#hdchat .ch-agent[hidden]{display:none}' +
-  '#hdchat .ch-agent:hover,#hdchat .ch-agent[aria-expanded="true"]{background:#F2F2EF;color:#2b2b29}' +
-  '#hdchat .ch-agent i{flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}' +
-  '#hdchat .ch-agent.on{color:var(--ui-primary,#2b2b29)}#hdchat .ch-agent.on i{background:var(--ui-ok,#7a9a7a)}' +
-  '#hdchat .ch-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-  '#hdchat .ch-chip{display:inline-flex;align-items:center;gap:2px;max-width:240px;height:22px;padding:0 4px 0 8px;border-radius:999px;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-on-badge-soft,#3a3a37);font-size:12px;font-weight:600}' +
-  '#hdchat .ch-chip.all{padding-right:8px;background:#F2F2EF;color:#6b6b66;font-weight:500}' +
+  '@media (prefers-reduced-motion: reduce){#hdchat .ch-line.pulse{animation:none}#hdchat .ch-box,#hdchat .ch-hide{transition:none}}' +
+  // 카드 한 장(S1c): 칩 줄(고른 것이 있을 때만) · 입력칸(카드 폭 전체) · 도구 줄 28px(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽). 빈 높이 8+32+6+28+8 = 82
+  '#hdchat .ch-box{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px;background:var(--ui-surface,#fff);border-radius:16px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.08);transition:box-shadow .15s}' +
+  '#hdchat .ch-box:focus-within{box-shadow:0 0 0 1px rgba(0,0,0,.16),0 4px 20px rgba(0,0,0,.08)}' +
+  '#hdchat .ch-hide{position:absolute;top:6px;right:6px;z-index:1;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:none;color:var(--ui-muted,#8a8a85);cursor:pointer;display:grid;place-items:center;opacity:0;transition:opacity .12s}' +
+  '#hdchat .ch-box:hover .ch-hide,#hdchat .ch-box:focus-within .ch-hide{opacity:1}' +
+  '#hdchat .ch-hide:hover{background:#F2F2EF;color:var(--ui-primary,#2b2b29)}' +
+  '#hdchat .ch-hide svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
+  '#hdchat .ch-chips{display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;max-height:48px;overflow-y:auto;scrollbar-width:thin;padding-right:24px}' +
+  '#hdchat .ch-chips[hidden]{display:none}' +
+  '#hdchat .ch-chip{display:inline-flex;align-items:center;gap:2px;max-width:240px;height:22px;box-sizing:border-box;padding:0 4px 0 8px;border-radius:999px;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-on-badge-soft,#3a3a37);font-size:12px;font-weight:600}' +
   '#hdchat .ch-chip.el{background:#2b2b29;color:#fff}' +
   '#hdchat .ch-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
   '#hdchat .ch-chip button{border:0;background:none;color:inherit;font:inherit;width:18px;height:18px;border-radius:999px;cursor:pointer;opacity:.7;line-height:1}' +
   '#hdchat .ch-chip button:hover{opacity:1;background:rgba(0,0,0,.12)}' +
-  '#hdchat .ch-row{display:flex;align-items:flex-end;gap:6px}' +
-  '#hdchat textarea{flex:1;min-width:0;border:0;outline:none;resize:none;font:inherit;font-size:14px;line-height:20px;height:20px;max-height:100px;padding:4px 0;background:none;color:inherit}' +
-  '#hdchat .ch-send{flex:none;height:30px;padding:0 12px;border:0;border-radius:9px;background:var(--ui-primary,#2b2b29);color:#fff;font:600 13px system-ui,sans-serif;cursor:pointer}' +
-  '#hdchat .ch-send:disabled{opacity:.35;cursor:default}' +
+  '#hdchat .ch-chip.ch-more{padding:0 8px;border:0;background:#F2F2EF;color:#6b6b66;font:500 12px system-ui,sans-serif;cursor:pointer}' +
+  '#hdchat .ch-chip.ch-more:hover{background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-primary,#2b2b29)}' +
+  '#hdchat textarea{display:block;width:100%;box-sizing:border-box;height:32px;min-height:32px;max-height:200px;margin:0;padding:6px;border:0;outline:none;resize:none;font:inherit;font-size:14px;line-height:20px;background:none;color:inherit;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#cfcfca transparent}' +
+  '#hdchat .ch-chips[hidden]+textarea{padding-right:26px}' +             // 칩 줄이 없으면 첫 줄 = 입력칸 — 숨김 ⌄ 자리를 비운다
+  '#hdchat textarea::placeholder{color:var(--ui-muted,#8a8a85)}' +
+  '#hdchat .ch-tools{display:flex;align-items:center;gap:6px;height:28px}' +
+  '#hdchat .ch-agent{flex:0 1 auto;min-width:0;display:inline-flex;align-items:center;gap:6px;max-width:180px;height:26px;padding:0 8px;border:0;border-radius:8px;background:none;color:#6b6b66;font:500 12px system-ui,sans-serif;cursor:pointer}' +
+  '#hdchat .ch-agent[hidden]{display:none}' +
+  '#hdchat .ch-agent:hover,#hdchat .ch-agent[aria-expanded="true"]{background:#F2F2EF;color:#2b2b29}' +
+  '#hdchat .ch-agent i{flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}' +
+  '#hdchat .ch-agent.on{color:var(--ui-primary,#2b2b29)}#hdchat .ch-agent.on i{background:var(--ui-ok,#4f7d5f)}' +
+  '#hdchat .ch-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+  '#hdchat .ch-send{flex:none;margin-left:auto;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:var(--ui-primary,#2b2b29);color:#fff;display:grid;place-items:center;cursor:pointer}' +
+  '#hdchat .ch-send:disabled{background:#E4E4DF;color:var(--ui-muted,#8a8a85);cursor:default}' +
+  '#hdchat .ch-send svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
   'html body.has-chat:not(.no-chat):not(.bare):not(.modal-open) #toast{bottom:var(--hd-chat-top,120px)}';
 
 function mount(ctx) {
-  var C = HD.chat, prog = null, dismissed = {}, last = null, shownLine = null, chipSig = null, warned = {}, booted = false, tbSeen = false;
+  var C = HD.chat, prog = null, dismissed = {}, open = false, last = null, shownLine = null, chipSig = null, warned = {}, booted = false, tbSeen = false;
   var LKEY = ctx.key('hd-chat-last');
   var root = document.createElement('div');
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   root.id = 'hdchat'; root.setAttribute('role', 'form'); root.setAttribute('aria-label', 'AI 에게 요청');
   root.innerHTML = '<div class="ch-line" hidden aria-live="polite"><b class="ch-req"></b><span class="ch-st"></span></div>' +
-    '<div class="ch-box"><div class="ch-top"><div class="ch-chips" aria-label="요청 범위"></div>' +
-    '<button type="button" class="ch-hide" title="대화창 숨기기 — 창 메뉴에서 다시 보여요" aria-label="대화창 숨기기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></div>' +
-    '<div class="ch-row"><textarea rows="1" aria-label="요청 글"></textarea>' +
-    '<button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span></button>' +
-    '<button type="button" class="ch-send" disabled>보내기</button></div></div>';
+    '<div class="ch-box"><button type="button" class="ch-hide" title="대화창 숨기기 — 창 메뉴에서 다시 보여요" aria-label="대화창 숨기기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>' +
+    '<div class="ch-chips" aria-label="요청 범위" hidden></div>' +
+    '<textarea rows="1" aria-label="요청 글"></textarea>' +
+    '<div class="ch-tools"><button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span></button>' +
+    '<button type="button" class="ch-send" disabled aria-label="보내기" title="보내기 (Enter)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>';
   document.body.appendChild(root); document.body.classList.add('has-chat');
   var ta = root.querySelector('textarea'), btn = root.querySelector('.ch-send'), chipsEl = root.querySelector('.ch-chips'), lineEl = root.querySelector('.ch-line');
   var hideB = root.querySelector('.ch-hide'), agentB = root.querySelector('.ch-agent'), ai = ctx.$('#aichip');
-  ta.placeholder = C.PLACEHOLDER;
+  ta.placeholder = C.placeholder([]);
 
   function warnOnce(k, msg) { if (warned[k]) return; warned[k] = 1; console.warn('[hd] 대화창: ' + msg); }
   function selected() {
@@ -77,15 +87,19 @@ function mount(ctx) {
   function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, el: picked()}); }
   function chipsNow() { var raw = rawChips(); dismissed = C.prune(dismissed, raw); return C.visible(raw, dismissed); }
 
-  function renderChips() {
-    var list = chipsNow(), sig = JSON.stringify(list.map(function (c) { return [c.key, c.label]; }));
+  function renderChips() {                               // 칩 줄(S1c): 고른 것이 있을 때만 · 3개를 넘으면 앞 2개 + '외 N개'(누르면 펼침) · 범위는 입력 안내 글로
+    var list = chipsNow();
+    if (list.length <= 3) open = false;                    // 접을 것이 없어지면 다음 고르기는 다시 접힌 채로
+    var f = C.fold(list, open), sig = JSON.stringify([f.more, f.shown.map(function (c) { return [c.key, c.label]; })]);
     if (sig === chipSig) return;
     chipSig = sig;
-    chipsEl.innerHTML = list.length ? list.map(function (c) {
+    chipsEl.innerHTML = f.shown.map(function (c) {
       return '<span class="ch-chip' + (c.kind === 'el' ? ' el' : '') + '" data-key="' + ctx.esc(c.key) + '" title="' + ctx.esc(c.label) + '"><span>' + ctx.esc(c.label) +
         '</span><button type="button" aria-label="' + ctx.esc(c.label) + ' 빼기">×</button></span>';
-    }).join('') : '<span class="ch-chip all" title="고른 것이 없으면 모든 화면에 요청해요"><span>' + ctx.esc(C.ALL) + '</span></span>';
+    }).join('') + (f.more ? '<button type="button" class="ch-chip ch-more" aria-expanded="false" title="고른 것 모두 보기">외 ' + f.more + '개</button>' : '');
+    chipsEl.hidden = !list.length;
     chipsEl.dataset.scope = C.scope(list);
+    ta.placeholder = C.placeholder(list);
   }
   function busyOf() {
     var s = null;
@@ -113,15 +127,21 @@ function mount(ctx) {
     var tb = ctx.$('#ptabs'), b = tb && tb.getClientRects().length ? tb.getBoundingClientRect() : null;
     if (tb && window.ResizeObserver && !tbSeen) { tbSeen = true; new ResizeObserver(function () { place(); }).observe(tb); }   // 탭은 늦게 실린다
     var need = b && b.width ? (+tb.dataset.need || 0) : 0;
-    var w = Math.min(560, right - 32);
+    var w = Math.min(640, right - 32);
     if (need) w = Math.min(w, Math.max(360, right - 2 * (b.left + need + 12)));
     root.style.width = Math.max(240, w) + 'px';
     root.style.left = (right / 2) + 'px';
-    root.style.bottom = (b && b.width && b.right > right / 2 - root.getBoundingClientRect().width / 2 ? innerHeight - b.top + 8 : 10) + 'px';
+    root.style.bottom = (b && b.width && b.right > right / 2 - root.getBoundingClientRect().width / 2 ? innerHeight - b.top + 8 : 12) + 'px';
     var top = root.hidden || !root.offsetHeight ? 0 : innerHeight - root.getBoundingClientRect().top + 8;
     document.body.style.setProperty('--hd-chat-top', (top || 120) + 'px');   // 토스트는 대화창 위에
   }
-  function grow() { ta.style.height = '20px'; ta.style.height = Math.min(100, ta.scrollHeight - 8 > 20 ? ta.scrollHeight - 8 : 20) + 'px'; btn.disabled = !ta.value.trim(); place(); }
+  function grow() {                                       // 32px(한 줄) → 줄마다 +20 → 200px 뒤 스크롤(얇은 막대, S1c)
+    ta.style.height = '32px';
+    var h = ta.scrollHeight;
+    ta.style.height = Math.min(200, Math.max(32, h)) + 'px';
+    ta.style.overflowY = h > 200 ? 'auto' : 'hidden';
+    btn.disabled = !ta.value.trim(); place();
+  }
   function renderAgent() {                                // 위쪽 받는 곳 칩(#aichip)을 그대로 비춘다 — 진실은 view-sync(도우미 attach) 하나
     if (!ai) { agentB.hidden = true; return; }
     var on = ai.classList.contains('on'), t = ai.textContent || '', i = t.indexOf(' · '), label = on ? (i >= 0 ? t.slice(i + 3) : t) : (t || '받는 곳 없음');
@@ -162,7 +182,9 @@ function mount(ctx) {
   root.addEventListener('pointerdown', function (e) { e.stopPropagation(); });   // 판 고르기 풀기·끌기로 새지 않게
   root.addEventListener('click', function (e) { e.stopPropagation(); });
   chipsEl.addEventListener('click', function (e) {
-    var b = e.target.closest('button'), c = b && b.closest('.ch-chip[data-key]'); if (!c) return;
+    var b = e.target.closest('button');
+    if (b && b.classList.contains('ch-more')) { open = true; renderChips(); place(); ta.focus(); return; }   // 외 N개 = 펼침
+    var c = b && b.closest('.ch-chip[data-key]'); if (!c) return;
     dismissed[c.dataset.key] = 1; renderChips(); place(); ta.focus();
   });
   hideB.addEventListener('click', function () {

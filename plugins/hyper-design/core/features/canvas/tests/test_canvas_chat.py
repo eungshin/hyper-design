@@ -24,7 +24,7 @@ def shot(pg, name):
     pg.screenshot(path=str(SHOTS / name))
 
 
-def _serve(ctx, setup=None):
+def _serve(ctx, setup=None, extra=0):
     tmp = Path(tempfile.mkdtemp(prefix="hd-canvas-chat-"))
     out = tmp / "out"
     (out / "screens").mkdir(parents=True)
@@ -33,7 +33,9 @@ def _serve(ctx, setup=None):
     (out / "screens" / "done.html").write_text(DONE, encoding="utf-8")
     (out / "screens.json").write_text(json.dumps({"groups": ["결제"], "screens": [
         {"id": "pay", "file": "screens/pay.html", "title": "결제", "group": "결제", "purpose": "결제한다", "policies": []},
-        {"id": "done", "file": "screens/done.html", "title": "완료", "group": "결제", "purpose": "끝", "policies": []}]}, ensure_ascii=False), encoding="utf-8")
+        {"id": "done", "file": "screens/done.html", "title": "완료", "group": "결제", "purpose": "끝", "policies": []}] +
+        [{"id": f"s{i}", "file": "screens/done.html", "title": f"화면 {i}", "group": "결제", "purpose": "", "policies": []} for i in range(3, 3 + extra)]},
+        ensure_ascii=False), encoding="utf-8")
     r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(out)], capture_output=True, text=True, encoding="utf-8",
                        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
     assert r.returncode == 0, r.stderr
@@ -124,6 +126,9 @@ def queued(pg):
     return q[0].read_text(encoding="utf-8")
 
 
+ALL_PH = "모든 화면에 대해 무엇을 바꾸거나 만들까요?"
+
+
 def chips(pg):
     return pg.locator("#hdchat .ch-chip").all_text_contents()
 
@@ -142,14 +147,15 @@ def test_card_chip_send_makes_memo_and_forwards(live):
     assert box["y"] + box["height"] <= vw["height"] and abs((box["x"] + box["width"] / 2) - vw["width"] / 2) < vw["width"] * 0.3, "판 아래 가운데"
     if tabs:
         assert box["x"] >= tabs["x"] + tabs["width"] or box["y"] + box["height"] <= tabs["y"], "아래 프로젝트 탭을 가리지 않는다"
-    assert pg.get_attribute("#hdchat textarea", "placeholder") == "무엇을 바꾸거나 만들까요?"
-    assert chips(pg) == ["모든 화면"], "고른 것이 없으면 모든 화면"
+    assert chips(pg) == [], "고른 것이 없으면 칩 없음 — 범위는 입력 안내 글이 말한다"
+    assert pg.get_attribute("#hdchat textarea", "placeholder") == ALL_PH
     shot(pg, "s1-empty.png")
 
     pg.keyboard.press("v")
     card_click(pg, "pay")
     pg.wait_for_function("document.querySelectorAll('#hdchat .ch-chip').length && document.querySelector('#hdchat .ch-chip').textContent.startsWith('결제')")
     assert [c.replace("×", "") for c in chips(pg)] == ["결제"]
+    assert pg.get_attribute("#hdchat textarea", "placeholder") == "무엇을 바꿀까요?"
     pg.click("#hdchat textarea")
     pg.keyboard.type("버튼을 더 크게")
     pg.keyboard.press("Shift+Enter")
@@ -165,9 +171,10 @@ def test_card_chip_send_makes_memo_and_forwards(live):
     assert pg.evaluate("document.querySelector('#hdchat .ch-line').classList.contains('pulse')"), "새 줄 = 맥박 한 번"
     assert "버튼을 더 크게" in line and ("보냄" in line or "대기열" in line), line
     assert pg.evaluate("document.querySelector('.card[data-id=\"pay\"]').classList.contains('picked')"), "보낸 뒤에도 고른 카드·캔버스 그대로"
-    # 칩 빼기 = 모든 화면으로 넓어짐
+    # 칩 빼기 = 모든 화면으로 넓어짐(칩 줄이 사라지고 안내 글이 범위를 말한다)
     pg.click("#hdchat .ch-chip button")
-    assert chips(pg) == ["모든 화면"]
+    assert chips(pg) == [] and pg.is_hidden("#hdchat .ch-chips")
+    assert pg.get_attribute("#hdchat textarea", "placeholder") == ALL_PH
     shot(pg, "s1-after-send.png")
 
 
@@ -317,3 +324,116 @@ def test_chat_target_chip_opens_same_picker(hub, width):
     pg.click("#amenu .ag-row.ag-none")
     pg.wait_for_function("document.querySelector('#hdchat .ch-agent').textContent.includes('받는 곳 없음')")
     assert not [x for x in pg.calls if x[1].startswith("/api/forward")], "고르기만 — 보내지 않는다"
+
+
+# ---------------------------------------------------------------- S1c 입력창 한 장(tasks/52-composer/FINDINGS.md '정한 모양')
+TS1C = Path(os.environ.get("HD_SHOTS_S1C", Path(tempfile.gettempdir()) / "claude" / "ts1c"))
+
+
+def shot1c(pg, name):
+    TS1C.mkdir(parents=True, exist_ok=True)
+    pg.screenshot(path=str(TS1C / name))
+
+
+GEOM = """() => { const q = s => document.querySelector(s), r = s => q(s).getBoundingClientRect(), box = q('#hdchat .ch-box'), cs = getComputedStyle(box);
+  const ta = q('#hdchat textarea'), tcs = getComputedStyle(ta);
+  return {box: box.getBoundingClientRect().height, inner: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+          ta: r('#hdchat textarea'), send: r('#hdchat .ch-send'), agent: q('#hdchat .ch-agent').hidden ? null : r('#hdchat .ch-agent'),
+          sbw: tcs.scrollbarWidth, ovy: tcs.overflowY, chipsShown: !!q('#hdchat .ch-chips').getClientRects().length,
+          hide: +getComputedStyle(q('#hdchat .ch-hide')).opacity, label: q('#hdchat .ch-send').getAttribute('aria-label'), dis: q('#hdchat .ch-send').disabled}; }"""
+
+
+@pytest.mark.parametrize("width", [1280, 2880])
+def test_composer_is_one_card_textarea_full_width_toolbar_below(hub, width):
+    """빈 입력창 = 카드 한 장 82px(8+32+6+28+8): 칩 줄 없음, 입력칸은 카드 안쪽 폭 전체 한 줄, 그 아래 도구 줄(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽).
+    입력칸 스크롤바는 얇게(▲▼ 없음). 세 줄 쓰면 줄마다 +20, 200px 뒤 스크롤. 숨김 ⌄ 는 올렸을 때만."""
+    pg = hub
+    _size(pg, width)
+    pg.wait_for_selector("#hdchat .ch-agent:not([hidden])")
+    pg.mouse.move(5, 300)
+    pg.wait_for_timeout(200)
+    g = pg.evaluate(GEOM)
+    assert abs(g["box"] - 82) <= 2, f"빈 높이 82px: {g['box']}"
+    assert not g["chipsShown"], "고른 것이 없으면 칩 줄 없음"
+    assert g["sbw"] == "thin", f"스크롤바는 thin(Windows 화살표 없음): {g['sbw']}"
+    assert g["ta"]["width"] >= g["inner"] - 4, f"입력칸 = 카드 안쪽 폭 전체 {g['ta']['width']} / {g['inner']}"
+    assert g["send"]["top"] >= g["ta"]["bottom"] - 0.5, "보내기는 입력칸 아래 줄"
+    assert g["agent"] and g["agent"]["top"] >= g["ta"]["bottom"] - 0.5 and g["agent"]["right"] < g["send"]["left"], "받는 곳 알약 = 아래 줄 왼쪽"
+    assert abs(g["send"]["width"] - 28) <= 1 and abs(g["send"]["height"] - 28) <= 1 and g["label"] == "보내기" and g["dis"], "28 원 보내기, 비면 꺼짐"
+    assert g["hide"] == 0, "숨김 ⌄ 는 평소 안 보임"
+    assert pg.get_attribute("#hdchat textarea", "placeholder") == ALL_PH
+    shot1c(pg, f"s1c-empty-{width}.png")
+    pg.hover("#hdchat .ch-box")
+    pg.wait_for_timeout(250)
+    assert pg.evaluate(GEOM)["hide"] == 1, "카드에 올리면 숨김 ⌄"
+    shot1c(pg, f"s1c-hide-hover-{width}.png")
+    pg.click("#hdchat textarea")
+    pg.keyboard.type("버튼을 더 크게"); pg.keyboard.press("Shift+Enter")
+    pg.keyboard.type("색은 그대로"); pg.keyboard.press("Shift+Enter")
+    pg.keyboard.type("여백 조금")
+    g3 = pg.evaluate(GEOM)
+    assert abs(g3["box"] - 122) <= 3, f"세 줄 = 82 + 40: {g3['box']}"
+    assert not g3["dis"] and g3["send"]["top"] >= g3["ta"]["bottom"] - 0.5
+    pg.mouse.move(5, 300)
+    pg.wait_for_timeout(250)
+    shot1c(pg, f"s1c-focused-3lines-{width}.png")
+    for _ in range(12):
+        pg.keyboard.press("Shift+Enter"); pg.keyboard.type("더")
+    g9 = pg.evaluate(GEOM)
+    assert g9["ta"]["height"] <= 201 and g9["ovy"] == "auto", f"200px 뒤 스크롤 {g9['ta']['height']} {g9['ovy']}"
+
+
+@pytest.fixture()
+def hub5(ctx):
+    pg, errors, done = _serve(ctx, mock_hub, extra=3)
+    yield pg
+    done()
+    assert not errors, errors
+
+
+@pytest.mark.parametrize("width", [1280, 2880])
+def test_five_picked_chips_fold_to_two_and_more(hub5, width):
+    """화면 5개를 고르면(줄 제목 누르기) 칩이 세로로 쌓이지 않고 앞 2개 + '외 3개' 한 줄, 입력칸은 그대로 보인다. 누르면 펼침(2줄까지)."""
+    pg = hub5
+    _size(pg, width)
+    pg.keyboard.press("0")
+    pg.locator("#rows .flow > .glabel").first.dispatch_event("click")   # 1280 에서는 제목이 도구 막대 아래일 수 있다 — 누르기 의도만
+    pg.wait_for_function("document.querySelectorAll('#rows .card.picked').length === 5")
+    pg.wait_for_selector("#hdchat .ch-more")
+    pg.mouse.move(5, 300)
+    names = [c.replace("×", "") for c in chips(pg)]
+    assert names == ["결제", "완료", "외 3개"], names
+    g = pg.evaluate(GEOM)
+    row = pg.evaluate("document.querySelector('#hdchat .ch-chips').getBoundingClientRect().height")
+    assert row <= 24, f"접힌 칩 = 한 줄 {row}"
+    assert g["ta"]["height"] >= 31 and g["ta"]["width"] >= g["inner"] - 4, "입력칸은 줄지 않는다"
+    assert pg.get_attribute("#hdchat textarea", "placeholder") == "무엇을 바꿀까요?"
+    shot1c(pg, f"s1c-chips-5-{width}.png")
+    pg.click("#hdchat .ch-more")
+    pg.wait_for_function("document.querySelectorAll('#hdchat .ch-chip[data-key]').length === 5")
+    assert pg.locator("#hdchat .ch-more").count() == 0
+    row = pg.evaluate("document.querySelector('#hdchat .ch-chips').getBoundingClientRect().height")
+    assert row <= 50, f"펼쳐도 2줄까지 {row}"
+
+
+@pytest.mark.parametrize("width", [1280, 2880])
+def test_progress_line_sits_above_card(hub, width):
+    """상태 줄 = 카드 위 한 줄(말이 있을 때만). 보내기 → 이벤트(claim) → 'AI 작업 중 · 결제'."""
+    pg = hub
+    _size(pg, width)
+    assert pg.is_hidden("#hdchat .ch-line"), "말 없으면 숨김"
+    pg.keyboard.press("v")
+    card_click(pg, "pay")
+    pg.wait_for_selector("#hdchat .ch-chip[data-key]")
+    pg.click("#hdchat textarea")
+    pg.keyboard.type("버튼을 더 크게")
+    pg.keyboard.press("Enter")
+    pg.wait_for_selector("#hdchat .ch-line:not([hidden])", timeout=8000)
+    pg.evaluate("document.dispatchEvent(new CustomEvent('hd-event', {detail: {type: 'claim', screen: 'pay'}}))")
+    pg.wait_for_function("document.querySelector('#hdchat .ch-line').textContent.includes('AI 작업 중 · 결제')")
+    l, b = _rect(pg, "#hdchat .ch-line"), _rect(pg, "#hdchat .ch-box")
+    assert l["b"] <= b["t"] and b["t"] - l["b"] <= 8, f"줄은 카드 바로 위 {l} {b}"
+    assert abs((l["b"] - l["t"]) - 20) <= 2, f"상태 줄 20px {l}"
+    pg.mouse.move(5, 300)
+    pg.wait_for_timeout(700)
+    shot1c(pg, f"s1c-progress-{width}.png")

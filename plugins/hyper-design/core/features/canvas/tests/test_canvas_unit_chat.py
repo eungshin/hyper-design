@@ -64,6 +64,13 @@ out.line = [
   C.line({text: '질문', ids: ['c'], at: 1}, find, () => null, false)];
 out.parse = [C.parseLast(null), C.parseLast('{"text":"a","ids":["x"],"at":5}'), C.parseLast('{깨짐'), C.parseLast('{"text":"a","ids":"x"}'), C.parseLast('[]')];
 out.record = C.record('  여백 줄이기\n두 줄 ', [{id: 'a'}, {id: 'b'}], 9);
+// 칩 줄 접기(S1c) · placeholder 로 범위
+const many = C.chips({ids: ['a', 'b', 'c', 'd', 'e'], titleOf: title, el: null});
+const keys = f => ({shown: f.shown.map(c => c.key), more: f.more});
+out.fold = {five: keys(C.fold(many)), fiveOpen: keys(C.fold(many, true)), three: keys(C.fold(many.slice(0, 3))), four: keys(C.fold(many.slice(0, 4))),
+            none: keys(C.fold([])), bad: keys(C.fold(null)),
+            withEl: keys(C.fold(C.chips({ids: ['a', 'b', 'c', 'd'], titleOf: title, el: {screen: 'd', h: BTN}})))};
+out.ph = [C.placeholder([]), C.placeholder(out.cards), C.placeholder(out.elem), C.placeholder(null)];
 console.log(JSON.stringify(out));
 """
 
@@ -175,3 +182,18 @@ def test_parse_and_record(out):
     assert p[1] == {"last": {"text": "a", "ids": ["x"], "at": 5}, "bad": False}
     assert p[2] == {"last": None, "bad": True} and p[3] == {"last": None, "bad": True} and p[4] == {"last": None, "bad": True}
     assert out["record"] == {"text": "여백 줄이기 두 줄", "ids": ["a", "b"], "at": 9}
+
+
+def test_chip_row_folds_after_three(out):
+    f = out["fold"]
+    assert f["five"] == {"shown": ["screen:a", "screen:b"], "more": 3}, "5개 = 앞 2개 + 외 3개"
+    assert f["fiveOpen"] == {"shown": ["screen:a", "screen:b", "screen:c", "screen:d", "screen:e"], "more": 0}, "외 N개를 누르면 펼침"
+    assert f["three"]["more"] == 0 and len(f["three"]["shown"]) == 3, "3개까지는 다 보인다(외 1개는 자리를 아끼지 않는다)"
+    assert f["four"] == {"shown": ["screen:a", "screen:b"], "more": 2}
+    assert f["none"] == {"shown": [], "more": 0} and f["bad"] == {"shown": [], "more": 0}
+    assert f["withEl"]["shown"][-1].startswith("el:d:") and f["withEl"]["more"] == 2, "고른 요소 칩은 접지 않는다"
+
+
+def test_placeholder_carries_scope(out):
+    assert out["ph"] == ["모든 화면에 대해 무엇을 바꾸거나 만들까요?", "무엇을 바꿀까요?", "무엇을 바꿀까요?",
+                         "모든 화면에 대해 무엇을 바꾸거나 만들까요?"], "모든 화면 칩 대신 placeholder 가 범위를 말한다"

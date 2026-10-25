@@ -11,12 +11,16 @@
      진행(S2, 47-4b): progress(p, ev, screens) → {step:'working'|'landed'|'done', screen} | p — 요청 화면(screens, 비면 아무 화면)의 claim · AI 쓰기(screen.written ai · ai.write) · release.
        opt.progress 가 있고 손이 필요한 단계(sending·unsent·decide)가 아니면 줄 = 'AI 작업 중 · <화면>' · '반영됨 · <화면>' · '끝'(+ ' · ' 짧은 답, stage working·applied·done).
    마지막 요청 record(text, memos, at) = {text, ids, at} · parseLast(raw) → {last, bad}(깨졌으면 bad — 셸 아닌 View 가 [hd] 경고)
-   HD.chat = {PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, build, stage, line, progress, record, parseLast} */
+   칩 줄 접기(S1c): fold(chips, open) → {shown, more} — 3개까지는 다, 넘으면 앞 2개(+ 고른 요소 칩은 늘) + '외 N개'(more), open = 펼침(다 보임).
+   placeholder(chips) — 범위를 칩이 아니라 입력 안내 글로: 칩 없음 = '모든 화면에 대해 …', 있으면 '무엇을 바꿀까요?'.
+   HD.chat = {PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
-var PLACEHOLDER = '무엇을 바꾸거나 만들까요?';
+var PLACEHOLDER = '모든 화면에 대해 무엇을 바꾸거나 만들까요?';   // 고른 것 없음 = 범위 모든 화면(S1c — 칩 대신)
+var PLACEHOLDER_PICKED = '무엇을 바꿀까요?';
+var FOLD_AT = 3, FOLD_KEEP = 2;                          // 칩이 3개를 넘으면 앞 2개 + 외 N개
 var ALL = '모든 화면';
 var CUT = 20;                                            // 요소 칩 글 최대 글자(넘으면 …)
 var STAGES = ['sending', 'unsent', 'decide', 'working', 'queued', 'sent', 'partial', 'answered', 'applied'];   // 여럿이면 앞의 것이 줄을 맡는다
@@ -74,6 +78,13 @@ function scopeLabel(list) {
   var s = scope(list);
   return s === 'all' ? ALL : s === 'element' ? '요소' : '화면 ' + list.length + '개';
 }
+function fold(list, open) {
+  list = Array.isArray(list) ? list : [];
+  if (open || list.length <= FOLD_AT) return {shown: list.slice(), more: 0};
+  var shown = list.filter(function (c, i) { return i < FOLD_KEEP || c.kind === 'el'; });   // 고른 요소는 접지 않는다 — 보내면 그 요소가 범위다
+  return {shown: shown, more: list.length - shown.length};
+}
+function placeholder(list) { return list && list.length ? PLACEHOLDER_PICKED : PLACEHOLDER; }
 
 function elMemo(id, c, note) {
   var h = c.h, t = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null};
@@ -164,5 +175,5 @@ function parseLast(raw) {
 }
 
 HD.chat = {PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
-           scope: scope, scopeLabel: scopeLabel, build: build, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
+           scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();
