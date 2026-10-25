@@ -123,9 +123,9 @@ def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out):
         if got.get(old_key, {}).get("hd-theme-vars"):
             assert got.get(new["key"], {}).get("hd-theme-vars", 0) >= 1, f"옛 틀이 받은 테마를 새 틀도 받는다: {got}"
         pg.wait_for_selector(JOB + ' .busy[data-kind="done"]', timeout=4000)
-        assert pg.text_content(JOB + ' .busy[data-kind="done"]').strip() == "방금 반영됨 ✓"
+        assert pg.text_content(JOB + ' .busy[data-kind="done"] .busy-txt').strip() == "방금 반영됨 ✓"
         assert pg.locator(JOB + ' .busy[data-kind="working"]').count() == 0
-        pg.wait_for_selector(JOB + " .busy", state="detached", timeout=4000)   # 약 2초 뒤 사라짐
+        pg.wait_for_selector(JOB + " .busy", state="detached", timeout=13000)   # 잠시 뒤 사라짐(전/후 보기가 있으면 10초, 48b)
         assert pg.evaluate("window.__sameLoad") == 1, "판은 다시 불러오지 않는다"
     finally:
         srv.shutdown(); srv.server_close()
@@ -156,6 +156,9 @@ def test_touched_card_waits_with_pill_then_swaps(ctx, out):
         pg.wait_for_timeout(600)
         assert pg.locator(JOB + " .phone iframe").count() == 2, "만지는 동안은 옛 화면 그대로(새 것은 숨어 기다림)"
         assert pg.evaluate("(s) => getComputedStyle(document.querySelector(s + ' .phone iframe.hd-swap-next')).opacity", JOB) == "0"
+        pr, ph = pg.locator(pill).bounding_box(), pg.locator(JOB + " .phone").bounding_box()
+        assert pr["y"] >= ph["y"] + ph["height"] - 0.5, f"알약은 화면 밖(카드 화면 밑 가장자리 아래) — 화면 안 버튼을 가리지 않는다: {pr} {ph}"
+        shot(pg, "4-pill-below-card")
         pg.click(pill)
         swapped(pg)
         assert pg.locator(pill).count() == 0
@@ -177,6 +180,85 @@ def test_touched_card_waits_with_pill_then_swaps(ctx, out):
         swapped(pg)
         assert pg.locator(pill).count() == 0
         assert pg.evaluate("window.__sameLoad") == 1
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+SHOTS = pathlib.Path(os.environ.get("HD_SHOTS", "")) if os.environ.get("HD_SHOTS") else None
+FRAME = "(s) => document.querySelector(s + ' .phone iframe')"
+
+
+def shot(pg, name):
+    if SHOTS:
+        SHOTS.mkdir(parents=True, exist_ok=True)
+        pg.screenshot(path=str(SHOTS / f"{name}.png"))
+
+
+@pytest.mark.area("helper", "links")
+def test_changed_blocks_flash_and_before_after_and_badges_return(ctx, out):
+    """48b — 바뀐 글 블록은 외곽선, 새 블록은 떠오름 · 칩 [전/후] 로 옛 화면 겹쳐 보기 · 고른 카드의 링크 번호가 새 틀에도 · 움직임 줄이기 = 강조 없음"""
+    srv = serve(out)
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        open_board(pg, srv)
+        b = pg.locator(JOB + " .phone").bounding_box()
+        pg.mouse.click(b["x"] + 20, b["y"] + b["height"] - 20)    # 손 도구 한 번 = 그 카드 고르기 → 화면 안 링크 번호
+        badges = "(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument; return d.querySelectorAll('[data-hd-links]').length; }"
+        pg.wait_for_function(badges, arg=JOB, timeout=6000)
+        n_badges = pg.evaluate(badges, JOB)
+        post(srv, "/api/claim", {"screen": "job"})
+        pg.wait_for_selector(JOB + ' .busy[data-kind="working"]', timeout=8000)
+        job = out / "screens" / "job.html"
+        job.write_text(job.read_text(encoding="utf-8").replace("하는 일이 무엇인가요?", "무슨 일을 하세요?")
+                       .replace('<div class="tile-grid"', '<p class="note">새 안내 한 줄</p><div class="tile-grid"'), encoding="utf-8")
+        swapped(pg)
+        anim = """(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument;
+            const a = (q) => { const el = d.querySelector(q); return el ? el.getAnimations().map(x => Object.keys(x.effect.getKeyframes()[0]).filter(k => !['offset', 'easing', 'composite', 'computedOffset'].includes(k)).sort().join(',')) : null; };
+            return {h1: a('h1.title'), note: a('p.note'), lead: a('p.lead'), tile: a('button.tile')}; }"""
+        pg.wait_for_function("(s) => document.querySelector(s + ' .phone iframe').contentDocument.querySelector('h1.title').getAnimations().length > 0", arg=JOB, timeout=4000)
+        a = pg.evaluate(anim, JOB)                      # 떠오름은 0.3초 — 찍기 전에 읽는다
+        pg.wait_for_timeout(100)
+        shot(pg, "1-mid-highlight")
+        assert a["h1"] == ["outline,outlineOffset"], f"바뀐 글 블록 = 외곽선: {a}"
+        assert a["note"] == ["opacity,transform"], f"새 블록 = 떠오름: {a}"
+        assert a["lead"] == [] and a["tile"] == [], f"안 바뀐 것은 그대로: {a}"
+        pg.wait_for_timeout(1200)
+        assert pg.evaluate("(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument, n = d.querySelector('p.note');"
+                           " return [d.querySelector('h1.title').getAnimations().length, getComputedStyle(n).opacity, n.style.cssText]; }", JOB) == [0, "1", ""], \
+            "강조가 끝나면 화면 문서에 남는 것이 없다"
+        pg.wait_for_function(badges, arg=JOB, timeout=6000)
+        assert pg.evaluate(badges, JOB) == n_badges, "고른 카드의 링크 번호가 새 틀에도 돌아온다"
+        # 전/후 보기
+        chip = JOB + ' .busy[data-kind="done"]'
+        cmp = chip + ' [data-act="compare"]'
+        assert pg.text_content(cmp) == "전/후" and pg.get_attribute(cmp, "aria-pressed") == "false"
+        pg.click(cmp)
+        over = JOB + " .phone iframe.hd-swap-before"
+        pg.wait_for_selector(over, timeout=3000)
+        pg.wait_for_function("(s) => { const f = document.querySelector(s); return f.contentDocument && f.contentDocument.querySelector('h1.title'); }", arg=over, timeout=5000)
+        assert pg.evaluate("(s) => document.querySelector(s).contentDocument.querySelector('h1.title').textContent", over) == "하는 일이 무엇인가요?"
+        assert pg.get_attribute(cmp, "aria-pressed") == "true" and "바뀌기 전 화면" in pg.text_content(chip)
+        assert pg.evaluate("(s) => document.querySelectorAll(s + ' .phone iframe')[0].contentDocument.querySelector('h1.title').textContent", JOB) == "무슨 일을 하세요?", \
+            "카드의 틀(첫 iframe)은 새 화면 그대로 — 옛 화면은 위에 겹친 것뿐"
+        pg.wait_for_timeout(300)
+        shot(pg, "2-before-overlay")
+        pg.wait_for_timeout(2200)                       # 보는 동안은 칩이 사라지지 않는다(DONE_MS 2초를 넘겨도)
+        assert pg.locator(over).count() == 1 and pg.locator(chip).count() == 1
+        pg.click(cmp)
+        assert pg.locator(over).count() == 0 and pg.get_attribute(cmp, "aria-pressed") == "false"
+        shot(pg, "3-after")
+        # 움직임 줄이기 = 숨기기·강조 없음
+        pg.emulate_media(reduced_motion="reduce")
+        job.write_text(job.read_text(encoding="utf-8").replace("무슨 일을 하세요?", "하는 일을 골라 주세요"), encoding="utf-8")
+        pg.wait_for_function("(s) => document.querySelector(s + ' .phone iframe').contentDocument.querySelector('h1.title').textContent === '하는 일을 골라 주세요'", arg=JOB, timeout=10000)
+        swapped(pg)
+        pg.wait_for_timeout(900)
+        assert pg.evaluate("(s) => { const d = document.querySelector(s + ' .phone iframe').contentDocument; return [d.querySelector('h1.title').textContent, d.getAnimations().filter(a => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('h1')).length]; }", JOB) \
+            == ["하는 일을 골라 주세요", 0]
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors

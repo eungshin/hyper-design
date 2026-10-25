@@ -22,7 +22,9 @@
    lookDone() → {kind: 'done', text: '방금 반영됨 ✓', title} — 덮개가 걷힌 카드의 새 화면이 판에 반영된 뒤 DONE_MS 동안 보이는 칩(48a)
    landed(rec, ev) → {rec(새 객체), show: bool} — rec = {화면 id: 걷힌 시각}. ev = {type: 'lifted', ids, at}(파일이 바뀌어 걷힘 — 손 걷기 × 는 넣지 않는다)
      | {type: 'swapped', id, at}(그 카드 교체가 끝남 — 걷힌 지 LANDED_WAIT 안이면 show, 그 id 는 지움)
-   HD.busy = {VIA, MAX, ERR_MAX, DONE_MS, LANDED_WAIT, initial, reduce, load, save, files, label, look, lookDone, landed, refresh, isApp, shouldLift, hereError} */
+   doneMs(canCompare) → 칩이 보이는 시간 — 전/후 보기가 있으면 COMPARE_MS(10초), 없으면 DONE_MS(48b)
+   lookCompare(on) → {text, title, btn: '전/후', pressed: on} — on = 바뀌기 전 화면을 새 화면 위에 보이는 중(다시 누르면 끔)
+   HD.busy = {VIA, MAX, ERR_MAX, DONE_MS, COMPARE_MS, doneMs, lookCompare, LANDED_WAIT, initial, reduce, load, save, files, label, look, lookDone, landed, refresh, isApp, shouldLift, hereError} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -149,6 +151,12 @@ function look(it) {
 
 var DONE_MS = 2000, LANDED_WAIT = 10 * 60 * 1000;    // 미룬 교체(알약)는 사용자가 손을 뗄 때까지 — 넉넉히
 function lookDone() { return {kind: 'done', text: '방금 반영됨 ✓', title: 'AI 수정이 이 카드에 반영됐어요'}; }
+var COMPARE_MS = 10000;
+function doneMs(canCompare) { return canCompare ? COMPARE_MS : DONE_MS; }
+function lookCompare(on) {
+  return on ? {text: '바뀌기 전 화면', title: 'AI 가 바꾸기 전 화면을 보는 중 — 전/후 를 다시 누르면 새 화면', btn: '전/후', pressed: true}
+            : {text: lookDone().text, title: 'AI 수정이 반영됐어요 — 전/후 를 누르면 바뀌기 전 화면을 겹쳐 봐요', btn: '전/후', pressed: false};
+}
 function landed(rec, ev) {
   var cur = rec && typeof rec === 'object' ? rec : {}, next;
   if (!ev) return {rec: cur, show: false};
@@ -180,5 +188,5 @@ function refresh(changed, opt) {
 }
 
 HD.busy = {VIA: VIA, MAX: MAX, initial: initial, reduce: reduce, load: load, save: save, files: files, label: label, look: look, refresh: refresh, isApp: isApp, shouldLift: shouldLift, ERR_MAX: ERR_MAX, hereError: hereError,
-           DONE_MS: DONE_MS, LANDED_WAIT: LANDED_WAIT, lookDone: lookDone, landed: landed};
+           DONE_MS: DONE_MS, COMPARE_MS: COMPARE_MS, doneMs: doneMs, lookCompare: lookCompare, LANDED_WAIT: LANDED_WAIT, lookDone: lookDone, landed: landed};
 })();

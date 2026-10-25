@@ -150,6 +150,10 @@ function mount(ctx) {
     if (xpId) return;
     expand(id, Math.round(dim(id).h * 1.4), function () { setTimeout(function () { if (xpId === id && ids.indexOf(id) < 0) collapse(id); }, 500); });
   }
+  document.addEventListener('hd-swap', function (e) {   // 48b — 바뀐 화면이 새 틀로 들어옴(view-swap 의도): 고른 카드면 링크를 다시 물어 버튼 표시(①②)를 되살린다
+    var d = e.detail || {}; if (d.phase !== 'done' || ids.indexOf(d.id) < 0) return;
+    delete models[d.id]; request(d.id);
+  });
   return {set: set, paint: paint, refresh: refresh, cardEl: cardEl, item: item, linksOf: linksOf, demoExpand: demoExpand,
           model: function (id) { return models[id] || null; }};
 }

@@ -70,6 +70,11 @@ out.landedSwap = {rec: Object.keys(sw.rec), show: sw.show};
 out.landedOther = B.landed(sw.rec, {type: 'swapped', id: 'z', at: 200}).show;
 out.landedOld = B.landed({a: 100}, {type: 'swapped', id: 'a', at: 100 + B.LANDED_WAIT + 1}).show;
 out.landedBad = [B.landed(null, {type: 'swapped', id: 'a', at: 1}).show, B.landed({}, null).show, B.landed({}, {type: 'lifted', ids: 'a', at: 1}).rec];
+// 48b — 바뀐 곳 강조 계획 · 전/후 보기 칩
+out.flashC = S.FLASH;
+out.flash = [S.flash({changed: [3], added: [5, 6], removed: [1], many: false}, false), S.flash({changed: [3], added: [], removed: [], many: false}, true),
+             S.flash({changed: [], added: [], removed: [2], many: false}, false), S.flash({changed: [], added: [], removed: [], many: true}, false), S.flash(null, false)];
+out.compare = {ms: [B.doneMs(true), B.doneMs(false)], off: B.lookCompare(false), on: B.lookCompare(true)};
 console.log(JSON.stringify(out));
 """
 
@@ -131,3 +136,17 @@ def test_done_chip_only_after_ai_lift(r):
     assert r["landedOther"] is False, "덮개가 걷히지 않은 카드(직접 쓰기) = 칩 없음"
     assert r["landedOld"] is False
     assert r["landedBad"] == [False, False, {}]
+
+
+def test_flash_plan_48b(r):
+    assert r["flashC"] == {"OUTLINE": "2px solid rgba(96,86,240,.5)", "OUTLINE_END": "2px solid rgba(96,86,240,0)", "OUTLINE_HOLD": 600, "OUTLINE_MS": 400, "RISE_MS": 300, "RISE_PX": 6, "AFTER_LOAD": 600}
+    assert r["flash"][0] == {"outline": [3], "rise": [5, 6]}
+    assert r["flash"][1] is None, "움직임 줄이기 = 강조 없음"
+    assert r["flash"][2] is None and r["flash"][3] is None and r["flash"][4] is None, "강조할 것이 없거나 통째로 바뀜 = 없음"
+
+
+def test_compare_chip_48b(r):
+    assert r["compare"]["ms"] == [10000, 2000], "전/후 보기가 있으면 칩이 10초"
+    off, on = r["compare"]["off"], r["compare"]["on"]
+    assert off["btn"] == on["btn"] == "전/후" and off["pressed"] is False and on["pressed"] is True
+    assert off["text"] == "방금 반영됨 ✓" and on["text"] == "바뀌기 전 화면" and off["title"] and on["title"]

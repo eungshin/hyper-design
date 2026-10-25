@@ -8,12 +8,22 @@
    current(s, id, seq) → bool · pending(s) → [id] · initial()
    failed(nav{status?, timedOut?}) → 이유 글|null(시간 초과 · HTTP 4xx/5xx) · errorText(이유) → 카드 실패 줄 글
    boardUrl(u) → 판 카드 주소(?hd-mode=board — 셸 boardSrc 와 같은 규칙, contract/board-motion.md)
-   HD.swap = {FADE_MS, LOAD_MS, PILL, plan, touching, next, initial, reduce, current, pending, failed, errorText, boardUrl} */
+   flash(diff{changed, added, many}, reduced) → {outline:[i], rise:[i]} | null — 바뀐 곳 강조 계획(48b, diff = HD.swapDiff.diff). 움직임 줄이기 · many · 강조할 것 없음 = null
+   FLASH = {OUTLINE, OUTLINE_END, OUTLINE_HOLD, OUTLINE_MS, RISE_MS, RISE_PX, AFTER_LOAD} — Stitch 값(외곽선 2px, OUTLINE_HOLD 동안 보인 뒤 0.4초 사라짐 · 새 요소 0.3초 ease 로 6px 아래에서 떠오름).
+     AFTER_LOAD = 새 틀 load 뒤 강조를 시작하는 가장 이른 때(판 모드 palette.js 가 load+500ms 에 움직임을 끝내 버리므로 그 뒤 — contract/board-motion.md)
+   HD.swap = {FADE_MS, LOAD_MS, PILL, FLASH, flash, plan, touching, next, initial, reduce, current, pending, failed, errorText, boardUrl} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var FADE_MS = 200, LOAD_MS = 10000, PILL = '새 버전 준비됨 · 반영';
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
+
+var FLASH = {OUTLINE: '2px solid rgba(96,86,240,.5)', OUTLINE_END: '2px solid rgba(96,86,240,0)', OUTLINE_HOLD: 600, OUTLINE_MS: 400, RISE_MS: 300, RISE_PX: 6, AFTER_LOAD: 600};
+function flash(d, reduced) {
+  if (reduced || !d || d.many) return null;
+  var o = Array.isArray(d.changed) ? d.changed.slice() : [], r = Array.isArray(d.added) ? d.added.slice() : [];
+  return o.length || r.length ? {outline: o, rise: r} : null;
+}
 
 function plan(f) { return f && f.live === true ? 'preload' : 'lazy'; }
 
@@ -65,6 +75,6 @@ function boardUrl(u) {
   return u + (u.indexOf('?') < 0 ? '?' : '&') + 'hd-mode=board' + h;
 }
 
-HD.swap = {FADE_MS: FADE_MS, LOAD_MS: LOAD_MS, PILL: PILL, plan: plan, touching: touching, next: next, initial: initial, reduce: reduce,
+HD.swap = {FADE_MS: FADE_MS, LOAD_MS: LOAD_MS, PILL: PILL, FLASH: FLASH, flash: flash, plan: plan, touching: touching, next: next, initial: initial, reduce: reduce,
            current: current, pending: pending, failed: failed, errorText: errorText, boardUrl: boardUrl};
 })();

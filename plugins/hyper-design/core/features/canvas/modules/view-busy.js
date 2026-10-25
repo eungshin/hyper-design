@@ -13,6 +13,9 @@
    "방금 반영됨 ✓"(48a): 화면 파일이 바뀌어 걷힌 카드(손 걷기 × 는 아님)의 교체가 끝나면(document 'hd-swap' {id, phase:'done'} — view-swap) 같은 자리에
      칩 <div class="busy bchip" data-kind="done"> 을 HD.busy.DONE_MS 동안(규칙 HD.busy.landed) · 앱 카드가 hd-here 로 걷히면 바로(이미 새 화면).
      'hd-swap' failed {why} = 그 카드 .cerr 한 줄(앱 카드 실패 줄과 같은 길) — 그 카드의 다음 done 이 걷는다.
+     전/후 보기(48b): done 에 before(옛 화면 스냅숏 있음)면 칩에 [전/후](button.bcmp[data-act=compare][aria-pressed]) — HD.busy.doneMs(true)(10초) 동안,
+     누르면 'hd-swap-compare' {id, on:true}(view-swap 이 옛 화면을 겹침, 칩 글 '바뀌기 전 화면', 보는 동안 칩이 남음) · 다시 누르면 off 와 10초 다시.
+     칩이 걷히면(새 교체 'hd-swap' start · 덮개 다시 씀) 켜져 있던 전/후 보기도 off.
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids)}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
@@ -36,6 +39,10 @@ var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--ts,1));
   '@keyframes hd-bchip-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.busy.bchip .bspin{animation:none}}' +
   '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--ts,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
   '.busy.bchip[data-kind=done]{transition:opacity .3s ease-out}.busy.bchip[data-kind=done].bout{opacity:0}' +
+  '.busy.bchip .bcmp{flex:none;height:calc(16px * var(--ts,1));padding:0 calc(6px * var(--ts,1));margin:0;border:1px solid rgba(0,0,0,.16);border-radius:999px;background:#fff;' +
+  'color:inherit;font:inherit;font-size:calc(10px * var(--ts,1));line-height:1;cursor:pointer;pointer-events:auto}' +
+  '.busy.bchip .bcmp:hover,.busy.bchip .bcmp:focus-visible{background:rgba(0,0,0,.07)}' +
+  '.busy.bchip .bcmp[aria-pressed=true]{background:#2b2b29;border-color:#2b2b29;color:#fff}' +
   '.busy.bchip[data-kind=done] .bok{flex:none;color:var(--ui-accent,#c2590a);font-weight:700}' +
   '@media (prefers-reduced-motion:reduce){.busy.bchip[data-kind=done]{transition:none}}' +
   '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}' +
@@ -104,8 +111,9 @@ function mount(ctx) {
     for (k in st.items) draw(k, st.items[k]);
     drawModal();
   }
-  function undone(id) { var d = dones[id]; if (d) { clearTimeout(d.t); d.el.remove(); delete dones[id]; } }
-  function showDone(id) {                             // "방금 반영됨 ✓" — DONE_MS 뒤 사라짐(덮개가 다시 씌면 그 칩이 대신)
+  function compareTo(id, on) { document.dispatchEvent(new CustomEvent('hd-swap-compare', {detail: {id: id, on: on}})); }   // view-swap 이 옛 화면을 겹친다·걷는다
+  function undone(id) { var d = dones[id]; if (d) { clearTimeout(d.t); d.el.remove(); delete dones[id]; if (d.on) compareTo(id, false); } }
+  function showDone(id, canCompare) {                 // "방금 반영됨 ✓" — DONE_MS(전/후 보기가 있으면 COMPARE_MS) 뒤 사라짐(덮개가 다시 씌면 그 칩이 대신)
     var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card);
     if (!host || has(st.items, id)) return;
     undone(id);
@@ -113,21 +121,39 @@ function mount(ctx) {
     el.className = 'busy bchip'; el.setAttribute('data-kind', 'done'); el.setAttribute('data-id', id); el.setAttribute('role', 'status'); el.title = lk.title;
     var ok = document.createElement('span'); ok.className = 'busy-txt'; ok.textContent = lk.text; el.appendChild(ok);
     el.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    el.addEventListener('click', function (e) { e.stopPropagation(); });   // 칩 누르기가 카드 고르기·크게 보기로 새지 않게
     host.appendChild(el);
-    var d = dones[id] = {el: el, t: setTimeout(function () {
-      el.classList.add('bout');
-      d.t = setTimeout(function () { if (dones[id] === d) { el.remove(); delete dones[id]; } }, 320);
-    }, B.DONE_MS)};
+    var d = dones[id] = {el: el, on: false, t: 0};
+    function expire() {
+      clearTimeout(d.t);
+      d.t = setTimeout(function () {
+        el.classList.add('bout');
+        d.t = setTimeout(function () { if (dones[id] === d) { el.remove(); delete dones[id]; } }, 320);
+      }, B.doneMs(!!canCompare));
+    }
+    if (canCompare) {                                 // [전/후] — 누르면 바뀌기 전 화면을 겹쳐 보고, 다시 누르면 새 화면(보는 동안은 칩이 사라지지 않는다)
+      var bt = document.createElement('button');
+      bt.type = 'button'; bt.className = 'bcmp'; bt.setAttribute('data-act', 'compare');
+      var look = function () { var c = B.lookCompare(d.on); bt.textContent = c.btn; bt.setAttribute('aria-pressed', String(c.pressed)); ok.textContent = c.text; el.title = c.title; bt.title = c.title; };
+      bt.addEventListener('click', function (e) {
+        e.stopPropagation(); e.preventDefault();
+        d.on = !d.on; look(); compareTo(id, d.on);
+        if (d.on) { clearTimeout(d.t); el.classList.remove('bout'); } else expire();
+      });
+      look(); el.appendChild(bt);
+    }
+    expire();
   }
   function onSwap(e) {                                // view-swap 의 의도 — 교체가 끝남·실패
     var d = e.detail || {}, id = d.id;
     if (typeof id !== 'string' || !id) return;
     if (d.phase === 'failed') { swapErr[id] = 1; errLine(id, d.why || '새 버전을 싣지 못했어요'); return; }
+    if (d.phase === 'start') { undone(id); return; }   // 새 교체가 시작됨 — 지난 반영 칩·전/후 보기는 걷는다
     if (d.phase !== 'done') return;
     if (has(swapErr, id)) { delete swapErr[id]; errLine(id, null); }
     var r = B.landed(landedRec, {type: 'swapped', id: id, at: Date.now()});
     landedRec = r.rec;
-    if (r.show) showDone(id);
+    if (r.show) showDone(id, !!d.before);
   }
   function wrote(list) { var until = Date.now() + SKIP_MS; (list || []).forEach(function (id) { skip[id] = until; }); }
 
