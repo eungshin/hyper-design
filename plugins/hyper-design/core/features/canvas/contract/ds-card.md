@@ -9,6 +9,7 @@
 - **Model `dsCard.sections(names)`** — 토큰 이름(빌드가 `hd-data.tokens` 에 넣는 `tokens.css` `:root` 변수 이름, 없으면 `null`) → 색 줄(Primary `--c-primary|--c-brand` · Secondary `--c-secondary|--c-brand-tint` · Accent `--c-accent|--c-tertiary` · Neutral = 실제 토큰 사다리 bg→text-1, 셋 미만이면 회색 글자 값) · 글자 Headline/Body/Label(`--fs-title|h1|headline|h2` · `--fs-body` · `--fs-caption|label|sub`, 같은 꼬리의 `--fw-`·`--lh-`) · 단추 Primary/Secondary/Outlined · 입력 · `--r-*` · `--shadow-*`. 후보가 없는 색 줄은 빼고, 글자·단추는 글자 값으로. 목록이 아니거나 색 토큰 0 = `null`(카드 없음). 이름이 아닌 값은 버리고 `bad` 로 센다
 - **누르기** — 끌지 않은 클릭·Enter = Foundation 탭(같은 토큰의 자세한 견본). 클릭은 판으로 올라가지 않는다(고르기 풀기·레이아웃 놓기 없음)
 - **숨기기** — 판 글 레이어 `@dscard`(상태 주인 = 셸 `hidden`, 키 `hd-hidden:`): 레이어 패널 눈·왼쪽 [숨긴 것]. 셸 `loadHidden` 이 카드보다 먼저 돌아서 시작 숨김은 카드가 그 키를 읽기만 한다
+- **판 글 레이어**(t51-9, `board-text.md`) — 이동 도구(V)에서 누르기 = 판 글 고르기(Foundation 은 Enter), Delete = 숨기기
 - **아닌 것** — `.card` 가 아니다: 보내기 요청문의 화면·메모 핀·연결·교체(swap)·크기·선택 대상이 아니다
 - **오류 탐지** — 토큰이 없으면 카드 없음, 경고 없음(앱 프로젝트도 같음). `tokens` 가 목록이 아니거나 이름이 아닌 값이 있으면 `[hd]` 경고 한 줄. 숨김 목록이 깨졌으면 보이게 두고 `[hd]` 경고
 

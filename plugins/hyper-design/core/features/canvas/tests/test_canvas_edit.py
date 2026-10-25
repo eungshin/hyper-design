@@ -2153,7 +2153,7 @@ def test_layers_panel_tree_hide_lock_search(dpage):
     cards = dpage.evaluate("[...document.querySelectorAll('#rows .card:not(.del)')].map(c => c.dataset.id)")
     assert [l["name"] for l in ls if l["kind"] == "row" and l["id"] != "@drafts"] == groups, ls
     assert [l["id"] for l in ls if l["kind"] == "screen"] == cards
-    assert {"@intro", "@foot"} <= {l["id"] for l in ls if l["kind"] == "text"}, "판 글도 레이어(H7)"
+    assert {"@intro-story", "@intro-decisions", "@foot-palettes"} <= {l["id"] for l in ls if l["kind"] == "text"}, "판 글도 레이어(H7) — 묶음마다 따로(t51-9)"
     sid = "job"
     title = dpage.get_attribute(f'.card[data-id="{sid}"] .cover', "data-title")
     # 검색: 화면 이름
@@ -2176,10 +2176,10 @@ def test_layers_panel_tree_hide_lock_search(dpage):
     assert dpage.locator(f'.card[data-id="{sid}"]').is_visible()
     dpage.click('#lyF [data-f="hidden"]')
     # 판 글 숨기기
-    dpage.click('#lyTree [data-ly="@intro"] .ly-eye')
-    assert dpage.is_hidden("#intro")
-    dpage.click('#lyTree [data-ly="@intro"] .ly-eye')
-    assert dpage.is_visible("#intro")
+    dpage.click('#lyTree [data-ly="@intro-story"] .ly-eye')
+    assert dpage.is_hidden("#intro-story")
+    dpage.click('#lyTree [data-ly="@intro-story"] .ly-eye')
+    assert dpage.is_visible("#intro-story")
     # 줄 접기
     row0 = [l for l in layers(dpage) if l["kind"] == "row"][0]["id"]
     n0 = len(layers(dpage))

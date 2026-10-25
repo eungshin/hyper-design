@@ -654,6 +654,7 @@ var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.mo
   r.setProperty('--modal-w', MW + 'px'); r.setProperty('--modal-h', MH + 'px'); r.setProperty('--modal-r', (cr + 2) + 'px');
 })(document.documentElement.style, D.radius == null ? 28 : D.radius);
 var BK = null;                                   // 요소 막대(modules/view-blocks.js · 규칙 blocks.js, task 49a) — 기능 등록부로 아래에서 붙는다
+var BT = null;                                   // 판 글 레이어(modules/view-board-text.js, t51-9) — 기능 등록부로 아래에서 붙는다
 var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
 function sizeOf(id) { return AB ? AB.of(id) : {w: CARD.w, h: CARD.h, custom: false}; }   // 카드 크기를 읽는 곳 하나(없으면 프로젝트 카드 크기)
@@ -667,27 +668,9 @@ var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"']/g, f
 var pane = $('#screens'), stage = $('#stage'), rowsEl = $('#rows');
 
 /* ---------- 판 내용 ---------- */
-var intro = '';
-var st = D.story;
-if (st && (st.headline || st.summary)) {
-  var head = esc(st.headline).replace(/&lt;(\/?)em&gt;/g, '<$1em>');
-  intro += '<section class="story"><h2>' + head + '</h2>' + (st.summary ? '<p class="sum">' + esc(st.summary) + '</p>' : '') +
-    '<div class="ideas">' + (st.ideas || []).slice(0, 3).map(function (d) {
-      return '<div class="idea"><b>' + esc(d.title) + '</b><p>' + esc(d.desc) + '</p></div>'; }).join('') + '</div>' +
-    ((D.people || []).length ? '<div class="people"><h3>누구를 위한 앱인가</h3><ul>' + D.people.map(function (p) {
-      return '<li><b>' + esc(p.name) + (p.core ? ' · 핵심' : '') + '</b>' + esc(p.why) + '<span class="win">→ ' + esc(p.win) + '</span>' + '</li>'; }).join('') + '</ul></div>' : '') + '</section>';
-}
-var dc = D.decisions;
-if (dc && ((dc.items || []).length || dc.core)) {
-  intro += '<section class="decisions"><h3>정한 것 · 뺀 것</h3>' + (dc.core ? '<p class="core">' + esc(dc.core) + '</p>' : '') +
-    '<ul>' + (dc.items || []).map(function (i) {
-      return '<li><span class="v v-' + esc(i.verdict) + '">' + esc(i.label) + '</span><b>' + esc(i.name) + '</b>' +
-        (i.how ? ' → ' + esc(i.how) : '') + '<span class="why">' + esc(i.why) + '</span></li>'; }).join('') + '</ul>' +
-    ((dc.market || []).length ? '<h3 class="mk">시장 관례 — 따른 것 · 벗어난 것</h3><ul>' + dc.market.map(function (i) {
-      return '<li><span class="v v-' + esc(i.verdict) + '">' + esc(i.label) + '</span><b>' + esc(i.name) + '</b>' +
-        '<span class="why">' + esc(i.verdict === 'cut' ? i.why : (i.how || i.why)) + '</span></li>'; }).join('') + '</ul>' : '') + '</section>';
-}
-$('#intro').innerHTML = '<p class="hint">끌어서 둘러보고, 화면을 누르면 크게 보고 직접 눌러볼 수 있어요 · 점선은 주요 흐름' + (D.stage === 'go' && D.pending ? ' · 오류·확인·빈 화면 같은 상태 ' + D.pending + '개는 <b>/hyper-design:max</b>로 더할 수 있어요' : '') + '</p><div class="intro-grid">' + intro + '</div>';
+// 판 글(소개·끝 글) = 묶음마다 레이어 하나(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 고르기·고치기·지우기는 등록부 기능 boardText
+HD.viewBoardText.paint({intro: $('#intro'), foot: $('#foot'), esc: esc}, D, {});
+var P = D.palettes;                               // 테마 패널의 바탕 팔레트 목록
 $('#intro').style.marginLeft = LEFT + 'px';
 
 // 화면 줄 그리기·다시 맞추기(modules/view-rows.js · 계획 modules/rows.js, 51-1) — 처음 그리기와 쓴 뒤 data() 가 같은 길
@@ -697,20 +680,6 @@ html += RW.html(D.rows);
 rowsEl.innerHTML = html;
 rowsEl.style.paddingLeft = LEFT + 'px';
 
-var foot = '';
-var P = D.palettes;
-if (P && P.options && P.options.length) {
-  foot += '<p>색 출처: ' + P.options.map(function (o) { return esc(o.name) + ' 웹 팔레트'; }).join(' · ') +
-    ' — 시안용 참고. 출시 전 자체 브랜드 색으로 바꾸세요.</p>';
-}
-if (D.credits && D.credits.length) {
-  foot += '<details><summary>사진 출처 ' + D.credits.length + '장</summary><ul>' + D.credits.map(function (c) {
-    var t = esc(c.title || c.file || c.slot);
-    var link = c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">' + t + '</a>' : t;
-    return '<li>' + (c.slot ? esc(c.slot) + ' — ' : '') + link + (c.author ? ' · ' + esc(c.author) : '') + (c.license ? ' · ' + esc(c.license) : '') + '</li>';
-  }).join('') + '</ul></details>';
-}
-$('#foot').innerHTML = foot;
 $('#foot').style.marginLeft = LEFT + 'px';
 
 /* ======================================================================
@@ -1215,7 +1184,7 @@ loadLinkNames();
 // 숨긴 화면 — 이 캔버스에서만 안 보이게(화면 파일은 그대로). 별도 키, 없는 화면 id 는 버리고 정리한 목록을 다시 쓴다(modules/layer-flags.js — 잠금도 같은 규칙)
 var HKEY = 'hd-hidden:' + hashStr(KEYPATH), hidden = {};
 function layerFlags(key, what) {                     // 저장된 id 목록 → 지금 있는 화면만(set) · 걸렀거나 깨졌으면 다시 씀
-  var r = HD.layerFlags.clean(ST.getItem(key), HD.layerFlags.live(D.rows, NS.list()));
+  var r = HD.layerFlags.clean(ST.getItem(key), HD.layerFlags.live(D.rows, NS.list()).concat(HD.boardText.IDS));
   if (r.bad) console.warn('[hd] ' + what + ' 목록이 깨져 비웠어요');
   else if (r.dropped.length) console.warn('[hd] ' + what + ' 목록에서 없는 화면 ' + r.dropped.length + '개를 뺐어요: ' + r.dropped.join(', '));
   if (r.changed) { try { ST.setItem(key, JSON.stringify(r.ids)); } catch (e) {} }   // 저장 실패는 state-sync 가 알린다
@@ -1224,8 +1193,7 @@ function layerFlags(key, what) {                     // 저장된 id 목록 → 
 function loadHidden() {                              // 시작 때 · 기록 줄로 오갈 때(adoptState)
   hidden = layerFlags(HKEY, '숨긴 화면');
   $$('.card', rowsEl).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); });
-  $('#intro').hidden = !!hidden['@intro']; $('#foot').hidden = !!hidden['@foot'];
-  if ($('#dscard')) $('#dscard').hidden = !!hidden['@dscard'];
+  ['@intro', '@foot', '@dscard'].concat(HD.boardText.IDS).forEach(function (id) { var t = $('#' + id.slice(1)); if (t) t.hidden = !!hidden[id]; });   // 판 글 레이어(t51-9)
 }
 loadHidden();
 // 잠긴 화면 — 옮기기·삭제·글자 고치기를 막는다(이 캔버스에서만, 화면 파일은 그대로). 별도 키
@@ -1356,7 +1324,7 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
     });
     var drafts = $$('.card.draft', rowsEl).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; });
     if (drafts.length) groups.push({id: '@drafts', name: '빈 레이아웃', screens: drafts});
-    return {groups: groups, texts: [{id: '@intro', name: '판 글 · 소개'}, {id: '@foot', name: '판 글 · 끝'}].concat($('#dscard') ? [{id: '@dscard', name: '디자인 시스템'}] : [])};
+    return {groups: groups, texts: BT ? BT.layers() : HD.boardText.layers(HD.boardText.blocks(D, {dscard: !!$('#dscard')}), hidden)};   // 판 글 = 묶음마다 줄(t51-9)
   },
   state: function () { var memo = {}; HD.edits.split(NS.list()).memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; }); return {hidden: hidden, locked: locked, memo: memo}; },
   picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
@@ -1381,7 +1349,7 @@ window.HDCanvas = {routeCurve: HD.route.routeCurve, camera: HD.camera, style: HD
 /* ---------- 숨기기 · 숨긴 화면 목록 · 우클릭 메뉴(선·카드·빈 곳) ---------- */
 // 화면 파일을 바꾸는 항목 — 도착 바꾸기·끊기·트리거·여기에 레이아웃은 아래 편집(메모로 쌓고 판에 바로 표시), 이름·설명·글자는 더블클릭
 var cmenu = $('#cmenu');
-function titleOf(id) { var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
+function titleOf(id) { if (id === '@board') return '판 글'; var c = VL.cardEl(id), b = c ? $('.cover', c) : null; return b ? b.dataset.title : id; }
 function saveHidden() { try { ST.setItem(HKEY, JSON.stringify(Object.keys(hidden))); } catch (e) {} }
 function setHidden(ids, on) {
   ids.forEach(function (id) {
@@ -1826,7 +1794,7 @@ function foldCards(ids) {
 }
 // 카드 아래 글 한 상자(H16) — 제목·설명·정책 줄을 한 상자에서. 그리기·글쇠 = modules/view-caption.js, 비교 = modules/caption.js
 // 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 addEdits = 되돌리기 한 번
-var CAP = HD.viewCaption.mount({
+var CAPX, CAP = HD.viewCaption.mount(CAPX = {
   values: function (id) {
     var o = ORIG[id];
     if (!o) { var dn = layoutOf(id); return dn ? {title: dn.value, purpose: dn.purpose || '', policies: []} : null; }   // 빈 레이아웃 = 그 메모의 이름·목적
@@ -1848,7 +1816,7 @@ var CAP = HD.viewCaption.mount({
   hasPolicies: function (id) { return !!ORIG[id]; },   // 빈 레이아웃은 이름·목적만(#225)
   toast: function (m) { toast(m); },
   hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로) · Shift+Enter 줄바꿈'}; },
-  onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(c ? [c.dataset.id] : null); }
+  onClose: function (c) { if (c) c.classList.remove('capopen'); paintCardText(c ? [c.dataset.id] : null); if (BT) BT.place(); }   // 닫은 뒤에도 그 카드 글이 골라진 채(F14, t51-9)
 });
 function openCaption(el, focus) {                   // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
   closeCmenu();
@@ -2360,6 +2328,7 @@ function renderNotes(ids) {                          // ids = 메모가 바뀐 �
   notesShown = c;
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)
   if (ORIG) { renderDrafts(ids); paintDeleted(ids); paintCardText(ids); sendAllPending(ids); }   // ORIG 전(시작 중)에는 아직 그릴 카드 글이 없다
+  if (BT) BT.paint();                              // 판 글 반영 대기(t51-9)
   if (VL && VL.refresh) VL.refresh();
   if (PN) PN.render(ids);
   if (TH) TH.refresh();
@@ -2418,7 +2387,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
         FT.swap.same(mframe, mu).then(function (same) { if (!same && !modal.hidden && mframe.getAttribute('src') === mwas) mgo(); });
       } else mgo();
     }
-    paintCardText(); drawArrows(); scheduleVisible();
+    paintCardText(); if (BT) BT.data(nd); drawArrows(); scheduleVisible();
     pruneFolders(); if (LY) LY.render();
     if (VB) { VB.render(); VB.wrote(changed); }          // 방금 스스로 다시 실은 카드 — 도우미의 바뀐 화면 알림으로 또 싣지 않게
     if (PR) PR.check();
@@ -2468,7 +2437,7 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
   aiWrites: function () { if (FT && FT.aiUndo && FT.aiUndo.poll) FT.aiUndo.poll(); },
   built: function (ids) { if (OP) OP.built(ids); },
   revert: function (ids, why, screens) {             // 뒤 빌드가 깨져 도우미가 쓰기를 되돌림 — 먼저 보인 변경을 거두고 알린 뒤 그 화면을 파일대로 다시
-    var mine = OP ? OP.reverted(ids, why) : [];
+    var mine = (OP ? OP.reverted(ids, why) : []).concat(BT ? BT.reverted(ids) : []);   // BT = 판 글(t51-9) — 파일대로 다시 불러온다
     if (!mine.length) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
     if (screens.length) VS.refresh(screens, 'f' + Date.now());
   },
@@ -2563,6 +2532,14 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
   }}});
 PP = FT.popPlace || null;
+// 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
+BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
+  queue: function (l, list, msg) { addEdits(l, list, msg, null, true); }, hide: hide, hidden: function () { return hidden; }, tool: function () { return tool; },
+  pickCard: function (id) { if (id) { if (!(SL.ids().length === 1 && SL.has(id))) SL.dispatch({type: 'only', id: id}); } else SL.dispatch({type: 'clear'}); },
+  guard: function (ids) { return lockGuard(ids); },
+  caption: {values: function (id) { return CAPX.values(id); }, commit: function (id, ch) { CAPX.commit(id, ch); }, open: function (el, focus) { openCaption(el, focus); }},
+  reload: function () { VS.refresh([], 'f' + Date.now()); },
+  changed: function () { drawArrows(); scheduleVisible(); if (LY) LY.render(); }}) : null;
 BK = FT.blocks || null; if (BK) { BK.onAct(blockAct); BK.onPick(function (p) {   // 상위·쓴 뒤 따라가기로 새로 고른 요소(task 49b) — 판 = 테두리·소켓·막대, 크게 보기 = 막대
   if (p.where === 'modal') { if (!modal.hidden && p.screen === mscreen) BK.show(modalSel(p.screen, p.h)); return; }
   var c = VL.cardEl(p.screen); if (c) selectEl(c, p.h);

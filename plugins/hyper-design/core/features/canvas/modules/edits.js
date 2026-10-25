@@ -1,7 +1,7 @@
 /* Model — 편집 메모(화면 파일을 바꾸는 편집). DOM·저장소·메시지를 쓰지 않는다.
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
-     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a · op to + to = 형제 사이 자리, 51-5) · attr(op = 속성 이름, value = 새 값) · insert·replace(value = 부품 key, task 49b) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
+     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a · op to + to = 형제 사이 자리, 51-5) · attr(op = 속성 이름, value = 새 값) · insert·replace(value = 부품 key, task 49b) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy · board(판 글, screen '@board' · op set|delete · to = 칸·묶음 키 — t51-9, board-text.js)
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
    request(notes, out, sizes?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46)
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
@@ -53,7 +53,7 @@ function pendingLink(notes, from, path, to) {
 // 도우미(helper.py)가 화면 파일에 바로 쓸 수 있는 편집
 var BLOCK = {text: 1, remove: 1, duplicate: 1, move: 1, attr: 1, insert: 1, replace: 1};   // 요소 편집(task 49a·49b) — 도우미가 바로 쓴다
 function directOf(n) {
-  return BLOCK[n.edit] === 1 || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' || n.edit === 'policies' ||
+  return BLOCK[n.edit] === 1 || n.edit === 'board' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' || n.edit === 'policies' ||
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 

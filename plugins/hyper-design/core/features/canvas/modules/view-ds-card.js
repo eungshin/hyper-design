@@ -1,7 +1,7 @@
 /* View — 판 위 디자인 시스템 카드(S6): 판 글 아래·화면 줄 위 자기 줄에 카드 하나, 화면과 같은 tokens.css 로 그린다. 칸 규칙은 modules/ds-card.js(Model).
    카드 = iframe(srcdoc) 하나 — <link id="tokens" href="tokens.css"> 를 화면과 똑같이 읽고, 셸이 모든 iframe 에 보내는 hd-palette·hd-theme-vars 를
    그대로 받는다(화면의 palette.js 와 같은 두 가지만). 그래서 테마 패널에서 고르거나 색을 고치면 카드와 모든 화면이 한 번에 바뀐다.
-   누르기(끌지 않고)·Enter = Foundation 탭. 숨기기 = 판 글 레이어 '@dscard'(주인은 셸 hidden — 레이어 패널 눈·숨긴 것 목록). 시작 때 숨김은
+   누르기(끌지 않고)·Enter = Foundation 탭(이동 도구 V 에서는 누르기 = 판 글 고르기, t51-9). 숨기기 = 판 글 레이어 '@dscard'(주인은 셸 hidden — 레이어 패널 눈·숨긴 것 목록). 시작 때 숨김은
    셸 loadHidden 이 이 카드보다 먼저 돌아서 저장 키 hd-hidden 을 읽기만 한다. 요청문·메모 핀·연결·교체 대상이 아니다(.card 가 아님).
    토큰이 없으면(hd-data tokens 없음·색 토큰 0) 카드 없음, 오류 없음. 데이터가 깨졌으면 [hd] 경고 한 줄.
    HD.feature('dsCard', {needs: [rowsEl, frameLoaded, store, key, warn]}) → {el | null} */
@@ -107,6 +107,7 @@ function mount(ctx) {
   var down = null;
   el.addEventListener('pointerdown', function (e) { down = {x: e.clientX, y: e.clientY}; });
   el.addEventListener('click', function (e) {
+    if (el.closest('.t-move')) { down = null; return; }   // 이동 도구(V) = 판 글 고르기(t51-9, view-board-text) — Enter 가 Foundation 탭
     e.stopPropagation();                               // 판의 빈 곳 누르기(고르기 풀기·레이아웃 놓기)로 가지 않게
     var moved = !down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4; down = null;
     if (!moved && !e.shiftKey && !e.ctrlKey && !e.metaKey && e.button === 0) open();   // 끌어 판을 옮긴 뒤의 click 은 열지 않는다

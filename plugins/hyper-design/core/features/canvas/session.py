@@ -18,6 +18,7 @@
 import datetime, hashlib, json, os, pathlib, secrets, shutil, subprocess, sys, threading, time, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
+import board_text as BT  # 판 글 고치기·지우기 계획(순수 Model, t51-9)
 import build_canvas
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
@@ -139,8 +140,11 @@ def apply_edits(out, edits, stamp=None, build=None):
     data = json.loads(sj.read_text(encoding="utf-8"))
     files = _screen_files(data)
     applied, failed, html_ops, json_ops, owner, parts_html, paths = [], [], {}, [], {}, None, {}
+    board = []                                       # 판 글(t51-9) — 화면이 아니라 screens.json story·people · decisions.json
     for e in edits:
         eid, sid, kind = e.get("id"), e.get("screen"), e.get("edit")
+        if kind == "board":
+            board.append(e); continue
         try:
             if sid not in files:
                 raise ValueError("없는 화면: %s" % sid)
@@ -188,7 +192,7 @@ def apply_edits(out, edits, stamp=None, build=None):
             html_ops.setdefault(f, []).append((eid, e.get("path") or "", op[0], op[1])); owner[f] = sid
         except ValueError as err:
             failed.append({"id": eid, "reason": str(err)})
-    if not html_ops and not json_ops:
+    if not html_ops and not json_ops and not board:
         return {"applied": applied, "failed": failed, "stamp": None, "changed": []}
     w, changed = _Writes(out, stamp, build), set()
     for f, ops in html_ops.items():                 # 한 화면 안에서 하나가 실패하면 그 하나만 빼고 다시
@@ -207,6 +211,27 @@ def apply_edits(out, edits, stamp=None, build=None):
                     paths[good[0][0]] = at
             w.keep(f); f.write_text(new, encoding="utf-8", newline="")
             applied += [o[0] for o in good]; changed.add(owner[f])
+    sj_dirty = bool(json_ops)
+    if board:                                        # 판 글: 하나씩 계획(앞 것 위에) — 거절은 그 하나만
+        dj = out / "decisions.json"
+        try:
+            dec = json.loads(dj.read_text(encoding="utf-8")) if dj.is_file() else None
+        except (OSError, ValueError):
+            dec = None
+        dec_dirty = False
+        for e in board:
+            try:
+                r = BT.plan(data, dec, {"op": e.get("op"), "to": e.get("to"), "value": e.get("value")})
+            except BT.BoardError as err:
+                failed.append({"id": e.get("id"), "reason": str(err)}); continue
+            if r["screens"] is not None:
+                data, sj_dirty = r["screens"], True
+            if r["decisions"] is not None:
+                dec, dec_dirty = r["decisions"], True
+            applied.append(e.get("id"))
+        if dec_dirty:
+            raw = dj.read_text(encoding="utf-8")
+            w.keep(dj); _write_json(dj, dec, raw)
     if json_ops:
         by = {s["id"]: s for s in data["screens"]}
         drop = {}                                   # 화면 → 지울 정책 줄 번호(원래 번호) — 바꾸기를 다 한 뒤 큰 번호부터
@@ -227,6 +252,7 @@ def apply_edits(out, edits, stamp=None, build=None):
         for sid, idx in drop.items():
             for i in sorted(idx, reverse=True):
                 del by[sid]["policies"][i]
+    if sj_dirty:
         raw = sj.read_text(encoding="utf-8")
         w.keep(sj); _write_json(sj, data, raw)
     if not applied:                                 # 모두 거절(겹침·허용 밖 속성 등) — 쓴 것이 없으니 다시 빌드·기록도 없다

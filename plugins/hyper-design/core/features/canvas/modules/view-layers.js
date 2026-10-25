@@ -14,6 +14,7 @@
    ctx = {$, esc, root, tree() → {groups, texts}, state() → {hidden, locked, memo}, picked() → [id],
           hide(ids, on), lock(ids, on), reveal(id), addLayout(), del(ids),
           folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y'), hover(ids)} — 폴더 셋·hover 는 없으면 그 기능만 빠진다
+   판 글 줄(kind text)을 누르면 의도 'hd-board-pick' {id}(판에서 그 글 고르기, t51-9).
    줄에 마우스를 올리면 ctx.hover(HD.layers.hoverIds(나무, 그 줄 id)) — 판이 그 카드·판 글을 강조(51-3, Figma F10), 나무 밖으로 나가면 hover([]) */
 (function () {
 'use strict';
@@ -163,6 +164,7 @@ function mount(ctx) {
     if (e.target.closest('[data-act="unfolder"]')) { if (x.kind === 'folder') send({type: 'remove', id: id}); return; }
     if (e.target.closest('[data-act="ungroup"]')) { if (section(x)) emit('hd-row-dissolve', {name: x.name}); return; }
     if (head) { if (ctx.pick && e.target.closest('.ly-name')) ctx.pick(seen(id), 'only'); return; }
+    if (x.kind === 'text') { if (!x.hid) emit('hd-board-pick', {id: id}); return; }   // 판 글 줄 = 판에서 그 글 고르기(t51-9, view-board-text)
     if (x.kind !== 'screen' || x.hid) return;
     if ((e.shiftKey || e.ctrlKey || e.metaKey) && ctx.pick) { ctx.pick([id], 'toggle'); return; }
     ctx.reveal(id);
