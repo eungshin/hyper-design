@@ -535,19 +535,21 @@ pane.addEventListener('click', function (e) {
   if (!e.shiftKey && !cl('.card, .alabel')) SL.dispatch({type: 'clear'});   // 빈 판을 그냥 누르면 고르기 풀기(강조도 꺼짐)
 }, true);
 
-/* ---------- 보이는 카드만 로드(이동·확대 후 100ms 묶어서) · 라이브 상한(modules/live-cap.js, contract/board-motion.md) ---------- */
+/* ---------- 보이고 읽히는 크기인 카드만 로드(이동·확대 후 100ms 묶어서) · LOD·라이브 상한(modules/live-cap.js, contract/board-motion.md) ---------- */
 var visT = 0, seenAt = {};
 function loadCard(f) { var s = f.getAttribute('data-src'); f.dataset.live = s; f.removeAttribute('data-src'); f.src = HD.swap.boardUrl(s); }   // 판 위 카드 = 판 모드(palette.js 가 움직임을 멈춤) — 크게 보기(#mframe)는 붙이지 않는다
 function loadVisible() {
   var pr = pane.getBoundingClientRect();
   if (!pr.width || pane.hidden) return;
-  var now = Date.now(), loaded = [], vis = [], frames = {};
+  var now = Date.now(), loaded = [], vis = [], small = [], frames = {}, sel = SL ? SL.ids() : [], mid = modal.hidden ? null : mscreen;
   $$('.card', rowsEl).forEach(function (c) {
     var f = $('.phone iframe', c); if (!f) return;
     var id = c.dataset.id, r = f.parentNode.getBoundingClientRect();
     if (r.width && r.right > pr.left - 80 && r.left < pr.right + 80 && r.bottom > pr.top - 80 && r.top < pr.bottom + 80) {
       vis.push(id); seenAt[id] = now;
-      if (f.hasAttribute('data-src')) {
+      var tiny = !HD.liveCap.readable(r.width);     // LOD: 읽히지 않는 크기면 싣지 않는다(틀·제목·흰 바탕) — 고른·크게 보기 카드는 싣는다
+      if (tiny) small.push(id);
+      if (f.hasAttribute('data-src') && (!tiny || sel.indexOf(id) >= 0 || id === mid)) {
         if (!f.dataset.wired) {                   // 다시 실을 때(data-src 다시 붙임)마다 듣는 이를 더하지 않는다 — 실을 때마다 메시지 한 번
           f.dataset.wired = '1';
           f.addEventListener('load', function () { if (f.hasAttribute('data-src')) return;   // 내린 카드(about:blank)
@@ -558,7 +560,7 @@ function loadVisible() {
     }
     if (!f.hasAttribute('data-src') && f.dataset.live) { loaded.push(id); frames[id] = f; }
   });
-  HD.liveCap.unload({loaded: loaded, visible: vis, lastSeen: seenAt, selected: SL ? SL.ids() : [], modal: modal.hidden ? null : mscreen, now: now,
+  HD.liveCap.unload({loaded: loaded, visible: vis, small: small, lastSeen: seenAt, selected: sel, modal: mid, now: now,
                      K: HD.liveCap.K, idle: HD.liveCap.IDLE})
     .forEach(function (id) { var f = frames[id]; f.setAttribute('data-src', f.dataset.live); f.src = 'about:blank'; });   // 내리기 = 틀·제목·핀은 그대로, 다시 보이면 위에서 다시 싣는다
 }
@@ -1325,7 +1327,7 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (PN && st.ids.length) PN.focus(null);          // 다른 카드를 고르면 막 메모를 단 카드의 핀 보이기는 끝
   if (AB) AB.closePop();                            // 고른 카드가 바뀌면 크기 팝오버는 닫는다(다른 카드에 잘못 적용하지 않게)
   if (selEl && st.ids.indexOf(selEl.card.dataset.id) < 0) unselectEl();   // 고른 요소의 카드를 놓으면 요소 막대도(task 49a)
-  placeSelbar();
+  placeSelbar(); scheduleVisible();                 // LOD: 고른 카드는 작게 봐도 싣고, 놓으면 다시 작은 카드로
   foldCards();                                      // 고른 카드만 설명·정책을 펼친다(task 31)
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
   if (st.ids.length && LE && LE.selected()) LE.clear();   // 카드를 고르면 고른 선(Q3)은 풀린다
