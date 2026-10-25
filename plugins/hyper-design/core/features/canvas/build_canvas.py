@@ -209,12 +209,18 @@ def index_data(out, m):
     else:
         pal = None
     credits = load(out / "credits.json", []) or []
+    tok = out / "tokens.css"                          # 판 위 디자인 시스템 카드(S6, modules/ds-card.js): tokens.css :root 변수 이름만 — 값은 카드가 같은 파일에서 읽는다
+    try:
+        tokens = root_vars(tok.read_text(encoding="utf-8")) if tok.exists() else None
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"경고: tokens.css 읽기 실패 — {e}", file=sys.stderr)
+        tokens = None
 
     scale, card_sz, modal_sz, radius = frame(out)
     data = {"title": m.get("title") or "전체 화면 한눈에 보기", "scale": scale, "card": card_sz, "modal": modal_sz, "radius": radius,
             "story": m.get("story") or None, "people": [{"name": p.get("name", ""), "why": p.get("why", ""), "win": p.get("win", ""), "core": bool(p.get("core")),
                                                      "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows, "links": links,
-            "palettes": pal, "credits": credits if isinstance(credits, list) else []}
+            "palettes": pal, "credits": credits if isinstance(credits, list) else [], "tokens": tokens}
     return data
 
 
