@@ -923,6 +923,36 @@
         "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 2/2 통과 — S1b 에 적힌 것과 같음)"
       ],
       "note": "Tab 은 끝에서 돈다(Figma). Enter = enterOf(h): textOk 이고 글이 있으면 그 자리 고치기, 아니면 첫 자식. palette 메시지 hd-down·hd-sib → hd-hop, hd-hit-at deep"
+    },
+    {
+      "slice": "51-4 줄 = 섹션 (제목 고르기·이름 바꾸기·Del·줄만 걷기=위 줄 합침 · 레이어 줄 id = 이름)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 13
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "줄만 걷기 차례: 한 줄 화면이 screens.json 에 흩어져 있으면 블록을 위 줄 마지막 화면 뒤에 끼워야 빌드 차례 = 판 차례(테스트 기대를 먼저 잘못 적음)"
+        },
+        {
+          "by": "browser",
+          "what": "고른 줄 카드가 설명을 펼쳐 아래 줄 제목을 덮음(기존 동작) — hover 스크린숏을 위 줄로"
+        }
+      ],
+      "waste": "영역 실행 중 w47-4b 가 modules/live.js 등을 더해 순수성 목록이 달라짐 + 부하 깨짐 4 — 혼자 5/5 통과",
+      "flaky": [
+        "test_canvas_blocks.py 2 · test_canvas_blocks_b.py 1 · test_canvas_edit.py::test_blank_layout_caption_has_name_and_multiline_purpose (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
+      ],
+      "note": "셸 0줄: 등록부 기능 rowHeads + document 의도(hd-row-pick/delete/rename/dissolve, hd-rows-changed)로 레이어 패널 ctx.pick·ctx.del 을 씀. 서버 /api/group-rename · /api/group-dissolve(순수 계획 + 쓰기 한 번 + restore)"
     }
   ]
 }

@@ -69,3 +69,118 @@ def test_emptied_row_and_heading_go_at_once_and_undo_brings_them_back(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+# ---------------------------------------------------------------- 줄 = 섹션(51-4, Figma F16·F17)
+SET, TRY = "설정 — 하는 일·언어·쓰는 방향", "체험 — 실제 키로 해 봐야 다음"
+PICKED = "() => [...document.querySelectorAll('#rows .card.picked')].map(c => c.dataset.id)"
+FLOW_IDS = "() => [...document.querySelectorAll('#rows .flow')].map(f => [...f.querySelectorAll('.card')].map(c => c.dataset.id))"
+
+
+def _open(ctx, out):
+    srv = helper.make_server(out, 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.goto(srv.url)
+    pg.wait_for_function("window.__hdReady !== undefined")
+    pg.evaluate("window.__hdStay = 1")
+    from test_canvas_edit import fit_view
+    fit_view(pg)
+    return srv, pg, errors
+
+
+def _head(pg, name):
+    return pg.locator("#rows .flow > .glabel", has_text=name).first
+
+
+def _sj(out):
+    import json
+    return json.loads((out / "screens.json").read_text(encoding="utf-8"))
+
+
+def _wait(fn, timeout=20.0):
+    import time
+    end = time.time() + timeout
+    while time.time() < end:
+        if fn():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+@pytest.mark.area("tools", "layers")
+def test_heading_click_picks_row_and_double_click_renames_in_place_with_one_undo(ctx, out):
+    srv, pg, errors = _open(ctx, out)
+    try:
+        before = (out / "screens.json").read_bytes()
+        _head(pg, SET).click()
+        pg.wait_for_timeout(150)
+        assert sorted(pg.evaluate(PICKED)) == ["job", "language", "usage"], "제목 누르기 = 그 줄 카드 모두 고르기"
+        assert pg.is_visible("#selbar"), "여러 장 고르기 막대"
+        if SHOTS:
+            _head(pg, "로그인").hover(); pg.wait_for_timeout(100)   # 고른 줄 카드는 설명을 펼쳐 아래 줄 제목을 덮는다 — 위 줄에 올린다
+            pg.screenshot(path=os.path.join(SHOTS, "51-4-hover-and-picked.png"))
+        # Esc = 그대로(쓰지 않음)
+        _head(pg, SET).dblclick()
+        pg.wait_for_function("document.activeElement && document.activeElement.classList.contains('glabel')")
+        pg.keyboard.press("Control+A"); pg.keyboard.type("아무거나")
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(200)
+        assert pg.evaluate(ROWS)[1] == SET and (out / "screens.json").read_bytes() == before, "Esc = 취소"
+        # Enter = 저장
+        _head(pg, SET).dblclick()
+        pg.wait_for_function("document.activeElement && document.activeElement.classList.contains('glabel')")
+        pg.keyboard.press("Control+A"); pg.keyboard.type("설정")
+        if SHOTS:
+            pg.screenshot(path=os.path.join(SHOTS, "51-4-rename-in-place.png"))
+        pg.keyboard.press("Enter")
+        assert _wait(lambda: _sj(out)["groups"][1] == "설정"), _sj(out)["groups"]
+        d = _sj(out)
+        assert [s["group"] for s in d["screens"] if s["id"] in ("job", "language", "usage")] == ["설정"] * 3, "줄 화면마다 group 도 같이"
+        pg.wait_for_function("[...document.querySelectorAll('#rows .flow .glabel')][1].textContent === '설정'")
+        assert pg.evaluate(ROWS)[1] == "설정" and pg.evaluate(LAYER_ROWS)[1] == "설정", "판과 레이어 패널"
+        pg.click("#undo")
+        assert _wait(lambda: (out / "screens.json").read_bytes() == before), "되돌리기 한 번 = 이름·화면 group 모두 그대로"
+        pg.wait_for_function("[...document.querySelectorAll('#rows .flow .glabel')][1].textContent === %r" % SET)
+        assert pg.evaluate(LAYER_ROWS)[1] == SET
+        assert pg.evaluate("window.__hdStay") == 1, "새로고침 없음"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools", "layers")
+def test_ctrl_backspace_on_heading_merges_row_into_the_row_above_with_one_undo(ctx, out):
+    srv, pg, errors = _open(ctx, out)
+    try:
+        before = (out / "screens.json").read_bytes()
+        first = pg.evaluate(ROWS)
+        ids0 = pg.evaluate(FLOW_IDS)
+        if SHOTS:
+            pg.screenshot(path=os.path.join(SHOTS, "51-4-dissolve-before.png"))
+        _head(pg, TRY).click()
+        pg.wait_for_timeout(150)
+        pg.keyboard.press("Control+Backspace")
+        assert _wait(lambda: TRY not in _sj(out)["groups"]), "줄만 걷기 = groups 에서 이름만 뺀다"
+        d = _sj(out)
+        assert len(d["screens"]) == 12, "화면은 하나도 지우지 않는다"
+        assert [s["id"] for s in d["screens"] if s["group"] == SET] == ids0[1] + ids0[2], "위 줄 화면 뒤에"
+        pg.wait_for_function("document.querySelectorAll('#rows .flow').length === 3")
+        assert pg.evaluate(ROWS) == [first[0], first[1], first[3]]
+        assert pg.evaluate(FLOW_IDS)[1] == ids0[1] + ids0[2], "판에서도 위 줄 끝에 붙는다"
+        assert pg.evaluate(LAYER_ROWS) == [first[0], first[1], first[3]]
+        if SHOTS:
+            fit_after = __import__("test_canvas_edit").fit_view; fit_after(pg)
+            pg.screenshot(path=os.path.join(SHOTS, "51-4-dissolve-after.png"))
+        pg.click("#undo")
+        assert _wait(lambda: (out / "screens.json").read_bytes() == before), "되돌리기 한 번"
+        pg.wait_for_function("document.querySelectorAll('#rows .flow').length === 4")
+        assert pg.evaluate(ROWS) == first and pg.evaluate(FLOW_IDS) == ids0, "줄과 카드가 제자리로"
+        assert pg.evaluate("window.__hdStay") == 1, "새로고침 없음"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

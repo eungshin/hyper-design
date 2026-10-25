@@ -253,6 +253,120 @@ def emptied_groups(groups, before, after):
     return [g for g in groups if not (g in had and g not in has)]
 
 
+GROUP_MAX = 80                                       # 줄 이름 글자 수 한도(판 제목 한 줄)
+
+
+class GroupError(ValueError):
+    """줄(group) 요청을 받을 수 없다 — 한국어 이유 + reason('invalid' = 400 · 'missing' = 404)."""
+    def __init__(self, msg, reason="invalid"):
+        super().__init__(msg)
+        self.reason = reason
+
+
+def _gname(s):                                       # build_canvas.index_data 와 같은 이름(group 없음 = '기타')
+    return s.get("group") or "기타"
+
+
+def group_order(data):
+    """줄 이름 차례 = build_canvas.index_data 와 같음(groups 먼저, 그다음 화면에만 있는 이름을 화면 차례로)."""
+    names = [g for g in (data.get("groups") or []) if isinstance(g, str)]
+    for s in data.get("screens") or []:
+        if _gname(s) not in names:
+            names.append(_gname(s))
+    return list(dict.fromkeys(names))
+
+
+def group_rows(data):                                # 판에 보이는 줄(화면이 하나라도 있는 이름) 차례
+    has = {_gname(s) for s in data.get("screens") or []}
+    return [g for g in group_order(data) if g in has]
+
+
+def plan_group_rename(data, frm, to):
+    """줄 이름 바꾸기 계획(51-4, Figma F16) — 순수. → {data(새 screens.json), screens(닿은 화면 id), to, same}.
+    groups 의 그 항목과 그 줄 화면마다 group 을 함께 바꾼다. 화면에만 있던 이름(예: '기타')이면 지금 줄 차례를 groups 에 적어 자리를 지킨다."""
+    names = group_order(data)
+    if not isinstance(frm, str) or frm not in names:
+        raise GroupError("없는 줄이에요: %s" % (frm,), "missing")
+    to = str(to if to is not None else "").strip()
+    if not to:
+        raise GroupError("줄 이름이 비었어요")
+    if len(to) > GROUP_MAX:
+        raise GroupError("줄 이름이 %d자를 넘어요" % GROUP_MAX)
+    new = json.loads(json.dumps(data))
+    if to == frm:
+        return {"data": new, "screens": [], "to": to, "same": True}
+    if to in names:
+        raise GroupError("같은 이름의 줄이 이미 있어요: %s" % to)
+    groups = new.get("groups") if isinstance(new.get("groups"), list) else []
+    if frm not in groups:
+        groups = names
+    new["groups"] = [to if g == frm else g for g in groups]
+    hit = []
+    for s in new.get("screens") or []:
+        if _gname(s) == frm:
+            s["group"] = to; hit.append(s["id"])
+    return {"data": new, "screens": hit, "to": to, "same": False}
+
+
+def plan_group_dissolve(data, name):
+    """줄만 걷기 계획(51-4, Figma F17 · 사용자 결정 ①) — 순수. 그 줄 화면을 위 줄(첫 줄이면 아래 줄)로 옮기고 groups 에서 이름을 뺀다.
+    옮긴 화면은 위 줄 화면 뒤(아래 줄이면 앞)에 놓아 빌드가 같은 차례로 그린다. → {data, screens, into, where('above'|'below')}."""
+    rows = group_rows(data)
+    if not isinstance(name, str) or name not in rows:
+        raise GroupError("없는 줄이에요: %s" % (name,), "missing")
+    if len(rows) < 2:
+        raise GroupError("줄이 하나뿐이라 걷을 수 없어요")
+    i = rows.index(name)
+    into, where = (rows[i - 1], "above") if i > 0 else (rows[1], "below")
+    new = json.loads(json.dumps(data))
+    screens = new.get("screens") or []
+    moved = [s for s in screens if _gname(s) == name]
+    rest = [s for s in screens if _gname(s) != name]
+    for s in moved:
+        s["group"] = into
+    at = [k for k, s in enumerate(rest) if _gname(s) == into]
+    k = at[-1] + 1 if where == "above" else at[0]
+    new["screens"] = rest[:k] + moved + rest[k:]
+    if isinstance(new.get("groups"), list):
+        new["groups"] = [g for g in new["groups"] if g != name]
+    return {"data": new, "screens": [s["id"] for s in moved], "into": into, "where": where}
+
+
+def _group_write(out, plan, stamp=None, build=None):
+    """줄 계획 하나 → screens.json 쓰기 한 번(원본 + manifest = 되돌리기 한 번). 바뀐 화면 파일은 없다(changed = [])."""
+    out = pathlib.Path(out).resolve()
+    sj = out / "screens.json"
+    raw = sj.read_text(encoding="utf-8")
+    try:
+        p = plan(json.loads(raw))
+    except GroupError as e:
+        return {"error": str(e), "reason": e.reason}
+    res = {k: v for k, v in p.items() if k not in ("data", "same", "to")}
+    if p.get("same"):
+        return dict(res, group=p["to"], stamp=None, changed=[])
+    w = _Writes(out, stamp, build)
+    w.keep(sj); _write_json(sj, p["data"], raw)
+    err = w.commit([])
+    if err:
+        return {"error": err}
+    if "to" in p:
+        res["group"] = p["to"]
+    return dict(res, stamp=w.stamp, changed=[])
+
+
+def group_rename(out, frm, to, stamp=None, build=None):
+    """POST /api/group-rename {from, to} → {group, screens, stamp, changed:[]} | {error, reason}."""
+    return _group_write(out, lambda d: plan_group_rename(d, frm, to), stamp, build)
+
+
+def group_dissolve(out, name, stamp=None, build=None):
+    """POST /api/group-dissolve {name} → {group, into, where, screens, stamp, changed:[]} | {error, reason}."""
+    r = _group_write(out, lambda d: plan_group_dissolve(d, name), stamp, build)
+    if "stamp" in r:
+        r["group"] = name
+    return r
+
+
 def delete_screens(out, ids, stamp=None, build=None):
     """화면 지우기(2.2 D3) — screens.json 에서 빼고(그리로 가는 branches 도), 화면 파일은 기록으로 옮기고, 다른 화면에서 오는 링크는 끊는다."""
     out = pathlib.Path(out).resolve()
@@ -758,7 +872,7 @@ def keypath(out):                                    # file:// 로 열었을 때
 
 # ---------------------------------------------------------------- 객체(task 47-2): out 하나 = ProjectSession 하나
 def _code(r):                                        # restore·apply·delete 답 → 상태 코드(이유 = 409·404, 그 밖 오류 = 500)
-    return {"changed-since": 409, "missing": 404}.get(r.get("reason"), 500 if "error" in r else 200)
+    return {"changed-since": 409, "missing": 404, "invalid": 400}.get(r.get("reason"), 500 if "error" in r else 200)
 
 
 def _emit(bus, type_, **data):                       # 버스가 없으면(부품만 따로 쓰는 테스트) 알리지 않는다
@@ -888,6 +1002,12 @@ class History:
 
     def delete(self, ids):
         return self._write(lambda: delete_screens(self.out, ids, build=self.builder.run), ids)
+
+    def group_rename(self, frm, to):                 # 줄 이름 바꾸기(51-4) — screens.json 쓰기 한 번, 되돌리기 = restore
+        return self._write(lambda: group_rename(self.out, frm, to, build=self.builder.run))
+
+    def group_dissolve(self, name):                  # 줄만 걷기(51-4) — 그 줄 화면은 위 줄(첫 줄이면 아래 줄)로
+        return self._write(lambda: group_dissolve(self.out, name, build=self.builder.run))
 
     def restore(self, stamp, keep=False, notify=False):
         """notify = 되살린 화면 파일을 지켜보기가 '바뀜'으로 알리게(그 카드를 캔버스가 다시 싣는다 — 48c 기록 패널의 AI 줄 되돌리기)."""

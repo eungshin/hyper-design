@@ -205,6 +205,28 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/group-rename", "callers": ["modules/view-rows.js (row heading double-click · layers row rename, 51-4)"],
+      "request": "{from, to}", "response": "{group, screens:[id], stamp|null (same name = no write), changed:[]} | {error, reason:'invalid'|'missing'} 400/404 (Korean reason)",
+      "cases": [
+        {"name": "ok (screens without a group are the row '기타')", "request": {"method": "POST", "path": "/api/group-rename", "body": {"from": "기타", "to": "메인"}},
+         "expect": {"status": 200, "json": {"group": {"$eq": "메인"}, "screens": {"$list": "str", "$min": 1}, "stamp": "str", "changed": {"$eq": []}}}},
+        {"name": "same name = no write", "request": {"method": "POST", "path": "/api/group-rename", "body": {"from": "메인", "to": " 메인 "}},
+         "expect": {"status": 200, "json": {"group": {"$eq": "메인"}, "stamp": "null", "changed": {"$eq": []}}}},
+        {"name": "empty name", "request": {"method": "POST", "path": "/api/group-rename", "body": {"from": "메인", "to": "  "}}, "expect": {"status": 400, "json": {"error": "str", "reason": {"$eq": "invalid"}}}},
+        {"name": "unknown row", "request": {"method": "POST", "path": "/api/group-rename", "body": {"from": "zz", "to": "x"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}},
+        {"name": "JSON array body is a clean 400", "request": {"method": "POST", "path": "/api/group-rename", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/group-dissolve", "callers": ["modules/view-rows.js (줄만 걷기: Ctrl+Backspace · heading/layers menu, 51-4)"],
+      "request": "{name}", "response": "{group, into, where:'above'|'below', screens:[id], stamp, changed:[]} | {error, reason:'invalid'|'missing'} 400/404 (Korean reason)",
+      "cases": [
+        {"name": "only row", "request": {"method": "POST", "path": "/api/group-dissolve", "body": {"name": "메인"}}, "expect": {"status": 400, "json": {"error": "str", "reason": {"$eq": "invalid"}}}},
+        {"name": "unknown row", "request": {"method": "POST", "path": "/api/group-dissolve", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}},
+        {"name": "JSON array body is a clean 400", "request": {"method": "POST", "path": "/api/group-dissolve", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/forward", "callers": ["modules/view-sync.js (Send: non-direct notes)"],
       "request": "{text}", "response": "{via:'queue', path} | {via:'paseo', agent, path} (always writes <out>/.hd-queue/<stamp>.txt)",
       "cases": [

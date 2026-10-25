@@ -8,7 +8,9 @@
      q = 이름 찾기(화면·줄·폴더 이름, 대소문자 무시 — 줄·폴더 이름이 맞으면 그 아래 화면 모두) · only = 'hidden'|'locked'|'memo'
      folded = {줄·폴더 id: 1}. 줄·폴더는 아래에 보일 화면이 있을 때만 남는다(빈 사용자 폴더는 q·only 가 없을 때만 남는다).
      접힌 줄·폴더는 남고 그 화면만 빠진다.
-   HD.layers = {build, filter} */
+   rowId(name) → 'row:' + 줄 이름 — 줄(묶음) 줄 id(51-4, 예전 'g'+차례). 줄이 빠지거나 끼어도 접힘이 다른 줄로 옮겨 가지 않는다
+   renameRow(folded, from, to) → 새 접힘 표(이름을 바꾼 줄의 접힘이 새 id 로) — 저장하지 않는 상태라 옮길 저장값은 없다
+   HD.layers = {build, filter, rowId, renameRow} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -68,5 +70,12 @@ function filter(list, o) {
   return out;
 }
 
-HD.layers = {build: build, filter: filter};
+function rowId(name) { return 'row:' + String(name); }
+function renameRow(folded, from, to) {
+  var out = {}, a = rowId(from), b = rowId(to);
+  Object.keys(folded || {}).forEach(function (k) { out[k === a ? b : k] = folded[k]; });
+  return out;
+}
+
+HD.layers = {build: build, filter: filter, rowId: rowId, renameRow: renameRow};
 })();
