@@ -22,6 +22,10 @@ class HdError(Exception):
     """사용자에게 그대로 보일 한 줄 오류."""
 
 
+class Offline(HdError):
+    """도우미·허브에 닿지 않음(연결 실패) — hd_sdk 가 errors.Offline 으로 바꾼다(task 47-3)."""
+
+
 def home():
     return pathlib.Path(os.environ.get("HD_HOME") or pathlib.Path.home() / ".hyper-design")
 
@@ -135,7 +139,7 @@ def call(m, path, body=None, method="POST", timeout=10):
         except ValueError:
             return e.code, {"error": "HTTP %d" % e.code}
     except (OSError, ValueError) as e:
-        raise HdError("도우미에 닿지 않아요(%s): %s" % (e, _base(m)))
+        raise Offline("도우미에 닿지 않아요(%s): %s" % (e, _base(m)))
 
 
 def post_reply(m, body, timeout=10):
