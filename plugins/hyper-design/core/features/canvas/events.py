@@ -6,7 +6,8 @@
 """
 import collections, json, threading, time
 
-TYPES = ("screen.written", "notes.changed", "claim", "release", "ai.write", "build.started", "build.done", "build.failed")
+TYPES = ("screen.written", "notes.changed", "claim", "release", "ai.write", "build.started", "build.done", "build.failed",
+         "agent.hello", "agent.away", "agent.progress", "agent.reply", "request.sent")   # 47-5a: 접속·보내기
 COMMON = ("id", "type", "ts", "project")
 RING = 256                                           # 이어 받기로 다시 줄 수 있는 최근 이벤트 수
 QUEUE_MAX = 512                                      # 구독자 하나가 이만큼 뒤처지면 닫는다(다시 붙어 이어 받기)

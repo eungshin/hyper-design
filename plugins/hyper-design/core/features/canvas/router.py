@@ -4,6 +4,8 @@ Router.call(method, path, query, body, session) → (code, 답[, after]) | None(
 세션 주소(ROUTES)는 ProjectSession 의 부품으로, 서버 주소(/api/stop · home_api 의 프로젝트·탭·홈)는 서버가 넘긴 것으로 간다.
 SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나로, 허브가 /v1/p/<이름>/ 아래로 같은 것을 쓴다).
 이벤트 흐름(task 47-4a) GET /events · /api/events = 세션 EventBus 를 SSE 로(_events) — 계약 tests/protocol/events.json.
+접속·보내기(task 47-5a) /hello · /beat · /bye · /progress · GET /agents · /agents/spawn(+ 옛 뿌리 /api/… 별칭, GET /api/presence) = 세션 AgentPresence ·
+/api/forward {text, to?, notes?} = Queue.send(이벤트 또는 어댑터) — 계약 tests/protocol/presence.json.
 """
 import json, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
@@ -16,6 +18,7 @@ import home_api  # noqa: E402  — 프로젝트·탭·홈 라우트는 허브(hd
 
 FORBIDDEN = "토큰 또는 주소가 맞지 않아요"
 EVENT_PATHS = ("/events", "/api/events")             # /v1/p/<이름>/events · 옛 뿌리 /api/events(세션 토큰) · 도우미 /api/events
+V1_GET = ("/agents",)                                # /api 밖 JSON GET 주소(/v1/p/<이름>/agents) — 토큰을 보고 라우터로
 HEARTBEAT = 15.0                                     # 이만큼 조용하면 ': hb' 주석(프록시·SDK 가 끊긴 줄 알지 않게)
 POLL = 1.0                                           # 이만큼마다 손님이 닫았는지 본다(닫힌 흐름의 스레드가 남지 않게)
 
@@ -66,6 +69,8 @@ ROUTES = {
         "/api/agents": lambda s, q, b: (200, s.queue.agents(auto=q.get("auto", [""])[0] == "1")),
         "/api/archive": lambda s, q, b: (200, s.archive.get()),
         "/api/parts": lambda s, q, b: (200, s.builder.parts()),
+        "/agents": lambda s, q, b: (200, s.presence.list()),            # 47-5a 접속한 에이전트(/v1/p/<이름>/agents)
+        "/api/presence": lambda s, q, b: (200, s.presence.list()),      # 옛 뿌리 별칭(/api/agents 는 Paseo 목록 + connected)
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
@@ -79,7 +84,17 @@ ROUTES = {
         "/api/claim": lambda s, q, b: s.busy.claim(b),
         "/api/release": lambda s, q, b: s.busy.release(b),
         "/api/archive": lambda s, q, b: s.archive.post(b),
-        "/api/forward": _obj(lambda s, q, b: (200, s.queue.forward(str(b.get("text") or "")))),
+        "/api/forward": _obj(lambda s, q, b: s.queue.send(b)),          # 47-5a: to · notes, 이벤트 또는 어댑터
+        "/hello": lambda s, q, b: s.presence.hello(b),
+        "/api/hello": lambda s, q, b: s.presence.hello(b),
+        "/beat": lambda s, q, b: s.presence.beat(b),
+        "/api/beat": lambda s, q, b: s.presence.beat(b),
+        "/bye": lambda s, q, b: s.presence.bye(b),
+        "/api/bye": lambda s, q, b: s.presence.bye(b),
+        "/progress": lambda s, q, b: s.presence.progress(b),
+        "/api/progress": lambda s, q, b: s.presence.progress(b),
+        "/agents/spawn": lambda s, q, b: s.spawn(b),                    # 기본 꺼짐(HD_ALLOW_SPAWN=1)
+        "/api/agents/spawn": lambda s, q, b: s.spawn(b),
         "/api/attach": lambda s, q, b: s.queue.attach(b),
         "/api/watch": lambda s, q, b: (200, s.busy.mtimes(b.get("files") if isinstance(b, dict) else None)),
     },
@@ -216,7 +231,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         sess, rest = self.target(u.path)
         if rest in EVENT_PATHS:
             return self._events(sess, urllib.parse.parse_qs(u.query))
-        if rest.startswith("/api/"):                     # /api 아래는 늘 JSON — 토큰 먼저, 모르는 주소·POST 전용 주소는 404(2b)
+        if rest.startswith("/api/") or rest in V1_GET:   # /api 아래는 늘 JSON — 토큰 먼저, 모르는 주소·POST 전용 주소는 404(2b)
             if not self._token_ok(sess):
                 return self._json(403, {"error": FORBIDDEN})
             if not self.router.knows("GET", rest):

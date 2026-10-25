@@ -4,19 +4,25 @@
   ProjectSession — out 하나: 아래 부품을 만들고 잇는다 · 쓰기 자물쇠 하나 · 토큰 하나 · 페이지(index.html + window.__hdState)
   StateStore     — <out>/.hd-canvas.json: rev · 합쳐 쓰기(409) · 자물쇠 없는 읽기(#271) · 깨진 파일 옮기기
   History        — <out>/.hd-history: 쓰기마다 원본 + manifest(apply · delete) · 되살리기(restore, 409 changed-since) · 정리(prune)
-  Queue          — 보낸 메모: 보낼 곳(agent · Paseo 목록 5초 캐시 · 저장소) · 요청문 대기열 파일 + paseo send(forward) · 에이전트 답(reply)
+  Queue          — 보낸 메모: 보낼 곳(agent · Paseo 목록 5초 캐시 · 저장소) · 요청문 대기열 파일 + 받는 곳 고르기(send — 접속 중이면 request.sent 이벤트,
+                   아니면 AgentAdapter: adapters.py) · 에이전트 답(reply → agent.reply)
+  AgentPresence  — 접속한 에이전트(presence.py, 47-5a): hello·맥박·임대 끝 = away·진행 한 줄
+  Ticker         — 세션 시계 스레드 하나(47-5a): 1초마다 presence.sweep · 한 시간마다 Archive.sweep(완료 메모 보관)
   Busy           — AI 작업 덮개 state.busy(claim · release) + 화면 파일 지켜보기(1초 mtime → seq — /api/files · /api/watch)
   AiUndo         — 덮개 동안 AI 가 쓴 화면 = 기록 한 줄 'AI 반영 · <화면>' + 되살리기 stamp(48c, GET /api/ai-writes)
-  Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관
+  Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep = 서버가 고르고 옮김, 고르기 = memo_archive.py)
   Builder        — 다시 빌드(한 번에 하나 — 동기 apply 의 빌드와 뒤 빌드가 겹치지 않게) · hd-data · 부품 견본 목록
   EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
 """
 import datetime, hashlib, json, os, pathlib, secrets, shutil, subprocess, sys, threading, time, urllib.parse
 
+import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import build_canvas
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
+import memo_archive as MA  # 완료 메모 보관 고르기(순수 Model, task 47-5a)
+import presence as PR  # 접속한 에이전트(task 47-5a)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit_one
 
@@ -27,7 +33,7 @@ import helper_model  # noqa: E402  — since·413 글·보관 줄·정리 고르
 
 HERE = pathlib.Path(__file__).resolve().parent
 BUILD = HERE / "build_canvas.py"
-PASEO_DEFAULT = pathlib.Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Paseo" / "resources" / "bin" / "paseo.cmd"
+from adapters import PASEO_DEFAULT, _paseo_args, _paseo_cmd  # noqa: E402,F401  — 예전 이름(helper 가 다시 내보냄)
 
 
 # ---------------------------------------------------------------- 편집 적용(out 안만 · 원본 남김 · 다시 빌드)
@@ -412,6 +418,20 @@ def delete_screens(out, ids, stamp=None, build=None):
     return {"deleted": gone, "cut": cut, "failed": failed, "stamp": w.stamp, "changed": changed}
 
 
+REVERTED = "reverted.json"                            # .hd-history/<stamp>/ 묘비 — 뒤 빌드가 깨져 서버가 되돌린 쓰기(47-5a)
+
+
+def tombstone(out, stamp, ids, reason=None):
+    """되돌린 쓰기의 기록을 묘비로: 원본·manifest 를 지우고 reverted.json {ids, reason} 만 남긴다(그 stamp 되살리기 = 200 reverted, 404 아님)."""
+    hist = pathlib.Path(out) / ".hd-history" / stamp
+    shutil.rmtree(hist, ignore_errors=True)
+    try:
+        hist.mkdir(parents=True, exist_ok=True)
+        (hist / REVERTED).write_text(json.dumps({"ids": list(ids), "reason": reason}, ensure_ascii=False), encoding="utf-8")
+    except OSError as e:
+        print("[hd] 되돌린 쓰기의 표시를 쓰지 못했어요(%s): %s — 그 되돌리기 줄은 '없는 기록'이 돼요" % (e, stamp), file=sys.stderr, flush=True)
+
+
 def restore(out, stamp, build=None, keep=False):
     """쓰기 하나 되살리기(2.2 D4) — manifest 의 파일이 쓴 직후 그대로일 때만. 아니면 아무것도 안 바꾸고 reason:'changed-since'.
     keep = 되살리기 전 지금 파일을 새 기록으로 남기고 답에 redo(그 stamp) — 그 stamp 를 되살리면 다시 하기(48c AI 반영 줄)."""
@@ -419,6 +439,8 @@ def restore(out, stamp, build=None, keep=False):
     root = out / ".hd-history"
     hist = root / str(stamp or "")
     man = hist / "manifest.json"
+    if stamp and hist.resolve().parent == root.resolve() and not man.is_file() and (hist / REVERTED).is_file():
+        return {"restored": [], "changed": [], "reverted": True}   # 뒤 빌드가 깨져 이미 되돌린 쓰기(47-5a 묘비) — 되돌릴 것이 없다
     if not stamp or hist.resolve().parent != root.resolve() or not man.is_file():
         return {"error": "없는 기록: %s" % stamp, "reason": "missing"}
     m = json.loads(man.read_text(encoding="utf-8"))
@@ -462,36 +484,28 @@ def restore(out, stamp, build=None, keep=False):
     return res
 
 
-def _paseo_cmd(paseo=None):
-    """Paseo CLI 경로 — 넘긴 것(--paseo-cmd·HD_PASEO_CMD, 테스트의 가짜) > 설치 위치(PASEO_DEFAULT) > PATH. 없으면 None."""
-    return paseo or (str(PASEO_DEFAULT) if PASEO_DEFAULT.exists() else shutil.which("paseo"))
-
-
-def _paseo_args(cmd, rest):
-    args = [cmd] + rest
-    return ["cmd", "/c"] + args if cmd.lower().endswith((".cmd", ".bat")) else args
-
-
-def forward(out, text, agent=None, paseo=None):
-    """결정형이 아닌 메모 → 터미널. 늘 대기열 파일에 쓰고, Paseo 에이전트가 있으면 그 파일을 paseo send 로 넘긴다."""
+def queue_file(out, text):
+    """요청문 대기열 파일 <out>/.hd-queue/<stamp>.txt 하나(늘 씀 — 어디로 보내든 기록) → 경로."""
     q = pathlib.Path(out).resolve() / ".hd-queue"
     q.mkdir(exist_ok=True)
     p = q / (datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".txt")
     p.write_text(text, encoding="utf-8")
-    if agent:
-        cmd = _paseo_cmd(paseo)
-        if cmd:
-            args = _paseo_args(cmd, ["send", agent, "--prompt-file", str(p), "--no-wait"])
-            try:
-                r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
-                if r.returncode == 0:
-                    try:
-                        p.with_suffix(".sent").write_text("", encoding="utf-8")   # 보냄 표시 — 7일 뒤 정리(#281)
-                    except OSError as e:
-                        print("[hd] 대기열 보냄 표시를 쓰지 못했어요(%s): %s" % (e, p), file=sys.stderr, flush=True)
-                    return {"via": "paseo", "agent": agent, "path": str(p)}
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+    return p
+
+
+def mark_sent(p):                                    # 보냄 표시 — 7일 뒤 정리(#281). 어댑터(paseo·claude)가 받았을 때만
+    try:
+        p.with_suffix(".sent").write_text("", encoding="utf-8")
+    except OSError as e:
+        print("[hd] 대기열 보냄 표시를 쓰지 못했어요(%s): %s" % (e, p), file=sys.stderr, flush=True)
+
+
+def forward(out, text, agent=None, paseo=None):
+    """결정형이 아닌 메모 → 터미널(옛 이름 — 받는 곳 고르기는 Queue.send). 늘 대기열 파일에 쓰고, Paseo 에이전트가 있으면 PaseoAdapter(paseo send)로 넘긴다."""
+    p = queue_file(out, text)
+    if agent and AD.PaseoAdapter(lambda: _paseo_cmd(paseo)).send(p, text, agent)[0]:
+        mark_sent(p)
+        return {"via": "paseo", "agent": agent, "path": str(p)}
     return {"via": "queue", "path": str(p)}
 
 
@@ -557,7 +571,8 @@ def agents_get(srv, paseo, now=None, auto=False):
         hit = srv.agents_cache
         if hit is None or t - hit[0] >= AGENTS_TTL:
             hit = srv.agents_cache = (t, list_agents(paseo))
-    return dict(hit[1], current=srv.agent, repo=srv.repo)
+    connected = srv.presence.list()["agents"] if getattr(srv, "presence", None) is not None else []   # 47-5a: 접속한 에이전트(AgentPresence)
+    return dict(hit[1], current=srv.agent, repo=srv.repo, connected=connected)
 
 
 def watch(out, files):
@@ -991,7 +1006,7 @@ class History:
                     r = restore(self.out, w["stamp"], build=NO_BUILD)
                     if "restored" in r:
                         reverted[:0] = w["ids"]
-                        shutil.rmtree(self.out / ".hd-history" / w["stamp"], ignore_errors=True)
+                        tombstone(self.out, w["stamp"], w["ids"], "뒤 빌드 실패")   # 캔버스 되돌리기 줄이 '없는 기록' 대신 아무 일 없음(47-5a)
                     else:
                         kept[:0] = w["ids"]
                         print("[hd] 뒤 빌드 실패 — 쓰기 %s 를 되돌리지 못했어요(%s)" % (w["stamp"], r.get("error")), file=sys.stderr, flush=True)
@@ -1022,18 +1037,65 @@ class History:
         return prune(self.out)
 
 
-class Queue:
-    """보낸 메모 — 보낼 곳(agent, attach 로 바뀜 · Paseo 목록 5초 캐시 · 저장소 repo) · 요청문 보내기(forward) · 에이전트 답(reply).
-    칸 이름 agent · repo · agents_cache · agents_lock 은 agents_get 이 읽는다."""
+NOTES_MAX = 200                                      # /api/forward notes(메모 id) 개수 한도
 
-    def __init__(self, out, lock, agent=None, paseo=None, on_attach=None, bus=None):
-        self.out, self.lock, self.paseo, self.on_attach, self.bus = out, lock, paseo, on_attach, bus
+
+def check_send(body):
+    """POST /api/forward 본문 {text, to?, notes?} → ((text, to | None, notes), None) | (None, 한국어 오류)."""
+    to = body.get("to")
+    err = hd_model.agent_error(to)
+    if err:
+        return None, "to: " + err
+    notes = body.get("notes", [])
+    if not isinstance(notes, list) or len(notes) > NOTES_MAX or not all(isinstance(n, str) and n for n in notes):
+        return None, "notes: 메모 id 글 목록(%d개까지)이어야 해요" % NOTES_MAX
+    return (str(body.get("text") or ""), to, list(notes)), None
+
+
+class Queue:
+    """보낸 메모 — 보낼 곳(agent, attach 로 바뀜 · Paseo 목록 5초 캐시 · 저장소 repo) · 요청문 보내기(send: 대기열 파일 + 받는 곳 고르기) · 에이전트 답(reply).
+    받는 곳(adapters.choose): 접속 중이고 이벤트를 읽는 에이전트 = request.sent 이벤트(터미널 없음) · 아니면 어댑터(paseo · claude · queue).
+    칸 이름 agent · repo · agents_cache · agents_lock · presence 는 agents_get 이 읽는다."""
+
+    def __init__(self, out, lock, agent=None, paseo=None, on_attach=None, bus=None, presence=None, config=None):
+        self.out, self.lock, self.paseo, self.on_attach, self.bus, self.presence = out, lock, paseo, on_attach, bus, presence
         self.agent = agent or None
         self.repo = project_repo(out)
         self.agents_cache, self.agents_lock = None, threading.Lock()
+        cfg = config or {}
+        self.adapters = {"paseo": AD.PaseoAdapter(lambda: _paseo_cmd(self.paseo)),
+                         "claude": AD.ClaudeCliAdapter(lambda: cfg.get("claude_cmd") or shutil.which("claude"),
+                                                       enabled=bool(cfg.get("claude_wake")), cwd=self.repo or str(out)),
+                         "queue": AD.NoneAdapter()}
 
-    def forward(self, text):
-        return forward(self.out, text, self.agent, self.paseo)
+    def forward(self, text):                         # 옛 이름(받는 곳 = 붙은 에이전트, 메모 id 없음)
+        return self.send({"text": text})[1]
+
+    def send(self, body):
+        """POST /api/forward {text, to?, notes?} → (code, {via, path, agent?, event}). 늘 대기열 파일을 쓰고 request.sent 를 낸다."""
+        got, err = check_send(body)
+        if err:
+            return 400, {"error": err}
+        text, to, notes = got
+        target = to or self.agent
+        entry = self.presence.get(target) if (target and self.presence is not None) else None
+        how = AD.choose(target, entry, {k: a.ready() for k, a in self.adapters.items()})
+        p = queue_file(self.out, text)
+        via = how
+        if how in ("paseo", "claude"):
+            ok, why = self.adapters[how].send(p, text, entry or target)
+            if ok:
+                mark_sent(p)
+            else:
+                print("[hd] %s 로 넘기지 못해 대기열 파일로 남겨요(%s): %s" % (how, why, p.name), file=sys.stderr, flush=True)
+                via = "queue"
+        ev = _emit(self.bus, "request.sent", to=target, via=via, notes=notes, text=text, path=str(p))
+        res = {"via": via, "path": str(p)}
+        if via != "queue":
+            res["agent"] = target
+        if ev is not None:
+            res["event"] = ev["id"]
+        return 200, res
 
     def agents(self, auto=False):
         return agents_get(self, self.paseo, auto=auto)
@@ -1057,6 +1119,9 @@ class Queue:
             code, res = reply_post(self.out, body)
             if code == 200:
                 _emit(self.bus, "notes.changed", rev=res["rev"])
+                by = body["reply"].get("by")                # 47-5a: 에이전트가 답했다(캔버스 대화창 · 접속 칩)
+                _emit(self.bus, "agent.reply", note=_str(res.get("note")), kind=str(body["reply"].get("kind")), screen=_str(res.get("screen")),
+                      agent=_str(by), status=res["status"])
             return code, res
 
 
@@ -1192,10 +1257,10 @@ class AiUndo:
 
 
 class Archive:
-    """<out>/.hd-notes-archive.jsonl — 완료 메모 덧붙이기(자물쇠 안) · 마지막 2000 줄 읽기."""
+    """<out>/.hd-notes-archive.jsonl — 완료 메모 덧붙이기(자물쇠 안) · 마지막 2000 줄 읽기 · sweep = 서버가 고르고 옮기기(47-5a, Ticker 가 한 시간마다)."""
 
-    def __init__(self, out, lock):
-        self.out, self.lock = out, lock
+    def __init__(self, out, lock, bus=None):
+        self.out, self.lock, self.bus = out, lock, bus
 
     def post(self, body):
         with self.lock:
@@ -1204,12 +1269,66 @@ class Archive:
     def get(self):
         return archive_get(self.out)
 
+    def sweep(self, now_ms=None):
+        """오래된·넘친 완료 메모(memo_archive.pick)를 보관 파일로 옮기고 상태에서 뺀다(rev+1 · notes.changed) → 옮긴 수.
+        캔버스 탭도 같은 일을 한다(view-state-sync) — 보관 파일은 id 로 겹치지 않고, 캔버스는 notes.changed 로 다시 읽는다."""
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        with self.lock:
+            cur = state_load(self.out)
+            notes = cur["state"].get("notes")
+            picks = MA.pick(notes, now_ms)
+            if not picks:
+                return 0
+            code, res = archive_post(self.out, {"notes": picks})
+            if code != 200:
+                print("[hd] 완료 메모를 보관하지 못했어요: %s" % res.get("error"), file=sys.stderr, flush=True)
+                return 0
+            rev = _state_save(self.out, cur["rev"] + 1, dict(cur["state"], notes=MA.without(notes, picks)))
+            _emit(self.bus, "notes.changed", rev=rev)
+        print("[hd] 완료 메모 %d개를 보관으로 옮겼어요(%s)" % (len(picks), ARCHIVE_FILE), file=sys.stderr, flush=True)
+        return len(picks)
+
+
+PRESENCE_EVERY = 1.0                                 # 접속 임대 끝 보기(초)
+ARCHIVE_EVERY = 3600.0                               # 완료 메모 보관(초) — 캔버스 탭의 '한 시간에 한 번'과 같은 규칙, 탭이 없어도
+TICK = 0.5
+
+
+class Ticker:
+    """세션 시계 — 일(간격 초, fn)마다 처음 한 번, 그 뒤 간격마다. step(now) 는 I/O 가 없다(unit), 스레드는 start()·close().
+    한 일이 실패해도 [hd] 한 줄 뒤 다른 일은 계속."""
+
+    def __init__(self, tasks, clock=time.monotonic):
+        self.tasks, self.clock = list(tasks), clock
+        self.next = [None] * len(self.tasks)
+        self.stop = threading.Event()
+
+    def step(self, now):
+        for i, (every, fn) in enumerate(self.tasks):
+            if self.next[i] is None or now >= self.next[i]:
+                self.next[i] = now + every
+                try:
+                    fn()
+                except Exception as e:                # noqa: BLE001 — 세션 시계는 멈추지 않는다(한 줄 남김)
+                    print("[hd] 세션 시계 일이 실패했어요(%s): %s" % (getattr(fn, "__name__", fn), e), file=sys.stderr, flush=True)
+
+    def start(self):
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def close(self):
+        self.stop.set()
+
+    def _loop(self):
+        while not self.stop.is_set():
+            self.step(self.clock())
+            self.stop.wait(TICK)
+
 
 class ProjectSession:
     """프로젝트(out) 하나 — 부품 객체를 만들고 잇는다. 쓰기 자물쇠 하나(상태 파일·화면 파일·보관 파일 쓰기는 한 번에 하나) · 토큰 하나.
     open() = 시작 정리(깨진 상태 파일 옮기기 · 오래된 기록 정리) · start() = 지켜보기 시작 · close() = 멈춤."""
 
-    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None):
+    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None, config=None):
         self.out = pathlib.Path(out).resolve()
         self.token = token or secrets.token_urlsafe(18)
         self.lock = threading.Lock()
@@ -1221,8 +1340,12 @@ class ProjectSession:
         self.history = History(self.out, self.lock, self.builder, self.busy.absorb, self.events, lambda: self.busy.watch.seq)
         self.rebuilder = RB.Rebuilder(lambda: self.builder.run(self.out), self.history.revert_writes, self.events.publish)
         self.history.rebuilder = self.rebuilder
-        self.queue = Queue(self.out, self.lock, agent, paseo, on_attach, self.events)
-        self.archive = Archive(self.out, self.lock)
+        self.config = config if config is not None else AD.config_from_env(os.environ)   # 47-5a: claude 깨우기 · 새 에이전트 열기(기본 꺼짐)
+        self.presence = PR.AgentPresence(self.events.publish)
+        self.queue = Queue(self.out, self.lock, agent, paseo, on_attach, self.events, self.presence, self.config)
+        self.spawner = AD.PaseoSpawner(lambda: _paseo_cmd(paseo), enabled=bool(self.config.get("allow_spawn")))
+        self.archive = Archive(self.out, self.lock, self.events)
+        self.ticker = Ticker([(PRESENCE_EVERY, self.presence.sweep), (ARCHIVE_EVERY, self.archive.sweep)])
 
     def open(self):
         state_load(self.out)                         # 깨진 상태 파일을 옮겨 둔다(멈추지 않음)
@@ -1231,9 +1354,15 @@ class ProjectSession:
 
     def start(self):
         self.busy.start()
+        self.ticker.start()
         return self
 
+    def spawn(self, body):
+        """POST /agents/spawn {kind} — 기본 꺼짐(HD_ALLOW_SPAWN=1). 일하는 폴더 = 저장소(없으면 out)."""
+        return self.spawner.spawn(body, self.queue.repo or str(self.out), self.events.project)
+
     def close(self):
+        self.ticker.close()
         self.busy.close()
         self.rebuilder.close()                        # 다음 뒤 빌드는 시작하지 않는다(돌고 있는 것은 끝까지) — 남은 쓰기는 다음 열기의 빌드가 담는다
         if self.rebuilder.pending():

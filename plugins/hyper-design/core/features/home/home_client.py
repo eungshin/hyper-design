@@ -211,9 +211,9 @@ def reveal(out):
     if not o.is_dir():
         raise C.NotFound("폴더가 없어요: %s" % o)
     if sys.platform == "win32":
-        subprocess.Popen([str(pathlib.Path(os.environ.get("SystemRoot", r"C:\Windows")) / "explorer.exe"), str(o)])
+        subprocess.Popen([str(pathlib.Path(os.environ.get("SystemRoot", r"C:\Windows")) / "explorer.exe"), str(o)], creationflags=NO_WINDOW)
     else:
-        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(o)])
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(o)], creationflags=NO_WINDOW)   # NO_WINDOW = 0 밖 Windows
 
 
 PICK_PS = r"""

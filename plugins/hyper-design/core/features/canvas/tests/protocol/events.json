@@ -88,7 +88,7 @@
         {"send": {"method": "POST", "path": "/v1/p/proj-c/api/claim", "token": "${session}", "body": {"screen": "home", "by": "t", "note": "working"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 6}}}},
         {"send": {"method": "POST", "path": "/v1/p/proj-c/api/release", "token": "${session}", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"released": {"$eq": true}}}},
         {"send": {"method": "POST", "path": "/v1/p/proj-c/api/release", "token": "${session}", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"released": {"$eq": false}}}},
-        {"events": "s", "types": ["notes.changed", "notes.changed", "claim", "release"], "shapes": [{"rev": {"$eq": 4}}, {"rev": {"$eq": 5}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 6}, "by": {"$eq": "t"}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 7}}]}
+        {"events": "s", "types": ["notes.changed", "notes.changed", "agent.reply", "claim", "release"], "shapes": [{"rev": {"$eq": 4}}, {"rev": {"$eq": 5}}, {"note": {"$eq": "n1"}, "kind": {"$eq": "일부"}, "agent": "null", "status": {"$eq": "partial"}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 6}, "by": {"$eq": "t"}}, {"screen": {"$eq": "home"}, "rev": {"$eq": 7}}]}
       ]},
       {"name": "sync apply = screen.written after the build, no build events", "steps": [
         {"open": "s", "request": {"path": "/api/events?hd=${session}", "token": false}},
