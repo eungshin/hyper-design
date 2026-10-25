@@ -3,16 +3,21 @@
 Router.call(method, path, query, body, session) → (code, 답[, after]) | None(모르는 주소). after = 답을 보낸 뒤 부를 것(/api/stop).
 세션 주소(ROUTES)는 ProjectSession 의 부품으로, 서버 주소(/api/stop · home_api 의 프로젝트·탭·홈)는 서버가 넘긴 것으로 간다.
 SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나로, 허브가 /v1/p/<이름>/ 아래로 같은 것을 쓴다).
+이벤트 흐름(task 47-4a) GET /events · /api/events = 세션 EventBus 를 SSE 로(_events) — 계약 tests/protocol/events.json.
 """
-import json, pathlib, sys, urllib.parse
+import json, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
+import events as EV
 import session as S
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "home"))
 import home_api  # noqa: E402  — 프로젝트·탭·홈 라우트는 허브(hd home)와 같은 모듈 하나(같은 JSON)
 
 FORBIDDEN = "토큰 또는 주소가 맞지 않아요"
+EVENT_PATHS = ("/events", "/api/events")             # /v1/p/<이름>/events · 옛 뿌리 /api/events(세션 토큰) · 도우미 /api/events
+HEARTBEAT = 15.0                                     # 이만큼 조용하면 ': hb' 주석(프록시·SDK 가 끊긴 줄 알지 않게)
+POLL = 1.0                                           # 이만큼마다 손님이 닫았는지 본다(닫힌 흐름의 스레드가 남지 않게)
 
 
 def _since_files(q):
@@ -64,7 +69,8 @@ ROUTES = {
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
-        "/api/apply": _obj(lambda s, q, b: s.history.apply(b.get("edits") or [])),
+        "/api/apply": _obj(lambda s, q, b: s.history.apply_async(b.get("edits") or []) if b.get("async") is True   # 47-4a 고르기: 정확히 true 일 때만
+                           else s.history.apply(b.get("edits") or [])),
         "/api/delete": _obj(lambda s, q, b: s.history.delete([str(i) for i in b.get("screens") or []])),
         "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""), keep=b.get("keep") is True, notify=b.get("notify") is True)),
         "/api/reply": lambda s, q, b: s.queue.reply(b),
@@ -143,14 +149,71 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
+    def _given_token(self):                          # 머리글, 없으면 이벤트 흐름의 ?hd=(EventSource 는 머리글을 못 보낸다)
+        return self.headers.get("X-HD-Token") or getattr(self, "_query_token", None)
+
     def _token_ok(self, sess):
-        return self.headers.get("X-HD-Token") == sess.token
+        return self._given_token() == sess.token
+
+    # ------------------------------------------------------------ 이벤트 흐름(SSE, 47-4a)
+    def _peer_gone(self):
+        """손님이 연결을 닫았나 — 읽을 것이 있는데 0 바이트면 닫힘(select 0초 + MSG_PEEK, 막히지 않음)."""
+        try:
+            r, _, _ = select.select([self.connection], [], [], 0)
+            return bool(r) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
+
+    def _events(self, sess, q):
+        self._query_token = q.get("hd", [None])[0]
+        if not self._token_ok(sess):
+            return self._json(403, {"error": FORBIDDEN})
+        last = self.headers.get("Last-Event-ID")
+        want = EV.parse_last(last if last is not None else q.get("since", [None])[0])
+        sub, back, reset = sess.events.subscribe(want)
+        if sub is None:
+            return self._json(503, {"error": "이 프로젝트에 열린 이벤트 흐름이 너무 많아요(%d) — 안 쓰는 창을 닫으세요" % EV.MAX_SUBS})
+        self.close_connection = True
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Connection", "close")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            self.wfile.write(EV.RETRY_FRAME)
+            if reset:
+                self.wfile.write(EV.frame(EV.reset_event(sess.events, reset)))
+            for ev in back:
+                self.wfile.write(EV.frame(ev))
+            self.wfile.flush()
+            quiet = time.monotonic()
+            while True:
+                ev = sub.get(POLL)
+                if ev is EV.CLOSED:
+                    break
+                if ev is None:
+                    if self._peer_gone():
+                        break
+                    if time.monotonic() - quiet < HEARTBEAT:
+                        continue
+                    self.wfile.write(EV.HEARTBEAT_FRAME)
+                else:
+                    self.wfile.write(EV.frame(ev))
+                self.wfile.flush()
+                quiet = time.monotonic()
+        except OSError:                              # 손님이 끊음(BrokenPipe · ConnectionReset · ConnectionAborted) — 조용히 끝
+            pass
+        finally:
+            sess.events.unsubscribe(sub)
+        return None
 
     def do_GET(self):
         if not self._host_ok():
             return self._json(403, {"error": "주소가 맞지 않아요"})           # 47-2 2b: 허브처럼 JSON(전에는 HTML)
         u = urllib.parse.urlparse(self.path)
         sess, rest = self.target(u.path)
+        if rest in EVENT_PATHS:
+            return self._events(sess, urllib.parse.parse_qs(u.query))
         if rest.startswith("/api/"):                     # /api 아래는 늘 JSON — 토큰 먼저, 모르는 주소·POST 전용 주소는 404(2b)
             if not self._token_ok(sess):
                 return self._json(403, {"error": FORBIDDEN})

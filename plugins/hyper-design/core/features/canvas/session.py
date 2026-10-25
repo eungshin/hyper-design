@@ -8,12 +8,15 @@
   Busy           — AI 작업 덮개 state.busy(claim · release) + 화면 파일 지켜보기(1초 mtime → seq — /api/files · /api/watch)
   AiUndo         — 덮개 동안 AI 가 쓴 화면 = 기록 한 줄 'AI 반영 · <화면>' + 되살리기 stamp(48c, GET /api/ai-writes)
   Archive        — <out>/.hd-notes-archive.jsonl 완료 메모 보관
-  Builder        — 다시 빌드 · hd-data · 부품 견본 목록
+  Builder        — 다시 빌드(한 번에 하나 — 동기 apply 의 빌드와 뒤 빌드가 겹치지 않게) · hd-data · 부품 견본 목록
+  EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
 """
 import datetime, hashlib, json, os, pathlib, secrets, shutil, subprocess, sys, threading, time, urllib.parse
 
 import build_canvas
+import events as EV  # 바뀐 것 알림(Model, task 47-4a)
+import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit_one
 
@@ -36,7 +39,12 @@ def _sha(p):                                         # 파일 sha256 | None(없�
     return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None
 
 
+BUILD_FAIL = "캔버스 다시 빌드 실패"                  # 답·이벤트가 다시 빌드 실패를 알아보는 글(앞부분)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: 자식 프로세스가 콘솔 창을 띄웠다 닫지 않게(창 없이 뜬 도우미에서 편집마다 깜빡임)
+
+
+def NO_BUILD(out):                                   # async apply: 쓰기만 하고 빌드는 Rebuilder 가 뒤에서(47-4a)
+    return subprocess.CompletedProcess([], 0, "", "")
 
 
 def run_build(out, script=None):
@@ -95,7 +103,7 @@ class _Writes:
         r = self.build(self.out)
         if r.returncode != 0:
             self.undo(); self.build(self.out)
-            return "캔버스 다시 빌드 실패 — 되돌림: " + (r.stderr or "")[-300:]
+            return BUILD_FAIL + " — 되돌림: " + (r.stderr or "")[-300:]
         files = {rel: {"before": had, "after_sha": _sha(self.out / rel)} for rel, had in sorted(self.before.items())}
         (self.hist / "manifest.json").write_text(json.dumps({"files": files, "changed": changed}, ensure_ascii=False, indent=2), encoding="utf-8")
         prune(self.out)                              # 쓸 때마다 기록이 늘어나므로 그때 오래된 것을 정리(#281)
@@ -329,7 +337,7 @@ def restore(out, stamp, build=None, keep=False):
         build(out)
         if w is not None:
             shutil.rmtree(w.hist, ignore_errors=True)
-        return {"error": "캔버스 다시 빌드 실패 — 되돌림: " + (r.stderr or "")[-300:]}
+        return {"error": BUILD_FAIL + " — 되돌림: " + (r.stderr or "")[-300:]}
     res = {"restored": sorted(files), "changed": m.get("changed") or []}
     if w is not None:                                # 다시 하기 = 이 기록을 되살리기(같은 규칙: 그 뒤 파일이 바뀌면 409)
         w.hist.mkdir(parents=True, exist_ok=True)
@@ -753,11 +761,23 @@ def _code(r):                                        # restore·apply·delete �
     return {"changed-since": 409, "missing": 404}.get(r.get("reason"), 500 if "error" in r else 200)
 
 
+def _emit(bus, type_, **data):                       # 버스가 없으면(부품만 따로 쓰는 테스트) 알리지 않는다
+    return bus.publish(type_, **data) if bus is not None else None
+
+
+def _str(v):
+    return v if isinstance(v, str) else None
+
+
 class Builder:
     """다시 빌드 · hd-data · 부품 목록 — out 하나. run(out) = 빌드 하나(기본 작업 트리, CLI 도우미는 build_ref — helper 가 넘긴다)."""
 
     def __init__(self, out, run=None):
-        self.out, self.run = out, run or run_build
+        self.out, self._run, self.lock = out, run or run_build, threading.Lock()
+
+    def run(self, out):                              # 빌드 하나씩(동기 apply 의 빌드 · 뒤 빌드 · 되돌린 뒤 빌드가 같은 index.html 을 쓴다)
+        with self.lock:
+            return self._run(out)
 
     def build(self):
         return self.run(self.out)
@@ -772,8 +792,8 @@ class Builder:
 class StateStore:
     """<out>/.hd-canvas.json — 읽기는 자물쇠 없이(#271, 깨졌을 때만 자물쇠 안에서 옮김), 쓰기(PUT 합치기·rev+1)는 세션 자물쇠 안에서."""
 
-    def __init__(self, out, lock):
-        self.out, self.lock = out, lock
+    def __init__(self, out, lock, bus=None):
+        self.out, self.lock, self.bus = out, lock, bus
 
     def load(self):
         return state_load(self.out)
@@ -790,40 +810,93 @@ class StateStore:
 
     def put(self, body):
         with self.lock:                              # rev 비교와 쓰기 사이에 끼어들지 않게
-            return state_put(self.out, body)
+            code, res = state_put(self.out, body)
+            if code == 200:
+                _emit(self.bus, "notes.changed", rev=res["rev"])
+            return code, res
 
     def inject(self):
         return state_inject(self.out, self.lock)
 
 
 class History:
-    """<out>/.hd-history — 화면 파일 쓰기(apply · delete)마다 원본 + manifest, 되살리기(restore). 쓰기는 하나씩, 끝나면 on_written(지켜보기 기준 옮김)."""
+    """<out>/.hd-history — 화면 파일 쓰기(apply · delete)마다 원본 + manifest, 되살리기(restore). 쓰기는 하나씩, 끝나면 on_written(지켜보기 기준 옮김).
+    쓰기마다 screen.written(by human) · 다시 빌드가 깨지면 build.failed. apply_async = 쓰기만 하고 바로 답, 빌드는 rebuilder(47-4a)."""
 
-    def __init__(self, out, lock, builder, on_written=None):
+    def __init__(self, out, lock, builder, on_written=None, bus=None, seq=None):
         self.out, self.lock, self.builder, self.on_written = out, lock, builder, on_written
+        self.bus, self.seq, self.rebuilder = bus, seq or (lambda: 0), None
 
-    def _write(self, fn):
+    def _written(self, r, ids, stamp):
+        """쓰기 답 → 이벤트(자물쇠 안에서). 쓴 것이 있으면 screen.written, 다시 빌드가 깨져 되돌렸으면 build.failed. → screen.written 이벤트 | None."""
+        if r.get("changed") and (r.get("stamp") or "restored" in r):
+            return _emit(self.bus, "screen.written", screens=list(r["changed"]), by="human", rev=self.seq(), stamp=stamp)
+        broke = [f for f in r.get("failed") or [] if str(f.get("reason", "")).startswith(BUILD_FAIL)]
+        if broke or str(r.get("error", "")).startswith(BUILD_FAIL):
+            _emit(self.bus, "build.failed", reason=broke[0]["reason"] if broke else r["error"], reverted=[f["id"] for f in broke] or list(ids),
+                  kept=[], stamps=[], ids=[f["id"] for f in broke] or list(ids), screens=[], repaired=None)
+        return None
+
+    def _write(self, fn, ids=(), key="stamp"):
         with self.lock:
             try:
                 r = fn()
             finally:
                 if self.on_written:
                     self.on_written()                # 스스로 쓴 화면 파일은 '바뀜'으로 알리지 않는다(캔버스가 그 카드를 이미 다시 싣는다)
+            self._written(r, ids, r.get(key))
         return _code(r), r
 
     def apply(self, edits):
         return self._write(lambda: apply_edits(self.out, edits, build=self.builder.run))
 
+    def apply_async(self, edits):
+        """{edits, async:true} — 화면 파일만 쓰고(원본·manifest 는 같음) 바로 답 {accepted, failed, stamp, changed, paths, rev, async}.
+        rev = 이 쓰기의 screen.written 이벤트 id(쓴 것이 없으면 지금 newest). 빌드는 rebuilder 가 뒤에서 하나씩(build.* 이벤트)."""
+        ev = None
+        with self.lock:
+            try:
+                r = apply_edits(self.out, edits, build=NO_BUILD)
+            finally:
+                if self.on_written:
+                    self.on_written()
+            if r["applied"]:
+                ev = self._written(r, (), r.get("stamp"))
+                if self.rebuilder is not None:
+                    self.rebuilder.submit({"stamp": r["stamp"], "ids": list(r["applied"]), "screens": list(r["changed"])})
+        rev = ev["id"] if ev else (self.bus.last if self.bus is not None else 0)
+        return 200, {"accepted": r["applied"], "failed": r["failed"], "stamp": r["stamp"], "changed": r["changed"],
+                     "paths": r.get("paths") or {}, "rev": rev, "async": True}
+
+    def revert_writes(self, writes):
+        """뒤 빌드가 깨졌다 — 아직 빌드로 확인 안 된 쓰기들을 새것부터 되살리기(빌드 없이)로 되돌리고 그 기록을 지운다 → (되돌린 편집 id, 못 되돌린 편집 id)."""
+        reverted, kept = [], []
+        with self.lock:
+            try:
+                for w in reversed(writes):
+                    r = restore(self.out, w["stamp"], build=NO_BUILD)
+                    if "restored" in r:
+                        reverted[:0] = w["ids"]
+                        shutil.rmtree(self.out / ".hd-history" / w["stamp"], ignore_errors=True)
+                    else:
+                        kept[:0] = w["ids"]
+                        print("[hd] 뒤 빌드 실패 — 쓰기 %s 를 되돌리지 못했어요(%s)" % (w["stamp"], r.get("error")), file=sys.stderr, flush=True)
+            finally:
+                if self.on_written:
+                    self.on_written()
+        return reverted, kept
+
     def delete(self, ids):
-        return self._write(lambda: delete_screens(self.out, ids, build=self.builder.run))
+        return self._write(lambda: delete_screens(self.out, ids, build=self.builder.run), ids)
 
     def restore(self, stamp, keep=False, notify=False):
         """notify = 되살린 화면 파일을 지켜보기가 '바뀜'으로 알리게(그 카드를 캔버스가 다시 싣는다 — 48c 기록 패널의 AI 줄 되돌리기)."""
         if notify:
             with self.lock:
                 r = restore(self.out, stamp, build=self.builder.run, keep=keep)
+                self._written(r, (), r.get("redo"))
             return _code(r), r
-        return self._write(lambda: restore(self.out, stamp, build=self.builder.run, keep=keep))
+        return self._write(lambda: restore(self.out, stamp, build=self.builder.run, keep=keep), key="redo")
 
     def prune(self):
         return prune(self.out)
@@ -833,8 +906,8 @@ class Queue:
     """보낸 메모 — 보낼 곳(agent, attach 로 바뀜 · Paseo 목록 5초 캐시 · 저장소 repo) · 요청문 보내기(forward) · 에이전트 답(reply).
     칸 이름 agent · repo · agents_cache · agents_lock 은 agents_get 이 읽는다."""
 
-    def __init__(self, out, lock, agent=None, paseo=None, on_attach=None):
-        self.out, self.lock, self.paseo, self.on_attach = out, lock, paseo, on_attach
+    def __init__(self, out, lock, agent=None, paseo=None, on_attach=None, bus=None):
+        self.out, self.lock, self.paseo, self.on_attach, self.bus = out, lock, paseo, on_attach, bus
         self.agent = agent or None
         self.repo = project_repo(out)
         self.agents_cache, self.agents_lock = None, threading.Lock()
@@ -861,14 +934,17 @@ class Queue:
 
     def reply(self, body):
         with self.lock:
-            return reply_post(self.out, body)
+            code, res = reply_post(self.out, body)
+            if code == 200:
+                _emit(self.bus, "notes.changed", rev=res["rev"])
+            return code, res
 
 
 class Busy:
     """AI 작업 덮개 state.busy(claim · release, 상태 파일 자물쇠 안) + 화면 파일 지켜보기(1초마다 mtime → FileWatch seq)."""
 
-    def __init__(self, out, lock, ai=None):
-        self.out, self.lock, self.ai = out, lock, ai
+    def __init__(self, out, lock, ai=None, bus=None):
+        self.out, self.lock, self.ai, self.bus = out, lock, ai, bus
         self.watch, self.stop = FileWatch(), threading.Event()
 
     def claim(self, body):
@@ -876,13 +952,17 @@ class Busy:
             code, res = claim_post(self.out, body)
             if code == 200 and self.ai is not None:
                 self.ai.begin(res["screen"], res["file"])   # 48c — AI 가 쓰기 전 모습
+            if code == 200:
+                _emit(self.bus, "claim", screen=res["screen"], rev=res["rev"], by=_str(body.get("by")), note=_str(body.get("note")))
         return code, res
 
     def release(self, body):
         with self.lock:
             code, res = release_post(self.out, body)
             if code == 200 and self.ai is not None:
-                self.ai.end(body["screen"])             # 48c — 마지막으로 보고 끝
+                self._ai(body["screen"], self.ai.end)   # 48c — 마지막으로 보고 끝
+            if code == 200 and res.get("released"):
+                _emit(self.bus, "release", screen=body["screen"], rev=res["rev"])
         return code, res
 
     def mtimes(self, files):
@@ -908,9 +988,21 @@ class Busy:
             with self.lock:                          # 도우미가 쓰는 중(apply 의 쓰기~빌드)에는 보지 않는다 — 다 쓴 뒤 absorb 가 기준을 옮긴다
                 m = scan(self.out, cache)
                 if m is not None:
-                    for sid in self.watch.tick(m):
+                    changed = self.watch.tick(m)
+                    if changed:
+                        _emit(self.bus, "screen.written", screens=changed, by="ai", rev=self.watch.seq, stamp=None)
+                    for sid in changed:
                         if self.ai is not None:
-                            self.ai.seen(sid)
+                            self._ai(sid, self.ai.seen)
+
+    def _ai(self, sid, fn):
+        """AiUndo.seen · end 를 부르고, 기록 줄이 생기거나(record) 기준이 옮겨지면(update) ai.write — GET /api/ai-writes 의 한 줄 + act."""
+        n = len(self.ai.log)
+        act = fn(sid)                                # seen → 'record'|'update'|None · end → 끝난 항목(마지막으로 seen 을 부른다)
+        act = act if act in ("record", "update") else ("record" if len(self.ai.log) > n else None)
+        row = self.ai.log[-1] if len(self.ai.log) > n else self.ai.row(sid)
+        if act in ("record", "update") and row is not None:
+            _emit(self.bus, "ai.write", seq=row["seq"], stamp=row["stamp"], screen=row["screen"], label=row["label"], act=act)
 
 
 class AiUndo:
@@ -967,6 +1059,10 @@ class AiUndo:
     def since(self, since):
         return helper_model.ai_since(self.log, since)
 
+    def row(self, screen):                           # 그 화면을 지금 추적 중인 기록 줄 | None
+        e = self.track.get(screen)
+        return next((x for x in reversed(self.log) if e and x["stamp"] == e["stamp"]), None)
+
     def _title(self, screen):
         try:
             return next((x.get("title") for x in json.loads((self.out / "screens.json").read_text(encoding="utf-8")).get("screens", [])
@@ -993,16 +1089,19 @@ class ProjectSession:
     """프로젝트(out) 하나 — 부품 객체를 만들고 잇는다. 쓰기 자물쇠 하나(상태 파일·화면 파일·보관 파일 쓰기는 한 번에 하나) · 토큰 하나.
     open() = 시작 정리(깨진 상태 파일 옮기기 · 오래된 기록 정리) · start() = 지켜보기 시작 · close() = 멈춤."""
 
-    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None):
+    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None):
         self.out = pathlib.Path(out).resolve()
         self.token = token or secrets.token_urlsafe(18)
         self.lock = threading.Lock()
+        self.events = EV.EventBus(name or hd_model.project_name(self.out.name, self.out.parent.name))
         self.builder = Builder(self.out, build)
-        self.store = StateStore(self.out, self.lock)
+        self.store = StateStore(self.out, self.lock, self.events)
         self.ai = AiUndo(self.out)
-        self.busy = Busy(self.out, self.lock, self.ai)
-        self.history = History(self.out, self.lock, self.builder, self.busy.absorb)
-        self.queue = Queue(self.out, self.lock, agent, paseo, on_attach)
+        self.busy = Busy(self.out, self.lock, self.ai, self.events)
+        self.history = History(self.out, self.lock, self.builder, self.busy.absorb, self.events, lambda: self.busy.watch.seq)
+        self.rebuilder = RB.Rebuilder(lambda: self.builder.run(self.out), self.history.revert_writes, self.events.publish)
+        self.history.rebuilder = self.rebuilder
+        self.queue = Queue(self.out, self.lock, agent, paseo, on_attach, self.events)
         self.archive = Archive(self.out, self.lock)
 
     def open(self):
@@ -1016,6 +1115,10 @@ class ProjectSession:
 
     def close(self):
         self.busy.close()
+        self.rebuilder.close()                        # 다음 뒤 빌드는 시작하지 않는다(돌고 있는 것은 끝까지) — 남은 쓰기는 다음 열기의 빌드가 담는다
+        if self.rebuilder.pending():
+            print("[hd] 닫는 중 — 아직 빌드하지 않은 쓰기 %d개(화면 파일에는 있어요)" % self.rebuilder.pending(), file=sys.stderr, flush=True)
+        self.events.close()                           # 열린 흐름(SSE)이 끝난다
 
     def page(self):
         """index.html + <head> 에 window.__hdHelper·__hdKeyPath·__hdOut·__hdAgent(attach 로 바뀌므로 줄 때마다)·__hdState → bytes."""

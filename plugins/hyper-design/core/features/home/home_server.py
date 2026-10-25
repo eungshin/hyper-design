@@ -5,6 +5,7 @@
 - `/thumb/<name>.png` = <HD_HOME>/thumbs/<name>.png(토큰 없음, 알려진 이름만) · `/api/*` + 허브 토큰 = home_api.route(X-HD-Token · Host 검사)
 - `/v1/p/<이름>/` = 그 프로젝트 캔버스 페이지 · out 파일 · `/v1/p/<이름>/api/*`(세션 토큰 또는 허브 토큰 — 도우미와 같은 라우트, canvas/router.py)
 - `/api/*` + 세션 토큰 = 그 세션(옛 주소 별칭 — 캔버스 JS 는 그대로 '/api/…' 에 페이지 주소의 ?hd= 토큰을 보낸다)
+- 이벤트 흐름(47-4a) `/v1/p/<이름>/events` · 옛 뿌리 `/api/events` — 토큰은 머리글 또는 `?hd=`(EventSource), 처리는 canvas/router.py SessionHandler._events
 - `GET /v1/sessions`(허브 토큰) = 열린 세션 표지들 {sessions:[…]}(hd_client.hub_markers — hd ls·notes·reply·claim 이 허브를 거쳐 찾는다)
 - 본문 차례(POST·PUT): Host + 토큰(403) → 크기(413) → 아는 주소(404) → JSON(400) → 담당
 - 기록 <HD_HOME>/home.json {url, pid, port, token} — 살아 있고 답하면 다시 쓰고(브라우저만 엶), 죽었으면 덮어씀. 정상 종료 때 지움(세션도 모두 닫음)
@@ -86,9 +87,9 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
             return self._sess, path
 
         def _token_ok(self, sess):
-            return self.headers.get("X-HD-Token") in (sess.token, token)
+            return self._given_token() in (sess.token, token)
 
-        def _which(self, path):
+        def _which(self, path, query=""):
             """→ ('v1', 세션|None, 그 안 경로, 이름) | ('alias', 세션, 경로) | ('hub',)."""
             m = V1.match(path)
             if m:
@@ -96,6 +97,8 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
                 return ("v1", reg.get(name), m.group(2) or "", name)
             if path.startswith("/api/"):
                 tok = self.headers.get("X-HD-Token")
+                if not tok and path in R.EVENT_PATHS:      # EventSource 는 머리글을 못 보낸다 — 세션 토큰은 ?hd= 로
+                    tok = urllib.parse.parse_qs(query).get("hd", [None])[0]
                 sess = reg.by_token(tok) if tok and tok != token else None
                 if sess is not None:
                     return ("alias", sess, path)
@@ -152,7 +155,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
             if not self._host_ok():
                 return self._json(403, {"error": "주소가 맞지 않아요"})
             u = urllib.parse.urlparse(self.path)
-            w = self._which(u.path)
+            w = self._which(u.path, u.query)
             if w[0] == "v1" and w[1] is None:
                 return self._missing(w[3])
             if w[0] == "v1" and w[2] == "":                # /v1/p/<이름> → /v1/p/<이름>/ (화면 파일 상대 주소가 그 아래로)

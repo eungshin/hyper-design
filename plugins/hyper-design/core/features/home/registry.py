@@ -101,7 +101,7 @@ class ProjectRegistry:
         return e, self.marker(sess), False
 
     def _start(self, name, out, agent):
-        sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build).open()
+        sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build, name=name).open()   # name = 이벤트의 project
         sess.name, sess.started = name, C.now()
         sess.router = R.Router(home_ctx=self.ctx(sess), on_stop=lambda: threading.Thread(target=self.close, args=(name,), daemon=True).start())
         sess.record_before = self._read_record(sess.out)
