@@ -1099,8 +1099,11 @@ setInterval(loadVisible, 5000);                     // 가만히 있어도 화�
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
 function sizeModal() {
   var top = $('.hd').offsetHeight, dw = (parseFloat(document.body.style.getPropertyValue('--dockw')) || 0) + (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0);   // 덮개 = 위쪽 줄 아래 · 두 도크 사이
+  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 덮개 위에 뜨는 도구 막대(G5) 자리는 비운다 — 왼쪽 도크가 생기면 창이 그 밑에 깔려 왼쪽 내용을 가렸다(S3)
+  var g = tr && tr.width ? Math.max(0, Math.round(tr.right - (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0) + 8)) : 0;
+  modal.style.paddingLeft = g ? g + 'px' : '';
   var m = modalSize(), mw = m.w, mh = m.h;
-  var s = Math.min(1, (innerHeight - top - 128 - 26) / mh, (innerWidth - dw - 16) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 26
+  var s = Math.min(1, (innerHeight - top - 128 - 26) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 26
   mscale = s;
   mframe.style.width = m.custom ? mw + 'px' : ''; mframe.style.height = m.custom ? mh + 'px' : '';   // 크기를 바꾼 카드 = 그 크기로 크게 보기(task 46)
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';

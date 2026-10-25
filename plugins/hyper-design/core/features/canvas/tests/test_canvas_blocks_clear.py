@@ -51,27 +51,45 @@ def _card_rect(pg, sel, sid="job"):
     return {"x": f["x"] + r["x"] * f["sc"], "y": f["y"] + r["y"] * f["sc"], "w": r["w"] * f["sc"], "h": r["h"] * f["sc"]}
 
 
-@pytest.mark.area("modal", "tools")
-def test_modal_bar_does_not_cover_the_picked_tile_or_its_neighbour_tiles(ctx, out):
+def _modal_bar(ctx, out, width, name):
+    """크게 보기에서 타일 1 을 고른 뒤 (막대, 타일 1..6, 위 안내 글, 창 제목 막대, 페이지 오류). 도우미 주소 = 왼쪽 대화 도크가 있는 실제 배치."""
     srv = _serve(out)
     pg, errors = _open(ctx, srv.url)
     try:
+        pg.set_viewport_size({"width": width, "height": 1000})
         mf = _modal(pg)
         _pick(pg, mf, TILE % 1)
         pg.wait_for_timeout(400)                          # 형제 상자 답(hd-sibs) 뒤 다시 놓기
         bar = pg.evaluate(RECT % "#elbar")
-        shot(pg, "modal-tile-picked.png")
+        shot(pg, name)
         tiles = [_in_modal(pg, mf, TILE % i) for i in range(1, 7)]
-        assert not _overlap(bar, tiles[0]), ("막대가 고른 타일을 덮는다", bar, tiles[0])
-        hit = [i + 1 for i, t in enumerate(tiles[1:], 1) if _overlap(bar, t)]   # 위 안내 글과 타일 사이 틈(27px)이 막대(24px)+틈보다 좁다 — 덮지만 않으면 된다
-        assert not hit, ("막대가 옆 타일을 덮는다(위에 빈 자리가 있는데)", hit, bar, tiles[:4])
-        lead = _text_in_modal(pg, mf, "p.lead")
-        assert not _overlap(bar, lead), ("막대가 위 안내 글(글자)을 덮는다", bar, lead)
-        assert not _overlap(bar, pg.evaluate(RECT % "#modal .mbar")), "창 제목 막대를 덮지 않는다"
-        assert not errors, errors
+        return bar, tiles, _text_in_modal(pg, mf, "p.lead"), pg.evaluate(RECT % "#modal .mbar"), pg.evaluate(RECT % "#tools"), errors
     finally:
         pg.close()
         srv.shutdown(); srv.server_close()
+
+
+@pytest.mark.area("modal", "tools")
+def test_modal_bar_does_not_cover_the_picked_tile_or_its_neighbour_tiles(ctx, out):
+    """1440 폭 + 왼쪽 대화 도크(S3): 창이 작아 위에 빈 자리가 없다 — 그래도 고른 타일·옆 타일·창 제목 막대는 덮지 않고,
+    떠 있는 도구 막대(G5)가 창의 왼쪽 내용(타일 1)을 가리지 않는다. 덮을 수밖에 없으면 위 안내 글을 가장 적게(bar-place 규칙)."""
+    bar, tiles, _lead, mbar, tools, errors = _modal_bar(ctx, out, 1440, "modal-tile-picked.png")
+    assert not _overlap(bar, tiles[0]), ("막대가 고른 타일을 덮는다", bar, tiles[0])
+    hit = [i + 1 for i, t in enumerate(tiles[1:], 1) if _overlap(bar, t)]
+    assert not hit, ("막대가 옆 타일을 덮는다", hit, bar, tiles[:4])
+    assert not _overlap(bar, mbar), "창 제목 막대를 덮지 않는다"
+    assert not _overlap(tools, tiles[0]), ("도구 막대가 창 안 타일을 가린다(왼쪽 도크로 창이 그 밑에 깔림)", tools, tiles[0])
+    assert not errors, errors
+
+
+@pytest.mark.area("modal", "tools")
+def test_modal_bar_uses_the_free_room_above_without_covering_the_lead(ctx, out):
+    """넓은 창(빈 자리가 있음): 막대는 위 안내 글(글자)도 덮지 않는다(t51-7a 원래 약속)."""
+    bar, tiles, lead, mbar, _tools, errors = _modal_bar(ctx, out, 1800, "modal-tile-picked-wide.png")
+    assert not _overlap(bar, tiles[0]) and not [t for t in tiles[1:] if _overlap(bar, t)], (bar, tiles[:4])
+    assert not _overlap(bar, lead), ("막대가 위 안내 글(글자)을 덮는다", bar, lead)
+    assert not _overlap(bar, mbar), "창 제목 막대를 덮지 않는다"
+    assert not errors, errors
 
 
 @pytest.mark.area("tools", "links")
