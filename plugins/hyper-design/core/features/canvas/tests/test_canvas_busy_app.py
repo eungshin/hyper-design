@@ -17,7 +17,7 @@ import urllib.request
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, zoom_to  # noqa: F401
 
 sys.path.insert(0, str(SCRIPTS))
 import helper  # noqa: E402
@@ -76,6 +76,9 @@ def settled(pg, out):
 
 
 def job_frame(pg, url):
+    """job 카드 iframe(앱 주소)이 실리면 그 frame. 판은 보이는 카드만 불러오니(위에 DS 카드 줄 등 판 배치에 따라 처음 카메라 밖일 수 있다) 아직 안 실렸으면 그 카드로 카메라를 옮긴다."""
+    if pg.evaluate("!!document.querySelector('.card[data-id=\"job\"] iframe[data-src]')"):
+        zoom_to(pg, "job", 420)
     pg.wait_for_function("(u) => [...document.querySelectorAll('.card[data-id=\"job\"] iframe')].some(f => (f.src || '').startsWith(u))", arg=url, timeout=8000)
     for _ in range(80):
         f = next((f for f in pg.frames if f.url.startswith(url)), None)
