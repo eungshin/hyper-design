@@ -95,11 +95,11 @@ def _snapshot(out):                                  # out 안 화면 파일·sc
 
 
 def _links_to(out, sid):
-    import build_canvas
+    import board_data
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
     ids = {s["id"] for s in m["screens"]} | {sid}
     return sorted(s["id"] for s in m["screens"]
-                  if any(l["to"] == sid for l in build_canvas.screen_links(out, {"id": s["id"], "file": s.get("file") or "screens/%s.html" % s["id"]}, ids)))
+                  if any(l["to"] == sid for l in board_data.screen_links(out, {"id": s["id"], "file": s.get("file") or "screens/%s.html" % s["id"]}, ids)))
 
 
 @pytest.mark.area("helper")

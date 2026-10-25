@@ -147,7 +147,7 @@ def parse_settings_tabs(svelte):
 
 
 def is_dev_url(u):
-    """http(s)://127.0.0.1|localhost[:포트] — canvas/build_canvas.py is_dev_url 과 같은 규칙(카드가 그 주소를 그대로 불러온다)."""
+    """http(s)://127.0.0.1|localhost[:포트] — canvas/board_data.py is_dev_url 과 같은 규칙(카드가 그 주소를 그대로 불러온다)."""
     return isinstance(u, str) and bool(re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d{1,5})?/?$", u, re.I))
 
 

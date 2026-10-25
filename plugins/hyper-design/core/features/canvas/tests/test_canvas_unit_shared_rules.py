@@ -12,7 +12,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import build_canvas  # noqa: E402
+import board_data  # noqa: E402
 import links  # noqa: E402
 import helper  # noqa: E402  — 읽기만(select · _link_to)
 
@@ -75,4 +75,4 @@ def test_helper_link_to_follows_links_fixture(c):
 def test_screen_links_drops_self_and_unknown(tmp_path):
     """규칙 위의 거름(부르는 쪽): 자기 자신·없는 화면은 판의 선이 되지 않는다."""
     (tmp_path / "a.html").write_text('<a href="a.html">me</a><a href="sub/../b.html">b</a><a href="zz.html">z</a>', encoding="utf-8")
-    assert build_canvas.screen_links(tmp_path, {"id": "a", "file": "a.html"}, {"a", "b"}) == [{"to": "b", "text": "b"}]
+    assert board_data.screen_links(tmp_path, {"id": "a", "file": "a.html"}, {"a", "b"}) == [{"to": "b", "text": "b"}]

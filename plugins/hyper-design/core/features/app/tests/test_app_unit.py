@@ -15,7 +15,7 @@ NODE = shutil.which("node")
 sys.path.insert(0, str(APP))
 sys.path.insert(0, str(CORE / "features" / "canvas"))
 import app_stages as M  # noqa: E402
-import build_canvas  # noqa: E402
+import board_data  # noqa: E402
 
 DEV = "http://127.0.0.1:5199"
 
@@ -55,7 +55,7 @@ def test_screens_doc_cards_are_stage_urls_and_tabs_follow_settings(stages):
     files = {s["id"]: s["file"] for s in doc["screens"]}
     assert files["word-header"] == DEV + "/hd-stage/word-header.html"
     assert files["settings-window--usage"] == DEV + "/hd-stage/settings-window--usage.html"
-    assert all(build_canvas.is_dev_url(f) for f in files.values())
+    assert all(board_data.is_dev_url(f) for f in files.values())
     assert doc["groups"] == ["유기체", "분자"]
     wh = doc["screens"][1]
     assert wh["title"] == "WordHeader" and wh["purpose"].startswith("단어 헤더") and wh["policies"][0] == "소스: ui_host/popup/src/lookup/WordHeader.svelte"
@@ -68,13 +68,13 @@ def test_app_doc_is_relaunchable(stages):
     assert M.is_dev_url(DEV) and M.is_dev_url("http://localhost:3000/") and not M.is_dev_url("http://example.com:5199")
 
 
-# ---------------------------------------------------------------- build_canvas: 개발 서버 주소 카드
+# ---------------------------------------------------------------- board_data: 개발 서버 주소 카드
 @pytest.mark.parametrize("f, ok", [
     ("http://127.0.0.1:5173/hd-stage/a.html", True), ("https://localhost/x.html", True), ("http://LOCALHOST:80/", True),
     ("http://127.0.0.1.evil.com/x.html", False), ("http://example.com/x.html", False), ("screens/a.html", False),
     ("file:///C:/x.html", False), ("//127.0.0.1:5173/x", False), (None, False)])
 def test_build_dev_url_rule(f, ok):
-    assert build_canvas.is_dev_url(f) is ok
+    assert board_data.is_dev_url(f) is ok
 
 
 def test_build_keeps_dev_url_file_and_reads_no_file(tmp_path):
@@ -82,7 +82,7 @@ def test_build_keeps_dev_url_file_and_reads_no_file(tmp_path):
                      {"id": "local", "file": "screens/local.html", "group": "분자"}]}
     (tmp_path / "screens").mkdir()
     (tmp_path / "screens" / "local.html").write_text('<a href="word-header.html">go</a>', encoding="utf-8")
-    d = build_canvas.index_data(tmp_path, m)
+    d = board_data.index_data(tmp_path, m)
     cards = {c["id"]: c for r in d["rows"] for c in r["screens"]}
     assert cards["word-header"]["file"] == DEV + "/hd-stage/word-header.html"
     assert "word-header" not in d["links"]                       # 주소 카드는 링크를 미리 뽑지 않는다

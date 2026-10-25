@@ -27,7 +27,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
       · policies(value = [글] — 화면의 policies 를 통째로 바꿈, 글 목록·50줄·줄마다 500자 아니면 거절) · policy(옛 메모: index, op delete) · link · reason = 한국어
   /api/delete  {screens:[id]}                                 → {deleted:[id], cut:[{screen, path, to}], failed, stamp, changed:[screen]}
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
-  /api/data    {}                                             → build_canvas.index_data (index.html 의 hd-data 와 같은 객체)
+  /api/data    {}                                             → board_data.index_data (index.html 의 hd-data 와 같은 객체)
   /api/forward {text}                                         → {via:'paseo'|'queue', agent?, path?}
   /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
   GET /api/state[?since=rev]                                  → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0) · since == rev 면 {rev, unchanged:true}(#273)

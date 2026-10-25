@@ -15,7 +15,7 @@ SUFFIX = " 복사"                                     # 옛 복제 메모(canva
 TITLE_MAX = 200
 ID_MAX = 120
 ID_OK = re.compile(r"^[^/\\:*?\"<>|\s.][^/\\:*?\"<>|\s]*$")   # 파일 이름이 될 수 있는 한 조각(점으로 시작 = 숨은 파일 아님)
-DEV_URL = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?/", re.I)   # build_canvas.is_dev_url 과 같은 앱 카드 판정
+DEV_URL = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?/", re.I)   # board_data.is_dev_url 과 같은 앱 카드 판정
 
 
 class CopyError(Exception):
@@ -24,7 +24,7 @@ class CopyError(Exception):
         self.reason = reason
 
 
-def file_of(s):                                      # build_canvas.index_data 와 같은 기본 경로
+def file_of(s):                                      # board_data.index_data 와 같은 기본 경로
     return s.get("file") or "screens/%s.html" % s["id"]
 
 

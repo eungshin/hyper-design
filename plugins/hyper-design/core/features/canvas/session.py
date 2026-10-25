@@ -20,7 +20,7 @@ import datetime, hashlib, json, os, pathlib, posixpath, secrets, shutil, subproc
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import board_text as BT  # 판 글 고치기·지우기 계획(순수 Model, t51-9)
-import build_canvas
+import board_data
 import chat_log as CL  # 대화 기록 한 줄 모양·턴·한도(순수 Model, S3)
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
@@ -304,7 +304,7 @@ def emptied_groups(groups, before, after):
     """지우기로 비게 된 group 이름만 groups 에서 뺀다(51-1, Figma F18 빈 그룹은 없어진다) — 원래 빈 이름·순서는 그대로. groups 가 목록이 아니면 그대로."""
     if not isinstance(groups, list):
         return groups
-    name = lambda s: s.get("group") or "기타"           # build_canvas.index_data 와 같은 이름
+    name = lambda s: s.get("group") or "기타"           # board_data.index_data 와 같은 이름
     had, has = {name(s) for s in before}, {name(s) for s in after}
     return [g for g in groups if not (g in had and g not in has)]
 
@@ -319,12 +319,12 @@ class GroupError(ValueError):
         self.reason = reason
 
 
-def _gname(s):                                       # build_canvas.index_data 와 같은 이름(group 없음 = '기타')
+def _gname(s):                                       # board_data.index_data 와 같은 이름(group 없음 = '기타')
     return s.get("group") or "기타"
 
 
 def group_order(data):
-    """줄 이름 차례 = build_canvas.index_data 와 같음(groups 먼저, 그다음 화면에만 있는 이름을 화면 차례로)."""
+    """줄 이름 차례 = board_data.index_data 와 같음(groups 먼저, 그다음 화면에만 있는 이름을 화면 차례로)."""
     names = [g for g in (data.get("groups") or []) if isinstance(g, str)]
     for s in data.get("screens") or []:
         if _gname(s) not in names:
@@ -962,7 +962,7 @@ class Builder:
         return self.run(self.out)
 
     def data(self):
-        return build_canvas.index_data(self.out, json.loads((self.out / "screens.json").read_text(encoding="utf-8")))
+        return board_data.index_data(self.out, json.loads((self.out / "screens.json").read_text(encoding="utf-8")))
 
     def parts(self):
         return parts_of(self.out)

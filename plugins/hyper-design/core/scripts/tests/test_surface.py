@@ -10,7 +10,7 @@ CANVAS = CORE / "features" / "canvas"
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 sys.path.insert(0, str(SURF)); sys.path.insert(0, str(CANVAS))
 import surface  # noqa: E402
-import build_canvas  # noqa: E402
+import board_data  # noqa: E402
 
 SLOTS = {"name", "label", "frame", "viewport", "market", "flow", "kinds", "states", "audit", "images", "principles", "type", "writer"}
 
@@ -56,7 +56,7 @@ def test_setup_out_default_is_mobile_without_theme(tmp_path):
 
 
 def test_canvas_frame_from_profile_and_phone_fallback(tmp_path):
-    assert build_canvas.frame(tmp_path) == (0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28)
+    assert board_data.frame(tmp_path) == (0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28)
     (tmp_path / "surface.json").write_text(json.dumps(surface.resolve("desktop-wizard"), ensure_ascii=False), encoding="utf-8")
-    scale, card, modal, radius = build_canvas.frame(tmp_path)
+    scale, card, modal, radius = board_data.frame(tmp_path)
     assert card == {"w": 1080, "h": 680} and modal == {"w": 1080, "h": 680} and radius == 16 and scale == 0.4

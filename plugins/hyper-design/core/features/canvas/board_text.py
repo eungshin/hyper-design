@@ -2,7 +2,7 @@
 데이터 → 데이터 — 파일·네트워크를 쓰지 않는다(쓰기는 session.apply_edits 의 'board' 편집). 규칙은 modules/board-text.js 와 같다.
 
 편집 = {op: 'set', to: 칸 키, value: 글} | {op: 'delete', to: 묶음 키}
-  칸 키 = 판에 보이는 차례(build_canvas.index_data 의 hd-data 와 같은 자리):
+  칸 키 = 판에 보이는 차례(board_data.index_data 의 hd-data 와 같은 자리):
     story.headline · story.summary · story.ideas.N.title|desc · people.N.name|why|win ·
     decisions.core · decisions.items.N.name|how|why(N = 판에 보인 정한 것 차례) · decisions.market.N.name(N = 판에 보인 시장 관례 차례)
   묶음 키 = story(제목·요약) · ideas · people · decisions(core + 판에 나오는 정한 것 전부) · market(시장 관례 전부)
