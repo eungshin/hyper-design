@@ -86,9 +86,10 @@ from html_edit import (_after, _attr_patch, _block_ok, _dup_patch, _end, _has_te
 from out_io import (REPLACE_TRIES, _inside, _now, _replace, _screen_files, _sha, _stamp, _write_json)  # noqa: F401
 from state_store import (STATE_FILE, STATE_MAX, _state_ok, _state_save, _state_write, state_inject, state_load, state_peek,  # noqa: F401
                          state_put)
-from session import (AGENTS_TTL, ARCHIVE_FILE, FileWatch, NO_PASEO, NO_WINDOW, POLICY_MAX_CHARS, POLICY_MAX_LINES,  # noqa: F401
-                     ProjectSession, WATCH_EVERY, _Writes, _parts_html, _policies, agents_get, archive_get, archive_post,
-                     claim_post, keypath, list_agents, parts_of, project_repo, prune, release_post, reply_post, scan, watch)
+from note_archive import (ARCHIVE_FILE, archive_get, archive_post)  # noqa: F401
+from session import (AGENTS_TTL, FileWatch, NO_PASEO, NO_WINDOW, POLICY_MAX_CHARS, POLICY_MAX_LINES, ProjectSession, WATCH_EVERY,  # noqa: F401
+                     _Writes, _parts_html, _policies, agents_get, claim_post, keypath, list_agents, parts_of, project_repo,
+                     prune, release_post, reply_post, scan, watch)
 from adapters import (PASEO_DEFAULT, _paseo_args, _paseo_cmd)  # noqa: F401
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
