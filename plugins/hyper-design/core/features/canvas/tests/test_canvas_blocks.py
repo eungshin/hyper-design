@@ -91,8 +91,9 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         xy = _xy(pg, H1)
         _pick_element(pg, xy)
         bar = _bar(pg)
-        assert [b[0] for b in bar] == ["text", "remove", "dup", "up", "down", "memo"], bar
-        assert [b[1] for b in bar] == ["글자", "지우기", "복제", "↑", "↓", "메모"] and all(b[2] and not b[3] for b in bar), bar
+        six = [b for b in bar if b[0] in ("text", "remove", "dup", "up", "down", "memo")]   # 49b 가 [상위]·[바꾸기]·[아래에 넣기]를 더함
+        assert [b[0] for b in six] == ["text", "remove", "dup", "up", "down", "memo"], bar
+        assert [b[1] for b in six] == ["글자", "지우기", "복제", "↑", "↓", "메모"] and all(b[2] and not b[3] for b in bar), bar
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
         shot(pg, "board-elbar.png")
@@ -240,7 +241,7 @@ def test_app_card_bar_turns_edits_into_ai_requests(ctx, app_out):
     xy = _xy(pg, H1)
     _pick_element(pg, xy)
     bar = _bar(pg)
-    assert [b[3] for b in bar] == [True, True, True, True, True, False], ("앱 카드 = 편집 단추는 모두 AI 요청", bar)
+    assert all(b[3] for b in bar if b[0] not in ("parent", "memo")) and not any(b[3] for b in bar if b[0] in ("parent", "memo")), ("앱 카드 = 편집 단추는 모두 AI 요청(상위·메모는 아님)", bar)
     shot(pg, "board-elbar-app.png")
     pg.click('#elbar [data-act="dup"]')
     pg.wait_for_selector("#pop:not([hidden])", timeout=3000)

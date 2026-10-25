@@ -1,7 +1,8 @@
 /* View — 화면 파일에 바로 쓰기(helper.py 와 주고받기, 조각 2.2): 모드 칩 · 잇기·끊기·삭제 바로 쓰기(E1·E10) · 되돌리기 = 되살리기 · 보내기 · 쓴 뒤 바뀐 카드만 다시(E17).
    어떤 편집을 바로 쓰는지는 HD.edits.instantOf(Model). 판 다시 그리기·카드 다시 싣기·기록은 셸이 ctx 로 넘긴다(View 끼리 부르지 않음).
    HD.viewSync.mount(ctx) → {on, write(label, list) → Promise, del(ids) → Promise, send(list) → Promise<{ok, done, left, fw, res}>}
-   ctx = {chip, aiChip, agent, on, token, toast(msg, undoable), record(op), pend(label, list), request(list) → text, data(D, changed, stamp), retryMs?(쓴 뒤 다시 불러오기 재시도 간격, 기본 1초)}
+   ctx = {chip, aiChip, agent, on, token, toast(msg, undoable), record(op), pend(label, list), request(list) → text, data(D, changed, stamp), retryMs?(쓴 뒤 다시 불러오기 재시도 간격, 기본 1초),
+         wrote?(res, list) — write() 가 파일에 쓴 직후·카드를 다시 싣기 전(res.paths = {편집 id: 그 요소의 새 경로}, task 49b 고른 요소 따라가기)}
    aiChip = 보내기가 어디로 가는지(agent = helper 의 --paseo-agent → 'AI 연결됨', 없으면 '받는 곳 없음' = 대기열 파일에만, R4)
      aiChip 에 'hd-agent' 이벤트 {detail:{agent, name}} 가 오면(view-agents 가 고른 뒤, #214) 'AI 연결됨 · <name>' 으로 고치고 window.__hdAgent 도 바꾼다
    on 이 아니면(file:// · 토큰 없음) 칩만 '파일로 열림' 이고 나머지는 부르지 않는다. 네트워크가 끊기면 Promise 가 실패 → 셸이 지금처럼(반영 대기·복사) */
@@ -72,6 +73,7 @@ function mount(ctx) {
       if (bad.length) ctx.pend(label, bad);          // 못 쓴 것은 반영 대기로(이유는 보내기 때 요청문에)
       if (!res.applied || !res.applied.length) return res;
       logged(label, function () { return post('/api/apply', {edits: list.filter(function (n) { return ok[n.id]; }).map(wire)}); }, res.stamp);
+      if (ctx.wrote) { try { ctx.wrote(res, list); } catch (e) { console.error('[hd] 쓴 뒤 고른 요소 따라가기: ' + (e && e.message || e)); } }   // 다시 싣기 전에(task 49b)
       ctx.toast(label + ' — 파일에 썼어요' + (bad.length ? ' · ' + bad.length + '개는 반영 대기' : ''), true);
       return refresh(res.changed, res.stamp).then(function () { return res; });   // 쓴 뒤로는 실패해도 write() 는 이루어짐(다시 넣지 않게)
     });

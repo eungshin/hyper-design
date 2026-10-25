@@ -1,7 +1,7 @@
 /* Model — 편집 메모(화면 파일을 바꾸는 편집). DOM·저장소·메시지를 쓰지 않는다.
    단일 진실 원천: 편집은 모두 메모 목록 하나에 쌓이고, 판 위 표시(반영 대기 선·빈 레이아웃·글자 미리보기)는 여기서 계산한다.
    메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
-     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
+     edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a) · attr(op = 속성 이름, value = 새 값) · insert·replace(value = 부품 key, task 49b) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
    request(notes, out, sizes?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46)
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
@@ -51,26 +51,28 @@ function pendingLink(notes, from, path, to) {
 }
 
 // 도우미(helper.py)가 화면 파일에 바로 쓸 수 있는 편집
+var BLOCK = {text: 1, remove: 1, duplicate: 1, move: 1, attr: 1, insert: 1, replace: 1};   // 요소 편집(task 49a·49b) — 도우미가 바로 쓴다
 function directOf(n) {
-  return n.edit === 'text' || n.edit === 'remove' || n.edit === 'duplicate' || n.edit === 'move' || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' || n.edit === 'policies' ||
+  return BLOCK[n.edit] === 1 || n.edit === 'title' || n.edit === 'purpose' || n.edit === 'policy' || n.edit === 'policies' ||
          (n.edit === 'link' && ((n.op === 'link' && !!n.to) || n.op === 'cut' || n.op === 'untrigger'));
 }
 
 // 누르는 즉시 파일에 쓰는 편집(조각 2.2 D1): 잇기·끊기·트리거 해제 — 도착이 빈 레이아웃(new-…)이면 아직 파일이 없어 반영 대기로
 // 요소 편집(task 49a): 글자·지우기·복제·옮기기도 바로(되돌리기 = 되살리기) — 도우미가 없으면 셸이 지금처럼 반영 대기로
 function instantOf(n) {
-  return n.edit === 'text' || n.edit === 'remove' || n.edit === 'duplicate' || n.edit === 'move' || n.edit === 'link' && (n.op === 'cut' || n.op === 'untrigger' || (n.op === 'link' && !!n.to && !/^new-/.test(n.to)));
+  return BLOCK[n.edit] === 1 || n.edit === 'link' && (n.op === 'cut' || n.op === 'untrigger' || (n.op === 'link' && !!n.to && !/^new-/.test(n.to)));
 }
 
 // 반영 대기 미리보기(palette.js hd-pending 항목) — 그 화면의 글자 고치기 {path, text}(text '' = 비움) · 요소 지우기 {path, remove:true}
-// · 복제 {path, dup:true} · 옮기기 {path, move:'up'|'down'}(task 49a), 쌓인 차례대로
-var PREVIEW = {text: 1, remove: 1, duplicate: 1, move: 1};
+// · 복제 {path, dup:true} · 옮기기 {path, move:'up'|'down'}(task 49a) · 속성 {path, attr, value}(task 49b), 쌓인 차례대로 — 부품 넣기·바꾸기는 미리보기 없음(뼈대는 도우미가 뽑는다)
+var PREVIEW = {text: 1, remove: 1, duplicate: 1, move: 1, attr: 1};
 function preview(notes, screen) {
   return (notes || []).filter(function (n) { return n.screen === screen && PREVIEW[n.edit]; })
     .map(function (n) {
       if (n.edit === 'remove') return {path: n.path, remove: true};
       if (n.edit === 'duplicate') return {path: n.path, dup: true};
       if (n.edit === 'move') return {path: n.path, move: n.op === 'up' ? 'up' : 'down'};
+      if (n.edit === 'attr') return {path: n.path, attr: String(n.op || ''), value: String(n.value == null ? '' : n.value)};
       return {path: n.path, text: String(n.value == null ? '' : n.value)};
     });
 }
@@ -186,6 +188,9 @@ var say = {
   remove: function () { return '요소 지우기 — 이 요소(안의 글·자식 포함)를 화면에서 없애기'; },   // 요소 하나(task 30)
   duplicate: function () { return '요소 복제 — 이 요소(안의 글·자식 포함)를 바로 뒤에 하나 더(복사본의 id·data-region 은 빼기)'; },   // task 49a
   move: function (dir) { return dir === 'up' ? '요소 위로 옮기기 — 이 요소를 바로 앞 형제 요소와 자리 바꾸기' : '요소 아래로 옮기기 — 이 요소를 바로 뒤 형제 요소와 자리 바꾸기'; },
+  attr: function (name, v) { return v === '' ? '속성 ' + name + ' 비우기' : '속성 ' + name + ' 를 "' + v + '"(으)로 바꾸기'; },   // task 49b
+  insert: function (title) { return '부품 넣기: ' + title + ' — 이 요소 바로 아래에 Components 부품의 뼈대(글은 중립 글, 데이터는 화면에 맞게 채우기)'; },
+  replace: function (title) { return '부품으로 바꾸기: ' + title + ' — 이 요소 자리에 Components 부품의 뼈대(글은 중립 글, 데이터는 화면에 맞게 채우기)'; },
   removeScreen: function (label) { return '이 화면 ' + label + '을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'; },
   cutIn: function (label) { return '이 화면 ' + label + '으로 오는 연결을 모두 끊기(다른 화면의 버튼·링크에서)'; },
   emptyLayout: '빈 레이아웃에 목적이나 메모가 없어요 — AI가 채울 내용을 모를 수 있어요'

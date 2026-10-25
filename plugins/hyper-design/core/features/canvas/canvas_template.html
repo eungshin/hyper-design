@@ -1596,6 +1596,7 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지
   var MENU = {text: ['글자 고치기', '더블클릭'], remove: ['요소 지우기', 'Del'], dup: ['요소 복제', 'Ctrl+D'], up: ['위로 옮기기', 'Alt+↑'], down: ['아래로 옮기기', 'Alt+↓'], memo: ['요소에 메모', '']};
   HD.blocks.bar(h, {app: app}).forEach(function (b) {   // 요소 막대와 같은 규칙 — 꺼진 것은 빼되 글자 고치기는 남긴다(누르면 까닭을 알림)
     if (b.act === 'memo' && !inModal) return;        // 판: 아래 카드 메뉴의 메모·주석 도구가 있다
+    if (!MENU[b.act]) return;                        // 상위·속성·부품은 요소 막대에서만(고르기·칸·목록이 막대에 붙어 있다, task 49b)
     if (!b.on && b.act !== 'text') return;
     var m = MENU[b.act];
     els.push({label: m[0] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask ? '' : m[1], act: function () { blockAct(b.act, Object.assign({}, sel, {ask: b.ask})); }});
@@ -1611,6 +1612,19 @@ function blockAct(act, s) {
     done(); elemMemo(id, h, s.ask ? HD.blocks.askText(act, h) : '', inModal, a); return;
   }   // 앱 카드 = 파일 대신 AI 에게(소스 줄)
   if (act === 'text') { editScreenText(id, h, inModal); return; }
+  if (act === 'swap' || act === 'insert') {          // 부품 바꾸기·넣기(task 49b) — 뼈대를 뽑을 수 있으면 도우미가 바로, 아니면 AI 요청 메모(견본 글은 넣지 않음)
+    var pt = s.part || null;
+    if (!pt || !pt.ok || s.ask || !VS.on) { var r2 = s.anchor ? s.anchor() : null; done(); elemMemo(id, h, HD.blocks.partAsk(act, pt && pt.title), inModal, r2 ? {x: r2.x + r2.w, y: r2.y} : null); return; }
+    if (lockGuard([id])) return;
+    var pn = editNote(id, h, act === 'swap' ? HD.edits.say.replace(pt.title) : HD.edits.say.insert(pt.title)); pn.edit = act === 'swap' ? 'replace' : 'insert'; pn.value = pt.key;
+    addEdits(act === 'swap' ? '부품으로 바꾸기' : '부품 넣기', [pn]); return;
+  }
+  if (act === 'attr') {                               // 속성 칸(task 49b) — 바뀐 속성마다 편집 하나, 한 번에 쓰고 되돌리기 한 번
+    if (lockGuard([id])) return;
+    var an = Object.keys(s.attrs || {}).map(function (k) { var x = editNote(id, h, HD.edits.say.attr(k, s.attrs[k])); x.edit = 'attr'; x.op = k; x.value = s.attrs[k]; return x; });
+    if (an.length) addEdits('속성 바꾸기', an, '속성을 바꿨어요 — 반영 대기');
+    return;
+  }
   done();
   if (act === 'remove') { removeElement(id, h); return; }
   if (lockGuard([id])) return;
@@ -1837,6 +1851,7 @@ function selectEl(card, h) {
   sk.style.width = sk.style.height = d + 'px'; sk.style.margin = (-d / 2) + 'px 0 0 ' + (-d / 2) + 'px'; sk.style.borderWidth = (2 * ts) + 'px';
   ph.appendChild(sk); selEl = {card: card, h: h};
   if (BK) BK.show({screen: card.dataset.id, h: h, app: appCard(card.dataset.id), where: 'board',   // 요소 막대(task 49a) — 고른 테두리 옆, 판이 움직이면 placeSelbar 가 다시 놓는다
+                   frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
                    anchor: function () { var bx = $('.elbox.sel', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * tagScale() * z; return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
 }
 function appCard(id) { var c = VL.cardEl(id), cv = c && $('.cover', c); return HD.blocks.isApp(cv ? cv.dataset.file : ''); }   // 앱 카드 = 개발 서버 주소(build_canvas.is_dev_url)
@@ -2078,6 +2093,12 @@ function setMode(m) {
   modalTools();
   sendPick();
 }
+function modalSel(id, h) {                         // 크게 보기 고른 요소 → 요소 막대 sel(task 49a·49b) — 막대는 크게 보기 덮개(도크 왼쪽) 안, 고른 요소 위
+  var q = h.rect || {x: 0, y: 0, w: 0, h: 0};
+  return {screen: id, h: h, app: appCard(id), where: 'modal', frame: function () { return mframe; }, view: function () { return rectOf(modal); }, avoid: function () { return rectOf($('#modal .mbar')); },   // 창 제목 막대(닫기)는 덮지 않게
+          anchor: function () { if (modal.hidden) return null; var b = mbox.getBoundingClientRect(); return {x: b.left + q.x * mscale, y: b.top + q.y * mscale, w: q.w * mscale, h: q.h * mscale}; }};
+}
+function rectOf(el) { var r = el.getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; }
 function modalTools() {                            // 크게 보기면 손·이동(고르기)·주석·글자만 쓸 수 있고 눌린 것 = 지금 크게 보기 도구 · 닫으면 판의 도구 그대로
   var open = !modal.hidden, cur = open ? mmode : tool;
   $$('#tools [data-tool]').forEach(function (b) {
@@ -2089,11 +2110,9 @@ function modalTools() {                            // 크게 보기면 손·이�
 addEventListener('message', function (e) {         // 크게 보기 요소: 고르기(hd-sel) → 요소 막대 · 오른쪽 클릭(hd-ctx) → 요소 메뉴 · 스크롤(hd-scroll) → 막대 걷기 (palette.js, task 49a)
   var d = e.data; if (!d || typeof d !== 'object' || modal.hidden || e.source !== mframe.contentWindow) return;
   if (d.screen && (d.type === 'hd-sel' || d.type === 'hd-ctx')) mscreen = String(d.screen);
-  var at = function (r) { var b = mbox.getBoundingClientRect(); return {x: b.left + r.x * mscale, y: b.top + r.y * mscale, w: r.w * mscale, h: r.h * mscale}; };
   if (d.type === 'hd-sel' && mmode === 'move' && BK) {
     if (!d.path) { BK.hide('modal'); toast('여기에는 고를 요소가 없어요'); return; }
-    var q = d.rect || {x: 0, y: 0, w: 0, h: 0};
-    BK.show({screen: mscreen, h: d, app: appCard(mscreen), where: 'modal', anchor: function () { return modal.hidden ? null : at(q); }});
+    BK.show(modalSel(mscreen, d));
   } else if (d.type === 'hd-ctx') {
     if (!d.path) return;
     var b = mbox.getBoundingClientRect();
@@ -2267,6 +2286,7 @@ function swapCard(id, f, url) {
 }
 var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: window.__hdAgent || null, on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
   toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { addEdits(label, list, null, null, true); },
+  wrote: function (res, list) { if (BK) BK.wrote(res, list); },   // 쓴 뒤 고른 요소 따라가기(task 49b) — 다시 실린 카드에서 막대가 같은 요소로
   request: function (list) { return HD.edits.request(list, outDir(), AB ? AB.sizes() : null); },
   data: function (nd, changed, v) {                  // 쓴 뒤 새 데이터: 선·이름은 새로, 바뀐 카드만 다시 싣는다(E17) — 보던 자리·배율·고른 것 그대로
     D.links = nd.links; D.arrows = nd.arrows; G = HD.graph.fromData(D);
@@ -2391,7 +2411,10 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
   }}});
 PP = FT.popPlace || null;
-BK = FT.blocks || null; if (BK) BK.onAct(blockAct);   // 요소 막대(modules/view-blocks.js, task 49a) — 단추는 셸의 편집 길로
+BK = FT.blocks || null; if (BK) { BK.onAct(blockAct); BK.onPick(function (p) {   // 상위·쓴 뒤 따라가기로 새로 고른 요소(task 49b) — 판 = 테두리·소켓·막대, 크게 보기 = 막대
+  if (p.where === 'modal') { if (!modal.hidden && p.screen === mscreen) BK.show(modalSel(p.screen, p.h)); return; }
+  var c = VL.cardEl(p.screen); if (c) selectEl(c, p.h);
+}); }   // 요소 막대(modules/view-blocks.js, task 49a) — 단추는 셸의 편집 길로
 // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 상태(card-size)의 주인은 그 모듈, 셸은 크기가 바뀐 뒤 다시 그릴 것과 잠금만 넘긴다
 AB = FT.artboard ? FT.artboard.attach({
   changed: function () { drawArrows(); placeSelbar(); scheduleVisible(); if (!modal.hidden) { sizeModal(); drawPins(); } if (VP) VP.refresh(); },

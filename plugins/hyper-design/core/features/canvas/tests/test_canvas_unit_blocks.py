@@ -155,7 +155,7 @@ out.block = B.bar(Object.assign({}, h, {textOk: false}), {}).find(b => b.act ===
 out.root = on(B.bar(Object.assign({}, h, {root: true}), {}));
 out.app = B.bar(h, {app: true}).map(b => [b.act, b.on, !!b.ask]);
 out.appTitle = B.bar(h, {app: true}).find(b => b.act === 'dup').title;
-out.srcIsApp = B.bar(Object.assign({}, h, {src: {file: 'A.svelte', line: 3}}), {}).every(b => b.act === 'memo' || b.ask);
+out.srcIsApp = B.bar(Object.assign({}, h, {src: {file: 'A.svelte', line: 3}}), {}).every(b => b.act === 'memo' || b.act === 'parent' || b.ask);
 out.isApp = [B.isApp('http://127.0.0.1:5173/hd-stage/x.html'), B.isApp('https://localhost/x'), B.isApp('screens/a.html'), B.isApp(null)];
 out.keys = [B.keyAct({key: 'ArrowUp', alt: true}), B.keyAct({key: 'ArrowDown', alt: true}), B.keyAct({key: 'd', ctrl: true}),
             B.keyAct({key: 'D', meta: true}), B.keyAct({key: 'ArrowUp'}), B.keyAct({key: 'ArrowUp', alt: true, shift: true}), B.keyAct({key: 'd', ctrl: true, shift: true}), B.keyAct({key: 'Delete'}), B.keyAct({key: 'Backspace'})];
@@ -188,9 +188,10 @@ def js():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_bar_has_six_actions_in_order(js):
-    assert js["acts"] == ["text", "remove", "dup", "up", "down", "memo"]
-    assert js["labels"] == ["글자", "지우기", "복제", "↑", "↓", "메모"]
+def test_bar_has_six_actions_in_order(js):   # 49b 가 [상위]·[바꾸기]·[아래에 넣기]를 더함 — 49a 여섯 단추는 그 차례 그대로(test_canvas_unit_blocks_b)
+    six = ["text", "remove", "dup", "up", "down", "memo"]
+    assert [a for a in js["acts"] if a in six] == six, js["acts"]
+    assert [l for a, l in zip(js["acts"], js["labels"]) if a in six] == ["글자", "지우기", "복제", "↑", "↓", "메모"]
     assert all(js["all"].values()), js["all"]
 
 
@@ -198,11 +199,12 @@ def test_bar_disables_what_does_not_apply(js):
     assert js["first"]["up"] is False and js["first"]["down"] is True
     assert js["last"]["down"] is False and js["last"]["up"] is True
     assert js["block"]["on"] is False and "글자만 바꿀 수 없어요" in js["block"]["title"], js["block"]
-    assert js["root"] == {"text": True, "remove": False, "dup": False, "up": False, "down": False, "memo": True}, js["root"]
+    assert {k: js["root"][k] for k in ("text", "remove", "dup", "up", "down", "memo")} == {"text": True, "remove": False, "dup": False, "up": False, "down": False, "memo": True}, js["root"]
 
 
 def test_app_cards_turn_every_edit_into_an_ai_request(js):
-    assert js["app"] == [["text", True, True], ["remove", True, True], ["dup", True, True], ["up", True, True], ["down", True, True], ["memo", True, False]]
+    app = {a: (o, k) for a, o, k in js["app"]}   # 49b: [상위]는 고르기라 요청이 아님 · [바꾸기]·[아래에 넣기]도 요청
+    assert all(app[a] == (True, True) for a in ("text", "remove", "dup", "up", "down")) and app["memo"] == (True, False), js["app"]
     assert js["appTitle"].startswith("AI에게 요청"), js["appTitle"]
     assert js["srcIsApp"], "소스 위치(src)가 있는 요소 = 앱 카드"
     assert js["isApp"] == [True, True, False, False]
@@ -218,8 +220,8 @@ def test_ask_texts_are_requests(js):
 
 
 def test_place_bar_above_else_below_and_clamped(js):
-    assert js["placeAbove"] == {"x": 100, "y": 300 - 36 - 6, "below": False}, js["placeAbove"]
-    assert js["placeBelow"] == {"x": 100, "y": 40 + 20 + 6, "below": True}, js["placeBelow"]
+    assert {k: js["placeAbove"][k] for k in ("x", "y", "below")} == {"x": 100, "y": 300 - 36 - 6, "below": False}, js["placeAbove"]
+    assert {k: js["placeBelow"][k] for k in ("x", "y", "below")} == {"x": 100, "y": 40 + 20 + 6, "below": True}, js["placeBelow"]
     assert js["placeAvoid"]["below"] is True, "카드 선택 막대와 겹치면 아래로"
     assert js["placeClamp"]["x"] == 1000 - 200 - 8, js["placeClamp"]
 

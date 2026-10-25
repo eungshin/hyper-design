@@ -22,6 +22,8 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/apply   {edits:[{id, screen, edit, path, value?, to?}]} → {applied:[id], failed:[{id, reason}], stamp, changed:[screen]}
     edit: text(value — 요소 안 글·인라인 자식 전부를 바꿈, 안에 블록 자식이면 거절) · remove(요소 통째로, html·body·화면 뿌리 거절) · title · purpose
       · duplicate(바로 뒤에 복사본, 복사본 안 id·data-region 뺌) · move(op up|down — 앞·뒤 형제와 원문 조각 맞바꿈, 끝이면 거절)
+      · attr(op = 속성 이름, value — 허용 목록 ATTR_OK 만, on*·style·javascript: 거절) · insert·replace(value = 부품 key — 뼈대는 specimen_parts 가 out/components.html 에서, task 49b)
+      · 답 paths = {id: 그 요소의 새 경로}(그 화면에 요소 편집 하나일 때 — 캔버스가 쓴 뒤 같은 요소를 다시 고른다)
       · policies(value = [글] — 화면의 policies 를 통째로 바꿈, 글 목록·50줄·줄마다 500자 아니면 거절) · policy(옛 메모: index, op delete) · link · reason = 한국어
   /api/delete  {screens:[id]}                                 → {deleted:[id], cut:[{screen, path, to}], failed, stamp, changed:[screen]}
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
@@ -32,6 +34,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413 {error: 크기 + "완료 메모를 보관으로 옮기세요"}
   POST /api/archive {notes:[…]}                               → {ok:true, count} — <out>/.hd-notes-archive.jsonl 에 메모마다 한 줄(임시 파일 + os.replace, 자물쇠 안) · 400
   GET /api/archive                                            → {notes:[…]} (마지막 2000 줄, 새것이 뒤)
+  GET /api/parts                                              → {parts:[{key, title, ok}]} (out/components.html 의 견본, ok = 뼈대를 뽑을 수 있음) · 없으면 {parts:[], error}
   POST /api/reply {note: id | {screen, no}, reply:{kind, …칸, detail?, by?}} → {rev, status} · 400 {error, errors:[칸마다 한 줄]} · 404(없는 메모)
     — 답 규칙은 ../hd/hd_model.py(tasks/PLAN-2026-10-23.md §3). 늘 최신 파일에 붙이고 rev+1(rev 를 받지 않는다). by 기본 'agent', at = 지금.
   POST /api/stop {}                                           → {stopping:true} 를 답한 뒤 서버를 정상 종료(표지 지움 · .hd-helper.json 은 {port} 만 남김) — `hd stop`
@@ -62,6 +65,7 @@ from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import build_canvas
+import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
 import hd_model  # noqa: E402  — 답 규칙(순수 Model) 하나를 CLI 와 같이 쓴다
@@ -315,25 +319,111 @@ def _move_patch(src, el, path, way):
     return xa, yb, src[ya:yb] + src[xb:ya] + src[xa:xb]
 
 
+# 블록 조립(task 49b): 속성 칸 — 허용 목록만(on*·style 은 절대), 스크립트 주소 거절. 같은 목록: palette.js ATTR_OK · blocks.js ATTRS
+ATTR_OK = {"img": ("src", "alt"), "a": ("href",), "input": ("placeholder",), "textarea": ("placeholder",)}
+ATTR_MAX = 2000
+BAD_URL = re.compile(r"^\s*(javascript|vbscript|data):", re.I)
+DATA_IMG = re.compile(r"^\s*data:image/", re.I)
+
+
+def _attr_patch(src, el, v, path):
+    """속성 하나 바꾸기 — v = {name, value}. 허용 목록(태그마다) 밖·on*·style 거절, href·src 의 javascript:·vbscript:·data:(그림 src 의 data:image/ 만 허용) 거절."""
+    v = v if isinstance(v, dict) else {}
+    name, value = str(v.get("name") or ""), v.get("value")
+    if name not in ATTR_OK.get(el.tag, ()) or name.lower().startswith("on") or name.lower() == "style":
+        raise ValueError("바꿀 수 없는 속성이에요(%s %s) — 그림 src·alt · 링크 href · 입력 칸 placeholder 만: %s" % (el.tag, name or "?", path))
+    if not isinstance(value, str):
+        raise ValueError("속성 값은 글이어야 해요: " + path)
+    if "\n" in value or "\r" in value:
+        raise ValueError("속성 값에는 줄바꿈을 넣을 수 없어요: " + path)
+    if len(value) > ATTR_MAX:
+        raise ValueError("속성 값이 %d자를 넘어요: %s" % (ATTR_MAX, path))
+    if name in ("href", "src") and BAD_URL.match(value) and not (name == "src" and DATA_IMG.match(value)):
+        raise ValueError("이 주소는 쓸 수 없어요(javascript:·data: 등): " + path)
+    return el.start, el.open_end, _set_attr(src[el.start:el.open_end], name, value)
+
+
+def _part(markup, path):
+    if not isinstance(markup, str) or not markup.strip():
+        raise ValueError("빈 부품이에요: " + path)
+    return markup.strip()
+
+
+def _lead(src, a):                                   # 요소 앞 공백(줄바꿈·들여쓰기) — 넣은 부품도 같은 들여쓰기로
+    k = a
+    while k > 0 and src[k - 1] in " \t\r\n":
+        k -= 1
+    return src[k:a]
+
+
+def _insert_patch(src, el, markup, path):
+    """넣기: 요소 바로 뒤에 부품(앞 공백 그대로 한 번 + 뼈대). 화면 뿌리 거절."""
+    _block_ok(el, path, "옆에 넣을")
+    a, b = el.start, _end(el, path, "옆에 넣을")
+    return a, b, src[a:b] + _lead(src, a) + _part(markup, path)
+
+
+def _replace_patch(src, el, markup, path):
+    """바꾸기: 요소 자리 [시작, 닫는 태그 끝) 를 부품으로. 화면 뿌리 거절."""
+    _block_ok(el, path, "바꿀")
+    return el.start, _end(el, path, "바꿀"), _part(markup, path)
+
+
+def _op_patch(src, el, op, value, path):
+    if op == "text":
+        return _text_patch(src, el, value, path)
+    if op == "remove":
+        return _remove_patch(el, path)
+    if op == "duplicate":
+        return _dup_patch(src, el, path)
+    if op == "move":
+        return _move_patch(src, el, path, value)
+    if op == "attr":
+        return _attr_patch(src, el, value, path)
+    if op == "insert":
+        return _insert_patch(src, el, value, path)
+    if op == "replace":
+        return _replace_patch(src, el, value, path)
+    if op in ("link", "cut"):
+        return _relink(src, el, op, value, path)
+    raise ValueError("모르는 편집: " + op)
+
+
+def _after(src, el, op, value, p):
+    """편집 하나를 쓴 뒤 그 요소(옮긴 것 · 넣은·바꾼 부품)가 새 원문에서 시작하는 자리 | None(지움)."""
+    if op == "remove":
+        return None
+    if op == "insert":
+        return p[0] + (_end(el, "", "") - el.start) + len(_lead(src, el.start))
+    if op == "move" and value == "down":
+        sibs = [c for c in el.parent.children if c.tag not in SIB_SKIP]
+        y = sibs[sibs.index(el) + 1]
+        return p[0] + (_end(y, "", "") - y.start) + (y.start - _end(el, "", ""))
+    return p[0] if op in ("move", "replace") else el.start
+
+
+def edit_one(src, path, op, value):
+    """편집 하나 → (새 원문, 그 요소의 새 경로 | None) — 경로 = 태그:nth-of-type 사슬(palette.js find 도 읽음). 쓴 뒤 캔버스가 같은 요소를 다시 고른다."""
+    tree = Tree(src)
+    el = select(tree, path)
+    p = _op_patch(src, el, op, value, path)
+    new = _patch(src, [p])
+    at = _after(src, el, op, value, p)
+    if at is None:
+        return new, None
+    hit = [n for n in Tree(new).walk() if n.start == at]
+    return new, (_path_of(hit[0]) if hit else None)
+
+
 def edit_html(src, edits):
     """edits = [(path, op, value)] — op: text(요소 안 내용 전부를 value 로, '' = 비우기) | remove(요소 통째로) | link(value=도착 id) | cut
-    | duplicate(바로 뒤에 복사본, 복사본 id·data-region 뺌) | move(value = up|down, 형제와 맞바꿈).
+    | duplicate(바로 뒤에 복사본, 복사본 id·data-region 뺌) | move(value = up|down, 형제와 맞바꿈)
+    | attr(value = {name, value} — 허용 목록만) | insert·replace(value = 부품 뼈대 마크업 — 도우미가 key 로 뽑은 것만, task 49b).
     원문 위치 기준으로 뒤에서부터 바꾼다. 같은 자리 두 편집 = 나중 것, 겹치는 자리(안팎) = ValueError."""
     tree, spans = Tree(src), {}
     for path, op, value in edits:
         el = select(tree, path)
-        if op == "text":
-            p = _text_patch(src, el, value, path)
-        elif op == "remove":
-            p = _remove_patch(el, path)
-        elif op == "duplicate":
-            p = _dup_patch(src, el, path)
-        elif op == "move":
-            p = _move_patch(src, el, path, value)
-        elif op in ("link", "cut"):
-            p = _relink(src, el, op, value, path)
-        else:
-            raise ValueError("모르는 편집: " + op)
+        p = _op_patch(src, el, op, value, path)
         spans[(p[0], p[1])] = p                       # 같은 자리 = 나중 것
     patches = sorted(spans.values(), key=lambda p: (p[0], p[1]))
     for x, y in zip(patches, patches[1:]):
@@ -487,7 +577,7 @@ def apply_edits(out, edits, stamp=None):
     sj = out / "screens.json"
     data = json.loads(sj.read_text(encoding="utf-8"))
     files = _screen_files(data)
-    applied, failed, html_ops, json_ops, owner = [], [], {}, [], {}
+    applied, failed, html_ops, json_ops, owner, parts_html, paths = [], [], {}, [], {}, None, {}
     for e in edits:
         eid, sid, kind = e.get("id"), e.get("screen"), e.get("edit")
         try:
@@ -512,6 +602,14 @@ def apply_edits(out, edits, stamp=None):
                 op = ("duplicate", None)
             elif kind == "move" and e.get("op") in ("up", "down"):
                 op = ("move", e["op"])
+            elif kind == "attr":                        # 속성 칸(task 49b) — op = 속성 이름, value = 새 값(허용 목록은 _attr_patch)
+                op = ("attr", {"name": str(e.get("op") or ""), "value": e.get("value")})
+            elif kind in ("insert", "replace"):         # 부품 넣기·바꾸기(task 49b) — value = 견본 key, 뼈대는 여기서 뽑는다(캔버스가 보낸 마크업은 쓰지 않음)
+                if parts_html is None:
+                    parts_html = _parts_html(out)
+                if parts_html is None:
+                    raise ValueError("부품 견본(components.html)이 없어요")
+                op = (kind, specimen_parts.markup(parts_html, str(e.get("value") or "")))
             elif kind == "link" and e.get("op") == "link" and e.get("to") in files:
                 op = ("link", e["to"])
             elif kind == "link" and e.get("op") in ("cut", "untrigger"):
@@ -537,6 +635,10 @@ def apply_edits(out, edits, stamp=None):
                 failed.append({"id": o[0], "reason": str(err)})
         if good:
             new = edit_html(src, [(o[1], o[2], o[3]) for o in good])
+            if len(good) == 1 and good[0][2] not in ("link", "cut"):   # 요소 편집 하나 = 그 요소의 새 경로(캔버스가 쓴 뒤 다시 고른다, task 49b)
+                at = edit_one(src, good[0][1], good[0][2], good[0][3])[1]
+                if at:
+                    paths[good[0][0]] = at
             w.keep(f); f.write_text(new, encoding="utf-8", newline="")
             applied += [o[0] for o in good]; changed.add(owner[f])
     if json_ops:
@@ -561,11 +663,26 @@ def apply_edits(out, edits, stamp=None):
                 del by[sid]["policies"][i]
         raw = sj.read_text(encoding="utf-8")
         w.keep(sj); _write_json(sj, data, raw)
+    if not applied:                                 # 모두 거절(겹침·허용 밖 속성 등) — 쓴 것이 없으니 다시 빌드·기록도 없다
+        return {"applied": [], "failed": failed, "stamp": None, "changed": [], "paths": {}}
     changed = sorted(changed)
     err = w.commit(changed)
     if err:                                         # 다시 빌드가 깨지면 원본으로 되돌렸다
         return {"applied": [], "failed": failed + [{"id": i, "reason": err} for i in applied], "stamp": None, "changed": []}
-    return {"applied": applied, "failed": failed, "history": str(w.hist), "stamp": w.stamp, "changed": changed}
+    return {"applied": applied, "failed": failed, "history": str(w.hist), "stamp": w.stamp, "changed": changed, "paths": paths}
+
+
+def _parts_html(out):                                # 이 프로젝트의 부품 견본(Components 탭 = out/components.html) 글 | None
+    f = pathlib.Path(out) / "components.html"
+    return f.read_text(encoding="utf-8") if f.is_file() else None
+
+
+def parts_of(out):
+    """GET /api/parts — 부품 고르기 목록 {parts:[{key, title, ok}]}(ok = 뼈대를 뽑을 수 있음, 아니면 캔버스가 AI 요청으로)."""
+    src = _parts_html(out)
+    if src is None:
+        return {"parts": [], "error": "부품 견본(components.html)이 없어요"}
+    return {"parts": specimen_parts.parts(src)}
 
 
 def delete_screens(out, ids, stamp=None):
@@ -1090,7 +1207,7 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
             if not self._host_ok():
                 return self.send_error(403)
             u = urllib.parse.urlparse(self.path)
-            if u.path in ("/api/state", "/api/files", "/api/agents", "/api/archive") + home_api.GET_PATHS:
+            if u.path in ("/api/state", "/api/files", "/api/agents", "/api/archive", "/api/parts") + home_api.GET_PATHS:
                 if self.headers.get("X-HD-Token") != token:
                     return self._json(403, {"error": "토큰 또는 주소가 맞지 않아요"})
                 if u.path == "/api/files":
@@ -1107,6 +1224,8 @@ def make_server(out, port=0, agent=None, paseo=None, token=None):
                     return self._json(200, agents_get(self.server, paseo, auto=auto))
                 if u.path == "/api/archive":
                     return self._json(200, archive_get(out))
+                if u.path == "/api/parts":
+                    return self._json(200, parts_of(out))
                 try:
                     since = helper_model.parse_since(urllib.parse.parse_qs(u.query).get("since", [None])[0])
                 except ValueError as e:

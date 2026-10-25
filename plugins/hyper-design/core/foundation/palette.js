@@ -22,6 +22,10 @@
     hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸} 으로(없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'}.
     hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) — 경로는 모두 바꾸기 전 문서에서 찾는다.
+  블록 조립(task 49b): hd-hit 계열 답에 up(감싼 요소가 있나 — body·html 은 아님) · tag · attrs(허용 목록 ATTR_OK 의 지금 값).
+    {type:'hd-up', path, tag} → {type:'hd-upchain', tag, path, chain:[조상 hd-hit 칸…](가까운 것부터 8개)} ·
+    {type:'hd-find', path, tag} → 문서가 다 실린 뒤 {type:'hd-found', tag, …hd-hit 칸}(없으면 path null) — 쓴 뒤 같은 요소 다시 고르기 ·
+    hd-pending 항목 {path, attr, value}(허용 목록 속성을 잠시 바꿈).
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
@@ -312,8 +316,22 @@
   function hitMsg(el, type) {                         // hd-hit·hd-dbl·hd-sel·hd-ctx 답 칸(같은 것)
     return withSrc({type: type, screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
           rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el), textOk: textOk(el),
-          prev: !!sib(el, -1), next: !!sib(el, 1), root: isRoot(el)}, el);
+          prev: !!sib(el, -1), next: !!sib(el, 1), root: isRoot(el), up: !!upOf(el), tag: el.tagName.toLowerCase(), attrs: attrsOf(el)}, el);
   }
+  // 속성 칸(task 49b) — helper.py ATTR_OK · blocks.js ATTRS 와 같은 허용 목록(on*·style 은 절대)
+  var ATTR_OK = {img: ['src', 'alt'], a: ['href'], input: ['placeholder'], textarea: ['placeholder']};
+  function attrsOf(el) {
+    var o = {}; (ATTR_OK[el.tagName.toLowerCase()] || []).forEach(function (n) { o[n] = el.getAttribute(n) || ''; }); return o;
+  }
+  function upOf(el) {                                 // 고를 수 있는 감싼 요소(body·html 은 아님)
+    var p = el.parentElement; return p && p !== document.body && p !== document.documentElement ? p : null;
+  }
+  function upChain(el) {                              // 상위 고르기(task 49b): 조상 hit 들(가까운 것부터, 8개까지) — 어느 것을 고를지는 캔버스(blocks.parentPick)
+    var out = [];
+    for (var p = upOf(el); p && out.length < 8; p = upOf(p)) out.push(hitMsg(p, 'hd-up'));
+    return out;
+  }
+  function whenLoaded(fn) { if (document.readyState === 'complete') fn(); else addEventListener('load', fn, {once: true}); }
   var SIB_SKIP = /^(script|style|template|link|meta)$/;   // helper.py SIB_SKIP 과 같은 규칙
   function sib(el, d) {                               // 앞(-1)·뒤(1) 형제 요소 | null
     for (var n = d < 0 ? el.previousElementSibling : el.nextElementSibling; n; n = d < 0 ? n.previousElementSibling : n.nextElementSibling) {
@@ -342,6 +360,7 @@
       if (q.back) q.back.parent.insertBefore(q.el, q.back.next && q.back.next.parentNode === q.back.parent ? q.back.next : null);
       if (q.kids) { while (q.el.firstChild) q.el.removeChild(q.el.firstChild); q.kids.forEach(function (k) { q.el.appendChild(k); }); }
       if (q.disp !== undefined) q.el.style.display = q.disp;
+      if (q.attr) { if (q.attr.had) q.el.setAttribute(q.attr.name, q.attr.v); else q.el.removeAttribute(q.attr.name); }
       q.el.style.outline = q.o; q.el.style.outlineOffset = q.oo;
     });
     pend = [];
@@ -351,6 +370,12 @@
       if (!el) return;
       var q = {el: el, o: el.style.outline, oo: el.style.outlineOffset};
       if (it.remove) { q.disp = el.style.display; el.style.display = 'none'; pend.push(q); return; }
+      if (it.attr) {                                   // 속성(task 49b): 허용 목록만 잠시 바꿔 점선
+        if ((ATTR_OK[el.tagName.toLowerCase()] || []).indexOf(it.attr) < 0) return;
+        q.attr = {name: it.attr, had: el.hasAttribute(it.attr), v: el.getAttribute(it.attr)};
+        el.setAttribute(it.attr, String(it.value == null ? '' : it.value));
+        el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px'; pend.push(q); return;
+      }
       if (it.dup) {                                    // 복제: 바로 뒤에 점선 복사본(id·data-region 뺌)
         var cp = el.cloneNode(true);
         [cp].concat(Array.prototype.slice.call(cp.querySelectorAll('[id],[data-region]'))).forEach(function (n) { n.removeAttribute('id'); n.removeAttribute('data-region'); });
@@ -440,6 +465,15 @@
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
     else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
     else if (d.type === 'hd-pending') pending(d.items);
+    else if (d.type === 'hd-up') {                     // 상위 고르기(task 49b) → {type:'hd-upchain', tag, path, chain}
+      var ue = find(d.path);
+      send({type: 'hd-upchain', screen: screenId(), tag: d.tag || '', path: d.path || null, chain: ue ? upChain(ue) : []});
+    } else if (d.type === 'hd-find') {                 // 쓴 뒤 다시 실린 화면에서 같은 요소 찾기(task 49b) → {type:'hd-found', tag, …hd-hit 칸} | path null
+      whenLoaded(function () {
+        var fe = find(d.path), m = fe ? hitMsg(fe, 'hd-found') : {type: 'hd-found', screen: screenId(), path: null};
+        m.tag = d.tag || ''; send(m);
+      });
+    }
     else if (d.type === 'hd-locate') locate(d.items);
     else if (d.type === 'hd-edit') editOn = !!d.on;
     else if (d.type === 'hd-pick') {

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>설정 1/3 · 하는 일</title>
+<link id="tokens" rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../components.css"><script src="../palette.js"></script>
+</head>
+<body class="window">
+<div class="wizard">
+  <header class="wizard-chrome">
+    <ol class="wizard-steps" aria-label="단계"><li>로그인</li><li aria-current="step">설정</li><li>체험</li><li>시작</li></ol>
+    <a class="wizard-close" href="job.html" aria-label="닫기. 다음 로그인 때 이어서 할 수 있어요"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    <div class="wizard-progress" style="--p:20%"></div>
+  </header>
+  <main class="wizard-body">
+    <section class="wizard-main">
+      <a class="wizard-back" href="login--done.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg> 이전</a>
+      <div class="wizard-content">
+        <p class="eyebrow">설정 1 / 3</p>
+        <h1 class="title">하는 일이 무엇인가요?</h1>
+        <p class="lead">하는 일에 맞는 사전을 다음 단계에서 골라 드릴게요.</p>
+        <div class="tile-grid" role="radiogroup" aria-label="하는 일">
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/graduation-cap.svg" alt="" width="28" height="28">대학생<span class="n">1</span></button>
+          <button class="tile" role="radio" aria-checked="true"><img src="../assets/fluent/microscope.svg" alt="" width="28" height="28">대학원생·연구원<span class="n">2</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/hundred-points.svg" alt="" width="28" height="28">어학 시험 준비<span class="n">3</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/laptop.svg" alt="" width="28" height="28">개발자·엔지니어<span class="n">4</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/envelope.svg" alt="" width="28" height="28">해외 업무 직장인<span class="n">5</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/pill.svg" alt="" width="28" height="28">의료·약학·바이오<span class="n">6</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/memo.svg" alt="" width="28" height="28">번역·콘텐츠 제작<span class="n">7</span></button>
+          <button class="tile" role="radio" aria-checked="false"><img src="../assets/fluent/books.svg" alt="" width="28" height="28">교사·강사<span class="n">8</span></button>
+          <button class="tile is-input" role="radio" aria-checked="false"><img src="../assets/fluent/pencil.svg" alt="" width="28" height="28">직접 입력<span class="n">9</span></button>
+        </div>
+      </div>
+      <footer class="wizard-foot">
+        <span class="wizard-hint"><span class="kbd">1</span>–<span class="kbd">9</span> 고르기 · <span class="kbd">Enter</span> 다음 · <span class="kbd">Esc</span> 이전</span>
+        <div class="btns"><a class="btn primary pill" href="language.html">다음으로</a></div>
+      </footer>
+    </section>
+    <aside class="wizard-art" aria-label="고른 것">
+      <div class="art-card pick"><img src="../assets/fluent/microscope.svg" alt=""><strong>대학원생·연구원</strong><p>논문을 읽을 때 필요한 사전을<br>먼저 보여 드릴게요.</p></div>
+    </aside>
+  </main>
+</div>
+</body></html>

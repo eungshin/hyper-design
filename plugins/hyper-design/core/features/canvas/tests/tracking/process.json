@@ -716,6 +716,42 @@
         "busy_app·claim_watch 가 -n 4 area 에서 한 번 깨지고 --lf 로 통과(부하 시간)"
       ],
       "note": "R56: test_canvas_helper 두 곳의 즉시 '?v=' 확인을 '그 카드가 새 버전을 싣는다'로 기다리게 고침(교체가 다 그린 뒤에 바뀜)"
+    },
+    {
+      "slice": "task49b 블록 조립(막대 자리·상위·쓴 뒤 따라가기·속성 칸·부품 바꾸기/넣기)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 12
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "new-test",
+          "what": "apply_edits 가 화면 편집을 모두 거절하면 없는 기록 폴더에 manifest 를 쓰다 FileNotFoundError — unit(허용 밖 속성) 이 잡음, 쓴 것 없으면 커밋 안 함"
+        },
+        {
+          "by": "old-test",
+          "what": "요소 메뉴가 막대 단추 목록을 그대로 돌다 새 단추(상위·속성·부품)에서 MENU 없어 멈춤 — 49a 크게 보기 메뉴 테스트가 잡음"
+        },
+        {
+          "by": "new-test",
+          "what": "막대가 단추를 누르면 셸이 고르기를 풀어 쓴 결과를 따라갈 요소가 없음 — Alt+↓ 두 번 테스트가 잡음(누른 요소를 기억)"
+        }
+      ],
+      "waste": [
+        "Bash heredoc 이 역슬래시 두 개를 하나로 줄여 helper.py 에 날 줄바꿈이 들어감 — 이스케이프가 든 편집은 Edit/Write 로"
+      ],
+      "flaky": [
+        "busy_app 두 개가 area 에서 깨짐 — 48b 작업 중 파일(busy·view-busy·swap) 이 같은 작업 트리에 있어 내 것과 분리 못 함, main 에 알림"
+      ],
+      "note": "R56: 49a unit 4·브라우저 2 단언을 의도대로(막대가 커짐 · 상위·메모는 앱 카드에서도 요청 아님)"
     }
   ]
 }
