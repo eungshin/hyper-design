@@ -10,10 +10,13 @@
      line(last, find, busyOf, inflight, opt?{progress, titleOf}) → {stage, text, req}|null — 여러 메모면 가장 앞선 단계(STAGES 차례) + 끝난 수 (k/N).
      진행(S2, 47-4b): progress(p, ev, screens) → {step:'working'|'landed'|'done', screen} | p — 요청 화면(screens, 비면 아무 화면)의 claim · AI 쓰기(screen.written ai · ai.write) · release.
        opt.progress 가 있고 손이 필요한 단계(sending·unsent·decide)가 아니면 줄 = 'AI 작업 중 · <화면>' · '반영됨 · <화면>' · '끝'(+ ' · ' 짧은 답, stage working·applied·done).
+     받는 곳(47-5b): progress(p, ev, screens, ids) — ids = 이 요청의 메모 id. request.sent(notes 가 ids 와 겹침) = {step:'sent', via, to}(처음·sent 일 때만 — 뒤로 가지 않음),
+       agent.progress(받는 곳의 것 · 받는 곳을 모르면 아무 에이전트) = {step:'progress', text, screen, via, to}, agent.reply(note 가 ids 안) = {step:'replied', kind, status, to}.
+       줄 = '보냄 · <이름> (실시간|Paseo|Claude)' · '보냄 · 대기열 — …'(via queue) · 'AI 작업 중 · <진행 글>' · '답 옴 · <짧은 답|종류>'. opt.agentName(id) → 이름(없으면 id).
    마지막 요청 record(text, memos, at) = {text, ids, at} · parseLast(raw) → {last, bad}(깨졌으면 bad — 셸 아닌 View 가 [hd] 경고)
    칩 줄 접기(S1c): fold(chips, open) → {shown, more} — 3개까지는 다, 넘으면 앞 2개(+ 고른 요소 칩은 늘) + '외 N개'(more), open = 펼침(다 보임).
    placeholder(chips) — 범위를 칩이 아니라 입력 안내 글로: 칩 없음 = '모든 화면에 대해 …', 있으면 '무엇을 바꿀까요?'.
-   HD.chat = {PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, stage, line, progress, record, parseLast} */
+   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -34,8 +37,11 @@ var SAY = {
   partial: '일부 반영 — 남은 것은 메모에',
   applied: '반영됨 ✓'
 };
-var PSAY = {working: 'AI 작업 중 · ', landed: '반영됨 · ', done: '끝'};    // 이벤트 진행 줄(S2)
-var PSTAGE = {working: 'working', landed: 'applied', done: 'done'};
+var PSAY = {working: 'AI 작업 중 · ', landed: '반영됨 · ', done: '끝', progress: 'AI 작업 중 · ', replied: '답 옴 · '};    // 이벤트 진행 줄(S2 · 47-5b)
+var PSTAGE = {working: 'working', landed: 'applied', done: 'done', sent: 'sent', progress: 'working', replied: 'answered'};
+var VIA = {event: '실시간', paseo: 'Paseo', claude: 'Claude', queue: '대기열'};
+var QUEUED = '보냄 · 대기열 — 읽는 에이전트를 기다려요';
+var PROGRESS_CUT = 60;
 var HANDS = ['sending', 'unsent', 'decide'];
 var FINAL = ['applied', 'answered', 'partial'];          // 메모가 끝난 단계               // 손이 필요한 단계 = 이벤트보다 앞선다
 var REPLY_CUT = 40;
@@ -126,7 +132,11 @@ function line(last, find, busyOf, inflight, opt) {
   var top = STAGES.filter(function (s) { return st.indexOf(s) >= 0; })[0] || 'sent';
   var pr = opt && opt.progress;
   if (pr && PSTAGE[pr.step] && HANDS.indexOf(top) < 0) {   // 이벤트 진행(S2) — 손이 필요한 단계가 아니면 마지막 이벤트가 줄을 맡는다
-    var t = opt.titleOf ? opt.titleOf(pr.screen) : pr.screen, said = replyText(ns), step = pr.step;
+    var said = replyText(ns), step = pr.step;
+    if (step === 'sent') return {stage: pr.via === 'queue' ? 'queued' : 'sent', text: sentText(pr, opt.agentName), req: last.text};
+    if (step === 'progress') return {stage: 'working', text: PSAY.progress + cutText(pr.text, PROGRESS_CUT), req: last.text};
+    if (step === 'replied') return {stage: replyStage(pr.status), text: PSAY.replied + (said || flat(pr.kind) || '답'), req: last.text};
+    var t = opt.titleOf ? opt.titleOf(pr.screen) : pr.screen;
     if (step === 'landed' && st.every(function (x) { return FINAL.indexOf(x) >= 0; })) step = 'done';   // 쓰고 모든 메모에 답함 = 끝(덮개를 캔버스가 먼저 걷으면 release 가 오지 않는다)
     pr = {step: step, screen: pr.screen};
     var tx = pr.step === 'done' ? PSAY.done : PSAY[pr.step] + (t == null || t === '' ? pr.screen : t);
@@ -149,10 +159,31 @@ function replyText(ns) {                                 // 요청 메모의 마
   }
   return '';
 }
-function progress(p, ev, screens) {
+function cutText(t, n) { t = flat(t); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+function sentText(pr, nameOf) {
+  if (pr.via === 'queue' || !VIA[pr.via]) return QUEUED;
+  var n = pr.to && nameOf ? nameOf(pr.to) : null;
+  return '보냄 · ' + (n || pr.to || 'AI') + ' (' + VIA[pr.via] + ')';
+}
+function replyStage(status) { return status === 'partial' ? 'partial' : status === 'decide' ? 'decide' : status === 'done' ? 'applied' : 'answered'; }
+function str(x) { return typeof x === 'string' && x ? x : null; }
+function progress(p, ev, screens, ids) {
   if (!ev || typeof ev.type !== 'string') return p;
   var mine = function (id) { return typeof id === 'string' && !!id && (!screens || !screens.length || screens.indexOf(id) >= 0); };
-  var t = ev.type;
+  var t = ev.type, to = p && p.to || null;
+  if (t === 'request.sent') {                            // 보낸 곳과 길(47-5b) — 이 요청의 메모 id 가 든 것만, 진행이 이미 앞섰으면 그대로
+    var hit = Array.isArray(ids) && Array.isArray(ev.notes) && ev.notes.some(function (n) { return ids.indexOf(n) >= 0; });
+    if (!hit || (p && p.step !== 'sent') || !str(ev.via)) return p;
+    return {step: 'sent', via: ev.via, to: str(ev.to)};
+  }
+  if (t === 'agent.progress') {
+    if (!str(ev.text) || !flat(ev.text) || (to && str(ev.agent) && ev.agent !== to)) return p;
+    return {step: 'progress', text: flat(ev.text), screen: str(ev.screen), via: p && p.via || null, to: to || str(ev.agent)};
+  }
+  if (t === 'agent.reply') {
+    if (!Array.isArray(ids) || ids.indexOf(ev.note) < 0) return p;
+    return {step: 'replied', kind: str(ev.kind) || '', status: str(ev.status) || '', to: to || str(ev.agent)};
+  }
   if (t === 'claim' && mine(ev.screen)) return {step: 'working', screen: ev.screen};
   if (t === 'release' && mine(ev.screen)) return {step: 'done', screen: ev.screen};
   if (t === 'ai.write' && mine(ev.screen)) return {step: 'landed', screen: ev.screen};
@@ -174,6 +205,6 @@ function parseLast(raw) {
   return {last: {text: v.text, ids: v.ids.slice(), at: +v.at || 0}, bad: false};
 }
 
-HD.chat = {PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
+HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
            scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();

@@ -4,7 +4,12 @@
    rank(list, repo) → 새 목록: repo 안(cwd 가 repo 이거나 그 아래) 먼저, 그다음 running < idle < 그 밖, 그다음 이름(없으면 id)
    suggest(list, repo) → repo 안에서 running 인 에이전트가 정확히 하나면 그것, 아니면 null
    inRepo(cwd, repo) · key(path)(역슬래시 → '/', 끝 '/' 빼기, 드라이브 경로는 대소문자 무시) · label(a) → 이름 40자(넘으면 …) · folder(cwd) → 마지막 폴더 이름
-   NAME_MAX = 40 */
+   NAME_MAX = 40
+   받는 곳 메뉴(47-5b): menu(body) → {connected, rows, orphan, current, repo, error, bad, empty} — body.connected(접속한 에이전트, GET /api/agents 의 connected)를
+     먼저(접속 중 here 먼저 · 이름), Paseo 줄(rows)은 접속 목록에 같은 id 가 있으면 뺀다. orphan = 지금 받는 곳(current)이 어느 목록에도 없으면 {id, label}(예전에 붙인 것 — 보이게).
+     접속 줄 = {id, name, label, kind, kindSay, state:'here'|'away', stateSay, listen, progress(60자), current}. empty = 고를 에이전트가 하나도 없음
+   KIND_SAY · STATE_SAY · PROGRESS_MAX = 60
+   보낸 뒤(47-5b): delivery(fw, n) → {ok, text} — /api/forward 답 via 가 paseo·event·claude 면 에이전트가 받음(ok, 카드 덮개 'AI 수정 중'), 아니면 ok false·text null(대기열 — 셸의 지금 글) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -63,5 +68,45 @@ function rows(body) {
   }), current: cur, repo: repo, error: typeof b.error === 'string' && b.error ? b.error : null, bad: bad};
 }
 
-HD.agents = {rows: rows, rank: rank, suggest: suggest, inRepo: inRepo, key: key, label: label, folder: folder, NAME_MAX: NAME_MAX};
+var KIND_SAY = {claude: 'Claude', codex: 'Codex', paseo: 'Paseo', other: '에이전트'};
+var STATE_SAY = {here: '접속 중', away: '자리 비움'};
+var PROGRESS_MAX = 60;
+
+function cut(t, n) { t = String(t == null ? '' : t).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+
+function menu(body) {
+  var b = body && typeof body === 'object' ? body : {};
+  var base = rows(b), cur = base.current;
+  var raw = Array.isArray(b.connected) ? b.connected : [];
+  var good = raw.filter(ok);
+  var conn = good.map(function (a, i) { return {a: a, i: i}; }).sort(function (x, y) {
+    var sx = x.a.state === 'here' ? 0 : 1, sy = y.a.state === 'here' ? 0 : 1;
+    if (sx !== sy) return sx - sy;
+    var nx = nameOf(x.a), ny = nameOf(y.a);
+    return nx < ny ? -1 : nx > ny ? 1 : x.i - y.i;
+  }).map(function (o) {
+    var a = o.a, kind = KIND_SAY[a.kind] ? a.kind : 'other', state = a.state === 'here' ? 'here' : 'away';
+    var pr = a.progress && typeof a.progress.text === 'string' ? cut(a.progress.text, PROGRESS_MAX) : '';
+    return {id: a.id, name: nameOf(a), label: label(a), kind: kind, kindSay: KIND_SAY[kind], state: state, stateSay: STATE_SAY[state],
+            listen: a.listen !== false, progress: pr, current: a.id === cur};
+  });
+  var seen = {}; conn.forEach(function (c) { seen[c.id] = 1; });
+  var paseo = base.rows.filter(function (r) { return !seen[r.id]; });
+  var known = !!seen[cur] || paseo.some(function (r) { return r.id === cur; });
+  var orphan = cur && !known ? {id: cur, label: cut(cur, NAME_MAX)} : null;
+  return {connected: conn, rows: paseo, orphan: orphan, current: cur, repo: base.repo, error: base.error,
+          bad: base.bad + (raw.length - good.length), empty: !conn.length && !paseo.length && !orphan};
+}
+
+var DELIVERED = {
+  paseo: function (n) { return 'AI 에이전트에게 ' + n + '건 보냈어요 — 카드에 “AI 수정 중”'; },
+  event: function (n) { return '접속한 AI 에이전트에게 ' + n + '건 보냈어요(실시간) — 카드에 “AI 수정 중”'; },
+  claude: function (n) { return 'Claude 세션을 깨워 ' + n + '건 보냈어요 — 카드에 “AI 수정 중”'; }
+};
+function delivery(fw, n) {
+  var via = fw && typeof fw.via === 'string' ? fw.via : '';
+  return Object.prototype.hasOwnProperty.call(DELIVERED, via) ? {ok: true, text: DELIVERED[via](n)} : {ok: false, text: null};
+}
+
+HD.agents = {delivery: delivery, menu: menu, KIND_SAY: KIND_SAY, STATE_SAY: STATE_SAY, PROGRESS_MAX: PROGRESS_MAX, rows: rows, rank: rank, suggest: suggest, inRepo: inRepo, key: key, label: label, folder: folder, NAME_MAX: NAME_MAX};
 })();

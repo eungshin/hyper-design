@@ -12,6 +12,7 @@
 - 다른 자리의 칩(S1b 하단 대화창 받는 곳 칩): document 의도 `hd-agent-pick {anchor}` → 같은 메뉴를 그 칩 옆에(아래 자리가 모자라면 위로) 열고 `detail.done = true`. 같은 칩을 다시 누르면 닫는다. 열린 메뉴의 기준 칩에 `aria-expanded`
 - 언제 보이나: 도우미로 열었을 때만(`ctx.api.on`). 아니면 아무것도 만들지 않는다. 템플릿에는 줄이 없다
 - 층: `agents`(Model, 순수 — 줄·차례·제안·이름 자르기) · `view-agents`(View — 메뉴·`ctx.api` 부르기·자동). 상태 = 열린 메뉴·고르는 중·자동 끔 키(이 View 만). 보낼 곳의 주인은 도우미 `srv.agent` 하나, 캔버스 쪽 사본 `window.__hdAgent` 는 view-sync 가 고친다. 등록 `HD.feature('agents', {needs: ['api', '$', 'esc', 'toast', 'local', 'key']})` → `{open, close, auto() → Promise}` | `{}`(도우미 없음)
+- 47-5b: 메뉴는 `HD.agents.menu` — 접속한 에이전트(here/away) 먼저, 목록에 없는 지금 받는 곳, 마지막 `+ 새 터미널…`. 규칙·모듈은 `receivers.md`
 - 테스트는 가짜 paseo(`ls` = 한글 JSON, `send` = 로그)만 쓴다 — 실제 에이전트에 보내지 않는다
 
 ## 고치면 돌릴 것

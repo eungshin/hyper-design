@@ -953,6 +953,40 @@
         "test_canvas_blocks.py 2 · test_canvas_blocks_b.py 1 · test_canvas_edit.py::test_blank_layout_caption_has_name_and_multiline_purpose (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
       ],
       "note": "셸 0줄: 등록부 기능 rowHeads + document 의도(hd-row-pick/delete/rename/dissolve, hd-rows-changed)로 레이어 패널 ctx.pick·ctx.del 을 씀. 서버 /api/group-rename · /api/group-dissolve(순수 계획 + 쓰기 한 번 + restore)"
+    },
+    {
+      "slice": "47-5b 받는 곳 고르기 · 에이전트 상태 · 진행 줄 · 새 터미널(캔버스)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 9
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "규칙 10개 각각 부숴서 빨강 확인(메뉴 중복·orphan·away·request.sent 메모 id·받는 곳 진행·via 글·403 설명·reverted·live TYPES·delivery)"
+        },
+        {
+          "by": "browser",
+          "what": "live.js TYPES 에 agent.*·request.sent 가 없어 EventSource 가 새 이벤트를 듣지 않음 — 진행 줄·칩이 안 바뀜"
+        },
+        {
+          "by": "screenshot",
+          "what": "접속한 에이전트(via event)에 보내도 셸 토스트가 '보내지 못해 대기열'·덮개 '대기열' — HD.agents.delivery 로 고침"
+        }
+      ],
+      "waste": "영역 실행 중 다른 일꾼의 bar-place.js 작성 중(FileNotFound) + 부하 깨짐 2(혼자 통과)",
+      "flaky": [
+        "test_canvas_helper.py::test_helper_canvas_writes_delete_and_link_without_reload · test_canvas_instant.py::test_async_apply_whose_build_fails_reverts_the_optimistic_change (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
+      ],
+      "note": "셸 3줄(sendList 의 delivery) + CSS 1줄. 새 기능 presence·spawn 은 등록부 View, 규칙은 Model 4개(agents.menu/delivery · presence · spawn · undo-answer)"
     }
   ]
 }

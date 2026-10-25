@@ -4,6 +4,7 @@
      기록 없이 바뀐 것(AI 답·번호 매기기)은 다음 줄에 섞이지 않는다 — 한 일과 그 기록이 같은 차례에 일어나야 한다(셸의 record 자리 모두 그렇다).
    이번 세션 줄은 op 로, 지난 세션 줄은 d 를 ctx.track.write 로 되쓰고 ctx.adopt(이름들) 로 셸이 다시 읽어 그린다(상태 주인은 셸·state-sync 그대로).
    HD.viewHistory.mount(ctx) → {record(op), undo(), redo(), go(to), sent(), applied(), wrote(이름), state()}   op = {label, undo(), redo(), status?}
+   op.bind?(f) — 줄이 생길 때 표시 함수 f(note)를 받는다: 그 줄 옆에 짧은 표시(.hn)를 붙이거나('' 이면 지움) 다시 그린다(47-5b, 저장 안 함).
    ctx = {$, esc, list, undoBtn, redoBtn, toast(msg), getItem(k), setItem(k, v), key, track?{read(이름) → 값|null, write(이름, 값|null)}, adopt?(이름들), warn?(msg)}
      key 에 지난 줄을 남긴다(최근 200, d 는 새것부터 1 MB) */
 (function () {
@@ -43,7 +44,7 @@ function mount(ctx) {
     st.rows.forEach(function (r, k) {
       var i = k + 1;
       h += '<li data-i="' + i + '" tabindex="0" class="' + (i > st.at ? 'undone' : '') + (i < st.lock ? ' lock' : '') + (i === st.at ? ' now' : '') + '">' +
-        '<span class="hl">' + esc(r.label) + '</span><span class="hs hs-' + r.status + '">' + esc(H.STATUS[r.status]) + '</span><span class="ht">' + esc(r.at) + '</span></li>';
+        '<span class="hl">' + esc(r.label) + '</span>' + (r.note ? '<span class="hn">' + esc(r.note) + '</span>' : '') + '<span class="hs hs-' + r.status + '">' + esc(H.STATUS[r.status]) + '</span><span class="ht">' + esc(r.at) + '</span></li>';
       if (i === st.lock && st.lock > 0) h += '<li class="hbound" aria-label="되돌릴 수 없는 경계">↑ ' + esc(reason()) + '</li>';
     });
     list.innerHTML = h;
@@ -79,6 +80,7 @@ function mount(ctx) {
   function record(op) {
     var cur = readAll(), d = track ? H.diff(base, cur) : null, row = {label: op.label, status: op.status || 'canvas', at: time(), op: op};
     if (d) row.d = d;
+    if (typeof op.bind === 'function') op.bind(function (note) { st.rows.forEach(function (r) { if (r.op === op) r.note = note ? String(note) : ''; }); render(); });   // 줄 표시(47-5b: 되돌리기 답 '빌드 실패로 이미 되돌림') — 이번 세션만, 저장 안 함
     base = cur; clearTimeout(baseT); baseT = 0;
     set(H.reduce(st, {type: 'record', row: row}));
   }

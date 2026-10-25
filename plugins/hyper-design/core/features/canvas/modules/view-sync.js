@@ -7,6 +7,8 @@
          wrote?(res, list) — write() 가 파일에 쓴 직후·카드를 다시 싣기 전(res.paths = {편집 id: 그 요소의 새 경로}, task 49b 고른 요소 따라가기)}
    aiChip = 보내기가 어디로 가는지(agent = helper 의 --paseo-agent → 'AI 연결됨', 없으면 '받는 곳 없음' = 대기열 파일에만, R4)
      aiChip 에 'hd-agent' 이벤트 {detail:{agent, name}} 가 오면(view-agents 가 고른 뒤, #214) 'AI 연결됨 · <name>' 으로 고치고 window.__hdAgent 도 바꾼다
+   보내기의 /api/forward 에 notes = 넘긴 메모 id(최대 200, 47-5b — 받는 에이전트가 어느 메모인지 안다). 받는 곳은 도우미의 붙은 에이전트(attach) 그대로.
+   되돌리기 답 reverted:true(뒤 빌드가 깨져 이미 되돌린 쓰기, 47-5a) = 토스트 + 그 기록 줄에 '빌드 실패로 이미 되돌림'(op.bind 로 받은 표시 함수, HD.undoAnswer).
    on 이 아니면(file:// · 토큰 없음) 칩만 '파일로 열림' 이고 나머지는 부르지 않는다. 네트워크가 끊기면 Promise 가 실패 → 셸이 지금처럼(반영 대기·복사) */
 (function () {
 'use strict';
@@ -67,20 +69,23 @@ function mount(ctx) {
         .catch(function () { ctx.toast('파일에는 썼어요 — 판을 새로 그리지 못했어요. 새로고침해 주세요'); });
     });
   }
-  function restore(stamp, label) {
+  function restore(stamp, label, mark) {
     return post('/api/restore', {stamp: stamp}).then(function (r) {
-      if (r.error) { ctx.toast(r.reason === 'changed-since' ? '그 뒤에 파일이 바뀌어 되돌릴 수 없어요' : '되돌리지 못했어요: ' + r.error); return; }
+      var a = HD.undoAnswer.read(r);
+      if (mark) mark(a.note);                         // 기록 줄 표시(이미 되돌림 · 아니면 지움)
+      if (a.kind === 'already') { ctx.toast(a.msg, false, 6000); return; }
+      if (a.kind !== 'done') { ctx.toast(a.msg); return; }
       return refresh(r.changed, 'r' + stamp, null);
     }).catch(function () { ctx.toast('되돌리지 못했어요 — 파일에 바로 쓰기가 꺼져 있어요: ' + label); });
   }
   // 한 번 쓴 일 = 기록 한 줄(status file, 잠그지 않음). 되돌리기 = 되살리기, 다시 하기 = 같은 쓰기를 다시(새 stamp)
   function logged(label, again, stamp) {
-    var cur = stamp;
-    ctx.record({label: label, status: 'file',
-                undo: function () { track(restore(cur, label)); },
+    var cur = stamp, mark = null;
+    ctx.record({label: label, status: 'file', bind: function (f) { mark = f; },   // 기록 패널이 줄 표시 함수를 건넨다(47-5b)
+                undo: function () { track(restore(cur, label, mark)); },
                 redo: function () {               // 다시 쓰기가 안 되면 말한다(기록은 다시 한 줄로 보이지만 파일은 그대로)
                   var fail = function () { ctx.toast('다시 하지 못했어요 — 파일에 쓰지 못했어요: ' + label); };
-                  track(again().then(function (r) { if (r && r.stamp) { cur = r.stamp; return refresh(r.changed, r.stamp, r.stamp); } fail(); }, fail));
+                  track(again().then(function (r) { if (r && r.stamp) { cur = r.stamp; if (mark) mark(''); return refresh(r.changed, r.stamp, r.stamp); } fail(); }, fail));
                 }});
   }
 
@@ -118,7 +123,8 @@ function mount(ctx) {
       };
       if (!left.length) return fin(null);
       var t = ctx.request(left); window.__hdLastSend = t;
-      return post('/api/forward', {text: t}).then(fin);
+      var ids = left.map(function (n) { return n && n.id != null ? String(n.id) : ''; }).filter(Boolean).slice(0, 200);   // 서버 한도 NOTES_MAX
+      return post('/api/forward', {text: t, notes: ids}).then(fin);
     });
   }
   return {on: on, write: function (l, x) { return track(write(l, x)); }, del: function (x) { return track(del(x)); }, send: function (x) { return track(send(x)); },

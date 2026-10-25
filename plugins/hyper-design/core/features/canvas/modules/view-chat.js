@@ -8,6 +8,8 @@
    받는 곳 알약(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
    자리: 판(도크 왼쪽) 아래 가운데. 프로젝트 탭 바(아래 왼쪽, view-tabs 가 이 창 앞에서 멈춤)가 좁은 창에서 최소 폭이라 겹칠 때만 그 위로 올린다.
    진행 줄(S2, 47-4b): document 'hd-event'(view-live)를 HD.chat.progress 로 — 보낸 요청 화면의 claim·AI 쓰기·release 를 줄 하나(마지막 상태)로. 저장하지 않음(새로고침 = 메모 상태 줄).
+   받는 곳(47-5b): 알약 점은 #aichip[data-state](view-presence — 접속 중 초록 · 자리 비움 회색)를 따른다. 진행 줄은 이 요청의 메모 id 로 request.sent(via) →
+     agent.progress(진행 글) → agent.reply 를 따라가고, 받는 곳 이름은 보낼 때의 알약 글(HD.chat.line opt.agentName).
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
 'use strict';
@@ -50,6 +52,8 @@ var CSS =
   '#hdchat .ch-agent:hover,#hdchat .ch-agent[aria-expanded="true"]{background:#F2F2EF;color:#2b2b29}' +
   '#hdchat .ch-agent i{flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}' +
   '#hdchat .ch-agent.on{color:var(--ui-primary,#2b2b29)}#hdchat .ch-agent.on i{background:var(--ui-ok,#4f7d5f)}' +
+  '#hdchat .ch-agent.on[data-state="away"] i{background:#b5b5b0}' +
+  '#hdchat .ch-agent svg{flex:none;width:12px;height:12px;margin-left:-2px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;opacity:.7}' +
   '#hdchat .ch-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
   '#hdchat .ch-send{flex:none;margin-left:auto;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:var(--ui-primary,#2b2b29);color:#fff;display:grid;place-items:center;cursor:pointer}' +
   '#hdchat .ch-send:disabled{background:#E4E4DF;color:var(--ui-muted,#8a8a85);cursor:default}' +
@@ -66,7 +70,7 @@ function mount(ctx) {
     '<div class="ch-box"><button type="button" class="ch-hide" title="대화창 숨기기 — 창 메뉴에서 다시 보여요" aria-label="대화창 숨기기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>' +
     '<div class="ch-chips" aria-label="요청 범위" hidden></div>' +
     '<textarea rows="1" aria-label="요청 글"></textarea>' +
-    '<div class="ch-tools"><button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span></button>' +
+    '<div class="ch-tools"><button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
     '<button type="button" class="ch-send" disabled aria-label="보내기" title="보내기 (Enter)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>';
   document.body.appendChild(root); document.body.classList.add('has-chat');
   var ta = root.querySelector('textarea'), btn = root.querySelector('.ch-send'), chipsEl = root.querySelector('.ch-chips'), lineEl = root.querySelector('.ch-line');
@@ -108,7 +112,8 @@ function mount(ctx) {
   }
   function renderLine() {
     var inflight = !!(last && Date.now() - last.at < 20000);
-    var l = C.line(last, function (id) { return ctx.notes.find(id) || null; }, busyOf(), inflight, {progress: prog && prog.p, titleOf: ctx.title});
+    var l = C.line(last, function (id) { return ctx.notes.find(id) || null; }, busyOf(), inflight, {progress: prog && prog.p, titleOf: ctx.title,
+      agentName: function (id) { return prog && prog.name && (!prog.agent || prog.agent === id) ? prog.name : null; }});
     if (!l) { lineEl.hidden = true; shownLine = null; return; }
     var key = l.req + '\n' + l.text;
     if (key === shownLine) return;
@@ -147,6 +152,7 @@ function mount(ctx) {
     var on = ai.classList.contains('on'), t = ai.textContent || '', i = t.indexOf(' · '), label = on ? (i >= 0 ? t.slice(i + 3) : t) : (t || '받는 곳 없음');
     agentB.hidden = ai.hidden;
     agentB.classList.toggle('on', on);
+    if (on && ai.dataset.state) agentB.dataset.state = ai.dataset.state; else delete agentB.dataset.state;   // 접속 상태(view-presence)
     agentB.querySelector('span').textContent = label;
     agentB.title = ai.title || '';
     agentB.setAttribute('aria-label', '받는 곳: ' + label + ' — 바꾸기');
@@ -167,7 +173,8 @@ function mount(ctx) {
     if (ok === false) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 보내 주세요'); return false; }
     last = C.record(text, r.memos, Date.now());
     prog = {screens: r.memos.some(function (m) { return m.scope === 'all'; }) ? [] :   // 진행 줄(S2) — 이 요청 화면의 이벤트만(모든 화면 요청 = 아무 화면)
-      r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null};
+      r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null,
+      ids: last.ids.slice(), agent: window.__hdAgent || null, name: ai && ai.classList.contains('on') ? agentB.querySelector('span').textContent : null};   // 받는 곳(47-5b) = 보낼 때의 알약
     try { ctx.local.setItem(LKEY, JSON.stringify(last)); } catch (e) {}   // 저장 공간이 꽉 차도 이 창의 상태 줄은 그대로 보인다
     render();
     return true;
@@ -214,7 +221,7 @@ function mount(ctx) {
   addEventListener('resize', place);
   document.addEventListener('hd-event', function (e) {   // 서버 이벤트(view-live 의도, 47-4b) → 진행 줄: AI 작업 중 · 반영됨 · 끝 — 메모 답은 상태를 다시 읽은 뒤 1초 그리기가 붙인다
     if (!prog) return;
-    var np = C.progress(prog.p, e.detail, prog.screens);
+    var np = C.progress(prog.p, e.detail, prog.screens, prog.ids);
     if (np !== prog.p) { prog.p = np; renderLine(); }
   });
   setInterval(render, 1000);                               // 메모 상태·덮개는 다른 길(2초 읽기·답)로 바뀐다 — 47-4 SSE 가 오면 이벤트로

@@ -451,6 +451,7 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
 #hlist .hs{flex:none;font-size:11px;color:#666;background:#F0F1EE;border-radius:999px;padding:1px 7px}
 #hlist .hs-sent,#hlist .hs-file{background:#E3E4E1;color:#333}
 #hlist .ht{flex:none;color:#aaa;font-size:11px}
+#hlist .hn{flex:none;font-size:11px;color:var(--ui-accent);white-space:nowrap}   /* 줄 표시(47-5b): 빌드 실패로 이미 되돌림 */
 #hlist .hbound{margin:4px 0;padding:4px 6px;border-top:2px dashed #BDBFBA;color:#888;font-size:11.5px}
 #pNotes{padding:0}#pNotes .dkp-empty{padding:10px 12px}
 .dk-f{position:absolute;pointer-events:auto;background:#fff;border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.26);display:flex;flex-direction:column;overflow:hidden;font-size:13px;cursor:default}
@@ -2490,8 +2491,8 @@ function sendList(list) {
     r.left.forEach(function (n) { n.sent = true; });
     saveNotes();
     if (r.left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
-    var paseo = r.fw && r.fw.via === 'paseo', ai = !r.left.length ? '' :   // 어디로 갔는지·AI 가 켜졌는지 말로(대기열이면 아무도 안 읽는다)
-      paseo ? 'AI 에이전트에게 ' + r.left.length + '건 보냈어요 — 카드에 “AI 수정 중”' :
+    var dv = HD.agents.delivery(r.fw, r.left.length), ai = !r.left.length ? '' :   // 어디로 갔는지·AI 가 켜졌는지 말로(대기열이면 아무도 안 읽는다) — paseo·접속한 에이전트(event)·claude = 받음(47-5b)
+      dv.ok ? dv.text :
       window.__hdAgent ? 'AI 에이전트에게 보내지 못해 ' + r.left.length + '건을 대기열 파일에만 저장했어요' :
       'AI 터미널이 연결돼 있지 않아요 — ' + r.left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요. 받게 하려면 터미널 에이전트에 hd 명령(hd notes)으로 읽게 하거나 도우미를 --paseo-agent <id> 로 다시 띄우세요';
     var said = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai;
@@ -2502,7 +2503,7 @@ function sendList(list) {
     if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
       var seen = {}, scs = [];
       r.left.forEach(function (n) { var c = VL.cardEl(n.screen), b = c && $('.cover', c); if (b && !seen[n.screen]) { seen[n.screen] = 1; scs.push({id: n.screen, file: b.dataset.file}); } });
-      VB.mark(scs, r.fw && r.fw.via === 'paseo' ? 'paseo' : 'queue');
+      VB.mark(scs, dv.ok ? 'paseo' : 'queue');       // 받은 곳이 있으면 'AI 수정 중'(덮개 종류 paseo — 접속한 에이전트·claude 도)
     }
   }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요', warn); }).then(sendDone, sendDone);
 }
