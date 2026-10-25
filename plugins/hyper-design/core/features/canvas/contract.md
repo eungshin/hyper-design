@@ -13,13 +13,14 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 
 ## 출력
 - `out/index.html` — `canvas_template.html`에 데이터(`hd-data`, 화면 파일에서 미리 뽑은 화면 사이 링크 `links` 포함 — `palette.js` 의 `links()` 와 같은 규칙: `href`·`data-href`·`onclick` 안 `.html`)·`modules/*.js`·`modules/motion.css`를 끼워 넣은 한 파일. 화면 카드는 보일 때 한 번만 불러온다
+- 코드 도장(47-7): `index.html` 의 `<head>` 바로 뒤 `<meta name="hd-code" content="…">` — env `HD_CODE_STAMP`(`build_ref.py` 가 넘김 = `g:<ref 의 core 나무 sha 앞 16>`), 없으면 빌드 입력(템플릿·모듈·motion.css·build_canvas.py·code_stamp.py·palette.js) 내용 해시 `w:…`(`build_canvas.work_stamp`). 규칙은 순수 `code_stamp.py`(`tree_stamp` `content_stamp` `stamp_page` `page_stamp` `stale` `reuse_verdict` `page_after`) — 지금 도장을 모르면(git 실패) 옛것이라 하지 않는다
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
 ## 구조
 - `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 기능별 규칙은 `contract/<기능>.md`(파일 하나 = 기능 하나 — 구조 규칙과 '고치면 돌릴 것' 줄). 목록은 그 폴더 자체다(여기에 줄을 더하지 않는다). 모듈 머리 주석이 아니라 파일로 둔 까닭: 규칙이 Model·View·셸에 걸치고, 머리 주석은 `index.html` 에 그대로 실려 나가며, 머리 주석은 한 줄 책임 + API 만 말한다
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
-- 기능 등록부 `features`(ViewModel) — View 가 읽힐 때 `HD.feature(이름, {needs, mount(ctx)})` 로 등록하고, 셸은 기존 mount 들 뒤에서 `HD.mountAll(ctx)` 를 한 번 부른다(공통 ctx 칸은 `modules/features.js` 머리 주석). `needs` 칸이 없거나 mount 가 던지면 그 기능만 빠지고 `[hd]` console.error + 토스트, 나머지는 붙는다. 기존 mount 는 그 자리에 둔다(스트랭글러) — 지금 등록부로 붙는 것: `popPlace`
+- 기능 등록부 `features`(ViewModel) — View 가 읽힐 때 `HD.feature(이름, {needs, mount(ctx)})` 로 등록하고, 셸은 기존 mount 들 뒤에서 `HD.mountAll(ctx)` 를 한 번 부른다(공통 ctx 칸은 `modules/features.js` 머리 주석). `needs` 칸이 없거나 mount 가 던지면 그 기능만 빠지고 `[hd]` console.error + 토스트, 나머지는 붙는다. 기존 mount 는 그 자리에 둔다(스트랭글러) — 지금 등록부로 붙는 것: `agents` · `aiUndo` · `artboard` · `blocks` · `chat` · `dsCard` · `home` · `popPlace` · `presence` · `projects` · `promote` · `readOnly` · `rowHeads` · `spawn` · `swap` · `tabs`(목록의 진실은 `modules/` 의 `HD.feature(` — 여기는 참고)
 - Model·ViewModel 파일은 DOM·저장소·메시지를 쓰지 않는다(`tests/test_canvas_modules.py`의 순수성 검사 — Model·ViewModel 전부). 모듈 목록은 손으로 적지 않는다: 빌드(`build_canvas.modules()`)가 `modules/*.js` 를 모두 끼우고(view-* 아닌 것 먼저 — 등록부가 View 보다 먼저 읽히게, 그 안은 이름 차례) 테스트가 같은 함수를 읽는다. 층도 표가 아니라 파일이 말한다: 머리 주석 첫 줄 `/* Model|ViewModel|View — …` 이고 파일 이름과 맞아야 한다(view-* = View, 그 밖 = Model·ViewModel — 다르거나 없으면 실패). HD 이름의 주인 모듈은 파일의 `HD.이름 =` 에서 읽는다(이름 하나 = 주인 하나)
 - 화면 ↔ 캔버스 메시지(`hd-pick`·`hd-links`·`hd-link-go` 등)와 "보내기" 요청문 형식은 `/hyper-design:fix`가 읽으므로 바꾸지 않는다
 - 추가된 메시지(기존 것은 그대로): `hd-hit-at {x, y}` → 화면이 `hd-hit {screen, path, text, rect, to}`로 답한다(그 자리 요소, 없으면 `path:null`). 1.5초 안에 답이 없으면(palette.js 없음) 캔버스는 "이 화면은 편집할 수 없어요"를 띄운다
@@ -54,8 +55,9 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
 - 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다
 - 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고(안인지는 `hd_projects.inside` — `hd` 와 같은 out 규칙 하나, #282), 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 다시 빌드한다(실패하면 되돌림). CLI 로 뜬 도우미는 `hd open` 과 같은 `build_ref.py`(저장소면 git HEAD 코드, 아니면 작업 트리 — #278)로, 같은 프로세스에서 `make_server` 를 쓰는 테스트는 작업 트리 `build_canvas.py` 로
+- 다시 열면 늘 지금 코드(47-7): CLI 도우미는 뜰 때 `build_ref.code_stamp()` 를 표지·`.hd-helper.json` 의 `code` 에 적는다(이 프로세스 Python 의 판). 페이지를 줄 때마다(`ProjectSession.page` → `refresh`) `index.html` 도장이 지금 도장과 다르면 다시 빌드 — 다시 빌드해도 그 도장이 안 나오면 그 도장으로는 다시 하지 않고 `[hd]` 한 줄(있던 페이지로). 옛 코드로 뜬 도우미를 끄고 새로 띄우는 일은 열기 쪽(`hd_client.freshen` — hd/contract.md '코드 도장'). 같은 프로세스 테스트(`make_server`)는 `code` 없음 = 견주지 않음
 - 정리(#281): 시작할 때와 쓰기마다 `.hd-history/<시각>/` 이 가장 새 200개 밖이면서 30일보다 오래됐으면 지우고, `.hd-queue/<시각>.txt` 중 보냄·걷힘 표시(`<시각>.sent` — paseo send 가 받았을 때 도우미가 씀 · `<시각>.lifted` — 다 처리한 쪽이 씀)가 붙은 7일 넘은 것을 표시와 함께 지운다. 시각 이름이 아닌 것(`fix-components.css` 등)은 손대지 않는다(고르기 = `hd/helper_model.py`). 떼어 띄운 도우미의 로그는 `<out>/.hd-helper.log`
-- 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다
+- 바로 쓰는 편집: 글자 · 카드 이름·설명(`screens.json`) · 잇기/도착 바꾸기 · 끊기/트리거 해제. 나머지 메모는 요청문 그대로 `<out>/.hd-queue/<시각>.txt`에 쓰고, `--paseo-agent`가 있으면 그 파일을 `paseo send … --prompt-file … --no-wait`로 넘긴다. 47-5a 부터 받는 곳은 `adapters.choose` 가 고른다 — 접속(hello)해 듣는 에이전트면 이벤트 `request.sent`(터미널 없이), 아니면 claude(`HD_CLAUDE_WAKE=1`) · paseo send(위 그대로) · 대기열(`contract/presence.md`)
 - `POST /api/watch {files}` → `{mtimes: {file: mtime|null}}`(out 밖·없는 파일 = null) — AI 수정 중 덮개가 끝을 아는 유일한 신호
 - 도우미로 열어도 저장 키는 file://로 열 때와 같다(`window.__hdKeyPath`). 도우미가 없거나 꺼져 있으면 '보내기'는 지금처럼 요청문을 복사한다
 - 프로젝트 상태 파일 `<out>/.hd-canvas.json` = `{"version":1, "rev":N, "updated":"<iso>", "state":{"notes":…, "card-pos":…, "edit-log":…, "link-names":…, "hidden":…, "locked":…, "folders":…, "busy":…, "note-seq":…}}`(값은 풀어 둔 JSON, 해시 없는 이름, 모르는 키는 그대로) — 터미널 에이전트(`hd`)가 읽는 곳. `index.html` 을 줄 때 `window.__hdState = {rev, state}` 를 끼워 넣는다
@@ -101,6 +103,10 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `foundation/palette.js` | `links or modal or tools` |
 | `helper.py` | `helper`(+ `-m slow -k helper_upkeep`, hd 테스트) |
 | `build_canvas.py` | `unit or flow or links` |
+| `code_stamp.py` · `build_ref.py` 의 `code_stamp` · `session.refresh`(코드 도장, 47-7) | `-m unit -k code_stamp`(test_canvas_unit_code_stamp.py) + `-m slow` + `hd/tests -k code_fresh` |
+| `modules/presence.js` · `spawn.js` · `undo-answer.js` · `view-presence.js` · `view-spawn.js`(받는 곳·에이전트 상태·새 터미널, 47-5b) | `contract/receivers.md` 의 줄 |
+| `modules/bar-place.js`(요소 막대 자리, 51-7a) | `contract/blocks.md` 의 줄 |
+| `modules/rows.js` `space` · `view-rows.js` `space()`(줄 사이 여백, 51-8) | `contract/rows.md` 의 줄 |
 | 여러 영역에 걸친 변경 | 그 영역들을 `or` 로 묶어서(전체는 아래 3 에서만) |
 
 **돌리는 순서 (전체를 반복해서 돌리지 않는다)**

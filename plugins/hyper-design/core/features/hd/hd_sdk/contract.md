@@ -34,7 +34,7 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 - 서버 거절 = `from_status`: `'<도우미|홈 서버>가 거절했어요(<code>): <error 또는 errors 줄들>'`.
 - 쓰기 전에 규칙으로 먼저 본다(답·덮개·에이전트 id·없는 화면) — 걸리면 서버에 가지 않는다.
 
-## 아직 (다음 단계)
+## 흐름 (47-4b)
 - `Project.events(since=None, timeout=None, retries=3)`(47-4b) = SSE `<세션>/api/events`(모양 `canvas/tests/protocol/events.json`) → `Event` generator. 끊기면 마지막 id 를 Last-Event-ID 로 다시 붙고(0.5·1·2…초, 연달아 retries 번 넘게 실패 = `Offline`), reset 은 `Event('reset')` 으로 내고 그 `last` 부터 — 받는 쪽은 상태를 다시 읽는다. 흐름이 없는 옛 서버(404)·흐름을 못 여는 transport = `NotYet`. timeout = 그 초 뒤 끝(오류 없음).
 - `Project.wait` = 흐름이 열릴 때와 notes.changed·claim·release·reset 마다 상태를 다시 본다(타이머 없이 깨어남). 흐름이 없거나 끊겨 다시 못 붙으면 남은 시간 2초 `GET /api/state`(서버가 다시 뜨면 finder 로 새 표지).
 ## 접속 (task 47-5a, 서버 계약 `canvas/tests/protocol/presence.json`)
@@ -48,8 +48,9 @@ p.bye()                              # 맥박 멈춤 + away
 - `Hub.hello()`(인자 없음) = 예전 그대로 `GET /v1/sessions` 로 닿는지·토큰. 프로젝트나 who 를 주면 접속 알리기 → 그 `Project`
 - `Project.hello(id=None, name, kind, pid, listen=True, session, lease, beat=True)` — id 기본 = `whoami`. `listen=False` = 보이기만(보내기는 어댑터 — `hd attach` 가 이렇게). 옛 서버 = `NotYet`
 - `beat()` = `POST /beat`, 404 unknown 이면 hello 다시 · `bye()` · `progress(text, screen=None, agent=None)` → 이벤트 id(모르는 id 면 보이기만 hello 뒤 한 번 더) · `agents()` · `requests(since, timeout)`(hello 먼저)
-- CLI: `hd attach` 는 붙인 뒤 hello(kind paseo, listen false, 맥박 없음 — 실패해도 attach 는 됨) · `hd progress "<글>" [--screen] [--agent]`
+- CLI: `hd attach` 는 붙인 뒤 hello(kind paseo, listen false, 맥박 없음 — 실패해도 attach 는 됨) · `hd progress "<글>" [--screen] [--agent]`(글 1–200자, `--json` → `{project, text, screen, event}`)
+- 받는 길은 둘(옛 길을 지우지 않음): 접속해 듣기(위 — `request.sent` via event) · 접속하지 않음(`hd attach` 의 Paseo 보내기 · 대기열 파일 `<out>/.hd-queue` + `hd notes`/`hd wait`). 서버가 고른다(`canvas/contract/presence.md` '받는 곳 고르기')
 - `apply(…, async=True)` 는 47-4a 서버가 받으면 그대로 넘어간다(옵션을 몸통에 그대로 실음).
 
 ## 테스트
-`python -m pytest plugins/hyper-design/core/features/hd/tests -k "sdk or cli_lock"` — `test_hd_sdk_unit.py`(가짜 Transport: 가족·바꾸기·순수성·Note/Event·Project 읽기/쓰기/거절 종류/wait·Hub hello/new/고르기, 1초 안) · `test_hd_sdk_hub.py`(이 프로세스 안 진짜 허브 + 임시 HD_HOME: save → open → notes → reply → claim/release → apply → files → 틀린 토큰 Unauthorized → stop → 닫힌 세션 NotFound → 허브 끔 Offline) · `test_hd_cli_lock.py`(CLI 글자 그대로, 옛 도우미·허브 세션 둘 다).
+`python -m pytest plugins/hyper-design/core/features/hd/tests -k "sdk or cli_lock"` — `test_hd_sdk_unit.py`(가짜 Transport: 가족·바꾸기·순수성·Note/Event·Project 읽기/쓰기/거절 종류/wait·Hub hello/new/고르기, 1초 안) · `test_hd_sdk_hub.py`(이 프로세스 안 진짜 허브 + 임시 HD_HOME: save → open → notes → reply → claim/release → apply → files → 틀린 토큰 Unauthorized → stop → 닫힌 세션 NotFound → 허브 끔 Offline) · `test_hd_cli_lock.py`(CLI 글자 그대로, 옛 도우미·허브 세션 둘 다) · `test_hd_sdk_presence.py`(47-5a, 가짜 Transport: whoami · hello/맥박/bye · 옛 서버 NotYet · progress/agents/requests · Hub.hello · CLI attach hello · `hd progress`) · `test_hd_sdk_presence_hub.py`(진짜 허브: hello → 캔버스 보내기 → `requests()` 가 받음 → progress → bye = away, 터미널·Paseo 없음). 접속만 고치면 `-k presence`.
