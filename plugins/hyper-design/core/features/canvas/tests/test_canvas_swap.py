@@ -162,7 +162,10 @@ def test_touched_card_waits_with_pill_then_swaps(ctx, out):
         # 2) 크게 보기가 그 화면 → 미룸 → 닫으면 저절로
         pg.keyboard.press("Escape")
         pg.wait_for_selector("#pop", state="hidden", timeout=4000)
+        # 숨은 메모 칸(#pnote)이 아직 포커스를 쥐고 있으면(Chrome 은 다음 그리기 때 놓는다) 'h' 가 입력으로 읽혀 도구가 안 바뀐다 — 48b 탐침으로 찾은 깨짐
+        pg.wait_for_function("!document.getElementById('pop').contains(document.activeElement)")
         pg.keyboard.press("h")                            # 메모 도구를 끄고(손: 카드 누르기 = 크게 보기 — V 는 49a 부터 고른 카드 안 요소 고르기)
+        assert pg.get_attribute('#tools [data-tool="hand"]', "aria-pressed") == "true"
         open_screen(pg, "job")
         post(srv, "/api/claim", {"screen": "job"})        # AI 덮개 길(방금 다시 실은 카드의 5초 건너뛰기와 상관없이)
         pg.wait_for_selector(JOB + ' .busy[data-kind="working"]', timeout=8000)
