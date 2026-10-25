@@ -11,7 +11,7 @@ import urllib.request
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, swap_done, swap_mark  # noqa: F401
 
 sys.path.insert(0, str(SCRIPTS))
 import helper  # noqa: E402
@@ -76,19 +76,19 @@ def test_claim_cover_without_reload_and_only_changed_card_reloads(ctx, out):
         pg.wait_for_function("document.getElementById('modal').hidden")
         assert pg.locator("#modal .busy").count() == 0, "닫으면 막대 칩도 없다"
         before = pg.evaluate(SRCS)
+        m = swap_mark(pg)
         touch(out / "screens" / "job.html")               # 끝난 편집 → 덮개가 걷히고 그 카드만 다시
         pg.wait_for_selector(cover, state="detached", timeout=8000)
-        pg.wait_for_function("(b) => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return f && ((f.getAttribute('src') || '') + '|' + (f.getAttribute('data-src') || '')) !== b; }",
-                             arg=before["job"], timeout=8000)
+        swap_done(pg, "job", m, timeout=8000)
         pg.wait_for_timeout(2500)                          # 도우미 알림(1초)·카드 폴링(1초)이 한 바퀴 더 돌아도
         after = pg.evaluate(SRCS)
         assert [k for k in before if before[k] != after[k]] == ["job"], "다른 카드는 다시 싣지 않는다"
         assert pg.evaluate("window.__sameLoad") == 1
 
         before = after                                     # 덮개 없는 카드: 파일이 바뀌면 그 카드만
+        m = swap_mark(pg)
         touch(out / "screens" / "usage.html")
-        pg.wait_for_function("(b) => { const f = document.querySelector('.card[data-id=\"usage\"] .phone iframe'); return f && ((f.getAttribute('src') || '') + '|' + (f.getAttribute('data-src') || '')) !== b; }",
-                             arg=before["usage"], timeout=8000)
+        swap_done(pg, "usage", m, timeout=8000)
         pg.wait_for_timeout(1500)
         after = pg.evaluate(SRCS)
         assert [k for k in before if before[k] != after[k]] == ["usage"]
@@ -164,9 +164,9 @@ def test_ai_write_event_reloads_the_card_with_polling_off(ctx, out):
         pg.wait_for_timeout(2600)                          # 폴링이면 상태 읽기 1번 + /api/files 2번은 있었다
         assert polls == [], "실시간이면 폴링 없음: %s" % polls
         before = pg.evaluate(SRCS)
+        m = swap_mark(pg)
         touch(out / "screens" / "job.html")                # 터미널 AI 가 쓴 것 = 서버 지켜보기 → screen.written(by ai)
-        pg.wait_for_function("(b) => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return f && (f.getAttribute('src') || '') + '|' + (f.getAttribute('data-src') || '') !== b; }",
-                             arg=before["job"], timeout=6000)
+        swap_done(pg, "job", m, timeout=6000)
         after = pg.evaluate(SRCS)
         assert [k for k in before if before[k] != after.get(k)] == ["job"], "그 카드만"
         assert not [u for u in polls if "/api/files" in u], "다시 싣기는 이벤트로(파일 폴링 없음): %s" % polls

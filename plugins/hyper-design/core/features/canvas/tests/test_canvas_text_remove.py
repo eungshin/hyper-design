@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, reload, zoom_to  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, reload, swap_done, swap_mark, zoom_to  # noqa: F401
 from test_canvas_edit import NOTES_JS, notes_of, wait_notes
 
 sys.path.insert(0, str(SCRIPTS))
@@ -114,9 +114,10 @@ def test_editing_a_two_line_text_twice_leaves_only_the_latest(ctx, out):   # K1 
     try:
         xy = _h1_xy(pg)
         # task 49a: 도우미가 있으면 글자 고치기가 [보내기] 없이 바로 파일에(예전 = 반영 대기 → 보내기). 지키는 것은 같다: 두 번째 고치기 뒤 파일·카드에 마지막 글만
+        m = swap_mark(pg)
         _edit_text(pg, xy, "줄1\n줄2")
         _wait_h1(pg, out, "줄1<br>줄2")
-        pg.wait_for_timeout(600)                         # 바뀐 카드 다시 싣기
+        swap_done(pg, "job", m)                          # 바뀐 카드 다시 싣기
         xy = _h1_xy(pg)
         _edit_text(pg, xy, "끝")
         _wait_h1(pg, out, "끝")                          # 두 번째 고치기 뒤 옛 줄(줄2)이 남으면 안 된다

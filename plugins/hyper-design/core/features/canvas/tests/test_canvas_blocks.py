@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, zoom_to  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, swap_done, swap_mark, zoom_to  # noqa: F401
 from test_canvas_edit import NOTES_JS, notes_of, wait_notes
 from test_canvas_text_remove import _open, _frame, _serve, inline_type, out  # noqa: F401
 
@@ -54,21 +54,10 @@ def _bar(pg):
     return pg.evaluate("[...document.querySelectorAll('#elbar button[data-act]')].map(b => [b.dataset.act, b.textContent, b.getAttribute('aria-disabled') !== 'true', !!b.dataset.ask])")
 
 
-def _frame_until(pg, js, arg=None, sid="job"):
-    """쓴 뒤 카드가 새 버전(?v=)으로 바뀌어(48a: 숨은 둘째 틀에 싣고 → 페이드 → 옛 틀 치움) 그 카드에 틀이 하나만 남고, 그 틀에서 js 가 참이 될 때까지.
-    옛 틀 핸들을 잡지 않고 매번 카드의 지금 iframe 을 다시 찾는다."""
-    sel = '.card[data-id="%s"] .phone iframe' % sid
-    for _ in range(250):
-        try:
-            fs = pg.query_selector_all(sel)
-            if len(fs) == 1 and "?v=" in (fs[0].get_attribute("src") or ""):
-                fr = fs[0].content_frame()
-                if fr and fr.evaluate(js, arg):
-                    return
-        except Exception:                                # 틀이 막 떨어짐·아직 없음
-            pass
-        pg.wait_for_timeout(100)
-    raise AssertionError("카드가 새 파일로 다시 실리지 않았다: " + js)
+def _frame_until(pg, js, mark, arg=None, sid="job"):
+    """쓴 뒤 그 카드의 교체(48a: 숨은 둘째 틀에 싣고 → 페이드 → 옛 틀 치움)가 끝나면(swap_done, mark = 쓰기 전 swap_mark) 그 카드의 지금 틀에서 js 가 참이 될 때까지."""
+    swap_done(pg, sid, mark)
+    _frame(pg, sid).wait_for_function(js, arg=arg, timeout=5000)
 
 
 def _logged(pg):
@@ -107,11 +96,12 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
         shot(pg, "board-elbar.png")
+        m = swap_mark(pg)
         _act(pg, "dup")
         _wait_file(pg, out, lambda s: s.count('<h1 class="title">하는 일이 무엇인가요?</h1>') == 2, "복제가 파일에 바로 써지지 않았다")
         assert pg.evaluate("(" + NOTES_JS + ").length") == 0, "반영 대기로 남지 않는다"
         assert pg.is_hidden("#elbar"), "바뀐 카드의 고른 요소는 풀린다"
-        _frame_until(pg, "(s) => document.querySelectorAll(s).length === 2", H1)
+        _frame_until(pg, "(s) => document.querySelectorAll(s).length === 2", m, H1)
         pg.wait_for_timeout(500)
         shot(pg, "board-duplicate-after.png")
         _logged(pg)
@@ -132,10 +122,11 @@ def test_alt_arrow_moves_element_in_file_and_undo_restores(ctx, out):
         xy = _xy(pg, TILE2)
         _pick_element(pg, xy)
         shot(pg, "board-move-before.png")
+        m = swap_mark(pg)
         pg.keyboard.press("Alt+ArrowUp")
         _wait_file(pg, out, lambda s: s.index("대학원생·연구원") < s.index("대학생<"), "Alt+↑ 가 앞 형제와 자리를 바꾸지 않았다")
         assert "</button>\n          <button" in _job(out), "형제 사이 줄바꿈·들여쓰기는 그대로"
-        _frame_until(pg, "() => document.querySelector('.tile-grid > button').textContent.indexOf('대학원생') >= 0")
+        _frame_until(pg, "() => document.querySelector('.tile-grid > button').textContent.indexOf('대학원생') >= 0", m)
         pg.wait_for_timeout(500)
         shot(pg, "board-move-after.png")
         _logged(pg)

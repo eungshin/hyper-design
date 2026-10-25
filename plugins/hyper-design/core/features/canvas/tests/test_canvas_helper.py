@@ -12,7 +12,7 @@ import urllib.request
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, swap_done, swap_mark  # noqa: F401
 
 sys.path.insert(0, str(SCRIPTS))
 import helper  # noqa: E402
@@ -233,6 +233,7 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         assert pg.text_content("#mode") == "파일에 바로 씀", "모드 칩(E9)"
         assert pg.text_content("#aichip") == "받는 곳 없음" and pg.is_visible("#aichip"), "보내기가 AI 로 가는지 위쪽 줄에 늘 보인다"
         pg.evaluate("window.__hdStay = 1")               # 새로고침하면 사라지는 표지
+        m = swap_mark(pg)
         pg.click("#nsend")
         pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
         last = pg.evaluate("window.__hdLastHelper")
@@ -242,7 +243,8 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
         assert "도우미가 씀" in (out / "screens" / "job.html").read_text(encoding="utf-8")
         assert "이건 무슨 뜻?" in pathlib.Path(last["forward"]["path"]).read_text(encoding="utf-8")
         assert pg.evaluate("window.__hdStay") == 1, "쓴 뒤 페이지 전체를 새로고침하지 않는다(E17)"
-        pg.wait_for_function(FRESH, arg="job", timeout=8000)   # 바뀐 카드는 새 버전(?v=)을 싣는다 — 실린 카드는 숨긴 틀에서 다 그린 뒤 바뀐다(48a)
+        swap_done(pg, "job", m, timeout=8000)              # 바뀐 카드는 새 버전(?v=)을 싣는다 — 실린 카드는 숨긴 틀에서 다 그린 뒤 바뀐다(48a)
+        assert pg.evaluate(FRESH, "job")
         left = pg.evaluate("JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]')")
         assert [n["id"] for n in left] == ["x2"] and left[0]["sent"], "바로 쓴 편집은 메모에서 빠지고, 터미널로 보낸 것은 보냄"
         srv.shutdown(); srv.server_close()                  # 도우미가 꺼지면 지금처럼 복사
@@ -348,9 +350,11 @@ def test_helper_canvas_busy_chip_never_hides_screen(ctx, out):   # Q2b · task 3
         pg.wait_for_selector(busy + '[data-kind="queued"]')    # 새로고침해도 남는다
         pg.wait_for_function("Object.keys(localStorage).some(k => k.startsWith('hd-busy:') && /\"mtime\":[0-9]/.test(localStorage.getItem(k)))", timeout=5000)
         f = out / "screens" / "job.html"
+        m = swap_mark(pg)
         f.write_text(f.read_text(encoding="utf-8") + "\n<!-- AI 가 고침 -->\n", encoding="utf-8")
         pg.wait_for_selector(busy, state="detached", timeout=6000)  # 화면 파일이 바뀌면 걷힌다
-        pg.wait_for_function(FRESH, arg="job", timeout=8000)   # 그 카드는 새 버전(?v=)을 싣는다(48a: 다 그린 뒤 바뀜)
+        swap_done(pg, "job", m, timeout=8000)              # 그 카드는 새 버전(?v=)을 싣는다(48a: 다 그린 뒤 바뀜)
+        assert pg.evaluate(FRESH, "job")
         zoom_to(pg, "language", 420)
         pg.locator(work + " [data-act=lift]").click()            # [×] = 손으로 바로 걷기 · 테두리도
         pg.wait_for_selector(work, state="detached", timeout=4000)

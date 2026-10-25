@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from test_canvas_v2 import browser, ctx, zoom_to  # noqa: F401
+from test_canvas_v2 import browser, ctx, swap_done, swap_mark, zoom_to  # noqa: F401
 from test_canvas_text_remove import _open, _frame, _serve, inline_type, out  # noqa: F401
 from test_canvas_blocks import _xy, _pick_element, _wait_file
 
@@ -59,9 +59,10 @@ def test_figma_keys_walk_siblings_parent_child_and_enter_edits_text(ctx, out):
         if SHOTS:
             pg.screenshot(path=os.path.join(SHOTS, "51-2-after-edit.png"))
         pg.keyboard.press("Enter")                       # 저장해도 그대로(도우미가 쓰고 카드를 다시 실은 뒤에도)
+        m = swap_mark(pg)
         inline_type(pg, _frame(pg), "h1.title", "새 제목")
         _wait_file(pg, out, lambda s: '<h1 class="title">새 제목</h1>' in s, "그 자리 고치기가 파일에 써지지 않았다")
-        pg.wait_for_timeout(1500)
+        swap_done(pg, "job", m)                          # 도우미가 쓰고 카드를 다시 실은 뒤
         _is(pg, "h1.title")
         pg.focus("#hdchat textarea")                     # 입력 칸의 Tab 은 그 칸 것 — 고른 요소는 그대로
         pg.keyboard.press("Tab")

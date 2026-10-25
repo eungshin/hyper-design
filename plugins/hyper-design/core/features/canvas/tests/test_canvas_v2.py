@@ -73,6 +73,28 @@ def reload(pg):
     pg.wait_for_timeout(200)
 
 
+# 카드 화면 교체(48a)가 끝난 때 — 판이 document 에 내는 'hd-swap' {id, phase: start|done|failed} 의도(modules/view-swap.js)만 읽는다.
+# done = 새 틀이 그 자리 틀이 되고 옛 틀이 빠진 뒤(화면 밖 카드는 data-src 만 바꾼 뒤). 쓰기 전에 swap_mark, 쓴 뒤 swap_done.
+SWAP_REC = """() => { if (!window.__hdSwapLog) { window.__hdSwapLog = [];
+  document.addEventListener('hd-swap', e => window.__hdSwapLog.push(Object.assign({}, e.detail))); }
+  return window.__hdSwapLog.length; }"""
+
+
+def swap_mark(pg):
+    """'hd-swap' 기록을 켜고(페이지마다 한 번 — 판을 새로 불러오면 다시) 지금까지 온 수. 쓰기(파일·도우미) 전에 부른다."""
+    return pg.evaluate(SWAP_REC)
+
+
+def swap_done(pg, sid, mark, timeout=10000):
+    """mark 뒤 그 카드(sid)의 교체가 끝날 때까지(done) — 먼저 끝난 것이 failed 면 그 까닭으로 깨진다. mark 뒤 그 카드의 done 기록들."""
+    pg.wait_for_function("([id, m]) => (window.__hdSwapLog || []).slice(m).some(d => d.id === id && (d.phase === 'done' || d.phase === 'failed'))",
+                         arg=[sid, mark], timeout=timeout)
+    got = [d for d in pg.evaluate("(m) => window.__hdSwapLog.slice(m)", mark) if d.get("id") == sid]
+    end = [d for d in got if d.get("phase") in ("done", "failed")]
+    assert end[0]["phase"] == "done", f"카드 {sid} 교체 실패: {end[0]}"
+    return [d for d in end if d["phase"] == "done"]
+
+
 def visible_paths(pg):
     return pg.evaluate("[...document.querySelectorAll('#rows path.ln')].filter(p => getComputedStyle(p).display !== 'none').length")
 

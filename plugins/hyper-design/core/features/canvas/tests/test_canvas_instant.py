@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from test_canvas_v2 import browser, ctx  # noqa: F401
+from test_canvas_v2 import browser, ctx, swap_done, swap_mark  # noqa: F401
 from test_canvas_text_remove import _frame, _open, _serve, out  # noqa: F401
 
 SHOTS = Path(os.environ.get("HD_SHOTS_49C", Path(tempfile.gettempdir()) / "claude" / "t49c"))
@@ -81,7 +81,7 @@ def test_text_tool_edits_in_place_and_writes_without_reloading_the_view(ctx, out
         mf = _modal(pg)
         src0 = pg.get_attribute("#mframe", "src")
         font0 = mf.evaluate("(s) => getComputedStyle(document.querySelector(s)).font", H1)
-        pg.evaluate("window.__swaps = []; document.addEventListener('hd-swap', e => window.__swaps.push(e.detail))")
+        m = swap_mark(pg)
         shot(pg, "inline-before.png")
         pg.click('#tools [data-tool="text"]')
         mf.click(H1)
@@ -108,8 +108,7 @@ def test_text_tool_edits_in_place_and_writes_without_reloading_the_view(ctx, out
         assert pg.get_attribute("#mframe", "src") == src0, "같은 내용이면 크게 보기 틀을 다시 싣지 않는다(두 번 깜빡임 없음)"
         assert mf.evaluate("(s) => document.querySelector(s).innerHTML", H1) == "바로 고친<br>제목"
         assert not mf.evaluate("(s) => document.querySelector(s).isContentEditable", H1)
-        pg.wait_for_function("window.__swaps.some(d => d.id === 'job' && d.phase === 'done')", timeout=10000)
-        done = [d for d in pg.evaluate("window.__swaps") if d["id"] == "job" and d["phase"] == "done"]
+        done = swap_done(pg, "job", m)
         assert done[-1].get("silent") is True, ("크게 보기 뒤 판 카드도 같은 내용 = 알약·겹치기 없이 조용히 바꿈", done)
         assert pg.locator('.card[data-id="job"] .swap-pill').count() == 0
         shot(pg, "inline-after.png")
@@ -300,7 +299,7 @@ def test_remove_hides_the_element_at_once_and_survives_the_swap(ctx, out):
     try:
         mf = _modal(pg)
         src0 = pg.get_attribute("#mframe", "src")
-        pg.evaluate("window.__swaps = []; document.addEventListener('hd-swap', e => window.__swaps.push(e.detail))")
+        m = swap_mark(pg)
         _pick(pg, mf, TILE % 2)
         assert "대학원생" in mf.text_content(TILE % 2)
         n0 = _job(out).count("대학원생")                 # 타일 글 + 화면 안 다른 자리
@@ -323,9 +322,9 @@ def test_remove_hides_the_element_at_once_and_survives_the_swap(ctx, out):
         held[0].continue_()
         pg.unroute("**/api/apply")
         _wait_file(pg, out, lambda s: s.count("대학원생") == n0 - 1, "파일에서 지워지지 않았다")
-        pg.wait_for_function("window.__swaps.some(d => d.id === 'job' && d.phase === 'done')", timeout=15000)
-        pg.wait_for_timeout(1500)                          # 쓴 뒤 다시 불러오기 + 같은 내용 견주기
-        done = [d for d in pg.evaluate("window.__swaps") if d["id"] == "job" and d["phase"] == "done"]
+        swap_done(pg, "job", m, timeout=15000)
+        pg.wait_for_timeout(1500)                          # 크게 보기 틀의 같은 내용 견주기(판 카드 교체와 따로 끝난다)
+        done = swap_done(pg, "job", m)
         assert done[-1].get("silent") is True, ("판 카드 = 이미 보이는 내용이라 조용히 바꿈", done)
         assert pg.get_attribute("#mframe", "src") == src0, "크게 보기 틀은 다시 싣지 않는다(두 번 깜빡임 없음)"
         assert mf.evaluate(gone) and _frame(pg).evaluate(gone), "지운 요소가 돌아오지 않는다"

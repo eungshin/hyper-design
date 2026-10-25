@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, zoom_to  # noqa: F401
+from test_canvas_v2 import REPO, SCRIPTS, browser, ctx, swap_mark, zoom_to  # noqa: F401
 from test_canvas_text_remove import _open, _frame, _serve, out  # noqa: F401
 from test_canvas_blocks import _act, _xy, _pick_element, _bar, _frame_until, _logged, _job, _wait_file, _modal, H1, TILE2
 
@@ -117,10 +117,11 @@ def test_board_selection_follows_the_moved_element_so_alt_down_repeats(ctx, out)
         _wait_path(pg, lambda p: p != p0 and "nth-of-type(3)" in p, "쓴 뒤 막대가 옮긴 요소(3번째)로 돌아온다")
         shot(pg, "step3-board-after-first-move.png")
         _logged(pg)
+        m = swap_mark(pg)
         pg.keyboard.press("Alt+ArrowDown")                      # 다시 고르지 않고 한 번 더
         _wait_file(pg, out, lambda s: s.index("개발자·엔지니어") < s.index("대학원생·연구원"), "Alt+↓ 두 번째 — 다시 고르지 않아도")
         _wait_path(pg, lambda p: "nth-of-type(4)" in p, "두 번째 뒤에도 같은 요소")
-        _frame_until(pg, "() => document.querySelectorAll('.tile-grid > button')[3].textContent.indexOf('대학원생') >= 0")
+        _frame_until(pg, "() => document.querySelectorAll('.tile-grid > button')[3].textContent.indexOf('대학원생') >= 0", m)
         pg.wait_for_timeout(400)
         shot(pg, "step3-board-after-second-move.png")
         box = pg.evaluate("(() => { const b = document.querySelector('.elbox.sel'); return b ? b.getBoundingClientRect().width : 0; })()")
