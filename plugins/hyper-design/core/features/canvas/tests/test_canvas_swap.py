@@ -104,9 +104,15 @@ def test_changed_card_crossfades_keeps_scroll_and_chip_says_done(ctx, out):
         touch(out / "screens" / "job.html")
         swapped(pg)
         log = pg.evaluate("window.__swapLog")
-        kinds = [e[0] for e in log]
-        assert kinds[:3] == ["add", "in", "remove"] and log[0][2] == "hd-swap-next" and log[2][2] == "old", log
-        assert log[2][1] - log[1][1] >= 150, f"옛 틀은 0.2초 겹쳐 보인 뒤에야 빠진다: {log}"
+        # 파일 쓰기가 감시에 두 번 잡히면(비우고 쓰기) 먼저 싣던 새 틀은 버려지고 새로 싣는다 — 옛 틀은 그동안 그대로 보인다.
+        # 지키는 것: 옛 틀은 마지막 새 틀이 드러난 뒤에만, 0.2초 겹친 뒤 빠진다
+        old_out = [i for i, e in enumerate(log) if e[0] == "remove" and e[2] == "old"]
+        assert len(old_out) == 1, f"옛 틀은 한 번만 빠진다: {log}"
+        tail = log[:old_out[0] + 1]
+        last_add = max(i for i, e in enumerate(tail) if e[0] == "add")
+        kinds = [e[0] for e in tail[last_add:]]
+        assert kinds == ["add", "in", "remove"] and tail[last_add][2] == "hd-swap-next", log
+        assert tail[-1][1] - tail[-2][1] >= 150, f"옛 틀은 0.2초 겹쳐 보인 뒤에야 빠진다: {log}"
         new = pg.evaluate("""(s) => { const f = document.querySelector(s + ' .phone iframe'), w = f.contentWindow;
             return {y: w.scrollY, key: w.location.pathname + w.location.search, op: getComputedStyle(f).opacity, pos: getComputedStyle(f).position}; }""", JOB)
         assert new["y"] == 240, "스크롤 자리 그대로"
@@ -156,7 +162,7 @@ def test_touched_card_waits_with_pill_then_swaps(ctx, out):
         # 2) 크게 보기가 그 화면 → 미룸 → 닫으면 저절로
         pg.keyboard.press("Escape")
         pg.wait_for_selector("#pop", state="hidden", timeout=4000)
-        pg.keyboard.press("v")                            # 메모 도구를 끄고(카드 누르기 = 크게 보기)
+        pg.keyboard.press("h")                            # 메모 도구를 끄고(손: 카드 누르기 = 크게 보기 — V 는 49a 부터 고른 카드 안 요소 고르기)
         open_screen(pg, "job")
         post(srv, "/api/claim", {"screen": "job"})        # AI 덮개 길(방금 다시 실은 카드의 5초 건너뛰기와 상관없이)
         pg.wait_for_selector(JOB + ' .busy[data-kind="working"]', timeout=8000)
