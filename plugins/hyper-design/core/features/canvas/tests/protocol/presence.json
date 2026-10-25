@@ -1,0 +1,170 @@
+{
+  "server": "agent presence and sending (task 47-5a) — one AgentPresence per open project session (canvas/presence.py), next to its EventBus. Same server as v1.json (hub, /v1/p/<name>/…) and the stand-alone helper (helper.py, no prefix). Replayed in-process by test_protocol_presence.py on a temp HD_HOME with a fake build and no paseo.",
+  "auth": "As v1.json: session token or hub token in X-HD-Token, Host 127.0.0.1:<port> or localhost:<port>. 403 {error} (token/Host), 404 {error} (project not open). The old root /api/hello · /api/beat · /api/progress · /api/bye · /api/presence · /api/agents/spawn with the session token are the same routes (the canvas JS calls '/api/…').",
+  "agent": "A connected agent as the server shows it: {id, name, kind: paseo|claude|codex|other, pid: int|null, state: 'here'|'away', listen: bool (true = it reads request.sent from the event stream, false = only shows up — sending goes through the adapter), since: ms of the hello that started this stay, seen: ms of the last hello/beat/progress, lease: s, progress: {text, screen, at}|null}.",
+  "lease": "hello and beat answer {agent, lease, beat, first}: lease = seconds the server keeps the agent 'here' without a beat (asked `lease` clamped to 1..300, default 30), beat = suggested heartbeat interval (lease/3). A sweep every second marks agents whose lease ran out 'away' (agent.away reason 'lease'). bye = away at once (reason 'bye'). Away agents stay in the list for an hour, then are forgotten. A beat for an unknown id = 404 reason 'unknown' (hello again); a beat or hello for an away agent brings it back (agent.hello again, first:true).",
+  "sending": "POST /api/forward {text, to?, notes?} always writes <out>/.hd-queue/<stamp>.txt. to (default = the attached agent, POST /api/attach) picks the receiver: a connected agent with listen true = event (request.sent {to, via:'event', notes, text, path}, answer {via:'event', agent, path, event}); otherwise the AgentAdapter: paseo (paseo send — unknown id or kind paseo, when the Paseo CLI is found), claude (claude -p --resume, only with HD_CLAUDE_WAKE=1 and an agent that said hello with a session), none (queue file only). Every forward publishes request.sent with its via. An adapter that fails falls back to the queue (via 'queue').",
+  "spawn": "POST /agents/spawn {kind: claude|codex} opens a new terminal agent through Paseo (paseo run --no-wait). Off unless the server runs with HD_ALLOW_SPAWN=1 — then 403 {error, reason:'disabled'}. The canvas must ask the user before calling it.",
+  "routes": [
+    {
+      "method": "POST", "path": "/v1/p/<name>/hello", "callers": ["SDK Project.hello() / Hub.hello(project, …) (47-5a)", "hd attach"],
+      "request": "{agent: {id, name?, kind?, pid?, listen?, session?}, lease?}", "response": "{agent, lease, beat, first}",
+      "cases": [
+        {"name": "no token", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": false, "body": {"agent": {"id": "ag-1"}}}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "not an object", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "agent missing", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "id with a space", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "a b"}}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown kind", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "kind": "robot"}}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "pid not an int", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "pid": "12"}}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "first hello", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "name": "클로드", "kind": "claude", "pid": 4242}}},
+         "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-1"}, "name": {"$eq": "클로드"}, "kind": {"$eq": "claude"}, "pid": {"$eq": 4242}, "state": {"$eq": "here"}, "listen": {"$eq": true}, "since": "int", "seen": "int", "lease": {"$eq": 30}, "progress": "null"},
+                                             "lease": {"$eq": 30}, "beat": "num", "first": {"$eq": true}}}},
+        {"name": "hello again = refresh", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "kind": "claude"}, "lease": 999}},
+         "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-1"}, "state": {"$eq": "here"}}, "lease": {"$eq": 300}, "first": {"$eq": false}}}},
+        {"name": "defaults (name = id, kind other, no pid), hub token", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${hub}", "body": {"agent": {"id": "ag-2", "listen": false}, "lease": 0}},
+         "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-2"}, "name": {"$eq": "ag-2"}, "kind": {"$eq": "other"}, "pid": "null", "listen": {"$eq": false}}, "lease": {"$eq": 1}, "first": {"$eq": true}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/v1/p/<name>/beat", "callers": ["SDK heartbeat thread (Project.hello)"],
+      "request": "{id}", "response": "{agent, lease, beat, first}",
+      "cases": [
+        {"name": "beat", "request": {"method": "POST", "path": "/v1/p/proj-c/beat", "token": "${session}", "body": {"id": "ag-1"}}, "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-1"}, "state": {"$eq": "here"}}, "lease": "int", "beat": "num", "first": {"$eq": false}}}},
+        {"name": "unknown id = hello again", "request": {"method": "POST", "path": "/v1/p/proj-c/beat", "token": "${session}", "body": {"id": "nobody"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "unknown"}}}},
+        {"name": "no id", "request": {"method": "POST", "path": "/v1/p/proj-c/beat", "token": "${session}", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/v1/p/<name>/progress", "callers": ["SDK Project.progress(text, screen)", "hd progress"],
+      "request": "{text (1..200 chars), screen?, agent?} — agent = a known id (also counts as a beat)", "response": "{event: id of the agent.progress event}",
+      "cases": [
+        {"name": "progress", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"agent": "ag-1", "text": "홈 버튼 고치는 중", "screen": "home"}}, "expect": {"status": 200, "json": {"event": "int"}}},
+        {"name": "without agent and screen", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"text": "보는 중"}}, "expect": {"status": 200, "json": {"event": "int"}}},
+        {"name": "empty text", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"text": "  "}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "text too long", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "screen not a string", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"text": "a", "screen": 3}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown agent", "request": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"text": "a", "agent": "nobody"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "unknown"}}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/v1/p/<name>/agents", "callers": ["SDK Project.agents()", "canvas chip (47-5b)"],
+      "request": "token", "response": "{agents:[agent], lease}",
+      "cases": [
+        {"name": "list", "request": {"method": "GET", "path": "/v1/p/proj-c/agents", "token": "${session}"},
+         "expect": {"status": 200, "json": {"agents": {"$list": {"id": "str", "name": "str", "kind": "str", "pid": "int|null", "state": "str", "listen": "bool", "since": "int", "seen": "int", "lease": "int", "progress": "dict|null"}, "$min": 2}, "lease": "int"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/v1/p/proj-c/agents", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/v1/p/<name>/bye", "callers": ["SDK Project.bye() / heartbeat stop"],
+      "request": "{id}", "response": "{agent} (state away)",
+      "cases": [
+        {"name": "bye", "request": {"method": "POST", "path": "/v1/p/proj-c/bye", "token": "${session}", "body": {"id": "ag-2"}}, "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-2"}, "state": {"$eq": "away"}}}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/v1/p/proj-c/bye", "token": "${session}", "body": {"id": "nobody"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "unknown"}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/v1/p/<name>/agents/spawn", "callers": ["canvas 'open a new terminal agent' (47-5b, after the user confirms)"],
+      "request": "{kind: claude|codex}", "response": "{spawned:true, via:'paseo', agent?} | 403 {error, reason:'disabled'} (default) | 400 bad kind",
+      "cases": [
+        {"name": "bad kind", "request": {"method": "POST", "path": "/v1/p/proj-c/agents/spawn", "token": "${session}", "body": {"kind": "robot"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "off by default", "request": {"method": "POST", "path": "/v1/p/proj-c/agents/spawn", "token": "${session}", "body": {"kind": "claude"}}, "expect": {"status": 403, "json": {"error": "str", "reason": {"$eq": "disabled"}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/hello", "callers": ["old root alias (session token)"], "request": "as /v1/p/<name>/hello", "response": "as /v1/p/<name>/hello",
+      "cases": [
+        {"name": "alias", "request": {"method": "POST", "path": "/api/hello", "token": "${session}", "body": {"agent": {"id": "ag-3", "kind": "codex"}}}, "expect": {"status": 200, "json": {"agent": {"id": {"$eq": "ag-3"}, "kind": {"$eq": "codex"}}, "first": {"$eq": true}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/beat", "callers": ["old root alias (session token)"], "request": "as /v1/p/<name>/beat", "response": "as /v1/p/<name>/beat",
+      "cases": [
+        {"name": "alias", "request": {"method": "POST", "path": "/api/beat", "token": "${session}", "body": {"id": "ag-3"}}, "expect": {"status": 200, "json": {"first": {"$eq": false}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/progress", "callers": ["old root alias (session token)"], "request": "as /v1/p/<name>/progress", "response": "as /v1/p/<name>/progress",
+      "cases": [
+        {"name": "alias", "request": {"method": "POST", "path": "/api/progress", "token": "${session}", "body": {"agent": "ag-3", "text": "목록 보는 중"}}, "expect": {"status": 200, "json": {"event": "int"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/bye", "callers": ["old root alias (session token)"], "request": "as /v1/p/<name>/bye", "response": "as /v1/p/<name>/bye",
+      "cases": [
+        {"name": "alias", "request": {"method": "POST", "path": "/api/bye", "token": "${session}", "body": {"id": "ag-3"}}, "expect": {"status": 200, "json": {"agent": {"state": {"$eq": "away"}}}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/presence", "callers": ["canvas chip on the old root (47-5b)"], "request": "session token", "response": "as /v1/p/<name>/agents",
+      "cases": [
+        {"name": "alias", "request": {"method": "GET", "path": "/api/presence", "token": "${session}"}, "expect": {"status": 200, "json": {"agents": {"$list": "dict", "$min": 3}, "lease": "int"}}},
+        {"name": "hub token keeps hub meaning (404)", "request": {"method": "GET", "path": "/api/presence", "token": "${hub}"}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/agents/spawn", "callers": ["old root alias (session token)"], "request": "as /v1/p/<name>/agents/spawn", "response": "as /v1/p/<name>/agents/spawn",
+      "cases": [
+        {"name": "alias, off by default", "request": {"method": "POST", "path": "/api/agents/spawn", "token": "${session}", "body": {"kind": "codex"}}, "expect": {"status": 403, "json": {"reason": {"$eq": "disabled"}}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/agents (connected)", "callers": ["modules/view-agents.js (menu)"], "request": "as helper.json", "response": "as helper.json + connected:[agent] (the AgentPresence list)",
+      "cases": [
+        {"name": "paseo list plus connected agents", "request": {"method": "GET", "path": "/v1/p/proj-c/api/agents", "token": "${session}"}, "expect": {"status": 200, "json": {"agents": "list", "current": "str|null", "connected": {"$list": {"id": "str", "state": "str"}, "$min": 3}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/forward (to)", "callers": ["modules/view-sync.js (Send)", "canvas receiver chip (47-5b)"], "request": "{text, to?, notes?}", "response": "{via:'event'|'paseo'|'claude'|'queue', agent?, path, event?}",
+      "cases": [
+        {"name": "to a connected listening agent = event", "request": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "버튼 고쳐 주세요", "to": "ag-1", "notes": ["n1"]}},
+         "expect": {"status": 200, "json": {"via": {"$eq": "event"}, "agent": {"$eq": "ag-1"}, "path": "str", "event": "int"}}},
+        {"name": "to an agent that does not listen (kind other) = queue", "request": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "x", "to": "ag-2"}},
+         "expect": {"status": 200, "json": {"via": {"$eq": "queue"}, "path": "str", "event": "int"}}},
+        {"name": "no receiver = queue (today)", "request": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "x"}}, "expect": {"status": 200, "json": {"via": {"$eq": "queue"}, "path": "str"}}},
+        {"name": "bad to", "request": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "x", "to": "a b"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "notes not a list of strings", "request": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "x", "notes": [1]}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    }
+  ],
+  "flows": {
+    "doc": "Same step language as events.json flows (open · send · events · build · get), a fresh session each.",
+    "cases": [
+      {"name": "hello, refresh, progress, reply, bye", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "name": "클로드", "kind": "claude"}}}, "expect": {"status": 200, "json": {"first": {"$eq": true}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-1", "kind": "claude"}}}, "expect": {"status": 200, "json": {"first": {"$eq": false}}}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/progress", "token": "${session}", "body": {"agent": "ag-1", "text": "홈 고치는 중", "screen": "home"}}, "expect": {"status": 200}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/reply", "token": "${session}", "body": {"note": "n1", "reply": {"kind": "일부", "done": "a", "left": "b", "by": "ag-1"}}}, "expect": {"status": 200}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/bye", "token": "${session}", "body": {"id": "ag-1"}}, "expect": {"status": 200}},
+        {"events": "s", "types": ["agent.hello", "agent.progress", "notes.changed", "agent.reply", "agent.away"],
+         "shapes": [{"agent": {"id": {"$eq": "ag-1"}, "name": {"$eq": "클로드"}, "kind": {"$eq": "claude"}, "state": {"$eq": "here"}}},
+                    {"agent": {"$eq": "ag-1"}, "text": {"$eq": "홈 고치는 중"}, "screen": {"$eq": "home"}},
+                    {"rev": {"$eq": 4}},
+                    {"note": {"$eq": "n1"}, "kind": {"$eq": "일부"}, "screen": {"$eq": "home"}, "agent": {"$eq": "ag-1"}, "status": {"$eq": "partial"}},
+                    {"agent": {"$eq": "ag-1"}, "reason": {"$eq": "bye"}}]}
+      ]},
+      {"name": "forward to a listening agent = request.sent, no terminal", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-2", "kind": "codex"}}}, "expect": {"status": 200}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "고쳐 주세요", "to": "ag-2", "notes": ["n1", "n3"]}}, "expect": {"status": 200, "json": {"via": {"$eq": "event"}, "event": "int"}}, "save": {"ev": "event", "path": "path"}},
+        {"events": "s", "types": ["agent.hello", "request.sent"],
+         "shapes": [{}, {"id": {"$eq": "${ev}"}, "to": {"$eq": "ag-2"}, "via": {"$eq": "event"}, "notes": {"$eq": ["n1", "n3"]}, "text": {"$eq": "고쳐 주세요"}, "path": {"$eq": "${path}"}}]}
+      ]},
+      {"name": "attached agent that does not listen goes through the adapter (none = queue)", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-3", "listen": false}}}, "expect": {"status": 200}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/attach", "token": "${session}", "body": {"agent": "ag-3"}}, "expect": {"status": 200}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/api/forward", "token": "${session}", "body": {"text": "x"}}, "expect": {"status": 200, "json": {"via": {"$eq": "queue"}}}},
+        {"events": "s", "types": ["agent.hello", "request.sent"], "shapes": [{"agent": {"listen": {"$eq": false}}}, {"to": {"$eq": "ag-3"}, "via": {"$eq": "queue"}, "notes": {"$eq": []}}]}
+      ]},
+      {"name": "a missed lease marks the agent away, a beat brings it back", "steps": [
+        {"open": "s", "request": {"path": "/v1/p/proj-c/events", "token": "${session}"}},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "body": {"agent": {"id": "ag-4"}, "lease": 1}}, "expect": {"status": 200, "json": {"lease": {"$eq": 1}}}},
+        {"events": "s", "types": ["agent.hello", "agent.away"], "shapes": [{}, {"agent": {"$eq": "ag-4"}, "reason": {"$eq": "lease"}}]},
+        {"send": {"method": "POST", "path": "/v1/p/proj-c/beat", "token": "${session}", "body": {"id": "ag-4"}}, "expect": {"status": 200, "json": {"first": {"$eq": true}, "agent": {"state": {"$eq": "here"}}}}},
+        {"events": "s", "types": ["agent.hello"], "shapes": [{"agent": {"id": {"$eq": "ag-4"}}}]}
+      ]}
+    ]
+  }
+}
