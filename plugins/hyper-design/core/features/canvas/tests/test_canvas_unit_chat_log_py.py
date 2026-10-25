@@ -1,5 +1,5 @@
 """대화 기록(S3) 서버 규칙 — chat_log.py(순수): 이벤트 → 기록 모양 · 턴 붙이기 · 열린 턴 · 한도/보관 · 깨진 줄 · since. I/O 없음.
-ChatLog(session.py, 파일)는 아래 slow 하나 — 버스 탭으로 남고, 다시 열어도 이어지고, 한도를 넘으면 보관 파일로 옮긴다."""
+ChatLog(chat_store.py, 파일)는 아래 slow 하나 — 버스 탭으로 남고, 다시 열어도 이어지고, 한도를 넘으면 보관 파일로 옮긴다."""
 import json, shutil, sys, tempfile
 from pathlib import Path
 
@@ -131,11 +131,11 @@ def test_since():
 @pytest.mark.slow
 def test_chatlog_file_tap_reload_and_archive():
     import events as EV
-    import session as S
+    import chat_store
     tmp = Path(tempfile.mkdtemp(prefix="hd-chatlog-"))
     try:
         bus = EV.EventBus("p")
-        log = S.ChatLog(tmp)
+        log = chat_store.ChatLog(tmp)
         bus.taps.append(log.tap)
         assert log.post({"kind": "ask", "text": "버튼 키워", "notes": ["n1"], "chips": ["결제"]})[0] == 200
         bus.publish("request.sent", to=None, via="queue", notes=["n1"], text="요청문", path="q")
@@ -145,14 +145,14 @@ def test_chatlog_file_tap_reload_and_archive():
         assert [r["kind"] for r in got["records"]] == ["ask", "sent", "progress"] and got["seq"] == 3
         assert log.post({"kind": "undone", "turn": 77})[0] == 404 and log.post({"kind": "x"})[0] == 400
         (tmp / CL.FILE).open("a", encoding="utf-8").write("{broken\n")
-        again = S.ChatLog(tmp)                                   # 다시 열기 — 파일에서 이어서(깨진 줄은 건너뜀)
+        again = chat_store.ChatLog(tmp)                                   # 다시 열기 — 파일에서 이어서(깨진 줄은 건너뜀)
         assert [r["seq"] for r in again.get(1)["records"]] == [2, 3]
         assert again.add("sent", {"notes": ["n2"], "via": "queue"})["seq"] == 4
         again.cap, again.slack = 1, 0
         again.add("sent", {"notes": ["n3"], "via": "queue"})
         arch = [json.loads(x) for x in (tmp / CL.ARCHIVE).read_text(encoding="utf-8").splitlines()]
         assert {r["turn"] for r in arch} == {1, 4}, "오래된 턴은 보관 파일로"
-        assert [r["turn"] for r in S.ChatLog(tmp).get(None)["records"]] == [5]
+        assert [r["turn"] for r in chat_store.ChatLog(tmp).get(None)["records"]] == [5]
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

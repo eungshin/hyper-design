@@ -1,6 +1,6 @@
 """Model — 대화 기록(S3)의 한 줄 모양 · 턴 붙이기 · 한도. 파일·시계·네트워크를 쓰지 않는다(tests/test_canvas_unit_chat_log_py.py).
 
-<out>/.hd-chat.jsonl 한 줄 = 기록 하나 {seq, at(ms), turn, kind, …}. 파일 I/O 는 session.ChatLog, 주소는 router(GET/POST /api/chat).
+<out>/.hd-chat.jsonl 한 줄 = 기록 하나 {seq, at(ms), turn, kind, …}. 파일 I/O 는 chat_store.ChatLog, 주소는 router(GET/POST /api/chat).
 기록은 세션이 이미 내는 이벤트에서 만든다(from_event) — request.sent → sent · agent.progress → progress(터미널에서 에이전트가 알린 줄) ·
 agent.reply → reply · ai.write(act record) → write · build.done → built · build.failed → failed. 캔버스가 직접 남기는 것(check_post): ask(보낸 글·칩) · undone(턴 되돌림).
 턴(turn) = 요청 하나 = 처음 기록의 seq. 붙이기(assign):
