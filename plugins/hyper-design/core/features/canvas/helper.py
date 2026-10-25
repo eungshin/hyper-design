@@ -77,6 +77,7 @@ import code_probe
 import html_edit
 import router as R
 import safe_port
+import send_queue
 import session as S
 from html_edit import *  # noqa: F401,F403  — 예전 이름(helper.select · edit_html · edit_one · Tree …)
 from html_edit import (_after, _attr_patch, _block_ok, _dup_patch, _end, _has_text, _inline_only, _insert_patch, _is_root, _lead,  # noqa: F401
@@ -88,8 +89,9 @@ from state_store import (STATE_FILE, STATE_MAX, _state_ok, _state_save, _state_w
                          state_put)
 from note_archive import (ARCHIVE_FILE, archive_get, archive_post)  # noqa: F401
 from busy import (FileWatch, WATCH_EVERY, claim_post, release_post, scan, watch)  # noqa: F401
-from session import (AGENTS_TTL, NO_PASEO, NO_WINDOW, POLICY_MAX_CHARS, POLICY_MAX_LINES, ProjectSession, _Writes, _parts_html,  # noqa: F401
-                     _policies, agents_get, keypath, list_agents, parts_of, project_repo, prune, reply_post)
+from send_queue import (AGENTS_TTL, NO_PASEO, NO_WINDOW, agents_get, list_agents, project_repo, reply_post)  # noqa: F401
+from session import (POLICY_MAX_CHARS, POLICY_MAX_LINES, ProjectSession, _Writes, _parts_html, _policies, keypath, parts_of,  # noqa: F401
+                     prune)
 from adapters import (PASEO_DEFAULT, _paseo_args, _paseo_cmd)  # noqa: F401
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "hd"))
@@ -134,7 +136,7 @@ def restore(out, stamp):
 
 
 def forward(out, text, agent=None, paseo=None):
-    return S.forward(out, text, agent, paseo)
+    return send_queue.forward(out, text, agent, paseo)
 
 
 # ---------------------------------------------------------------- 서버(out 하나)
