@@ -113,3 +113,19 @@ def test_other_places_and_scope_lines_keep_the_format():
     assert NO_RE.search(out[1]).group(1) == "1,2" and NO_RE.search(out[5]).group(1) == "3", "한 항목에 든 메모 번호 모두"
     _, body = _split()
     assert "다른 곳:" in body and "범위:" in body
+
+
+def test_card_size_line_keeps_the_format_and_is_described():
+    # task 46: 기본 크기가 아닌 카드 = 항목 아래 '화면 크기:' 줄 — 머리·text·요청 줄은 그대로 읽히고, 스킬 본문이 그 줄을 말한다
+    import json, shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node 없음")
+    js = ("require(%s); const n=[{screen:'a',path:'body',text:'',intent:'change',note:'wide',no:1}];"
+          "process.stdout.write(HD.edits.request(n,'C:/out',{a:'834×1194(iPad Pro 11)'}))") % json.dumps(str(EDITS))
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, encoding="utf-8", check=True).stdout.splitlines()
+    assert ITEM_RE.match(out[1]) and TEXT_RE.match(out[2]) and NOTE_RE.match(out[3]), out
+    assert out[4].startswith("   화면 크기: 834×1194(iPad Pro 11)"), out
+    _, body = _split()
+    assert "화면 크기:" in body

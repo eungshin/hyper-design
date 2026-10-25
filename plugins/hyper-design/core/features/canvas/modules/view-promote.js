@@ -2,7 +2,8 @@
    규칙(언제·무엇이 바뀌나)은 modules/promote.js(Model). 상태 없음 — 메모·카드 자리·폴더의 주인은 셸이고 여기는 attach 로 받은 읽기/쓰기만 부른다.
    HD.viewPromote.mount(ctx) → {attach(shell) → {check() → 승격한 수}}
      ctx = 기능 등록부 공통 칸 $$ · rowsEl · notes{list, save} · toast · record · title · warn
-     shell = {pos: {get() → 카드 옮긴 거리 {id: {dx, dy, g}}, set(map)}, folders: {get(), set(state)}, group(id) → 그 카드의 줄 이름}
+     shell = {pos: {get() → 카드 옮긴 거리 {id: {dx, dy, g}}, set(map)}, folders: {get(), set(state)}, group(id) → 그 카드의 줄 이름,
+              size?: {get() → 카드 크기 맵, set(map)} — 있으면 빈 레이아웃 크기를 화면으로(artboard.carry, task 46)}
    check 는 셸이 데이터·메모가 바뀐 뒤 부른다(시작 · 파일에서 온 메모 · 화면 파일을 다시 받은 뒤) — 승격할 것이 없으면 아무것도 하지 않는다.
    붙이기: 기능 등록부(modules/features.js)에 'promote' 로 등록, 셸은 mountAll 결과의 promote.attach 로 카드 자리·폴더를 넘긴다 */
 (function () {
@@ -33,7 +34,7 @@ function mount(ctx) {
     });
   }
   function attach(sh) {
-    function apply(st) { put(st.notes); ctx.notes.save(); sh.pos.set(st.cardPos); sh.folders.set(st.folders); }
+    function apply(st) { put(st.notes); ctx.notes.save(); sh.pos.set(st.cardPos); sh.folders.set(st.folders); if (sh.size && st.sizes) sh.size.set(st.sizes); }
     function check() {
       var ids = ctx.$$('.card:not(.draft)', ctx.rowsEl).map(function (c) { return c.dataset.id; });
       var todo = P.promotable(ctx.notes.list(), ids); if (!todo.length) return 0;
@@ -45,6 +46,11 @@ function mount(ctx) {
       });
       if (!done.length) return 0;
       var after = st, before = first;
+      if (sh.size && HD.artboard) {                  // 빈 레이아웃 크기(task 46) → 이어받는 화면 — 되돌리면 빈 카드로
+        var s0 = sh.size.get(), s1 = s0;
+        done.forEach(function (d) { s1 = HD.artboard.carry(s1, d.p.draft, d.p.screen); });
+        before = Object.assign({}, before, {sizes: s0}); after = Object.assign({}, after, {sizes: s1});
+      }
       apply(after);
       ctx.record({label: done.length > 1 ? '빈 레이아웃 ' + done.length + '개 자리에 화면' : '빈 레이아웃 자리에 화면',
                   undo: function () { apply(before); }, redo: function () { apply(after); }});

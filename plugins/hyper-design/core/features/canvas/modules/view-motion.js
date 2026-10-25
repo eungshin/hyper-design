@@ -1,7 +1,7 @@
 /* View — 움직임: Ctrl/Cmd+클릭 "어디로 가나" 카메라 · 움직임 줄이기(표시 패널 #mvOff — 전환 메뉴는 G4 로 없앰).
    계획은 HD.camera.plan(순수, 숫자만). 시간·곡선은 여기서 CSS 변수(modules/motion.css)를 읽어 넘긴다.
    HD.viewMotion.mount(ctx) → {ctrlClick(e), stop(), go(from, toId), goLink(from, to), setMotion(on)}
-   ctx = {VL, LN, select(id|null), pane, rowsEl, CARD, $, $$, esc, prefs, savePrefs(), typing(e), getView(), setView(z,tx,ty), openModal(file,title), closeModal(), modalOpen(), mframe}
+   ctx = {VL, LN, select(id|null), pane, rowsEl, CARD, sizeOf?(id) → {w, h}, $, $$, esc, prefs, savePrefs(), typing(e), getView(), setView(z,tx,ty), openModal(file,title), closeModal(), modalOpen(), mframe}
    Ctrl+클릭 대상: 카드 안 링크 요소(카드 iframe 에 hd-link-at 으로 물어 hd-link-go 답) · 선 태그 · 연결 패널 줄.
    고른 카드가 없을 때 링크를 Ctrl+클릭하면 그 쌍의 선 하나만 강조(LN.pair) — 다음 고르기·풀기로 해제. */
 (function () {
@@ -10,6 +10,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
   var C = HD.camera, VL = ctx.VL, pane = ctx.pane, CARD = ctx.CARD, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, root = document.documentElement;
+  function dim(id) { return ctx.sizeOf ? ctx.sizeOf(id) : CARD; }   // 그 카드 크기(task 46 — 카드마다 크기, 없으면 프로젝트 카드)
   var raf = 0, anim = null, pulseT = 0;
 
   function css(name) { return getComputedStyle(root).getPropertyValue(name).trim(); }
@@ -33,8 +34,8 @@ function mount(ctx) {
   }
   function elemPoint(id, rect) {                      // 카드 안 요소(카드 iframe 좌표 rect)의 가운데 → 판 좌표
     var p = phoneBox(id); if (!p) return null;
-    if (!rect) return {x: p.x + p.w / 2, y: p.y + Math.min(p.h, CARD.h) / 2};
-    var s = p.w / CARD.w;
+    if (!rect) return {x: p.x + p.w / 2, y: p.y + Math.min(p.h, dim(id).h) / 2};
+    var s = p.w / dim(id).w;
     return {x: p.x + (rect.x + rect.w / 2) * s, y: p.y + (rect.y + rect.h / 2) * s};
   }
 
@@ -85,7 +86,7 @@ function mount(ctx) {
   }
   function askAt(card, cx, cy) {                       // 카드 iframe 에 "이 자리의 링크는?" (그냥 클릭은 덮개가 받으므로 화면은 이동하지 않는다)
     var f = $('.phone iframe', card); if (!f || !f.contentWindow || f.hasAttribute('data-src')) return;
-    var r = $('.phone', card).getBoundingClientRect(), s = r.width / CARD.w;
+    var r = $('.phone', card).getBoundingClientRect(), s = r.width / dim(card.dataset.id).w;
     try { f.contentWindow.postMessage({type: 'hd-link-at', x: (cx - r.left) / s, y: (cy - r.top) / s}, '*'); } catch (e) {}
   }
   function ctrlClick(e) {

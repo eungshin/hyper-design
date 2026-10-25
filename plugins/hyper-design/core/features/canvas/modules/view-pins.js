@@ -55,7 +55,7 @@ function mount(ctx) {
 
   function phoneOf(id) { var c = ctx.cardEl(id); return c && !c.classList.contains('draft') ? ctx.$('.phone', c) : null; }
   function loaded(ph) { var f = ph && ctx.$('iframe', ph); return !!f && !f.hasAttribute('data-src') && !!f.getAttribute('src'); }
-  function scaleOf(ph) { return ph.offsetWidth / ctx.CARD.w || 1; }
+  function scaleOf(ph) { var c = ph.closest('.card'), w = c && ctx.sizeOf ? ctx.sizeOf(c.dataset.id).w : ctx.CARD.w; return ph.offsetWidth / w || 1; }   // 그 카드 폭 기준(task 46)
   function draw(id) {
     var ph = phoneOf(id); if (!ph) return;
     var box = ctx.$('.npins', ph);

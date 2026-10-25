@@ -54,6 +54,8 @@ out.r7 = E.request([m('s1', 1, 'home', 'body', '홈', '배경을 움직이는 �
                     m('s3', 3, 'home', 'h2', '부제', '여백 넓게', {scope: 'element'})], 'C:/o');
 out.scopes = A.SCOPES; out.scopeOf = [A.scopeOf({}), A.scopeOf({scope: 'all'}), A.scopeOf({scope: 'bogus'}), A.scopeOf({scope: 'screen'})];
 out.scopeWord = [A.scopeWord({}), A.scopeWord({scope: 'screen'}), A.scopeWord({scope: 'all'})];
+// task 46 — 기본 크기가 아닌 카드: 그 화면 항목 아래 '화면 크기:' 줄(크기 맵에 없는 화면은 그대로)
+out.size = E.request([m('z1', 1, 'pay', 'body', '결제', '넓게'), m('z2', 1, 'home', 'h1', '홈', '크게')], 'C:/o', {pay: '834×1194(iPad Pro 11)'});
 console.log(JSON.stringify(out));
 """
 
@@ -128,3 +130,9 @@ def test_scope_lines_and_labels(out):
     assert out["scopes"] == [["element", "이 요소"], ["screen", "이 화면"], ["all", "모든 화면"]]
     assert out["scopeOf"] == ["element", "all", "element", "screen"]
     assert out["scopeWord"] == ["", "이 화면", "모든 화면"]
+
+
+def test_card_size_line_only_for_resized_screens(out):
+    lines = out["size"].splitlines()
+    assert lines[1].startswith("1. screen=pay") and lines[4] == "   화면 크기: 834×1194(iPad Pro 11) — 이 뷰포트에 맞게 배치", lines
+    assert lines[5].startswith("2. screen=home") and len(lines) == 8, "기본 크기 화면 = 줄 없음"

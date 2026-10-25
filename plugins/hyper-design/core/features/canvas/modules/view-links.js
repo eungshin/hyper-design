@@ -2,7 +2,7 @@
    소켓, 연결 패널 줄 목록(ctx.rows → 셸 → view-link-panel), 긴 화면 펼치기. 선·선 태그·강조는 view-lines 하나가 그린다(E20 A) — 색·번호는 ctx.mark(from, to).
    HD.viewLinks.mount(ctx) → {set(ids), paint(), refresh(), cardEl(id), item(from, i), linksOf(id, cb(items|null)), model(id), demoExpand(id)}
    소켓(.sock): 연결 출발 요소마다 출발 카드 위 점 — 보이기는 CSS(트리거 도구), 끌기는 캔버스가 받는다
-   ctx = {rowsEl, CARD, $, $$, title(id), mark(from, to) → {n, color}|null, tagScale(), rows(rows, title),
+   ctx = {rowsEl, CARD, sizeOf?(id) → {w, h}, $, $$, title(id), mark(from, to) → {n, color}|null, tagScale(), rows(rows, title),
           isHidden?(id) — 숨긴·삭제 대기 화면은 연결 대상에서 뺀다,
           pending?(from) → {byPath:{path:{op:'link'|'cut', to}}, adds:[{to,path,text,rect}], cutIn:{id:1}} — 아직 파일에 안 들어간 연결 편집을 바로 겹친다} */
 (function () {
@@ -12,6 +12,7 @@ var GREY = '#8A8D86', WAIT = 1500;                 // 1.5초 안에 답이 없�
 
 function mount(ctx) {
   var rowsEl = ctx.rowsEl, CARD = ctx.CARD, $ = ctx.$, $$ = ctx.$$, title = ctx.title;
+  function dim(id) { return ctx.sizeOf ? ctx.sizeOf(id) : CARD; }   // 그 카드 크기(task 46 — 카드마다 크기, 없으면 프로젝트 카드)
   var ids = [], models = {}, lastD = {}, deadline = {}, waiters = {}, xpId = null;
 
   function cssMs(name, dflt) { return HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue(name), dflt); }
@@ -54,7 +55,7 @@ function mount(ctx) {
   function paintOne(id) {
     var m = models[id], c = cardEl(id); if (!m || !c) return;
     $$('.sock:not(.selsock)', c).forEach(function (n) { n.remove(); });   // 화면 안 표시는 아래 한 번의 hd-links-paint 가 통째로 바꾼다(지우기 메시지를 따로 보내지 않음)
-    var ph = $('.phone', c), sc = ph.offsetWidth / CARD.w, ts = ctx.tagScale ? ctx.tagScale() : 1, sk = 16 * ts, items = [];
+    var ph = $('.phone', c), sc = ph.offsetWidth / dim(id).w, ts = ctx.tagScale ? ctx.tagScale() : 1, sk = 16 * ts, items = [];
     m.items.forEach(function (it, i) {
       var mk = ctx.mark(id, it.to), color = mk ? mk.color : GREY, q = it.rect, b = document.createElement('span');
       items.push({path: it.path, color: color, n: mk ? mk.n : undefined});
@@ -123,8 +124,8 @@ function mount(ctx) {
     var m = buildModel(id, d);
     if (waiters[id]) { var ws = waiters[id]; delete waiters[id]; ws.forEach(function (fn) { fn(m.items); }); }
     if (ids.indexOf(id) < 0) { postTo(id, {type: 'hd-links', on: false}); return; }
-    var want = Math.min(Math.round(m.docHeight), Math.round(CARD.h * 2.5));
-    if (ids.length === 1 && m.items.length && xpId !== id && want > CARD.h + 4) {   // 긴 화면: 먼저 펼치고, 다 펼친 뒤 자리를 다시 받아 그린다
+    var want = Math.min(Math.round(m.docHeight), Math.round(dim(id).h * 2.5));
+    if (ids.length === 1 && m.items.length && xpId !== id && want > dim(id).h + 4) {   // 긴 화면: 먼저 펼치고, 다 펼친 뒤 자리를 다시 받아 그린다
       expand(id, want, function () { if (ids.indexOf(id) >= 0) request(id); });
       return;
     }
@@ -147,7 +148,7 @@ function mount(ctx) {
   // 펼치기 보여 주기(전환 메뉴 ▶): 펼쳤다가 접기
   function demoExpand(id) {
     if (xpId) return;
-    expand(id, Math.round(CARD.h * 1.4), function () { setTimeout(function () { if (xpId === id && ids.indexOf(id) < 0) collapse(id); }, 500); });
+    expand(id, Math.round(dim(id).h * 1.4), function () { setTimeout(function () { if (xpId === id && ids.indexOf(id) < 0) collapse(id); }, 500); });
   }
   return {set: set, paint: paint, refresh: refresh, cardEl: cardEl, item: item, linksOf: linksOf, demoExpand: demoExpand,
           model: function (id) { return models[id] || null; }};

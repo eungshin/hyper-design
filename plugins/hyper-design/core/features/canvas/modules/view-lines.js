@@ -15,6 +15,7 @@ var PLAN = '#B5B8B2';
 
 function mount(ctx) {
   var rowsEl = ctx.rowsEl, svg = ctx.svg, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, CARD = ctx.CARD, LEFT = ctx.LEFT, prefs = ctx.prefs;
+  function dim(id) { return ctx.sizeOf ? ctx.sizeOf(id) : CARD; }   // 그 카드 크기(task 46 — 카드마다 크기, 없으면 프로젝트 카드)
   var R = HD.route, S = HD.lineStyle, LT = HD.lineTone, hov = null, foc = {}, pairKey = null, marks = {};
 
   // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면 바뀐 d·자리만 고쳐 쓰고,
@@ -46,7 +47,7 @@ function mount(ctx) {
     var box = {}, base = {}, rowOf = {}, rows = $$('.flow', rowsEl);
     $$('.card:not(.hid):not(.del)', rowsEl).forEach(function (c) {   // 숨긴·삭제 대기 화면의 선은 그리지 않는다
       var ph = c.querySelector('.phone'), id = c.dataset.id;
-      var b = {x: c.offsetLeft, y: c.offsetTop, w: c.offsetWidth || CARD.w, h: Math.max(c.offsetHeight, ph ? ph.offsetHeight : 0) || CARD.h};
+      var b = {x: c.offsetLeft, y: c.offsetTop, w: c.offsetWidth || dim(id).w, h: Math.max(c.offsetHeight, ph ? ph.offsetHeight : 0) || dim(id).h};
       box[id] = b;
       base[id] = {x: b.x - (parseFloat(c.style.left) || 0), y: b.y - (parseFloat(c.style.top) || 0)};   // 끄는 동안 style 만으로 자리를 알게
       rowOf[id] = rows.indexOf(c.closest('.flow'));

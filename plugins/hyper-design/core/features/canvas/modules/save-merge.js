@@ -15,7 +15,7 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var LABEL = {notes: '메모', 'card-pos': '카드 자리', 'edit-log': '기록', 'link-names': '연결 이름', hidden: '숨김', locked: '잠금',
-             folders: '폴더', busy: 'AI 작업 표시', 'note-seq': '메모 번호'};
+             folders: '폴더', busy: 'AI 작업 표시', 'note-seq': '메모 번호', 'card-size': '카드 크기'};
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
 function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
 function same(a, b) { return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b); }

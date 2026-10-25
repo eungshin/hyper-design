@@ -14,7 +14,7 @@
   - 숨김·잠금·연결 이름(`hidden`·`locked`·`link-names`)은 옮기지 않는다
 - **알림** — "빈 레이아웃 '<이름>' 자리에 <화면 제목>이 들어왔어요"(+ 옮겨 둔 자리를 바꿨으면 "— 따로 옮겨 둔 자리 대신 빈 레이아웃 자리로") + [되돌리기]
 - **되돌리기** — 메모·카드 자리·폴더를 승격 전으로(빈 카드가 돌아옴). 돌아온 빈 레이아웃 메모에는 `stay = 화면 id` — 같은 화면으로는 다시 승격하지 않는다(폴링·새로고침에도). AI 가 다른 화면으로 다시 답하면 그때는 걸린다. 다시 하기 = 같은 승격
-- **층** — `promote`(Model): `promotable(notes, ids)`·`target`·`promote(state, draftId, screenId, place) → {state, undo, moved, name, memos, lines}`(입력은 고치지 않음)·`say`·`movedSay`. `view-promote`(View): 등록부 `HD.feature('promote', {needs: ['$$', 'rowsEl', 'notes', 'toast', 'record', 'title', 'warn']})` → `attach(shell)` → `{check()}`. 카드 자리·폴더의 주인은 셸이라 셸이 `FT.promote.attach({group, pos{get,set}, folders{get,set}})` 로 읽기/쓰기만 넘긴다(템플릿 손댄 곳: 이 attach 와 `PR.check()` 세 줄). 메모는 셸이 붙잡은 객체에 칸만 바꿔 넣는다(`annotation.adopt` 와 같은 뜻 — 되돌리기 기록 유지). 붙지 못하면 승격 없이 빈 카드가 남는다(`[hd]` + 토스트)
+- **층** — `promote`(Model): `promotable(notes, ids)`·`target`·`promote(state, draftId, screenId, place) → {state, undo, moved, name, memos, lines}`(입력은 고치지 않음)·`say`·`movedSay`. `view-promote`(View): 등록부 `HD.feature('promote', {needs: ['$$', 'rowsEl', 'notes', 'toast', 'record', 'title', 'warn']})` → `attach(shell)` → `{check()}`. 카드 자리·폴더의 주인은 셸이라 셸이 `FT.promote.attach({group, pos{get,set}, folders{get,set}, size?{get,set}})` 로(size = 카드 크기 맵 — 빈 레이아웃 크기를 화면으로 `artboard.carry`, task 46) 읽기/쓰기만 넘긴다(템플릿 손댄 곳: 이 attach 와 `PR.check()` 세 줄). 메모는 셸이 붙잡은 객체에 칸만 바꿔 넣는다(`annotation.adopt` 와 같은 뜻 — 되돌리기 기록 유지). 붙지 못하면 승격 없이 빈 카드가 남는다(`[hd]` + 토스트)
 
 ## 고치면 돌릴 것
 

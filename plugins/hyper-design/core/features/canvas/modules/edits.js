@@ -3,6 +3,7 @@
    메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
+   request(notes, out, sizes?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46)
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
 (function () {
 'use strict';
@@ -119,8 +120,8 @@ function nos(it) {
   return o.length ? ' · no=' + o.join(',') : '';
 }
 function place(a) { var t = flat(a.text); return a.path + (t && t.length <= 20 ? ' ("' + t + '")' : ''); }
-function request(notes, out) {
-  var list = items(notes);
+function request(notes, out, sizes) {               // sizes = {화면 id: 'W×H(프리셋)'} — 기본 크기가 아닌 카드만(task 46), 그 항목 아래 '화면 크기:' 줄
+  var list = items(notes), sz = sizes && typeof sizes === 'object' ? sizes : {};
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
     return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + nos(n) + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
       '\n   요청: ' + indent(n.note, CONT) +
@@ -129,7 +130,8 @@ function request(notes, out) {
         return '\n' + CONT + '- ' + (m.intent === 'question' ? '(질문) ' : '') + indent(String(m.note).trim(), CONT + '  ');
       }).join('') +
       (n.scope !== 'element' ? '\n   범위: ' + SCOPE_LINE[n.scope] : '') +
-      (n.also.length ? '\n   다른 곳: ' + n.also.map(place).join(' · ') : '');
+      (n.also.length ? '\n   다른 곳: ' + n.also.map(place).join(' · ') : '') +
+      (Object.prototype.hasOwnProperty.call(sz, n.screen) && sz[n.screen] ? '\n   화면 크기: ' + sz[n.screen] + ' — 이 뷰포트에 맞게 배치' : '');
   }).join('\n');
 }
 // 보낼 목록에서 목적도 메모 본문도 없는 빈 레이아웃 화면 id(복제는 내용이 있어 빼고) — 셸이 보낼 때 한 번 알린다(보내기는 그대로 간다)

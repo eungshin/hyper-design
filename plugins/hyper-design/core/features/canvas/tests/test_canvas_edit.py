@@ -1030,6 +1030,13 @@ def drafts(pg):
     return pg.evaluate("[...document.querySelectorAll('#rows .card.draft')].map(c => ({id: c.dataset.id, vis: c.offsetWidth > 0}))")
 
 
+def confirm_new(pg):
+    """task 46: 빈 레이아웃을 놓는 길(N 도구·여기에 레이아웃·레이어 [+])은 새 화면 대화상자를 먼저 연다 — 기본 크기 그대로 Enter = 만들기."""
+    pg.wait_for_selector("#abNew:not([hidden])")
+    pg.keyboard.press("Enter")
+    pg.wait_for_selector("#abNew", state="hidden")
+
+
 @pytest.mark.area("tools")
 def test_toolbar_has_add_group(dpage):
     tools = dpage.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => b.dataset.tool)")
@@ -1046,6 +1053,7 @@ def test_layout_tool_drops_blank_card_and_undo(dpage):
     assert tool(dpage) == ["layout"]
     e = empty_point(dpage)
     dpage.mouse.click(e["x"], e["y"])
+    confirm_new(dpage)
     dpage.wait_for_timeout(200)
     d = drafts(dpage)
     assert len(d) == 1 and d[0]["vis"], d
@@ -1090,6 +1098,7 @@ def test_empty_right_click_layout_here(dpage):
     dpage.mouse.click(e["x"], e["y"], button="right")
     assert "여기에 레이아웃" in cmenu_items(dpage)
     pick(dpage, "여기에 레이아웃")
+    confirm_new(dpage)
     dpage.wait_for_timeout(200)
     assert len(drafts(dpage)) == 1
     dpage.keyboard.press("Control+z")
@@ -1394,11 +1403,12 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     q = visible_cover(dpage, skip=[p["id"]])
     dpage.mouse.click(p["x"], p["y"])
     dpage.wait_for_timeout(150)
-    assert picked(dpage) == [p["id"]] and selbar(dpage) == ["메모", "숨기기", "삭제"]
+    sb = selbar(dpage)
+    assert picked(dpage) == [p["id"]] and sb[0].startswith("카드 크기 ") and sb[1:] == ["메모", "숨기기", "삭제"], sb   # task 46: 맨 앞 = 크기 단추
     dpage.keyboard.press("v")
     dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
     dpage.wait_for_timeout(150)
-    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage) == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
+    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage)[1:] == ["숨기기", "삭제"], "여러 장이면 메모는 빠진다"
     n0 = len(notes_of(dpage))
     dpage.click('#selbar [data-act="del"]')
     wait_notes(dpage, n0 + 2)
@@ -2284,8 +2294,9 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     dpage.mouse.click(c["x"], c["y"])
     dpage.wait_for_selector("#selbar:not([hidden])")
     bar = dpage.evaluate("[...document.querySelectorAll('#selbar button')].map(b => [b.dataset.act, b.textContent.trim(), b.getAttribute('aria-label'), !!b.querySelector('svg'), b.title])")
-    assert [b[0] for b in bar] == ["memo", "hide", "del"], bar
-    assert all(b[1] == "" and b[2] and b[3] and b[4] for b in bar), "아이콘만 · 이름은 aria-label · 툴팁"
+    assert [b[0] for b in bar] == ["size", "memo", "hide", "del"], bar
+    assert all(b[1] == "" and b[2] and b[3] and b[4] for b in bar[1:]), "아이콘만 · 이름은 aria-label · 툴팁"
+    assert re.match(r"^\d+×\d+ ▾$", bar[0][1]) and bar[0][2] and bar[0][4], ("task 46: 크기 단추 = 글(W×H ▾) · aria-label · 툴팁", bar[0])
     dpage.mouse.dblclick(c["x"], c["y"])
     dpage.wait_for_function("!document.getElementById('modal').hidden")
     assert dpage.locator("#mpick").count() == 0, "화면 위 [주석 달기] 버튼은 없다(G6)"
@@ -2593,6 +2604,7 @@ def test_user_tab_stays_and_blank_layout_click_selects(dpage):
     before = dpage.evaluate(ACTIVE_TABS_JS)
     assert "layers" in before, before
     dpage.click('#lyBar [data-act="layout"]')
+    confirm_new(dpage)
     dpage.wait_for_selector(".card.draft")
     dpage.keyboard.press("Escape")
     assert dpage.evaluate(ACTIVE_TABS_JS) == before, ("고른 탭이 그대로", before, dpage.evaluate(ACTIVE_TABS_JS))
@@ -2624,6 +2636,7 @@ def test_layer_folders_move_between_folders_and_blank_layouts(dpage):
     dpage.keyboard.press("Escape")
     dpage.click('#dock .dk-tab[data-p="layers"]')
     dpage.click('#lyBar [data-act="layout"]')
+    confirm_new(dpage)
     dpage.wait_for_selector(".card.draft")
     dpage.keyboard.press("Escape")
     d = dpage.evaluate("document.querySelector('.card.draft').dataset.id")
@@ -2780,6 +2793,7 @@ def drop_layout(pg):
     pg.keyboard.press("n")
     e = empty_point(pg)
     pg.mouse.click(e["x"], e["y"])
+    confirm_new(pg)
     pg.wait_for_selector(".card.draft")
     pg.keyboard.press("h")
     return pg.evaluate("document.querySelector('.card.draft').dataset.id")
