@@ -58,8 +58,9 @@ def test_large_view_bar_sits_above_the_element_and_never_covers_it(ctx, out):
         assert not _overlap(bar, el), (sel, "막대가 고른 요소를 덮는다", bar, el)
         assert not _overlap(bar, mb), (sel, "창 제목 막대(닫기)를 덮지 않는다", bar, mb)
         room = el["y"] - bar["h"] - 6 >= mb["y"] + mb["h"]                 # 창 제목 막대 아래에 자리가 있으면
-        if room:
-            assert bar["y"] + bar["h"] <= el["y"] + 1, (sel, "자리가 있으면 요소 위", bar, el)
+        if room:                                                            # 바로 위나 아래(t51-7a: 위가 형제 글로 막혀 있으면 아래 — bar-place.js)
+            above, below = bar["y"] + bar["h"] <= el["y"] + 1, bar["y"] >= el["y"] + el["h"] - 1
+            assert (above or below) and abs((el["y"] - bar["h"] - bar["y"]) if above else (bar["y"] - el["y"] - el["h"])) <= bar["h"] + 12 + 1, (sel, "자리가 있으면 요소 바로 위·아래", bar, el)
     assert not errors, errors
     pg.close()
 

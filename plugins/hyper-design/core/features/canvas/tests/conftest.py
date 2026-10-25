@@ -37,7 +37,7 @@ SURFACES = {
               ("test_canvas_swap.py", "test_canvas_busy_app.py", "test_canvas_blocks.py", "test_canvas_blocks_b.py",
                "test_canvas_blocks_place.py", "test_canvas_instant.py", "test_canvas_text_remove.py",
                "test_canvas_claim_watch.py", "test_canvas_replies_live.py", "test_canvas_helper.py", "test_canvas_figma_keys.py",
-               "test_canvas_cues.py")),
+               "test_canvas_cues.py", "test_canvas_blocks_clear.py")),
     "board": ("판 위 줄 배치·겹침(판 글·DS 카드·화면 줄·하단 대화창·탭·카메라 첫 자리)",
               ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
                "test_canvas_artboard.py", "test_canvas_tabs.py", "test_canvas_rows.py",

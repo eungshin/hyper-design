@@ -1,6 +1,7 @@
 /* View — 요소 막대(블록 편집, task 49a·49b·49c): 고른 요소 옆 [⠿][상위][글자][속성][지우기][복제][바꾸기][아래에 넣기][메모] · 속성 칸 · 부품 고르기 · 단축키(Alt+↑/↓ 옮기기 포함) · 끌어서 순서 바꾸기 · 쓴 뒤 같은 요소 다시 고르기.
-   규칙(켜짐·앱 = AI 요청·자리·너비/⋯·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model). 자리를 고를 때 같은 출처 화면의 둘레 글 상자를 읽어 넘긴다(못 읽으면 없이).
-   상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형}
+   규칙(켜짐·앱 = AI 요청·너비/⋯·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model), 막대 자리는 HD.barPlace(Model, t51-7a — 고른 요소·꼬리표·다른 막대를 덮지 않고 둘레 내용을 비킴).
+   둘레 내용 = 고른 요소의 형제 상자(hd-sibs — 어느 출처 화면이든) + 같은 출처 화면의 글·그림 상자(못 읽으면 형제만).
+   상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형, label?() → 꼬리표 사각형|null}
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
    편집 자체는 셸이 한다 — 단추는 onAct(fn) 로 받은 fn(act, sel) 하나로만 나간다(sel.attrs = 바꿀 속성 {이름: 값} · sel.part = 고른 부품 {key, title, ok}|null).
    상위·따라가기로 새 요소를 고르면 onPick(fn) 의 fn({screen, h, where}) — 셸이 그 자리 테두리·막대를 다시 그린다(View 끼리 부르지 않음).
@@ -50,7 +51,7 @@ var RO = '이 탭은 읽기만 해요 — 위쪽 "여기서 편집하기"를 누
 var FOLLOW_MS = 15000;
 
 function mount(ctx) {
-  var B = HD.blocks, cur = null, act = null, picked = null, follow = null, upWait = null, hopWait = null, navQ = [], seq = 0, done = null;   // navQ = 묻는 중에 더 누른 고르기 키(빠르게 Tab 여러 번 — 답이 오면 차례로)   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
+  var B = HD.blocks, P = HD.barPlace, cur = null, near = null, act = null, picked = null, follow = null, upWait = null, hopWait = null, navQ = [], seq = 0, done = null;   // navQ = 묻는 중에 더 누른 고르기 키(빠르게 Tab 여러 번 — 답이 오면 차례로)   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var bar = document.createElement('div');
   bar.id = 'elbar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '고른 요소'); bar.hidden = true;
@@ -116,20 +117,33 @@ function mount(ctx) {
       return r.x < v.x + v.w && r.x + r.w > v.x && r.y < v.y + v.h && r.y + r.h > v.y;
     });
   }
+  // 고른 요소의 형제 상자(틀 좌표) — 화면에 묻고(hd-sibs, 다른 출처도 답함) 답이 오면 다시 놓는다. 끌기의 hd-sibs 와 tag 로 나뉜다
+  function askNear() {
+    near = null;
+    var f = cur && cur.frame && cur.frame(), w = f && f.contentWindow;
+    if (!w) return;
+    near = {tag: 'near:' + (++seq), win: w, f: f, screen: cur.screen, path: cur.h.path, rects: null, index: -1};
+    try { w.postMessage({type: 'hd-sibs', path: cur.h.path, tag: near.tag}, '*'); } catch (e) { console.warn('[hd] 요소 막대: 형제 상자를 묻지 못했어요 — ' + (e && e.message || e)); near = null; }
+  }
+  function nearRects() {
+    if (!near || !near.rects || !cur || near.screen !== cur.screen || near.path !== cur.h.path || !near.f.isConnected) return [];
+    var b = frameBox(near.f);
+    return near.rects.filter(function (r, i) { return i !== near.index && r; }).map(function (r) { return {x: b.ox + r.x * b.sc, y: b.oy + r.y * b.sc, w: r.w * b.sc, h: r.h * b.sc}; });
+  }
+  function rectOf(r) { return r ? {x: r.left, y: r.top, w: r.width, h: r.height} : null; }
   function place() {
     if (!cur) return;
     var a = cur.anchor && cur.anchor();
     if (!a || !a.w && !a.h) { bar.hidden = true; pop.hidden = true; return; }
     bar.hidden = false;
     var v = viewRect(); fitBar(a, v);
-    var sb = ctx.$('#selbar'), r = sb && !sb.hidden ? sb.getBoundingClientRect() : null;
-    var tl = ctx.$('#tools'), tr = tl && !tl.hidden && tl.offsetWidth ? tl.getBoundingClientRect() : null;
-    var avoid = [cur.avoid ? cur.avoid() : r ? {x: r.left, y: r.top, w: r.width, h: r.height} : null,   // 비킬 것(절대): 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대 · 왼쪽 도구 막대 — 둘레 글은 무르게
-                 tr ? {x: tr.left, y: tr.top, w: tr.width, h: tr.height} : null];
+    var sb = ctx.$('#selbar'), tl = ctx.$('#tools');
+    var bars = [cur.avoid ? cur.avoid() : sb && !sb.hidden ? rectOf(sb.getBoundingClientRect()) : null,   // 다른 막대(절대): 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대 · 왼쪽 도구 막대 — 둘레 내용은 무르게
+                tl && !tl.hidden && tl.offsetWidth ? rectOf(tl.getBoundingClientRect()) : null];
     var os = null; try { os = others(v); } catch (e) { console.warn('[hd] 요소 막대: 둘레 글 상자를 읽지 못했어요 — ' + (e && e.message || e)); }
-    var p = B.place(a, {w: bar.offsetWidth, h: bar.offsetHeight}, v, avoid, os);
+    var p = P.place({anchor: a, label: cur.label ? cur.label() : null, size: {w: bar.offsetWidth, h: bar.offsetHeight}, view: v, bars: bars, content: nearRects().concat(os || [])});
     bar.style.left = p.x + 'px'; bar.style.top = p.y + 'px';
-    bar.dataset.side = p.over ? 'over' : p.side || (p.below ? 'below' : 'above');
+    bar.dataset.side = p.side;
     if (!pop.hidden) placePop();
   }
   function placePop() {                               // 막대 바로 아래(막대가 요소 아래면 막대 위가 아니라 그 아래 그대로) — 창 안
@@ -149,11 +163,11 @@ function mount(ctx) {
   }
   function show(sel) {
     if (!sel || !sel.h || !sel.h.path) { hide(); return; }
-    closePop(); cur = sel; paint(); bar.hidden = false; place();
+    closePop(); cur = sel; paint(); bar.hidden = false; askNear(); place();
   }
   function hide(where) {
     if (where && cur && cur.where !== where) return;
-    cur = null; bar.hidden = true; closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
+    cur = null; near = null; bar.hidden = true; closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
   }
   function run(a, extra) {
     var s = Object.assign({}, cur, extra || {});
@@ -351,7 +365,9 @@ function mount(ctx) {
   addEventListener('keydown', altKey, true); addEventListener('keyup', altKey, true);
   addEventListener('message', function (e) {
     var d = e.data; if (!d || typeof d !== 'object') return;
-    if (d.type === 'hd-sibs' && dr && d.tag === dr.tag && e.source === dr.win) {
+    if (d.type === 'hd-sibs' && near && d.tag === near.tag && e.source === near.win) {   // 막대 자리용 형제 상자
+      if (Array.isArray(d.rects) && d.index >= 0) { near.rects = d.rects; near.index = d.index; place(); } else near = null;
+    } else if (d.type === 'hd-sibs' && dr && d.tag === dr.tag && e.source === dr.win) {
       if (!Array.isArray(d.rects) || !(d.index >= 0)) { dragStop(); ctx.toast('이 요소의 형제를 찾지 못했어요 — 다시 골라 주세요'); return; }
       dr.rects = d.rects; dr.from = d.index;
       if (dr.pt) dragAt(dr.pt);

@@ -2,7 +2,7 @@
 
 도우미(I/O 없음, edit_html·apply_edits·restore 직접): duplicate = 요소 원문 바로 뒤에 복사본(앞 공백 그대로 한 번, 복사본 안 id·data-region 은 뺌),
 move up|down = 앞·뒤 형제 요소와 원문 조각을 맞바꿈(사이 글·공백은 제자리). 경로가 정확히 하나에 맞을 때만(task 41) · 화면 뿌리 거절.
-Model(node): blocks.bar(막대 단추 켜짐·AI 요청) · keyAct(Alt+↑↓·Ctrl+D) · isApp · place(막대 자리) · edits.instantOf(글자 = 바로) · preview(복제·옮기기 미리보기).
+Model(node): blocks.bar(막대 단추 켜짐·AI 요청) · keyAct(Alt+↑↓·Ctrl+D) · isApp · edits.instantOf(글자 = 바로) · preview(복제·옮기기 미리보기).
 """
 import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
@@ -160,10 +160,6 @@ out.isApp = [B.isApp('http://127.0.0.1:5173/hd-stage/x.html'), B.isApp('https://
 out.keys = [B.keyAct({key: 'ArrowUp', alt: true}), B.keyAct({key: 'ArrowDown', alt: true}), B.keyAct({key: 'd', ctrl: true}),
             B.keyAct({key: 'D', meta: true}), B.keyAct({key: 'ArrowUp'}), B.keyAct({key: 'ArrowUp', alt: true, shift: true}), B.keyAct({key: 'd', ctrl: true, shift: true}), B.keyAct({key: 'Delete'}), B.keyAct({key: 'Backspace'})];
 out.ask = ['text', 'remove', 'dup', 'up', 'down'].map(a => B.askText(a));
-out.placeAbove = B.place({x: 100, y: 300, w: 80, h: 20}, {w: 200, h: 36}, {w: 1000, h: 800}, null);
-out.placeBelow = B.place({x: 100, y: 40, w: 80, h: 20}, {w: 200, h: 36}, {w: 1000, h: 800}, null);
-out.placeAvoid = B.place({x: 100, y: 300, w: 80, h: 20}, {w: 200, h: 36}, {w: 1000, h: 800}, {x: 50, y: 250, w: 300, h: 40});
-out.placeClamp = B.place({x: 950, y: 300, w: 80, h: 20}, {w: 200, h: 36}, {w: 1000, h: 800}, null);
 const mk = (edit, op) => Object.assign(E.note('job', {path: 'li', text: 't', rect: null}, ''), {edit: edit, op: op || ''});
 const tx = Object.assign(mk('text'), {value: 'x'});
 out.instant = [E.instantOf(tx), E.instantOf(mk('duplicate')), E.instantOf(mk('move', 'up'))];
@@ -217,13 +213,6 @@ def test_keys_alt_arrows_move_ctrl_d_duplicates_delete_removes(js):
 def test_ask_texts_are_requests(js):
     assert js["ask"][1].startswith("요소 지우기") and js["ask"][2].startswith("요소 복제") and "위로" in js["ask"][3] and "아래로" in js["ask"][4], js["ask"]
     assert js["ask"][0].startswith("글자"), js["ask"]
-
-
-def test_place_bar_above_else_below_and_clamped(js):
-    assert {k: js["placeAbove"][k] for k in ("x", "y", "below")} == {"x": 100, "y": 300 - 36 - 6, "below": False}, js["placeAbove"]
-    assert {k: js["placeBelow"][k] for k in ("x", "y", "below")} == {"x": 100, "y": 40 + 20 + 6, "below": True}, js["placeBelow"]
-    assert js["placeAvoid"]["below"] is True, "카드 선택 막대와 겹치면 아래로"
-    assert js["placeClamp"]["x"] == 1000 - 200 - 8, js["placeClamp"]
 
 
 def test_text_duplicate_move_are_instant_and_direct(js):

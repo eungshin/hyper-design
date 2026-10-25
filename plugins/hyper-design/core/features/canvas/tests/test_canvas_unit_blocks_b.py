@@ -1,5 +1,5 @@
 """블록 조립(task 49b) — 속성 칸(attr)·부품 넣기/바꾸기(insert·replace)·쓴 뒤 고른 요소의 새 경로(도우미) · 견본 뼈대 뽑기(specimen_parts) ·
-요소 막대 규칙(blocks.js: [상위]·[ 키·상위 고르기·막대 자리·속성 칸·부품 요청 글) · edits.js(attr·insert·replace 바로 쓰기·미리보기·글귀).
+요소 막대 규칙(blocks.js: [상위]·[ 키·상위 고르기·속성 칸·부품 요청 글) · edits.js(attr·insert·replace 바로 쓰기·미리보기·글귀).
 
 도우미(I/O 없음, edit_html·edit_one·apply_edits·restore 직접): 실제 화면(fixtures/blocks-job.html — dayfine job.html 사본)에서.
 attr = 허용 목록(img src·alt · a href · input·textarea placeholder)만, on*·style 은 절대 · javascript:·data:(링크) 주소 거절.
@@ -260,16 +260,6 @@ out.up1 = B.parentPick(c0, [same, sec, rt]).path;
 out.up2 = B.parentPick(c0, [same]);
 out.up3 = B.parentPick(c0, []);
 out.up4 = B.parentPick(c0, null);
-const V = R(0, 0, 1000, 800), S = {w: 200, h: 36};
-out.above = B.place(R(100, 300, 80, 20), S, V, null);
-out.below = B.place(R(100, 30, 80, 20), S, V, null);
-out.avoid = B.place(R(100, 300, 80, 20), S, V, R(50, 250, 300, 40));
-out.right = B.place(R(950, 300, 40, 20), S, V, null);
-out.side = B.place(R(100, 20, 300, 770), S, V, null);
-out.left = B.place(R(700, 20, 290, 770), S, V, null);
-out.over = B.place(R(0, 0, 1000, 800), S, V, null);
-out.clip = B.place(R(300, 120, 80, 20), S, R(200, 100, 500, 600), null);
-out.bottom = B.place(R(100, 790, 80, 30), S, V, null);
 out.fields = B.attrFields({tag: 'img', attrs: {src: 'a.png', alt: '', onclick: 'x', style: 'y'}});
 out.fieldsA = B.attrFields({tag: 'a', attrs: {href: 'b.html', src: 'z'}});
 out.fieldsI = B.attrFields({tag: 'input', attrs: {placeholder: '이름', value: 'v'}});
@@ -321,19 +311,6 @@ def test_bracket_key_walks_up(js):
 
 def test_parent_pick_skips_wrappers_with_the_same_box(js):
     assert js["up1"] == "s" and js["up2"] is None and js["up3"] is None and js["up4"] is None
-
-
-def test_place_above_else_below_never_over_the_element(js):
-    assert js["above"] == {"x": 100, "y": 300 - 36 - 6, "below": False, "side": "", "over": False}, js["above"]
-    assert js["below"]["below"] is True and js["below"]["y"] == 30 + 20 + 6
-    assert js["avoid"]["below"] is True
-    assert js["right"]["x"] == 950 + 40 - 200, "오른쪽 끝 요소 = 막대 오른쪽을 요소 오른쪽에 맞춤"
-    assert js["side"]["side"] == "right" and js["side"]["x"] == 100 + 300 + 6, js["side"]
-    assert js["left"]["side"] == "left" and js["left"]["x"] == 700 - 200 - 6, js["left"]
-    assert js["over"]["over"] is True, "화면을 다 덮는 요소만 겹친다"
-    assert js["clip"] == {"x": 300, "y": 120 + 20 + 6, "below": True, "side": "", "over": False}, ("보이는 칸(크게 보기 창) 안에서", js["clip"])
-    b = js["bottom"]; el = {"x": 100, "y": 790, "w": 80, "h": 30}
-    assert b["y"] + 36 <= el["y"] and not b["below"], b
 
 
 def test_attr_fields_use_the_allow_list_only(js):
