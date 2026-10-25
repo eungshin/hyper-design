@@ -1,5 +1,5 @@
 """Model — 판 글 고치기·지우기 계획(t51-9): 판 위 소개 글(screens.json story·people · decisions.json core·items)을 캔버스 편집 하나로 바꾼다.
-데이터 → 데이터 — 파일·네트워크를 쓰지 않는다(쓰기는 session.apply_edits 의 'board' 편집). 규칙은 modules/board-text.js 와 같다.
+데이터 → 데이터 — 파일·네트워크를 쓰지 않는다(쓰기는 screen_edits.apply_edits 의 'board' 편집). 규칙은 modules/board-text.js 와 같다.
 
 편집 = {op: 'set', to: 칸 키, value: 글} | {op: 'delete', to: 묶음 키}
   칸 키 = 판에 보이는 차례(board_data.index_data 의 hd-data 와 같은 자리):

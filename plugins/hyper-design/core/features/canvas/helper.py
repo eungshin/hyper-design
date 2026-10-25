@@ -64,7 +64,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   hd open·허브가 지금 도장과 견줘 옛 코드 도우미를 (쉬면) 끄고 새로 띄운다. 페이지를 줄 때마다 index.html 의 도장도 견줘 옛것이면 다시 빌드.
 
 구조(task 47-2): 이 파일 = CLI(main) · make_server(out 하나 서버) · 예전 이름 다시 내보내기.
-  html_edit.py(Model — HTML 원문 고치기) · session.py(ProjectSession 과 부품: StateStore · History · Queue · Busy · Archive · Builder)
+  html_edit.py(Model — HTML 원문 고치기) · session.py(ProjectSession — 부품 모듈 state_store · history · send_queue · busy · note_archive · builder … 을 잇는다)
   · router.py(Router — 주소 → 세션 메서드, SessionHandler — 토큰·Host·크기 검사와 오류 모양)
 """
 
@@ -317,7 +317,7 @@ def main(argv=None):
 
 
 def attach_post(srv, body, lock=None):
-    """POST /api/attach 본문 {agent: id|null} → (code, 답) — 예전 이름(본체는 session.Queue.attach)."""
+    """POST /api/attach 본문 {agent: id|null} → (code, 답) — 예전 이름(본체는 send_queue.Queue.attach)."""
     return srv.session.queue.attach(body)
 
 

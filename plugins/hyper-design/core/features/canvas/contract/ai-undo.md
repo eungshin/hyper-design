@@ -4,7 +4,7 @@
 
 ## 규칙
 
-- 도우미(`session.py` `AiUndo`, 순수 규칙 `hd/helper_model.py` `ai_*`): `POST /api/claim` 이 200 이면 그 화면 파일을 `.hd-history/<stamp>/<rel>` 에 남긴다(직접 쓰기와 같은 모양). 덮개 동안 지켜보기가 그 화면이 바뀐 것을 보거나 `release` 때 마지막으로 보면 매니페스트(`by:"ai"`, after_sha)를 쓰고 처음 한 번만 기록 줄 `{seq, stamp, screen, label:"AI 반영 · <화면 제목>", at}` 을 남긴다. 덮개 하나 = 줄 하나(또 바뀌면 되살리기 기준만 새로). 안 바뀌었으면 release 때 남긴 것도 지운다.
+- 도우미(`ai_undo.py` `AiUndo`, 순수 규칙 `hd/helper_model.py` `ai_*`): `POST /api/claim` 이 200 이면 그 화면 파일을 `.hd-history/<stamp>/<rel>` 에 남긴다(직접 쓰기와 같은 모양). 덮개 동안 지켜보기가 그 화면이 바뀐 것을 보거나 `release` 때 마지막으로 보면 매니페스트(`by:"ai"`, after_sha)를 쓰고 처음 한 번만 기록 줄 `{seq, stamp, screen, label:"AI 반영 · <화면 제목>", at}` 을 남긴다. 덮개 하나 = 줄 하나(또 바뀌면 되살리기 기준만 새로). 안 바뀌었으면 release 때 남긴 것도 지운다.
 - `GET /api/ai-writes?since=<seq>` → `{seq, writes}`(since 없음·-1 = 기준만, 숫자 아님 = 400). 기록은 도우미 메모리 — 도우미가 다시 뜨면 seq 가 줄고 캔버스는 기준만 다시 잡는다.
 - 되살리기 = `POST /api/restore {stamp, keep:true, notify:true}`: keep = 되살리기 전 모습을 새 stamp 로 남기고 답에 `redo`(다시 하기에 쓸 stamp) · notify = 지켜보기 기준을 먹지 않아(absorb 안 함) 바뀐 화면으로 알린다 · 그 뒤 파일이 바뀌었으면 409(`changed-since`), 없으면 404, 빌드 실패 = 되돌리고 500.
 - `ai-undo`(Model, 순수): `fresh` · `first` · `body` · `outcome` · `again(src, now)`(카드 다시 싣기 주소 — hd-mode 등 그대로, v 만 새로). unit `tests/test_canvas_unit_ai_undo.py`.

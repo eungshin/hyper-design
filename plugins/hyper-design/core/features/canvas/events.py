@@ -1,6 +1,6 @@
 """Model — 세션 하나의 바뀐 것 알림(EventBus, task 47-4a): 번호 붙이기 · 고리 버퍼 · 이어 받기(Last-Event-ID) · 구독자 줄 · SSE 글 모양.
 
-소켓 쓰기는 router.SessionHandler._events, 언제 무엇을 내는지는 session.py 의 부품(StateStore · History · Busy · Queue · Rebuilder).
+소켓 쓰기는 router.SessionHandler._events, 언제 무엇을 내는지는 세션 부품(state_store.StateStore · history.History · busy.Busy · send_queue.Queue · note_archive.Archive · rebuild.Rebuilder) — 버스가 없으면 emit 이 건너뛴다.
 계약 = tests/protocol/events.json(모양 · 이어 받기 · reset). 상태: 고리(_ring) · newest id(_last) · 구독자들(_subs) — 주인은 이 객체 하나.
 버스는 세션마다 하나(허브 하나가 아니라): 상태·자물쇠·수명이 세션 것이고, 한 프로젝트가 바빠도 다른 프로젝트의 고리를 밀어내지 않는다.
 """

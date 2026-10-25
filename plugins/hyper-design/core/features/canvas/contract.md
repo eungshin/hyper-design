@@ -50,7 +50,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 셸에 새로 생긴 위쪽 `function` 이 있으면 왜 모듈이 아닌지 한 줄
 
 ## 로컬 도우미 (`helper.py`, 선택)
-- 구조(task 47-2): `helper.py` = CLI·`make_server`·예전 이름 · `html_edit.py`(Model — HTML 원문 고치기) · `session.py`(`ProjectSession` = `StateStore`·`History`·`Queue`·`Busy`·`Archive`·`Builder`, out 하나) · `router.py`(`Router` 주소 → 세션 메서드 · `SessionHandler` 토큰·Host·크기·JSON 오류). 허브(`hd home`)도 같은 세션·라우터를 `/v1/p/<이름>/` 아래에 쓴다(home/contract.md '서버 하나')
+- 구조(task 47-2): `helper.py` = CLI·`make_server`·예전 이름 · `html_edit.py`(Model — HTML 원문 고치기) · `session.py`(`ProjectSession` = 조립 지점, out 하나 — 부품은 모듈마다: `state_store.py` `StateStore` · `history.py` `History`(쓰기 기록 `write_record.py` · 편집 적용 `screen_edits.py` `EDIT_OPS` · 줄 `board_rows.py`) · `send_queue.py` `Queue` · `busy.py` `Busy` · `ai_undo.py` `AiUndo` · `note_archive.py` `Archive` · `chat_store.py` `ChatLog` · `builder.py` `Builder` · `ticker.py` `Ticker` · 파일 바탕 `out_io.py`) · `router.py`(`Router` 주소 → 세션 메서드 · `SessionHandler` 토큰·Host·크기·JSON 오류). 허브(`hd home`)도 같은 세션·라우터를 `/v1/p/<이름>/` 아래에 쓴다(home/contract.md '서버 하나')
 - 포트(#270): `--port` 가 없으면 `<out>/.hd-helper.json` 의 지난 포트를 먼저 열고, 막혔으면 빈 포트로(`[hd]` 한 줄) — 주소(origin)가 같아야 캔버스 localStorage(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다. `.hd-helper.json` = 떠 있는 동안 `{url, pid, port, token}`(주소를 찍기 전에 씀) · 정상 종료 뒤 `{port}`
 - 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
 - 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다

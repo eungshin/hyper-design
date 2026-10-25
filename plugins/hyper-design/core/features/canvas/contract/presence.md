@@ -8,7 +8,7 @@
 | `presence.py` | Model(순수 규칙) + 상태 주인 | `check_hello` · `lease_of` · `beat_of` · `check_progress` · `sweep_plan` · `public` / `AgentPresence` | hello(임대 1–300초, 기본 30) · beat · bye · progress · list · sweep(임대 끝 = away, 한 시간 지난 away = 잊음) | 에이전트 표(id → 항목) 하나 — 자물쇠 하나, 시계·알림은 받음 |
 | `adapters.py` | Model(`choose` · `config_from_env`) + Client 어댑터 | `NoneAdapter` · `PaseoAdapter` · `ClaudeCliAdapter` · `PaseoSpawner` | 접속 안 한(이벤트를 읽지 않는) 에이전트에게 넘기기 · 새 터미널 에이전트 열기 | 없음(찾는 법·켜짐만) |
 | `memo_archive.py` | Model(순수) | `pick` · `without` | 완료 메모 보관 고르기 — `modules/archive.js` 와 같은 규칙 | 없음 |
-| `session.py` | Service | `Queue.send` · `Archive.sweep` · `Ticker` · `ProjectSession.spawn` | 대기열 파일 + 받는 곳 고르기 + `request.sent` · 서버 쪽 보관 · 세션 시계(1초 presence.sweep, 한 시간 Archive.sweep) | Queue = 붙은 agent · 어댑터 표 |
+| `send_queue.py` · `note_archive.py` · `ticker.py` · `session.py` | Service | `Queue.send` · `Archive.sweep` · `Ticker` · `ProjectSession.spawn` | 대기열 파일 + 받는 곳 고르기 + `request.sent` · 서버 쪽 보관 · 세션 시계(1초 presence.sweep, 한 시간 Archive.sweep) | Queue = 붙은 agent · 어댑터 표 |
 | `router.py` | Controller | ROUTES | `/hello` `/beat` `/bye` `/progress` `GET /agents` `/agents/spawn` + 옛 뿌리 `/api/…` 별칭(`GET /api/presence`) · `/api/forward` = `Queue.send` | 없음 |
 
 ## 받는 곳 고르기(`adapters.choose`, 순수)

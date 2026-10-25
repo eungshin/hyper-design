@@ -8,7 +8,7 @@
 |---|---|---|
 | `modules/card-copy.js` | Model | 복제 계획. 상태 없음. `HD.cardCopy = {SUFFIX, plan(cards [{id, title, file, app?}](판 차례), srcs) → {items: [{src, id, title, file, after}], refused: [{id, why: app\|missing}]}, freshId}` |
 | `modules/view-card-copy.js` | View | 등록부 기능 `cardCopy`(needs `$ $$ toast warn cardEl rowsEl`). 상태 = 쓰기·빌드 확인 전 복사본(편집 id → 카드, 저장 안 함). 셸이 `CC = FT.cardCopy.attach({on, write, app, card, placed, removed, select})` 한 번 → `copy(ids) → bool`(false = 도우미 없음) · `reverted(ids, why)`(build.failed) |
-| `screen_copy.py` | Model(서버) | `plan(screens.json, src, want, title, files) → {data, id, title, file, src_file}` · `CopyError(이유, invalid\|missing)`. `session.apply_edits` 의 `edit:'clone'`(screen = 원본, to = 새 id, value = 제목)이 부르고 파일을 복사한다 — 쓰기 한 번 = 원본 + manifest(새 파일은 before:false) = 되돌리기 한 번 |
+| `screen_copy.py` | Model(서버) | `plan(screens.json, src, want, title, files) → {data, id, title, file, src_file}` · `CopyError(이유, invalid\|missing)`. `screen_edits.apply_edits` 의 `edit:'clone'`(screen = 원본, to = 새 id, value = 제목)이 부르고 파일을 복사한다 — 쓰기 한 번 = 원본 + manifest(새 파일은 before:false) = 되돌리기 한 번 |
 
 ## 규칙
 

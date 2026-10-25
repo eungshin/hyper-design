@@ -8,7 +8,7 @@
 |---|---|---|
 | `modules/board-text.js` | Model | 판 글 묶음(소개 안내 줄·제목·요약·아이디어·사람·정한 것·시장 관례 · 끝 글 색 출처·사진 출처 · DS 카드)과 출처 칸·되는 일. 상태 없음. `HD.boardText = {IDS, NAMES, CAPTION, blocks, apply, pending, check, keepEm, plain, captionDelete, layers, say, blockOf}` |
 | `modules/view-board-text.js` | View | `HD.viewBoardText.paint(els, D, hidden)`(셸이 처음 그림) + 등록부 기능 `boardText`(needs `$ $$ esc toast warn notes selected rowsEl`). 상태 = 고른 판 글 하나(저장 안 함) · 바로 반영 중 편집 · 받은 데이터. 셸은 `BT = FT.boardText.attach({data, on, write, queue, hide, hidden, tool, pickCard, guard, caption, reload, changed})` 한 번 — 쓰기 길·숨김·카드 글 상자는 셸 것. 의도 받음 `hd-board-pick {id}`(레이어 줄) |
-| `board_text.py` | Model(서버) | `plan(screens, decisions, {op, to, value})` → 바뀐 파일만 · `BoardError(이유, invalid|missing)`. `session.apply_edits` 의 `edit:'board'`(screen `'@board'`) 가 부른다 — 쓰기 한 번 = 원본 + manifest = 되돌리기 한 번 |
+| `board_text.py` | Model(서버) | `plan(screens, decisions, {op, to, value})` → 바뀐 파일만 · `BoardError(이유, invalid|missing)`. `screen_edits.apply_edits` 의 `edit:'board'`(screen `'@board'`) 가 부른다 — 쓰기 한 번 = 원본 + manifest = 되돌리기 한 번 |
 
 ## 규칙
 

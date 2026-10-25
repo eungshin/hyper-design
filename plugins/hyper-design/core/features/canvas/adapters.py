@@ -7,7 +7,7 @@
   ClaudeCliAdapter               `claude -p --resume <session>` — 표준 입력 = 요청문 파일, 출력 = 대기열 옆 .claude.log. 기다리지 않음. 기본 꺼짐
   PaseoSpawner                   새 터미널 에이전트 열기 `paseo run --no-wait …` — HD_ALLOW_SPAWN=1 이 아니면 403 disabled(밖으로 나가는 일 — 캔버스가 먼저 사용자에게 묻는다)
 자식 프로세스는 모두 creationflags=NO_WINDOW(창 없이 뜬 서버에서 콘솔이 깜빡이지 않게). run·popen 은 테스트가 가짜로 바꿔 끼운다.
-상태 없음(어댑터는 찾는 법 find 와 켜짐 enabled 만 안다). 쓰는 곳 = session.Queue.send · session.forward(옛 이름).
+상태 없음(어댑터는 찾는 법 find 와 켜짐 enabled 만 안다). 쓰는 곳 = send_queue.Queue.send · send_queue.forward(옛 이름).
 """
 import json, os, pathlib, shutil, subprocess
 

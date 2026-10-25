@@ -3,7 +3,7 @@
 순수 규칙(check_hello · lease_of · beat_of · check_progress · sweep_plan · public)은 시계·파일·네트워크를 모른다(unit 테스트).
 AgentPresence = 에이전트 표(id → 항목) 하나의 주인 — 자물쇠 하나, 시계(clock, 초)와 알림(publish = 세션 EventBus.publish)은 받는다.
 바깥 모양 = tests/protocol/presence.json(agent · lease) · 이벤트 agent.hello · agent.away · agent.progress(events.json).
-쓰는 곳: session.Queue(보낼 곳 고르기 — get) · session.Ticker(1초마다 sweep) · router(/hello · /beat · /bye · /progress · /agents).
+쓰는 곳: send_queue.Queue(보낼 곳 고르기 — get) · session 의 Ticker(1초마다 sweep) · router(/hello · /beat · /bye · /progress · /agents).
 """
 import pathlib, sys, threading, time
 

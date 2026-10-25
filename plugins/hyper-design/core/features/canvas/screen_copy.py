@@ -1,5 +1,5 @@
 """Model — 화면 카드 바로 복제 계획(51-6, Figma F19: Ctrl+D = 프레임 복제, 바로 오른쪽에). 데이터 → 데이터 — 파일·네트워크를 쓰지 않는다
-(파일 복사·쓰기는 session.apply_edits 의 'clone' 편집). 같은 규칙의 캔버스 쪽 = modules/card-copy.js(화면에 먼저 보일 카드).
+(파일 복사·쓰기는 screen_edits.apply_edits 의 'clone' 편집). 같은 규칙의 캔버스 쪽 = modules/card-copy.js(화면에 먼저 보일 카드).
 
 plan(screens.json, 원본 id, want=None, title=None, files=()) → {"data": 새 screens.json, "id", "title", "file", "src_file"}
   새 id   = want(캔버스가 고른 것 — 비었으면 아래 규칙) | '<원본>-copy', 쓰였으면 '-copy-2' '-copy-3' … (화면 id · 있는 파일(files = out 기준 경로) 모두 피함)

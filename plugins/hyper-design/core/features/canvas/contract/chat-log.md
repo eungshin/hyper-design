@@ -7,7 +7,7 @@
 | 모듈 | 층 | |
 |---|---|---|
 | `chat_log.py` | Model(순수) | 기록 한 줄 모양(`from_event` · `check_post` · `reply_text`) · 턴 붙이기(`assign`, 상태 = 다음 seq · 메모 → 턴 · 마지막 턴·시각) · 한도(`over` · `trim`, 500 턴 + 50) · 읽기(`parse_lines` · `since` · `parse_since`). 상태 없음 |
-| `session.py` `ChatLog` | Service | `<out>/.hd-chat.jsonl` 덧붙이기(자기 자물쇠) · 한도 넘으면 오래된 턴 → `.hd-chat-archive.jsonl` + 남은 것 임시 파일·`os.replace` · `tap(ev)` = `EventBus.taps`(구독자보다 먼저 — 이벤트를 받은 탭이 바로 읽어도 있다) · `post` · `get` |
+| `chat_store.py` `ChatLog` | Service | `<out>/.hd-chat.jsonl` 덧붙이기(자기 자물쇠) · 한도 넘으면 오래된 턴 → `.hd-chat-archive.jsonl` + 남은 것 임시 파일·`os.replace` · `tap(ev)` = `EventBus.taps`(구독자보다 먼저 — 이벤트를 받은 탭이 바로 읽어도 있다) · `post` · `get` |
 | `events.py` `EventBus.taps` | Model | publish 안에서 구독자보다 먼저 부르는 함수들. 탭이 던지면 `[hd]` 한 줄, 알림은 나간다 |
 | `router.py` | Controller | `GET /api/chat?since=` → `{seq, records[, reset]}`(since 정수 아님 = 400) · `POST /api/chat` ask/undone(틀림 400, 모르는 턴 404) |
 | `modules/chat-log.js` | Model | 기록 → 턴·상태·줄·닿은 화면·되돌릴 stamp, 자동 스크롤, 터미널 대화 섞기(`HD.chatLog`, 머리 주석이 API) |
@@ -32,6 +32,6 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `chat_log.py` · `session.py` `ChatLog` · `router.py` `/api/chat` · `events.py` taps | `unit`(test_canvas_unit_chat_log_py.py — ChatLog 파일은 `-m slow -k chatlog`) + `unit or helper` |
+| `chat_log.py` · `chat_store.py` `ChatLog` · `router.py` `/api/chat` · `events.py` taps | `unit`(test_canvas_unit_chat_log_py.py — ChatLog 파일은 `-m slow -k chatlog`) + `unit or helper` |
 | `modules/chat-log.js` | `unit`(test_canvas_unit_chat_log.py) |
 | `view-chat-log.js` · 셸 `#pTalk`·`#ldock`·`focus` · view-chat `hd-composer` | `unit or chat or dock or helper --surface board`(브라우저 test_canvas_chat_log.py) |

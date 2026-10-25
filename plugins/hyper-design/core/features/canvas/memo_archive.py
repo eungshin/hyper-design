@@ -3,7 +3,7 @@
 완료 = hd_model.status 'done'(annotation.js 와 같은 규칙). 끝난 시각 = 마지막 답의 at(ISO). 보내기 전·AI 작업 중·결정 필요·일부·id 없는 메모는 고르지 않는다.
 pick(notes, now_ms) → 끝난 지 KEEP_DAYS 일 넘은 완료 + 완료가 KEEP_DONE 개를 넘으면 가장 오래 전에 끝난 것부터(시각 모름 = 가장 오래됨). 목록 차례.
 without(notes, archived) → 보관한 것과 id·내용이 그대로 같은 메모만 뺀 목록(그 사이 다시 연 메모는 남긴다).
-쓰는 곳 = session.Archive.sweep(세션 시계가 한 시간마다 — 전에는 캔버스 탭이 이벤트·focus 때만).
+쓰는 곳 = note_archive.Archive.sweep(세션 시계가 한 시간마다 — 전에는 캔버스 탭이 이벤트·focus 때만).
 """
 import datetime, json, math, pathlib, sys
 

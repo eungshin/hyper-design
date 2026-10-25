@@ -1,5 +1,5 @@
 """Model — 화면 HTML 원문 고치기(task 47-2 에서 helper.py 에서 떼어 냄): 원문 위치를 아는 작은 트리 · palette.js 경로 고르기 ·
-편집 패치(글자·지우기·복제·옮기기·속성·넣기·바꾸기·잇기·끊기). 글 → 글 — 파일·네트워크를 쓰지 않는다(쓰기는 session.History).
+편집 패치(글자·지우기·복제·옮기기·속성·넣기·바꾸기·잇기·끊기). 글 → 글 — 파일·네트워크를 쓰지 않는다(쓰기는 history.History · screen_edits).
 """
 import html, re
 from html.parser import HTMLParser
