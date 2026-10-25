@@ -5,6 +5,7 @@ test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저
 여기서는 그 표시를 `-m` 으로 고를 수 있는 영역 표시(`tools`·`notes`…)로 바꿔 단다. 영역 표시가 없거나 AREAS 에 없는 영역을 쓴
 브라우저 테스트는 수집 단계에서 실패한다. 여기를 고칠 일은 새 영역(AREAS 한 줄)뿐이다.
 SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
+`--surface frame,board` 는 -m 고른 것에 그 화면 동작(SURFACES)을 함께 쓰는 테스트 파일을 더한다 — 파일은 달라도 같은 동작을 쓰는 이웃 조각을 커밋 전에 같이 본다.
 """
 import json, time
 from pathlib import Path
@@ -27,6 +28,23 @@ AREAS = {
     "chat": "하단 대화창: 고른 카드·요소 칩·보내기(S1)",
     "dscard": "판 위 디자인 시스템 카드(S6)",
 }
+
+
+# 화면 동작(surface): 영역(AREAS)과 달리 여러 조각이 함께 기대는 실행 중 동작 — 한 조각이 바꾸면 이웃 조각이 깨진 곳(2026-10-25 후속 고침 6건).
+# 그 동작을 바꾸는 조각은 커밋 전 `-m "<내 영역>" --surface <이름>` 으로 이웃 파일까지 돌린다. 새 테스트 파일이 그 동작을 쓰면 여기 한 줄.
+SURFACES = {
+    "frame": ("카드 iframe 다시 싣기·교체·요소 고르기(교체 뒤 배지·높이·선택 유지)",
+              ("test_canvas_swap.py", "test_canvas_busy_app.py", "test_canvas_blocks.py", "test_canvas_blocks_b.py",
+               "test_canvas_blocks_place.py", "test_canvas_instant.py", "test_canvas_text_remove.py",
+               "test_canvas_claim_watch.py", "test_canvas_replies_live.py", "test_canvas_helper.py")),
+    "board": ("판 위 줄 배치·겹침(판 글·DS 카드·화면 줄·하단 대화창·탭·카메라 첫 자리)",
+              ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
+               "test_canvas_artboard.py", "test_canvas_tabs.py")),
+}
+
+
+def pytest_addoption(parser):
+    parser.addoption("--surface", default="", help="쉼표로 화면 동작 이름(SURFACES) — -m 고른 것에 그 동작을 쓰는 테스트 파일을 더한다")
 
 
 # 격리(fable #4): -n 4 에서만 가끔 깨지는 테스트 — -n 실행은 고르지 않고, 끝에 `pytest tests -m serial`(-n 없이)로 따로 돌린다. 원인을 찾으면 여기서 뺀다.
@@ -54,6 +72,16 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "serial: -n 에서 가끔 깨지는 격리 테스트 — -n 실행에서 빠지고 `-m serial`(-n 없이)로 따로")
     for name, what in AREAS.items():
         config.addinivalue_line("markers", f"{name}: {what}")
+    surf = [x.strip() for x in (config.getoption("--surface", "") or "").split(",") if x.strip()]
+    bad = [x for x in surf if x not in SURFACES]
+    if bad:
+        raise pytest.UsageError(f"SURFACES(tests/conftest.py)에 없는 화면 동작: {bad} — 있는 것: {sorted(SURFACES)}")
+    for name, (what, _) in SURFACES.items():
+        config.addinivalue_line("markers", f"surface_{name}: {what}")
+    if surf:                                          # 표시 고르기(-m)는 이 뒤 mark 플러그인이 읽는다 — 이웃 파일 표시를 OR 로 더함
+        extra = " or ".join(f"surface_{x}" for x in surf)
+        m = getattr(config.option, "markexpr", "") or ""
+        config.option.markexpr = f"({m}) or {extra}" if m else extra
 
 
 @pytest.hookimpl(tryfirst=True)                     # xdist 가 묶음 이름(xdist_group)을 읽기 전에 표시를 단다
@@ -66,6 +94,9 @@ def pytest_collection_modifyitems(config, items):
             continue
         if not it.fspath.basename.startswith("test_canvas_"):
             continue
+        for name, (_, files) in SURFACES.items():
+            if it.fspath.basename in files:
+                it.add_marker(getattr(pytest.mark, "surface_" + name))
         areas = [a for m in it.iter_markers("area") for a in m.args]
         if not areas:
             missing.append(it.nodeid)

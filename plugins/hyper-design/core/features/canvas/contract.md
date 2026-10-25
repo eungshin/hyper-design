@@ -49,6 +49,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 셸에 새로 생긴 위쪽 `function` 이 있으면 왜 모듈이 아닌지 한 줄
 
 ## 로컬 도우미 (`helper.py`, 선택)
+- 구조(task 47-2): `helper.py` = CLI·`make_server`·예전 이름 · `html_edit.py`(Model — HTML 원문 고치기) · `session.py`(`ProjectSession` = `StateStore`·`History`·`Queue`·`Busy`·`Archive`·`Builder`, out 하나) · `router.py`(`Router` 주소 → 세션 메서드 · `SessionHandler` 토큰·Host·크기·JSON 오류). 허브(`hd home`)도 같은 세션·라우터를 `/v1/p/<이름>/` 아래에 쓴다(home/contract.md '서버 하나')
 - 포트(#270): `--port` 가 없으면 `<out>/.hd-helper.json` 의 지난 포트를 먼저 열고, 막혔으면 빈 포트로(`[hd]` 한 줄) — 주소(origin)가 같아야 캔버스 localStorage(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다. `.hd-helper.json` = 떠 있는 동안 `{url, pid, port, token}`(주소를 찍기 전에 씀) · 정상 종료 뒤 `{port}`
 - 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
 - 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다
@@ -76,6 +77,8 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 
 브라우저 테스트는 테스트 파일 안에서 영역 표시를 받는다 — 테스트마다 `@pytest.mark.area("tools", "notes")`(파일 전체면 `pytestmark = pytest.mark.area(...)`). conftest 가 그것을 `-m` 으로 고르는 표시로 바꿔 단다. 영역 표시가 없거나 `AREAS` 에 없는 영역이면 수집 단계에서 실패한다. `tests/conftest.py` 를 고칠 일은 새 영역(`AREAS` 한 줄)뿐이다:
 `input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(고르기 강조·화면 안 연결) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
+
+**이웃 화면 동작(surface)**: 파일이 겹치지 않아도 같은 실행 중 동작을 쓰는 조각끼리 깨진다(2026-10-25: 교체 뒤 배지·높이, DS 카드 줄이 카드를 밀어냄, 대화창이 안내 줄을 가림). 그 동작을 바꾸는 조각은 커밋 전 영역 실행에 `--surface <이름>` 을 더한다 — 예: `-m "helper or modal" --surface frame`. 이름은 `tests/conftest.py` 의 `SURFACES`: `frame`(카드 iframe 다시 싣기·교체·요소 고르기) · `board`(판 위 줄 배치·겹침). 새 테스트 파일이 그 동작을 쓰면 `SURFACES` 에 한 줄(`test_canvas_unit_surfaces.py` 가 파일이 있는지 본다). 전체 실행은 main 이 단계 끝에 한 번 — 일꾼은 영역 + 이웃까지.
 
 **어디를 고치면 무엇을 돌리나**
 
