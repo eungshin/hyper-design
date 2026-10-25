@@ -18,6 +18,10 @@
    자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
+  블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
+    hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸} 으로(없으면 그대로 hd-picked).
+    hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'}.
+    hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) — 경로는 모두 바꾸기 전 문서에서 찾는다.
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
@@ -63,7 +67,7 @@
   if (s) apply(s);
 
   /* ---------- 요소 고르기 ---------- */
-  var picking = false, box = null, last = null;
+  var picking = false, pickMode = '', box = null, last = null;   // pickMode: '' = 메모(hd-picked) · 'text' = 글자(hd-dbl) · 'select' = 요소 고르기(hd-sel)
   function send(msg) { try { if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*'); } catch (e) {} }
   function rectOf(el) { var r = el.getBoundingClientRect(); return {x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height)}; }
   function cssEsc(v) { return window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/[^\w-]/g, '\\$&'); }
@@ -233,6 +237,8 @@
     if (!picking) return;
     block(e);
     var t = target(e); if (!t) return;
+    if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
+    if (pickMode === 'select') { sendHit(t, false, 'hd-sel'); return; }   // 크게 보기 고르기 도구 → 요소 막대
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
 
@@ -301,8 +307,23 @@
   function sendHit(at, leaf, type) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
     var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
-    send(withSrc({type: type || 'hd-hit', screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
-          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el), textOk: textOk(el)}, el));
+    send(hitMsg(el, type || 'hd-hit'));
+  }
+  function hitMsg(el, type) {                         // hd-hit·hd-dbl·hd-sel·hd-ctx 답 칸(같은 것)
+    return withSrc({type: type, screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),
+          rect: rectOf(el), to: toOf(el), kind: kindOf(el), quote: quoteOf(el), textOk: textOk(el),
+          prev: !!sib(el, -1), next: !!sib(el, 1), root: isRoot(el)}, el);
+  }
+  var SIB_SKIP = /^(script|style|template|link|meta)$/;   // helper.py SIB_SKIP 과 같은 규칙
+  function sib(el, d) {                               // 앞(-1)·뒤(1) 형제 요소 | null
+    for (var n = d < 0 ? el.previousElementSibling : el.nextElementSibling; n; n = d < 0 ? n.previousElementSibling : n.nextElementSibling) {
+      if (!SIB_SKIP.test(n.tagName.toLowerCase()) && !n.hasAttribute('data-hd-dup')) return n;
+    }
+    return null;
+  }
+  function isRoot(el) {                               // helper.py _is_root 과 같은 규칙: body 바로 아래 유일한 요소
+    var p = el.parentElement; if (!p || p !== document.body) return false;
+    return Array.prototype.filter.call(p.children, function (c) { return !SIB_SKIP.test(c.tagName.toLowerCase()) && !c.hasAttribute('data-hd-pick') && !c.hasAttribute('data-hd-links'); }).length === 1;
   }
   // 글자만 바꿔도 되는 요소 — 안의 자식이 모두 인라인(글이 든 b·span…, 또는 br·wbr)일 때. helper.py INLINE·_inline_only 와 같은 규칙
   var INLINE = /^(b|strong|i|em|span|small|u|s|mark|sub|sup|code|abbr|cite|q|kbd|var|time|font|del|ins|br|wbr)$/;
@@ -317,16 +338,31 @@
   var pend = [];
   function pending(items) {                           // 반영 대기: 글 = 안의 마디를 떼어 두고 새 글로 · 지우기 = 숨김 — 다음 호출에서 처음대로(떼어 둔 마디를 그대로 되돌림)
     pend.reverse().forEach(function (q) {
+      if (q.added && q.added.parentNode) q.added.parentNode.removeChild(q.added);
+      if (q.back) q.back.parent.insertBefore(q.el, q.back.next && q.back.next.parentNode === q.back.parent ? q.back.next : null);
       if (q.kids) { while (q.el.firstChild) q.el.removeChild(q.el.firstChild); q.kids.forEach(function (k) { q.el.appendChild(k); }); }
       if (q.disp !== undefined) q.el.style.display = q.disp;
       q.el.style.outline = q.o; q.el.style.outlineOffset = q.oo;
     });
     pend = [];
-    (items || []).forEach(function (it) {
-      var el = find(it.path);
+    var els = (items || []).map(function (it) { return find(it.path); });   // 모두 바꾸기 전 문서에서 찾는다(도우미도 한 원문에서 고른다)
+    (items || []).forEach(function (it, i) {
+      var el = els[i];
       if (!el) return;
       var q = {el: el, o: el.style.outline, oo: el.style.outlineOffset};
       if (it.remove) { q.disp = el.style.display; el.style.display = 'none'; pend.push(q); return; }
+      if (it.dup) {                                    // 복제: 바로 뒤에 점선 복사본(id·data-region 뺌)
+        var cp = el.cloneNode(true);
+        [cp].concat(Array.prototype.slice.call(cp.querySelectorAll('[id],[data-region]'))).forEach(function (n) { n.removeAttribute('id'); n.removeAttribute('data-region'); });
+        cp.setAttribute('data-hd-dup', ''); cp.style.outline = '2px dashed #f59e0b'; cp.style.outlineOffset = '2px';
+        el.parentNode.insertBefore(cp, el.nextSibling); q.added = cp; pend.push(q); return;
+      }
+      if (it.move) {                                   // 옮기기: 형제와 자리 바꿈 — 되돌릴 때 원래 다음 마디 앞으로
+        var to = sib(el, it.move === 'up' ? -1 : 1); if (!to) return;
+        q.back = {parent: el.parentNode, next: el.nextSibling};
+        el.parentNode.insertBefore(el, it.move === 'up' ? to : to.nextSibling);
+        el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px'; pend.push(q); return;
+      }
       if (!textOk(el)) return;                         // 도우미도 거절할 요소 — 일부만 바꿔 보이지 않는다
       q.kids = Array.prototype.slice.call(el.childNodes);
       q.kids.forEach(function (k) { el.removeChild(k); });
@@ -381,6 +417,20 @@
     e.preventDefault(); e.stopPropagation();
     sendHit(el, true, 'hd-dbl');
   }, true);
+  document.addEventListener('contextmenu', function (e) {   // 크게 보기 오른쪽 클릭 → 캔버스 요소 메뉴(task 49a)
+    if (!editOn || !window.parent || window.parent === window) return;
+    e.preventDefault(); e.stopPropagation();
+    var at = e.target && e.target.nodeType === 1 ? e.target : null;
+    var x = e.clientX, y = e.clientY;
+    if (!at || at === document.documentElement || at === document.body) { send({type: 'hd-ctx', screen: screenId(), path: null, x: x, y: y}); return; }
+    var m = hitMsg(linkAt(at) || (at.closest ? at.closest(HIT_SEL) : null) || at, 'hd-ctx');   // 판 우클릭(hd-hit-at)과 같은 요소 고르기
+    m.x = x; m.y = y; send(m);
+  }, true);
+  var scrollT = 0;
+  addEventListener('scroll', function () {             // 고른 요소 막대는 화면 좌표라 스크롤하면 캔버스가 걷는다
+    if (!editOn || !window.parent || window.parent === window || scrollT) return;
+    scrollT = setTimeout(function () { scrollT = 0; }, 150); send({type: 'hd-scroll', screen: screenId()});
+  }, true);
   addEventListener('message', function (e) {
     var d = e.data; if (!d) return;
     if (d.type === 'hd-palette') apply(d.slug);
@@ -393,7 +443,7 @@
     else if (d.type === 'hd-locate') locate(d.items);
     else if (d.type === 'hd-edit') editOn = !!d.on;
     else if (d.type === 'hd-pick') {
-      picking = !!d.on; last = null;
+      picking = !!d.on; last = null; pickMode = picking && (d.mode === 'text' || d.mode === 'select') ? d.mode : '';
       if (!picking && box) box.style.display = 'none';
       document.documentElement.style.cursor = picking ? 'crosshair' : '';
     }

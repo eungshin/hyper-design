@@ -8,7 +8,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 - 읽기(GET /api/state · index.html 스냅숏)는 빌드 자물쇠를 기다리지 않는다(쓰기가 임시 파일 + os.replace) — 쓰기만 하나씩.
 - 127.0.0.1 에만 열고, 실행마다 새 토큰을 만든다. 출력한 주소(…/index.html?hd=<토큰>)로 캔버스를 열면 '보내기'가 도우미를 쓴다.
 - 쓰는 곳은 <out> 안뿐이다. 쓰기 전에 원본을 <out>/.hd-history/<시각>/ 에 남기고, 쓴 뒤 build_canvas.py 로 캔버스를 다시 만든다(실패하면 원본으로 되돌림).
-- 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 카드 이름(title) · 설명(purpose) · 정책 목록(policies, task 31) · 옛 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
+- 바로 쓰는 편집(결정형): 글자(text — 요소 안 내용 전부, '' = 비우기) · 요소 지우기(remove) · 요소 복제(duplicate)·위/아래로 옮기기(move, op up|down — task 49a) · 카드 이름(title) · 설명(purpose) · 정책 목록(policies, task 31) · 옛 정책 줄(policy, index) · 잇기/도착 바꾸기(link) · 끊기/트리거 해제(cut).
   나머지 메모(질문, 새 화면, 도착 없는 트리거 지정 등)는 요청문 그대로 <out>/.hd-queue/<시각>.txt 대기열 파일에 쓰고,
   --paseo-agent 가 있으면 그 파일을 `paseo send <agent> --prompt-file … --no-wait` 로 그 에이전트 터미널에 넣는다
   (없으면 터미널에서 /hyper-design:fix 에 그 내용을 붙여 넣는다).
@@ -21,6 +21,7 @@ python3 helper.py <out> [--port 0] [--paseo-agent ID] [--no-open]
 API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localhost 의 그 포트만)
   /api/apply   {edits:[{id, screen, edit, path, value?, to?}]} → {applied:[id], failed:[{id, reason}], stamp, changed:[screen]}
     edit: text(value — 요소 안 글·인라인 자식 전부를 바꿈, 안에 블록 자식이면 거절) · remove(요소 통째로, html·body·화면 뿌리 거절) · title · purpose
+      · duplicate(바로 뒤에 복사본, 복사본 안 id·data-region 뺌) · move(op up|down — 앞·뒤 형제와 원문 조각 맞바꿈, 끝이면 거절)
       · policies(value = [글] — 화면의 policies 를 통째로 바꿈, 글 목록·50줄·줄마다 500자 아니면 거절) · policy(옛 메모: index, op delete) · link · reason = 한국어
   /api/delete  {screens:[id]}                                 → {deleted:[id], cut:[{screen, path, to}], failed, stamp, changed:[screen]}
   /api/restore {stamp}                                        → {restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since'}
@@ -256,8 +257,67 @@ def _remove_patch(el, path):
     return el.start, el.close[1], ""
 
 
+# 블록 편집(task 49a): 복제·위/아래로 옮기기 — 원문 조각 그대로(요소 [시작, 닫는 태그 끝)), 형제 = 이 태그들은 건너뛴다(palette.js SIB_SKIP 과 같은 규칙)
+SIB_SKIP = {"script", "style", "template", "link", "meta"}
+
+
+def _end(el, path, what):                            # 요소 원문 끝(void·/> = 시작 태그 끝) — 닫는 태그가 없으면 거절
+    if el.void:
+        return el.open_end
+    if el.close is None:
+        raise ValueError("닫는 태그를 찾지 못해 %s 수 없어요: %s" % (what, path))
+    return el.close[1]
+
+
+def _block_ok(el, path, what):
+    if _is_root(el):
+        raise ValueError("화면 뿌리(html·body·맨 바깥 요소)는 %s 수 없어요: %s" % (what, path))
+
+
+def _strip_ids(src, el, a, b):
+    """원문 [a, b) = 요소 el 조각 → id·data-region 을 모두 뺀 복사본(그 안 자손 포함) — 복사본 경로가 원본과 겹치지 않게."""
+    nodes, stack = [], [el]
+    while stack:
+        n = stack.pop(); nodes.append(n); stack.extend(n.children)
+    patches = []
+    for n in nodes:
+        tag = src[n.start:n.open_end]
+        new = _set_attr(_set_attr(tag, "id", None), "data-region", None) if ("id" in n.attrs or "data-region" in n.attrs) else tag
+        if new != tag:
+            patches.append((n.start - a, n.open_end - a, new))
+    return _patch(src[a:b], patches)
+
+
+def _dup_patch(src, el, path):
+    """복제: 요소 바로 뒤에 복사본 — 요소 앞 공백(줄바꿈·들여쓰기)을 한 번 더 넣고 복사본. 패치 = 요소 자리 전체(안의 다른 편집과 겹치면 거절)."""
+    _block_ok(el, path, "복제할")
+    a, b = el.start, _end(el, path, "복제할")
+    k = a
+    while k > 0 and src[k - 1] in " \t\r\n":
+        k -= 1
+    return a, b, src[a:b] + src[k:a] + _strip_ids(src, el, a, b)
+
+
+def _move_patch(src, el, path, way):
+    """옮기기: 앞(up)·뒤(down) 형제 요소와 원문 조각 맞바꾸기 — 둘 사이 글·공백·주석은 제자리."""
+    if way not in ("up", "down"):
+        raise ValueError("옮길 방향은 up·down 이에요: %s" % way)
+    _block_ok(el, path, "옮길")
+    sibs = [c for c in el.parent.children if c.tag not in SIB_SKIP]
+    i = sibs.index(el)
+    j = i - 1 if way == "up" else i + 1
+    if j < 0:
+        raise ValueError("맨 위 요소라 더 위로 옮길 수 없어요: " + path)
+    if j >= len(sibs):
+        raise ValueError("맨 아래 요소라 더 아래로 옮길 수 없어요: " + path)
+    x, y = (sibs[j], el) if way == "up" else (el, sibs[j])
+    xa, xb, ya, yb = x.start, _end(x, path, "옮길"), y.start, _end(y, path, "옮길")
+    return xa, yb, src[ya:yb] + src[xb:ya] + src[xa:xb]
+
+
 def edit_html(src, edits):
-    """edits = [(path, op, value)] — op: text(요소 안 내용 전부를 value 로, '' = 비우기) | remove(요소 통째로) | link(value=도착 id) | cut.
+    """edits = [(path, op, value)] — op: text(요소 안 내용 전부를 value 로, '' = 비우기) | remove(요소 통째로) | link(value=도착 id) | cut
+    | duplicate(바로 뒤에 복사본, 복사본 id·data-region 뺌) | move(value = up|down, 형제와 맞바꿈).
     원문 위치 기준으로 뒤에서부터 바꾼다. 같은 자리 두 편집 = 나중 것, 겹치는 자리(안팎) = ValueError."""
     tree, spans = Tree(src), {}
     for path, op, value in edits:
@@ -266,6 +326,10 @@ def edit_html(src, edits):
             p = _text_patch(src, el, value, path)
         elif op == "remove":
             p = _remove_patch(el, path)
+        elif op == "duplicate":
+            p = _dup_patch(src, el, path)
+        elif op == "move":
+            p = _move_patch(src, el, path, value)
         elif op in ("link", "cut"):
             p = _relink(src, el, op, value, path)
         else:
@@ -444,6 +508,10 @@ def apply_edits(out, edits, stamp=None):
                 op = ("text", str(e.get("value", "")))
             elif kind == "remove":
                 op = ("remove", None)
+            elif kind == "duplicate":                   # 블록(task 49a)
+                op = ("duplicate", None)
+            elif kind == "move" and e.get("op") in ("up", "down"):
+                op = ("move", e["op"])
             elif kind == "link" and e.get("op") == "link" and e.get("to") in files:
                 op = ("link", e["to"])
             elif kind == "link" and e.get("op") in ("cut", "untrigger"):

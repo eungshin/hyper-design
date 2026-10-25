@@ -1443,7 +1443,7 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.wait_for_timeout(400)
     items = cmenu_items(dpage)
     assert items[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"], items
-    pick(dpage, "복제")
+    dpage.get_by_role("menuitem", name="복제", exact=True).click()   # 카드 복제(요소 항목 '요소 복제'와 다름, task 49a)
     dpage.wait_for_timeout(200)
     d = drafts(dpage)
     assert len(d) == 1 and "복사" in dpage.text_content(f'.card[data-id="{d[0]["id"]}"] .ftitle')
@@ -2286,7 +2286,7 @@ TOOLS_JS = """() => [...document.querySelectorAll('#tools [data-tool]')].map(b =
 
 @pytest.mark.area("modal", "tools")
 def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
-    """G8: 선택 막대 = 아이콘 + 툴팁(이름·키). G5: 크게 보기에서도 왼쪽 도구 막대가 남는다 — 쓸 수 있는 도구는 손(눌러 보기)·주석뿐.
+    """G8: 선택 막대 = 아이콘 + 툴팁(이름·키). G5: 크게 보기에서도 왼쪽 도구 막대가 남는다 — 쓸 수 있는 도구는 손(눌러 보기)·이동(요소 고르기)·주석·글자(task 49a).
     G6: 화면 위 [주석 달기] 버튼은 없애고 왼쪽 주석 도구 하나로(P 도 같음). 닫으면 판의 도구로 돌아온다."""
     dpage.keyboard.press("Escape")
     dpage.click("#zoom"); dpage.click("#fit")
@@ -2302,8 +2302,8 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     assert dpage.locator("#mpick").count() == 0, "화면 위 [주석 달기] 버튼은 없다(G6)"
     assert dpage.is_visible("#tools"), "크게 보기에서도 도구 막대(G5)"
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
-    assert t["hand"][1] != "true" and t["annotate"][1] != "true", t
-    assert all(t[k][1] == "true" for k in ("move", "trigger", "knife", "layout", "memo")), t
+    assert all(t[k][1] != "true" for k in ("hand", "move", "annotate", "text")), t
+    assert all(t[k][1] == "true" for k in ("trigger", "knife", "layout", "memo")), t
     dpage.click('#tools [data-tool="annotate"]')
     assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
     dpage.keyboard.press("p")

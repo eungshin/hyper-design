@@ -156,8 +156,8 @@ def test_say_remove_element_and_screen(js):
     assert js["sayScreen"] == '이 화면 "홈"(home)을 지우기 — 화면 파일과 screens.json 항목, 이 화면으로 오는 연결도 정리'
 
 
-def test_remove_is_a_mechanical_instant_edit_and_text_stays_pending(js):
-    assert js["direct"] == [True, True, False]
+def test_remove_and_text_are_mechanical_instant_edits(js):   # task 49a: 글자도 도우미가 있으면 바로 파일에(예전 = 보내기까지 반영 대기)
+    assert js["direct"] == [True, True, True]
 
 
 def test_preview_items_carry_text_and_removes_of_that_screen(js):

@@ -46,7 +46,15 @@ def _open(ctx, url):
 
 
 def _frame(pg, sid="job"):
-    return next(f for f in pg.frames if f.url.split("?")[0].endswith("/" + sid + ".html"))
+    """그 카드의 지금 iframe 의 frame — 보이게 된 카드가 실릴 때까지 잠깐 기다린다(-n 4 부하·48a 교체 중엔 틀이 늦게 생기거나 바뀐다)."""
+    sel = '.card[data-id="%s"] .phone iframe' % sid
+    for _ in range(100):
+        fs = pg.query_selector_all(sel)
+        fr = fs[-1].content_frame() if fs else None
+        if fr and fr.url.split("?")[0].endswith("/" + sid + ".html"):
+            return fr
+        pg.wait_for_timeout(100)
+    raise AssertionError("카드 iframe 이 실리지 않았다: " + sid)
 
 
 def _h1_xy(pg):
@@ -73,6 +81,14 @@ def _h1_in_file(o):
     return None if i < 0 else s[i + len('<h1 class="title">'): s.find("</h1>", i)]
 
 
+def _wait_h1(pg, o, want):
+    for _ in range(200):
+        if _h1_in_file(o) == want:
+            return
+        pg.wait_for_timeout(100)
+    assert _h1_in_file(o) == want
+
+
 def _serve(o):
     srv = helper.make_server(o, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -85,20 +101,23 @@ def test_editing_a_two_line_text_twice_leaves_only_the_latest(ctx, out):   # K1 
     pg, errors = _open(ctx, srv.url)
     try:
         xy = _h1_xy(pg)
+        # task 49a: 도우미가 있으면 글자 고치기가 [보내기] 없이 바로 파일에(예전 = 반영 대기 → 보내기). 지키는 것은 같다: 두 번째 고치기 뒤 파일·카드에 마지막 글만
         _edit_text(pg, xy, "줄1\n줄2")
-        wait_notes(pg, 1)
-        pg.click("#nsend")
-        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
-        assert _h1_in_file(out) == "줄1<br>줄2"
-        pg.evaluate("window.__hdLastHelper = null")
+        _wait_h1(pg, out, "줄1<br>줄2")
         pg.wait_for_timeout(600)                         # 바뀐 카드 다시 싣기
         xy = _h1_xy(pg)
         _edit_text(pg, xy, "끝")
-        wait_notes(pg, 1)
-        _frame(pg).wait_for_function("(s) => document.querySelector(s).textContent.trim() === '끝'", arg=H1, timeout=3000)   # 미리보기도 마지막 글만
-        pg.click("#nsend")
-        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
-        assert _h1_in_file(out) == "끝", "두 번째 고치기 뒤 옛 줄(줄2)이 남으면 안 된다"
+        _wait_h1(pg, out, "끝")                          # 두 번째 고치기 뒤 옛 줄(줄2)이 남으면 안 된다
+        got = None
+        for _ in range(100):                             # 다시 실린 카드에도 마지막 글만
+            try:
+                got = _frame(pg).evaluate("(s) => document.querySelector(s).textContent.trim()", H1)
+            except Exception:                            # 카드를 다시 싣는 중
+                got = None
+            if got == "끝":
+                break
+            pg.wait_for_timeout(100)
+        assert got == "끝", got
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors
