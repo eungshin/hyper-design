@@ -14,6 +14,7 @@ sys.path[:0] = [str(HERE), str(CANVAS), str(FEATURES / "hd"), str(FEATURES / "hd
 import hd_client as C  # noqa: E402
 import hdfix  # noqa: E402
 import home_server  # noqa: E402
+import busy  # noqa: E402
 import session as S  # noqa: E402
 from test_protocol_v1 import check, send  # noqa: E402
 
@@ -262,7 +263,7 @@ def test_helper_serves_events_and_real_build_async_apply(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- AI 쓰기(지켜보기) → screen.written by ai · ai.write
 def test_ai_write_events_from_the_file_watch(tmp_path, monkeypatch):
-    monkeypatch.setattr(S, "WATCH_EVERY", 0.1)
+    monkeypatch.setattr(busy, "WATCH_EVERY", 0.1)
     out = hdfix.make_out(tmp_path / "w")
     sess = S.ProjectSession(out, build=FakeBuild()).open().start()
     try:
