@@ -9,7 +9,7 @@
    reduce(s, a) → 새 상태(바뀐 게 없으면 같은 객체): start{id, url} · ready{id, seq} · end{id, seq}(끝남·실패·취소 — seq 가 지금 것일 때만)
    current(s, id, seq) → bool · pending(s) → [id] · initial()
    failed(nav{status?, timedOut?}) → 이유 글|null(시간 초과 · HTTP 4xx/5xx) · errorText(이유) → 카드 실패 줄 글
-   boardUrl(u) → 판 카드 주소(?hd-mode=board — 셸 boardSrc 와 같은 규칙, contract/board-motion.md)
+   boardUrl(u) → 판 카드 주소(?hd-mode=board — 셸 loadCard 가 판 카드에 쓰는 규칙 하나, contract/board-motion.md)
    flash(diff{changed, added, many}, reduced) → {outline:[i], rise:[i]} | null — 바뀐 곳 강조 계획(48b, diff = HD.swapDiff.diff). 움직임 줄이기 · many · 강조할 것 없음 = null
    FLASH = {OUTLINE, OUTLINE_END, OUTLINE_HOLD, OUTLINE_MS, RISE_MS, RISE_PX, AFTER_LOAD} — Stitch 값(외곽선 2px, OUTLINE_HOLD 동안 보인 뒤 0.4초 사라짐 · 새 요소 0.3초 ease 로 6px 아래에서 떠오름).
      AFTER_LOAD = 새 틀 load 뒤 강조를 시작하는 가장 이른 때(판 모드 palette.js 가 load+500ms 에 움직임을 끝내 버리므로 그 뒤 — contract/board-motion.md)
