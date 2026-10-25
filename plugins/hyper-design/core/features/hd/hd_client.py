@@ -230,7 +230,7 @@ def live_record(out, rec=None):
 def build(out):
     """커밋된 캔버스 코드로 index.html 을 만든다 → (종료 코드, 출력 끝 몇 줄)."""
     r = subprocess.run([sys.executable, str(BUILD_REF), str(out)], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"), creationflags=NO_WINDOW)   # 창 없는 허브·도우미(pythonw)에서 콘솔 창이 깜빡이지 않게
     tail = "\n".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-3:])
     return r.returncode, tail
 
