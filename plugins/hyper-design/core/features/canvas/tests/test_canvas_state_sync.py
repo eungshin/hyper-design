@@ -127,7 +127,8 @@ def _wait(pg, cond, ms=5000):
 
 @pytest.mark.area("helper", "notes")
 def test_done_notes_archived_then_removed_once(browser, served):
-    """#273 — 열 때 30일 넘은 완료 메모만 POST /api/archive(도우미가 아직 없으면 mock) → {ok} 뒤에만 notes 에서 한 번 저장으로 뺀다. 묻기는 ?since=rev."""
+    """#273 → 47-5a — 30일 넘은 완료 메모만 보관 파일로 한 번 옮기고 notes 에서 뺀다. 이제 서버(세션이 열 때·한 시간마다)가 먼저 하므로
+    캔버스 탭은 같은 메모를 다시 보내지 않는다(보관 파일에 한 번). 묻기는 ?since=rev."""
     out, srv = served
     old = memo("m1", 1, T_BTN, "오래전 완료")
     old["replies"] = [{"kind": "반영됨", "what": "고침", "screens": ["pay"], "at": "2026-01-01T00:00:00Z"}]
@@ -144,10 +145,13 @@ def test_done_notes_archived_then_removed_once(browser, served):
         f = out / ".hd-canvas.json"
         ids = lambda: [n["id"] for n in json.loads(f.read_text(encoding="utf-8"))["state"]["notes"]]
         assert _wait(pg, lambda: ids() == ["m2"]), ids()
-        assert [[n["id"] for n in p["notes"]] for p in posts] == [["m1"]], "완료 + 30일 넘은 것만, 한 번"
+        af = out / ".hd-notes-archive.jsonl"
+        arch_ids = lambda: [json.loads(l)["id"] for l in af.read_text(encoding="utf-8").splitlines() if l.strip()] if af.is_file() else []
+        sent = [n["id"] for p in posts for n in p["notes"]]
+        assert sorted(arch_ids() + sent) == ["m1"], ("완료 + 30일 넘은 것만, 서버·탭 합쳐 한 번", arch_ids(), sent)
         assert _wait(pg, lambda: bool(gets)) and all("since=" in u for u in gets), gets
         pg.wait_for_timeout(2500)
-        assert len(posts) == 1, "한 시간에 한 번"
+        assert sorted(arch_ids() + [n["id"] for p in posts for n in p["notes"]]) == ["m1"], "다시 보내지 않는다"
     finally:
         c.close()
     assert not errors, errors
