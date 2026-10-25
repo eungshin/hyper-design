@@ -236,6 +236,15 @@ def parts_of(out):
     return {"parts": specimen_parts.parts(src)}
 
 
+def emptied_groups(groups, before, after):
+    """지우기로 비게 된 group 이름만 groups 에서 뺀다(51-1, Figma F18 빈 그룹은 없어진다) — 원래 빈 이름·순서는 그대로. groups 가 목록이 아니면 그대로."""
+    if not isinstance(groups, list):
+        return groups
+    name = lambda s: s.get("group") or "기타"           # build_canvas.index_data 와 같은 이름
+    had, has = {name(s) for s in before}, {name(s) for s in after}
+    return [g for g in groups if not (g in had and g not in has)]
+
+
 def delete_screens(out, ids, stamp=None, build=None):
     """화면 지우기(2.2 D3) — screens.json 에서 빼고(그리로 가는 branches 도), 화면 파일은 기록으로 옮기고, 다른 화면에서 오는 링크는 끊는다."""
     out = pathlib.Path(out).resolve()
@@ -261,7 +270,10 @@ def delete_screens(out, ids, stamp=None, build=None):
                 patches.append(_relink(src, n, "cut", None, path)); cut.append({"screen": sid, "path": path, "to": to})
         if patches:
             w.keep(f); f.write_text(_patch(src, patches), encoding="utf-8", newline=""); changed.add(sid)
-    data["screens"] = [s for s in data["screens"] if s["id"] not in gone]
+    kept = [s for s in data["screens"] if s["id"] not in gone]
+    if "groups" in data:
+        data["groups"] = emptied_groups(data["groups"], data["screens"], kept)
+    data["screens"] = kept
     for s in data["screens"]:
         br = s.get("branches")
         if br and any(b.get("to") in gone for b in br):

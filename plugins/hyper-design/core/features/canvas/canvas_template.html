@@ -682,25 +682,10 @@ if (dc && ((dc.items || []).length || dc.core)) {
 $('#intro').innerHTML = '<p class="hint">끌어서 둘러보고, 화면을 누르면 크게 보고 직접 눌러볼 수 있어요 · 점선은 주요 흐름' + (D.stage === 'go' && D.pending ? ' · 오류·확인·빈 화면 같은 상태 ' + D.pending + '개는 <b>/hyper-design:max</b>로 더할 수 있어요' : '') + '</p><div class="intro-grid">' + intro + '</div>';
 $('#intro').style.marginLeft = LEFT + 'px';
 
-function polHtml(pol, cls) {                        // 카드 아래 정책 줄: 앞 셋은 목록, 나머지는 '정책 N개 더' 접기 · cls(i) = 줄마다 덧붙일 클래스(반영 대기)
-  var li = function (p, i) { var c = cls ? cls(i) : ''; return '<li' + (c ? ' class="' + c + '"' : '') + '>' + esc(p) + '</li>'; };
-  var shown = pol.slice(0, 3).map(li).join('');
-  return (shown ? '<ul class="pol">' + shown + '</ul>' : '') + (pol.length > 3 ? '<details class="more"><summary>정책 ' + (pol.length - 3) + '개 더</summary><ul class="pol">' +
-    pol.slice(3).map(function (p, i) { return li(p, i + 3); }).join('') + '</ul></details>' : '');
-}
+// 화면 줄 그리기·다시 맞추기(modules/view-rows.js · 계획 modules/rows.js, 51-1) — 처음 그리기와 쓴 뒤 data() 가 같은 길
+var RW = HD.viewRows.mount({rowsEl: rowsEl, $: $, $$: $$, esc: esc, warn: function (m) { console.warn(m); }}), polHtml = RW.polHtml;
 var html = '<svg class="ar" id="ar" width="1" height="1"><defs><marker id="hd-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs></svg>';
-(D.rows || []).forEach(function (row) {
-  html += '<div class="flow"><div class="glabel">' + esc(row.group) + '</div><div class="cards">';
-  row.screens.forEach(function (s) {
-    html += '<div class="card" data-id="' + esc(s.id) + '"><div class="phone"><iframe scrolling="no" tabindex="-1" title="' + esc(s.title) +
-      '" data-src="' + esc(s.file) + '"></iframe><button class="cover" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="pres" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
-      '" title="실제로 눌러 보기(두 번 눌러도 같아요)" aria-label="' + esc(s.title) + ' 크게 보기">보기</button>' +
-      '<div class="ftitle">' + (s.state ? '<span class="state">상태</span>' : '') + esc(s.title) + '</div>' +
-      '<div class="cbody">' + (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + polHtml(s.policies || []) + '</div></div>';
-  });
-  html += '</div></div>';
-});
+html += RW.html(D.rows);
 rowsEl.innerHTML = html;
 rowsEl.style.paddingLeft = LEFT + 'px';
 
@@ -2307,7 +2292,9 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     var live = {};
     (nd.rows || []).forEach(function (r) { r.screens.forEach(function (sc) { live[sc.id] = sc; ORIG[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; }); });
     $$('.card:not(.draft)', rowsEl).forEach(function (c) { var id = c.dataset.id; if (!live[id]) { gone[id] = {el: c, at: c.nextSibling, box: c.parentNode}; c.remove(); } });
+    var rs = RW.sync(nd.rows, function (id) { return !!gone[id] || !!VL.cardEl(id); });   // 줄 맞추기(51-1): 다 지운 줄은 제목째 걷고, 새 줄·되살린 줄은 제자리에
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
+    if (rs.added.length) { var nids = rs.added.map(function (c) { return c.dataset.id; }); rs.added.forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); placeCard(c); }); if (AB) AB.paint(nids); }
     changed.forEach(function (id) { if (OP && OP.hold(id)) return; var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) swapCard(id, f, live[id].file + '?v=' + v); });   // hold = 같은 화면에 바로 반영 쓰기가 더 남음(중간 모습으로 깜빡이지 않게, 49c)
     if (selEl && changed.indexOf(selEl.card.dataset.id) >= 0) unselectEl();   // 바뀐 카드의 고른 요소는 자리가 달라졌다(task 49a)
     if (!modal.hidden && mscreen && live[mscreen] && changed.indexOf(mscreen) >= 0 && !(OP && (OP.hold(mscreen) || OP.typing('modal')))) {   // 크게 보기도 새 파일로

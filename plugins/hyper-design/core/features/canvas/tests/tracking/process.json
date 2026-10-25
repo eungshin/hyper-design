@@ -867,6 +867,32 @@
       "waste": "probe 도우미 포트 정리(nohup 프로세스 pid 가 표지와 달라 포트 주인으로 끔) · 새 테스트의 파일 글 단언이 화면 안 같은 글 두 번을 못 봄",
       "flaky": [],
       "note": "40~50초는 이 사본에서 재현 안 됨 — 서버 쪽 다시 빌드가 거의 전부. 도우미가 빌드 전에 답하기는 47-4"
+    },
+    {
+      "slice": "51-1 줄 제목 남음 (data() 줄 맞추기 · delete_screens 빈 group 빼기)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 5
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "rows.plan 규칙·emptied_groups 가 없어 빨강 → 초록 · 브라우저 테스트는 RW.sync 를 끄면 빨강(로그인 줄이 남음)"
+        }
+      ],
+      "waste": "",
+      "flaky": [
+        "test_canvas_edit.py::test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards (HEAD 셸에서도 혼자 4번 중 3번 실패 — 이 조각과 무관, 51-2 에서 봄)"
+      ],
+      "note": "줄 그리기를 view-rows.js 하나로 빼서 첫 그리기와 data() 가 같은 길. 걷은 줄은 이름별로 떼어 두었다가 되살리기 때 같은 요소를 끼운다"
     }
   ]
 }
