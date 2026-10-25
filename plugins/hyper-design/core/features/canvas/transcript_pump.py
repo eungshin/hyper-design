@@ -19,8 +19,9 @@ EVENT = "agent.transcript"
 
 
 def _key(record):
-    """소스를 다시 만들어야 하나 — 종류나 세션이 바뀌면."""
-    return (TS.kind_of(record), record.get("session") if isinstance(record, dict) else None)
+    """소스를 다시 만들어야 하나 — 종류·세션·작업 폴더가 바뀌면."""
+    rec = record if isinstance(record, dict) else {}
+    return (TS.kind_of(record), rec.get("session"), rec.get("cwd"))
 
 
 class TranscriptPump:

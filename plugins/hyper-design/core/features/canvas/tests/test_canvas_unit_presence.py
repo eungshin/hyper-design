@@ -27,14 +27,24 @@ def pres(t=1000.0):
 def test_check_hello_defaults_and_refusals():
     who, lease, err = PR.check_hello({"agent": {"id": "ag-1"}})
     assert err is None and lease == PR.LEASE
-    assert who == {"id": "ag-1", "name": "ag-1", "kind": "other", "pid": None, "listen": True, "session": None}
+    assert who == {"id": "ag-1", "name": "ag-1", "kind": "other", "pid": None, "listen": True, "session": None, "cwd": None}
     who, lease, _ = PR.check_hello({"agent": {"id": "c", "name": " 클로드 ", "kind": "claude", "pid": 7, "listen": False, "session": "s-1"}, "lease": 999})
     assert who["name"] == "클로드" and who["kind"] == "claude" and who["pid"] == 7 and who["listen"] is False and who["session"] == "s-1" and lease == PR.LEASE_MAX
     bad = [{}, {"agent": "x"}, {"agent": {}}, {"agent": {"id": "a b"}}, {"agent": {"id": ""}}, {"agent": {"id": "a", "kind": "robot"}},
            {"agent": {"id": "a", "pid": "1"}}, {"agent": {"id": "a", "pid": True}}, {"agent": {"id": "a", "pid": 0}}, {"agent": {"id": "a", "listen": "y"}},
-           {"agent": {"id": "a", "name": "x" * (PR.NAME_MAX + 1)}}, {"agent": {"id": "a", "session": 3}}, {"agent": {"id": "a"}, "lease": "10"}, []]
+           {"agent": {"id": "a", "name": "x" * (PR.NAME_MAX + 1)}}, {"agent": {"id": "a", "session": 3}}, {"agent": {"id": "a"}, "lease": "10"}, [],
+           {"agent": {"id": "a", "cwd": 3}}, {"agent": {"id": "a", "cwd": " "}}, {"agent": {"id": "a", "cwd": "C:/x\ny"}},
+           {"agent": {"id": "a", "cwd": "x" * (PR.CWD_MAX + 1)}}]
     for b in bad:
         assert PR.check_hello(b)[2], b
+
+
+def test_check_hello_keeps_cwd_but_public_hides_it():
+    who, _, err = PR.check_hello({"agent": {"id": "c", "kind": "claude", "session": "s-1", "cwd": "C:\\Code\\proj"}})
+    assert err is None and who["cwd"] == "C:\\Code\\proj"
+    p, _, _ = pres()
+    code, res = p.hello({"agent": {"id": "c", "kind": "claude", "session": "s-1", "cwd": "C:\\Code\\proj"}})
+    assert code == 200 and "cwd" not in res["agent"] and p.get("c")["cwd"] == "C:\\Code\\proj", "작업 폴더는 서버 안에서만(어댑터·소스)"
 
 
 def test_lease_is_clamped_and_beat_is_a_third():

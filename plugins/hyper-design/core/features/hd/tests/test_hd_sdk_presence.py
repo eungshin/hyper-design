@@ -32,6 +32,33 @@ def test_whoami_from_env():
     assert SP.whoami({"PASEO_AGENT_ID": "p-1", "CLAUDECODE": "1"}, 7)["kind"] == "paseo", "Paseo 안의 Claude = Paseo 로 깨운다"
 
 
+SID = "0f8e2a64-1111-4c2d-9a7b-00000000000a"
+
+
+def test_whoami_claude_reports_session_id_and_cwd():
+    who = SP.whoami({"CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": SID}, 7, "C:\\Code\\proj")
+    assert who == {"id": "claude-7", "name": "Claude Code", "kind": "claude", "pid": 7, "session": SID, "cwd": "C:\\Code\\proj"}
+    for bad in ("../" + SID, "a b", "x" * 129, "", "C:\\x"):
+        assert "session" not in SP.whoami({"CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": bad}, 7), bad
+    assert "session" not in SP.whoami({"CLAUDE_CODE_SESSION_ID": SID}, 7), "Claude 가 아니면 세션 id 를 내지 않는다"
+    assert "session" not in SP.whoami({"PASEO_AGENT_ID": "p-1", "CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": SID}, 7)
+
+
+def test_hello_as_claude_sends_env_session_and_cwd(out, monkeypatch, tmp_path):
+    monkeypatch.delenv("PASEO_AGENT_ID", raising=False)
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", SID)
+    monkeypatch.chdir(tmp_path)
+    p, t = project(out, {("POST", "/hello"): (200, answer())})
+    p.hello(beat=False)
+    agent = t.calls[-1][2]["agent"]
+    assert agent["kind"] == "claude" and agent["session"] == SID and agent["cwd"] == str(tmp_path)
+    p.hello("ag-1", kind="claude", session="s-given", beat=False)
+    assert t.calls[-1][2]["agent"]["session"] == "s-given" and t.calls[-1][2]["agent"]["cwd"] == str(tmp_path), "준 session 이 먼저"
+    p.hello("ag-2", kind="other", beat=False)
+    assert "session" not in t.calls[-1][2]["agent"] and "cwd" not in t.calls[-1][2]["agent"], "claude 가 아니면 보내지 않는다"
+
+
 def test_presence_module_is_pure():
     import ast
     tree = ast.parse((hdfix.HD / "hd_sdk" / "presence.py").read_text(encoding="utf-8"))
@@ -43,9 +70,9 @@ def test_presence_module_is_pure():
 # ---------------------------------------------------------------- Project
 def test_hello_posts_who_and_remembers_me(out):
     p, t = project(out, {("POST", "/hello"): (200, answer())})
-    res = p.hello("ag-1", name="나", kind="claude", pid=5, session="s-1", beat=False)
+    res = p.hello("ag-1", name="나", kind="claude", pid=5, session="s-1", beat=False, cwd="C:\\w")
     assert res["first"] is True and p.me == "ag-1" and p.heartbeat is None
-    assert t.calls[-1] == ("POST", "/hello", {"agent": {"id": "ag-1", "name": "나", "kind": "claude", "pid": 5, "listen": True, "session": "s-1"}})
+    assert t.calls[-1] == ("POST", "/hello", {"agent": {"id": "ag-1", "name": "나", "kind": "claude", "pid": 5, "listen": True, "session": "s-1", "cwd": "C:\\w"}})
     p.hello("ag-1", listen=False, lease=60, beat=False)
     assert t.calls[-1][2] == {"agent": {"id": "ag-1", "name": "ag-1", "kind": "other", "listen": False}, "lease": 60}
 

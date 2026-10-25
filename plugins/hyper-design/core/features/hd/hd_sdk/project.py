@@ -176,14 +176,18 @@ class Project:
             return C.stop(self.marker)
 
     # ------------------------------------------------------------ 접속(task 47-5a, protocol presence.json)
-    def hello(self, id=None, name=None, kind=None, pid=None, listen=True, session=None, lease=None, beat=True):
+    def hello(self, id=None, name=None, kind=None, pid=None, listen=True, session=None, lease=None, beat=True, cwd=None):
         """이 프로젝트에 접속 알리기 POST /hello → {agent, lease, beat, first}. id 를 안 주면 whoami(PASEO_AGENT_ID · CLAUDECODE · pid).
         listen = request.sent 이벤트를 읽는다(requests()) — False 면 보이기만 하고 보내기는 어댑터(paseo 등)로.
-        session = claude 이어 받기 id(서버가 HD_CLAUDE_WAKE=1 일 때 claude -p --resume 으로 깨움). beat = 데몬 맥박 스레드(간격 = 서버가 권한 beat).
+        session = claude 세션 id(대화 패널이 그 jsonl 을 읽음 · 서버가 HD_CLAUDE_WAKE=1 일 때 claude -p --resume 으로 깨움). beat = 데몬 맥박 스레드(간격 = 서버가 권한 beat).
+        kind claude 면 session 기본 = CLAUDE_CODE_SESSION_ID(whoami), cwd 기본 = os.getcwd()(서버가 그 projects 폴더에서만 찾는다).
         옛 서버(접속 라우트 없음) = NotYet."""
+        who = whoami(os.environ, os.getpid(), os.getcwd())
         if id is None:
-            who = whoami(os.environ, os.getpid())
             id, name, kind, pid = who["id"], name or who["name"], kind or who["kind"], pid if pid is not None else who["pid"]
+        if kind == "claude":
+            session = session if session is not None else who.get("session") if who["kind"] == "claude" else None
+            cwd = cwd if cwd is not None else os.getcwd()
         if id is None or M.agent_error(id):
             raise E.Invalid(M.agent_error(id) or "에이전트 id 가 없어요")
         kind = kind or "other"
@@ -195,6 +199,8 @@ class Project:
         agent["listen"] = bool(listen)
         if session is not None:
             agent["session"] = session
+        if cwd is not None:
+            agent["cwd"] = str(cwd)
         body = {"agent": agent}
         if lease is not None:
             body["lease"] = lease

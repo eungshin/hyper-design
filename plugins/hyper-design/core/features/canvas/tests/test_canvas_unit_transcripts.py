@@ -112,7 +112,7 @@ def test_cursors_reject_foreign_strings():
 # ---------------------------------------------------------------- ClaudeTranscript(파일, 커서)
 def claude_home(tmp_path, cwd="C:\\Code\\proj", session="s-1", data=b""):
     folder = tmp_path / "projects" / TS.encode_cwd(cwd)
-    folder.mkdir(parents=True)
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / (session + ".jsonl")).write_bytes(data)
     return folder / (session + ".jsonl")
 
@@ -214,6 +214,62 @@ def test_source_for_chooses_by_kind(tmp_path):
         assert isinstance(src, TS.NoTranscript) and src.read("") == ([], "")
 
 
+# ---------------------------------------------------------------- S3c: claude 세션 id(CLAUDE_CODE_SESSION_ID) + cwd 로 찾기
+SID, SID2 = "0f8e2a64-1111-4c2d-9a7b-00000000000a", "0f8e2a64-1111-4c2d-9a7b-00000000000b"
+
+
+def test_claude_session_and_cwd_pick_that_exact_file_among_several(tmp_path):
+    claude_home(tmp_path, cwd="C:\\Code\\proj", session=SID, data=user("u1", "내 세션"))
+    claude_home(tmp_path, cwd="C:\\Code\\proj", session=SID2, data=user("u1", "옆 세션"))
+    env = TS.SourceEnv(tmp_path, (), lambda: None, None)
+    src = TS.source_for({"id": "claude-7", "kind": "claude", "session": SID, "cwd": "C:\\Code\\proj"}, env)
+    assert isinstance(src, TS.ClaudeTranscript) and src.anywhere is False
+    assert [e["text"] for e in src.read(None)[0]] == ["내 세션"]
+
+
+def test_claude_cwd_below_launch_folder_finds_parent_folder(tmp_path):
+    claude_home(tmp_path, cwd="C:\\Code\\proj", session=SID, data=user("u1", "위 폴더"))
+    env = TS.SourceEnv(tmp_path, (), lambda: None, None)
+    src = TS.source_for({"id": "c", "kind": "claude", "session": SID, "cwd": "C:\\Code\\proj\\sub\\deep"}, env)
+    assert [e["text"] for e in src.read(None)[0]] == ["위 폴더"]
+
+
+def test_claude_with_cwd_never_looks_in_other_project_folders(tmp_path):
+    claude_home(tmp_path, cwd="D:\\other", session=SID, data=user("u1", "다른 폴더"))
+    env = TS.SourceEnv(tmp_path, ("D:\\other",), lambda: None, None)   # 캔버스 힌트도 쓰지 않는다
+    src = TS.source_for({"id": "c", "kind": "claude", "session": SID, "cwd": "C:\\Code\\proj"}, env)
+    with pytest.raises(TS.TranscriptUnavailable):
+        src.read(None)
+    old = TS.source_for({"id": "c", "kind": "claude", "session": SID}, env)    # cwd 없는 옛 SDK = 예전 길
+    assert [e["text"] for e in old.read(None)[0]] == ["다른 폴더"]
+
+
+def test_claude_without_session_is_none(tmp_path):
+    env = TS.SourceEnv(tmp_path, (), lambda: None, None)
+    claude_home(tmp_path, cwd="C:\\Code\\proj", session=SID, data=user("u1", "x"))
+    src = TS.source_for({"id": "c", "kind": "claude", "cwd": "C:\\Code\\proj"}, env)
+    assert isinstance(src, TS.NoTranscript), "세션 id 없이 폴더의 아무 파일이나 고르지 않는다"
+
+
+def test_claude_cwd_and_session_cannot_escape_projects(tmp_path):
+    home = tmp_path / "home"
+    outside = tmp_path / "secret"
+    outside.mkdir()
+    (outside / (SID + ".jsonl")).write_bytes(user("u1", "밖"))
+    env = TS.SourceEnv(home, (), lambda: None, None)
+    for cwd in ("..\\..\\secret", "../../secret", "..", "C:\\..\\..\\secret"):
+        src = TS.source_for({"id": "c", "kind": "claude", "session": SID, "cwd": cwd}, env)
+        with pytest.raises(TS.TranscriptUnavailable):
+            src.read(None)
+    for bad in ("../" + SID, "..\\" + SID, SID + "/x", "a b", ""):
+        assert isinstance(TS.source_for({"id": "c", "kind": "claude", "session": bad, "cwd": "C:\\Code"}, env), TS.NoTranscript)
+
+
+def test_cwd_chain_is_folder_then_parents():
+    assert TS.cwd_chain("C:\\Code\\proj\\sub")[:3] == ("C:\\Code\\proj\\sub", "C:\\Code\\proj", "C:\\Code")
+    assert TS.cwd_chain(None) == () and TS.cwd_chain("  ") == ()
+
+
 # ---------------------------------------------------------------- 펌프
 class FakeSource(TS.TranscriptSource):
     kind = "fake"
@@ -268,6 +324,18 @@ def test_pump_logs_failure_once_and_keeps_going(capsys):
     t[0] += 1
     p.tick()
     assert capsys.readouterr().err.count("[hd]") == 1
+
+
+def test_pump_rebuilds_source_when_session_or_cwd_changes():
+    rec, made, t = {"id": "a1", "kind": "claude", "session": "s1", "cwd": "C:/a"}, [], [0.0]
+    p = PU.TranscriptPump(lambda *a, **k: None, lambda aid: dict(rec), lambda aid: True,
+                          factory=lambda r: made.append(dict(r)) or FakeSource(), clock=lambda: t[0])
+    p.watch("a1")
+    p.tick()
+    rec["cwd"] = "C:/b"                               # 같은 세션을 다른 폴더에서 다시 hello — 새 소스(새 폴더에서 찾기)
+    t[0] += 2
+    p.tick()
+    assert [m["cwd"] for m in made][-1] == "C:/b" and p.watched["a1"]["key"][2] == "C:/b"
 
 
 def test_http_get_history_and_bad_cursor():

@@ -21,7 +21,7 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 | `values.py` | Model(순수) | `Note` · `Event` | 값 객체. Note = `hd_model.rows` 줄 하나(키 순서 그대로, `ref` `is_open` `line`) · Event = events.json 의 `{id, type, ts, project, …}` | 없음(frozen) |
 | `sse.py` | Model(순수) | `frames` · `event_of` | SSE 줄 → frame(`retry`·주석·`: hb` 건너뜀, data 여러 줄) → `Event`(reset frame = `Event(type='reset', data{reason, last})`) | 없음 |
 | `transport.py` | Client 어댑터 | `HttpTransport` · `client_errors` | `request(method, path, body, timeout) → (code, 답)` = `hd_client.call` · `stream(path, last, timeout)` = `hd_client.stream`(SSE 줄) · hd_client 오류 → 가족 | 표지 하나 |
-| `presence.py` | Model(순수 whoami) + 맥박 | `whoami` · `Heartbeat` | 나는 누구(PASEO_AGENT_ID → paseo · CLAUDECODE=1 → claude-<pid> · 그 밖 agent-<pid>) · 맥박 한 번 `tick()`(서버가 잊었으면 hello 다시, 닿지 않으면 다음 차례) · 데몬 스레드 | 간격 · 실패 수 · 스레드 |
+| `presence.py` | Model(순수 whoami) + 맥박 | `whoami` · `session_id` · `Heartbeat` | 나는 누구(PASEO_AGENT_ID → paseo · CLAUDECODE=1 → claude-<pid> + `session` = `CLAUDE_CODE_SESSION_ID`(`[A-Za-z0-9_-]{1,128}` 일 때만) + `cwd` · 그 밖 agent-<pid>) · 맥박 한 번 `tick()`(서버가 잊었으면 hello 다시, 닿지 않으면 다음 차례) · 데몬 스레드 | 간격 · 실패 수 · 스레드 |
 | `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events · hello · beat · bye · progress · agents · requests | 표지 하나(attach·wait 가 고침) · me · heartbeat |
 | `hub.py` | Service | `Hub` | home.json 의 허브 · hello · new · canvases · project(고르기) · pick(고르기) · projects · open · save · forget | 없음(매번 hd_client 를 읽음) |
 | `text.py` | View | — | 사람용 줄(`hd_model.format_rows` · `format_canvases` · `hd_projects.format_rows` · `link_line` 을 부를 뿐) | 없음 |
@@ -46,7 +46,7 @@ for req in p.requests():             # 나에게 온 request.sent(via 'event') �
 p.bye()                              # 맥박 멈춤 + away
 ```
 - `Hub.hello()`(인자 없음) = 예전 그대로 `GET /v1/sessions` 로 닿는지·토큰. 프로젝트나 who 를 주면 접속 알리기 → 그 `Project`
-- `Project.hello(id=None, name, kind, pid, listen=True, session, lease, beat=True)` — id 기본 = `whoami`. `listen=False` = 보이기만(보내기는 어댑터 — `hd attach` 가 이렇게). 옛 서버 = `NotYet`
+- `Project.hello(id=None, name, kind, pid, listen=True, session, lease, beat=True, cwd=None)` — id 기본 = `whoami`. kind claude 면 session 기본 = `CLAUDE_CODE_SESSION_ID`(이 프로세스가 Claude Code 안일 때), cwd 기본 = `os.getcwd()` — 캔버스 대화 패널이 그 세션 기록(`~/.claude/projects/<인코딩한 cwd>/<session>.jsonl`)을 읽는다(S3c, `canvas/contract/transcripts.md`). 옛 서버는 모르는 `cwd` 를 무시한다. `listen=False` = 보이기만(보내기는 어댑터 — `hd attach` 가 이렇게). 옛 서버 = `NotYet`
 - `beat()` = `POST /beat`, 404 unknown 이면 hello 다시 · `bye()` · `progress(text, screen=None, agent=None)` → 이벤트 id(모르는 id 면 보이기만 hello 뒤 한 번 더) · `agents()` · `requests(since, timeout)`(hello 먼저)
 - CLI: `hd attach` 는 붙인 뒤 hello(kind paseo, listen false, 맥박 없음 — 실패해도 attach 는 됨) · `hd progress "<글>" [--screen] [--agent]`(글 1–200자, `--json` → `{project, text, screen, event}`)
 - 받는 길은 둘(옛 길을 지우지 않음): 접속해 듣기(위 — `request.sent` via event) · 접속하지 않음(`hd attach` 의 Paseo 보내기 · 대기열 파일 `<out>/.hd-queue` + `hd notes`/`hd wait`). 서버가 고른다(`canvas/contract/presence.md` '받는 곳 고르기')

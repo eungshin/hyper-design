@@ -52,18 +52,28 @@ def encode_cwd(path):
     return re.sub(r"[^A-Za-z0-9]", "-", str(path))
 
 
+def cwd_chain(cwd):
+    """에이전트 작업 폴더 → 그 폴더와 위 폴더들(가까운 차례, 순수). Claude 는 띄운 폴더 이름으로 기록하는데 hd 는 그 아래에서 돌 수 있어서.
+    빈 값·글이 아님 = ()."""
+    if not isinstance(cwd, str) or not cwd.strip():
+        return ()
+    path = pathlib.PurePath(cwd.strip())
+    return tuple(str(x) for x in (path,) + tuple(path.parents))
+
+
 def claude_home(env):
     return pathlib.Path(env.get("CLAUDE_CONFIG_DIR") or pathlib.Path.home() / ".claude")
 
 
 class ClaudeTranscript(TranscriptSource):
-    """session 하나의 jsonl 만 연다(다른 세션 파일은 열지 않는다). 경로: cwd 힌트 폴더 먼저, 없으면 projects/*/<session>.jsonl 이름으로만 찾기."""
+    """session 하나의 jsonl 만 연다(다른 세션 파일은 열지 않는다). 경로: cwd 힌트 폴더 먼저, 없으면(anywhere 일 때만)
+    projects/*/<session>.jsonl 이름으로만 찾기. anywhere=False = 힌트 폴더 밖은 보지 않는다(에이전트가 cwd 를 알려 준 경우)."""
     kind = "claude"
 
-    def __init__(self, session, home, cwd_hints=()):
+    def __init__(self, session, home, cwd_hints=(), anywhere=True):
         if not isinstance(session, str) or not SESSION_RE.match(session):
             raise ValueError("claude session id 가 아니에요")
-        self.session, self.home, self.cwd_hints = session, pathlib.Path(home), tuple(cwd_hints)
+        self.session, self.home, self.cwd_hints, self.anywhere = session, pathlib.Path(home), tuple(cwd_hints), anywhere
         self.path = None
 
     def locate(self):
@@ -71,10 +81,13 @@ class ClaudeTranscript(TranscriptSource):
             return self.path
         name, root = self.session + ".jsonl", self.home / "projects"
         for hint in self.cwd_hints:
-            p = root / encode_cwd(hint) / name
-            if p.is_file():
+            folder = encode_cwd(hint)                # 글자·숫자·'-' 뿐 — '..'·구분자가 남지 않아 projects 밖으로 못 나간다
+            p = root / folder / name
+            if p.parent.parent == root and p.is_file():
                 self.path = p
                 return p
+        if not self.anywhere:
+            raise TranscriptUnavailable("Claude 세션 기록 파일을 이 에이전트 폴더에서 찾지 못했어요(%s)" % self.session)
         hits = sorted(root.glob("*/" + name)) if root.is_dir() else []
         if not hits:
             raise TranscriptUnavailable("Claude 세션 기록 파일을 찾지 못했어요(%s)" % self.session)
@@ -170,9 +183,13 @@ def kind_of(record):
 
 
 def _claude(record, env):
+    """session(SDK = CLAUDE_CODE_SESSION_ID) 의 jsonl. hello 에 cwd 가 있으면 그 폴더(와 위 폴더)의 projects 폴더에서만, 없으면(옛 SDK) 캔버스 힌트 + 이름 찾기."""
     if not record.get("session"):
         return NoTranscript("이 Claude 터미널이 세션 id 를 알려 주지 않았어요(hello 의 session)")
+    chain = cwd_chain(record.get("cwd"))
     try:
+        if chain:
+            return ClaudeTranscript(record["session"], env.claude_home, chain, anywhere=False)
         return ClaudeTranscript(record["session"], env.claude_home, env.cwd_hints)
     except ValueError as e:
         return NoTranscript(str(e))

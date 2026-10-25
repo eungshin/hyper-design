@@ -14,7 +14,7 @@ KINDS = ("paseo", "claude", "codex", "other")
 LEASE, LEASE_MIN, LEASE_MAX = 30, 1, 300             # 초 — 맥박 없이 here 로 두는 시간(요청은 이 사이로 자름)
 AWAY_KEEP = 3600                                     # away 를 목록에 두는 시간(초), 지나면 잊음
 MAX_AGENTS = 32                                      # 프로젝트 하나에 아는 에이전트 수
-NAME_MAX, TEXT_MAX, SCREEN_MAX, SESSION_MAX = 60, 200, 80, 128
+NAME_MAX, TEXT_MAX, SCREEN_MAX, SESSION_MAX, CWD_MAX = 60, 200, 80, 128, 1024
 UNKNOWN = "모르는 에이전트예요: %s — hello 를 먼저 보내세요"
 
 
@@ -37,7 +37,8 @@ def beat_of(lease):
 
 
 def check_hello(body):
-    """POST /hello 본문 → (who{id, name, kind, pid, listen, session}, lease, None) | (None, None, 한국어 오류)."""
+    """POST /hello 본문 → (who{id, name, kind, pid, listen, session, cwd}, lease, None) | (None, None, 한국어 오류).
+    cwd = 에이전트의 작업 폴더(claude 대화 기록을 찾는 projects 폴더 하나 — transcripts.py). 밖으로 내지 않는다(public)."""
     if not isinstance(body, dict) or not isinstance(body.get("agent"), dict):
         return None, None, "agent: 없어요({agent: {id, name?, kind?, pid?, listen?}})"
     a = body["agent"]
@@ -59,10 +60,13 @@ def check_hello(body):
     session = a.get("session")
     if session is not None and (not isinstance(session, str) or not session or len(session) > SESSION_MAX or any(c.isspace() for c in session)):
         return None, None, "agent.session: 띄어쓰기 없는 1–%d자 글이어야 해요" % SESSION_MAX
+    cwd = a.get("cwd")
+    if cwd is not None and (not isinstance(cwd, str) or not cwd.strip() or len(cwd) > CWD_MAX or any(ord(c) < 32 for c in cwd)):
+        return None, None, "agent.cwd: 1–%d자 폴더 경로 글이어야 해요" % CWD_MAX
     lease = body.get("lease")
     if lease is not None and (type(lease) not in (int, float)):
         return None, None, "lease: 초(숫자)여야 해요"
-    who = {"id": a["id"], "name": name.strip(), "kind": kind, "pid": pid, "listen": listen, "session": session}
+    who = {"id": a["id"], "name": name.strip(), "kind": kind, "pid": pid, "listen": listen, "session": session, "cwd": cwd}
     return who, lease_of(lease), None
 
 

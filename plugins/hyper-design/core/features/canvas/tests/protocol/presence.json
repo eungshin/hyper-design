@@ -8,7 +8,7 @@
   "routes": [
     {
       "method": "POST", "path": "/v1/p/<name>/hello", "callers": ["SDK Project.hello() / Hub.hello(project, …) (47-5a)", "hd attach"],
-      "request": "{agent: {id, name?, kind?, pid?, listen?, session?}, lease?}", "response": "{agent, lease, beat, first}",
+      "request": "{agent: {id, name?, kind?, pid?, listen?, session?, cwd?}, lease?} — session/cwd (claude) are kept server-side only (transcript source), never in agent", "response": "{agent, lease, beat, first}",
       "cases": [
         {"name": "no token", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": false, "body": {"agent": {"id": "ag-1"}}}, "expect": {"status": 403, "json": {"error": "str"}}},
         {"name": "not an object", "request": {"method": "POST", "path": "/v1/p/proj-c/hello", "token": "${session}", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},

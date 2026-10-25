@@ -18,7 +18,11 @@
 의존: 펌프 → `TranscriptSource` 인터페이스 + 넣어 준 factory(구현을 모른다) · 소스 → 순수 파서. 새 도구 = 구현 클래스 하나 + `REGISTRY` 한 줄.
 
 ## 고르기 (`source_for`, `kind_of`)
-- kind claude + hello 의 `session` → `ClaudeTranscript`(`<CLAUDE_CONFIG_DIR|~/.claude>/projects/<인코딩한 cwd>/<session>.jsonl` — 저장소·out 폴더 이름 먼저, 없으면 `projects/*/<session>.jsonl` 이름으로만). session 없음 → `NoTranscript`(이유 = `error`)
+- kind claude + hello 의 `session` → `ClaudeTranscript`(`<CLAUDE_CONFIG_DIR|~/.claude>/projects/<인코딩한 cwd>/<session>.jsonl`). session 없음 → `NoTranscript`(이유 = `error`) — 폴더의 아무 파일이나 고르지 않는다
+  - session 은 SDK 가 보낸다(S3c): Claude Code 는 자식 프로세스에 `CLAUDE_CODE_SESSION_ID`(uuid = jsonl 파일 이름)를 준다 → `hd_sdk.whoami` 가 kind claude 의 hello 에 `session` + `cwd`(os.getcwd()) 를 싣는다. 추정(가장 최근 파일 고르기)은 하지 않는다 — 정확한 파일 하나
+  - hello 에 `cwd` 가 있으면(`anywhere=False`) 그 폴더와 위 폴더들(`cwd_chain` — hd 가 띄운 폴더 아래에서 돌 수 있어서)의 projects 폴더에서만 찾는다. 캔버스 힌트·다른 projects 폴더는 보지 않는다. 못 찾으면 `TranscriptUnavailable`
+  - `cwd` 없음(옛 SDK) = 예전 길: 저장소·out 폴더 이름 먼저, 없으면 `projects/*/<session>.jsonl` 이름으로만
+  - 펌프의 소스 열쇠 = (종류, session, cwd) — 바뀌면 새 소스·END
 - kind paseo 또는 kind 없음(붙이기만 한 id = 오늘의 Paseo id, `adapters.choose` 와 같은 규칙) → `PaseoTranscript`
 - 그 밖(codex · other) → `NoTranscript`
 
@@ -27,6 +31,7 @@ Claude jsonl 에서 읽는 것: `type` user(사람 말 — `isMeta`·`isSidechai
 ## 사생활
 - 고르거나 붙인 에이전트만(`allowed` = `queue.agent` 이거나 이 프로젝트에 hello 한 에이전트). 그 밖은 403 `reason:'not-selected'`. 고르기가 풀리면 다음 tick 에 뺀다
 - 세션 파일은 그 session 이름의 파일 하나만 연다(다른 세션은 열지 않는다). 세션 id 는 `[A-Za-z0-9_-]{1,128}` 만(경로 글자 거절)
+- `cwd` 는 폴더 이름으로 바꿀 때 글자·숫자 밖이 모두 `-` 가 되어 `..`·구분자로 projects 밖에 못 나간다(그래도 `projects/<한 칸>/` 인지 다시 본다). 서버는 `cwd` 를 밖으로 내지 않는다(presence `public` 에 없음)
 - 대화 기록을 디스크에 쓰지 않는다(이벤트 고리·응답에만)
 
 ## 오류 탐지
