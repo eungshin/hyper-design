@@ -1,0 +1,302 @@
+{
+  "server": "canvas helper — plugins/hyper-design/core/features/canvas/helper.py <out> (one per out, 127.0.0.1, free or last port)",
+  "auth": "X-HD-Token header on every /api/* (GET and POST/PUT); Host must be 127.0.0.1:<port> or localhost:<port>. Static files (/, /index.html, out files) need no token. The page URL carries the token as ?hd=<token>.",
+  "errors": "JSON {error} except: GET with a bad Host and unknown GET paths fall to SimpleHTTPRequestHandler (HTML body).",
+  "start_state": "out = hd/tests/hdfix.make_out: screens home, list; .hd-canvas.json rev 3 with notes n1..n4 (n4 = draft). Cases run in order and share state.",
+  "routes": [
+    {
+      "method": "GET", "path": "/", "callers": ["browser (canvas page)"],
+      "request": "no token", "response": "index.html with window.__hdHelper, __hdKeyPath, __hdOut, __hdAgent and window.__hdState={rev,state} injected into <head>",
+      "cases": [
+        {"name": "page", "request": {"method": "GET", "path": "/", "token": false},
+         "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdHelper=true", "window.__hdKeyPath=", "window.__hdOut=", "window.__hdAgent=", "window.__hdState="]}},
+        {"name": "index.html same", "request": {"method": "GET", "path": "/index.html", "token": false},
+         "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdState="]}},
+        {"name": "bad host", "request": {"method": "GET", "path": "/", "host": "evil.example:80"},
+         "expect": {"status": 403, "ctype": "text/html"}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/<out file>", "callers": ["browser (card iframes load screens/*.html)"],
+      "request": "no token", "response": "the file; dot-paths (.hd-canvas.json, .hd-history, .hd-queue) are 404",
+      "cases": [
+        {"name": "screen file", "request": {"method": "GET", "path": "/screens/home.html", "token": false}, "expect": {"status": 200, "ctype": "text/html"}},
+        {"name": "dot file hidden", "request": {"method": "GET", "path": "/.hd-canvas.json", "token": false}, "expect": {"status": 404}},
+        {"name": "missing file", "request": {"method": "GET", "path": "/nope.html", "token": false}, "expect": {"status": 404, "ctype": "text/html"}},
+        {"name": "unknown GET /api path is a static 404 (HTML, not JSON)", "request": {"method": "GET", "path": "/api/nope"}, "expect": {"status": 404, "ctype": "text/html"}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/state", "callers": ["modules/view-state-sync.js (load, 2 s poll with ?since=)", "hd_client.py (hd notes, ping)"],
+      "request": "?since=<rev> optional, non-negative int", "response": "{rev, state} | {rev, unchanged:true} when since == rev",
+      "cases": [
+        {"name": "no token", "request": {"method": "GET", "path": "/api/state", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "wrong token", "request": {"method": "GET", "path": "/api/state", "token": "wrong"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "ok", "request": {"method": "GET", "path": "/api/state"}, "expect": {"status": 200, "json": {"rev": {"$eq": 3}, "state": {"notes": {"$list": "dict"}, "card-pos": "dict"}}}},
+        {"name": "since == rev", "request": {"method": "GET", "path": "/api/state?since=3"}, "expect": {"status": 200, "json": {"rev": "int", "unchanged": {"$eq": true}}}},
+        {"name": "since older", "request": {"method": "GET", "path": "/api/state?since=1"}, "expect": {"status": 200, "json": {"rev": "int", "state": "dict"}}},
+        {"name": "since not int", "request": {"method": "GET", "path": "/api/state?since=x"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "since negative", "request": {"method": "GET", "path": "/api/state?since=-1"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "PUT", "path": "/api/state", "callers": ["modules/view-state-sync.js (save)", "hd_client.py"],
+      "request": "{rev:int, state:{name: value | null (delete)}}; body over 2 MB = 413 (checked before the token)", "response": "{rev} | 409 {rev, state} when rev differs",
+      "cases": [
+        {"name": "ok", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 3, "state": {"card-pos": {"home": [5, 6]}, "hidden": null}}}, "expect": {"status": 200, "json": {"rev": {"$eq": 4}}}},
+        {"name": "rev conflict", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 3, "state": {}}}, "expect": {"status": 409, "json": {"rev": {"$eq": 4}, "state": "dict"}}},
+        {"name": "bad JSON", "request": {"method": "PUT", "path": "/api/state", "raw": "{not json"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "wrong shape", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": "4", "state": {}}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 4, "state": {}}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "too large", "request": {"method": "PUT", "path": "/api/state", "size": 2097153}, "expect": {"status": 413, "json": {"error": "str"}}},
+        {"name": "too large, no token (size is checked first)", "request": {"method": "PUT", "path": "/api/state", "size": 2097153, "token": false}, "expect": {"status": 413, "json": {"error": "str"}}},
+        {"name": "unknown PUT path", "request": {"method": "PUT", "path": "/api/nope", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/<any>", "callers": ["(guards shared by every POST)"],
+      "request": "body read first, then Host + token, then JSON parse, then route", "response": "403 / 400 / 404 {error}",
+      "cases": [
+        {"name": "no token", "request": {"method": "POST", "path": "/api/apply", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad host", "request": {"method": "POST", "path": "/api/apply", "body": {}, "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad JSON", "request": {"method": "POST", "path": "/api/apply", "raw": "{not json"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown path", "request": {"method": "POST", "path": "/api/nope", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "unknown path with bad JSON is 400 (parse before route)", "request": {"method": "POST", "path": "/api/nope", "raw": "{"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "SUSPECTED BUG: JSON array body on /api/apply drops the connection (body.get on a list)", "request": {"method": "POST", "path": "/api/apply", "raw": "[]"}, "expect": {"status": "dropped"}},
+        {"name": "SUSPECTED BUG: JSON array body on /api/delete drops the connection", "request": {"method": "POST", "path": "/api/delete", "raw": "[]"}, "expect": {"status": "dropped"}},
+        {"name": "SUSPECTED BUG: JSON array body on /api/restore drops the connection", "request": {"method": "POST", "path": "/api/restore", "raw": "[]"}, "expect": {"status": "dropped"}},
+        {"name": "SUSPECTED BUG: JSON array body on /api/forward drops the connection", "request": {"method": "POST", "path": "/api/forward", "raw": "[]"}, "expect": {"status": "dropped"}},
+        {"name": "non-object body on /api/reply is a clean 400", "request": {"method": "POST", "path": "/api/reply", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "GET on a POST-only route is a static 404 (HTML)", "request": {"method": "GET", "path": "/api/apply"}, "expect": {"status": 404, "ctype": "text/html"}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/archive", "callers": ["modules/view-state-sync.js (move done notes)"],
+      "request": "{notes:[{...note}]}", "response": "{ok:true, count}",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/archive", "body": {"notes": [{"id": "old1", "screen": "home", "note": "done"}]}}, "expect": {"status": 200, "json": {"ok": {"$eq": true}, "count": {"$eq": 1}}}},
+        {"name": "not a list", "request": {"method": "POST", "path": "/api/archive", "body": {"notes": "x"}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/archive", "callers": ["modules/view-state-sync.js"],
+      "request": "-", "response": "{notes:[...]} last 2000, newest last",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/api/archive"}, "expect": {"status": 200, "json": {"notes": {"$list": {"id": "str"}, "$min": 1}}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/archive", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/reply", "callers": ["hd_client.py (hd reply)"],
+      "request": "{note: id | {screen, no}, reply:{kind, ...fields, detail?, by?}}", "response": "{rev, status, note, screen}",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/reply", "body": {"note": "n1", "reply": {"kind": "일부", "done": "a", "left": "b"}}},
+         "expect": {"status": 200, "json": {"rev": {"$eq": 5}, "status": "str", "note": "str", "screen": "str"}}},
+        {"name": "by screen + no", "request": {"method": "POST", "path": "/api/reply", "body": {"note": {"screen": "home", "no": 2}, "reply": {"kind": "답변", "text": "네"}}},
+         "expect": {"status": 200, "json": {"rev": {"$eq": 6}, "status": {"$eq": "done"}, "note": "str", "screen": "str"}}},
+        {"name": "unknown note", "request": {"method": "POST", "path": "/api/reply", "body": {"note": "zz", "reply": {"kind": "답변", "text": "x"}}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "draft note", "request": {"method": "POST", "path": "/api/reply", "body": {"note": "n4", "reply": {"kind": "대체됨", "where": "x"}}}, "expect": {"status": 400, "json": {"error": "str", "errors": {"$list": "str"}}}},
+        {"name": "bad reply", "request": {"method": "POST", "path": "/api/reply", "body": {"note": "n1", "reply": {"kind": "??"}}}, "expect": {"status": 400, "json": {"error": "str", "errors": {"$list": "str", "$min": 1}}}},
+        {"name": "no reply", "request": {"method": "POST", "path": "/api/reply", "body": {"note": "n1"}}, "expect": {"status": 400, "json": {"error": "str", "errors": {"$list": "str"}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/claim", "callers": ["hd_client.py (hd claim)", "skills (curl)"],
+      "request": "{screen, by?, note?}", "response": "{rev, screen, file}",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/claim", "body": {"screen": "home", "by": "test", "note": "working"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 7}, "screen": {"$eq": "home"}, "file": "str"}}},
+        {"name": "unknown screen", "request": {"method": "POST", "path": "/api/claim", "body": {"screen": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no screen", "request": {"method": "POST", "path": "/api/claim", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/release", "callers": ["hd_client.py (hd release)"],
+      "request": "{screen}", "response": "{rev, released: bool} (false = nothing to release, no write)",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/release", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 8}, "released": {"$eq": true}}}},
+        {"name": "nothing held", "request": {"method": "POST", "path": "/api/release", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"rev": {"$eq": 8}, "released": {"$eq": false}}}},
+        {"name": "no screen", "request": {"method": "POST", "path": "/api/release", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/files", "callers": ["canvas_template.html (1 s poll, reload changed cards)"],
+      "request": "?since=<seq> (missing or -1 = baseline)", "response": "{seq, changed:[screen]}",
+      "cases": [
+        {"name": "baseline", "request": {"method": "GET", "path": "/api/files"}, "expect": {"status": 200, "json": {"seq": "int", "changed": {"$list": "str"}}}},
+        {"name": "since", "request": {"method": "GET", "path": "/api/files?since=0"}, "expect": {"status": 200, "json": {"seq": "int", "changed": {"$list": "str"}}}},
+        {"name": "since not int", "request": {"method": "GET", "path": "/api/files?since=x"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/files", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/watch", "callers": ["canvas_template.html (AI busy cover end)"],
+      "request": "{files:[relpath]}", "response": "{mtimes:{relpath: mtime | null}} (missing or outside out = null)",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/watch", "body": {"files": ["screens/home.html", "nope.html", "../outside.html"]}},
+         "expect": {"status": 200, "json": {"mtimes": {"screens/home.html": "num", "nope.html": "null", "../outside.html": "null"}}}},
+        {"name": "not a list", "request": {"method": "POST", "path": "/api/watch", "body": {"files": "x"}}, "expect": {"status": 200, "json": {"mtimes": {"$map": "any"}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/data", "callers": ["modules/view-sync.js (rebuild cards after a write)"],
+      "request": "{} (ignored)", "response": "build_canvas.index_data = the hd-data object in index.html",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/data", "body": {}},
+         "expect": {"status": 200, "json": {"rows": {"$list": {"group": "str", "screens": {"$list": {"id": "str", "file": "str", "title": "str", "purpose": "str", "policies": "list", "state": "bool"}}}, "$min": 1}, "arrows": "list", "links": "dict"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/apply", "callers": ["modules/view-sync.js (Send: direct edits)"],
+      "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link, path?, value?, op?, to?, index?}]}",
+      "response": "{applied:[id], failed:[{id, reason}], stamp, changed:[screen], history} (stamp null and no history when nothing written)",
+      "cases": [
+        {"name": "ok + one failed", "request": {"method": "POST", "path": "/api/apply", "body": {"edits": [
+            {"id": "e1", "screen": "home", "edit": "text", "path": "body > h1", "value": "Hello"},
+            {"id": "e2", "screen": "zz", "edit": "text", "path": "body > h1", "value": "x"}]}},
+         "save": {"stamp": "stamp"},
+         "expect": {"status": 200, "json": {"applied": {"$eq": ["e1"]}, "failed": {"$list": {"id": "str", "reason": "str"}, "$min": 1}, "stamp": "str", "changed": {"$eq": ["home"]}, "history": "str"}}},
+        {"name": "nothing to write", "request": {"method": "POST", "path": "/api/apply", "body": {"edits": []}},
+         "expect": {"status": 200, "json": {"applied": {"$eq": []}, "failed": {"$eq": []}, "stamp": "null", "changed": {"$eq": []}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/restore", "callers": ["modules/view-sync.js (undo a write)"],
+      "request": "{stamp}", "response": "{restored:[relpath], changed:[screen]} | 409 {error, reason:'changed-since', path} | 404 {error, reason:'missing'}",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "${stamp}"}}, "expect": {"status": 200, "json": {"restored": {"$list": "str", "$min": 1}, "changed": {"$list": "str"}}}},
+        {"name": "changed since", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "${stamp}"}}, "expect": {"status": 409, "json": {"error": "str", "reason": {"$eq": "changed-since"}, "path": "str"}}},
+        {"name": "missing", "request": {"method": "POST", "path": "/api/restore", "body": {"stamp": "nope"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/delete", "callers": ["modules/view-sync.js (delete cards)"],
+      "request": "{screens:[id]}", "response": "{deleted:[id], cut:[{screen, path, to}], failed:[{id, reason}], stamp, changed:[screen]}",
+      "cases": [
+        {"name": "ok + unknown", "request": {"method": "POST", "path": "/api/delete", "body": {"screens": ["list", "zz"]}},
+         "expect": {"status": 200, "json": {"deleted": {"$eq": ["list"]}, "cut": {"$list": {"screen": "str", "path": "str", "to": "str"}}, "failed": {"$list": {"id": "str", "reason": "str"}, "$min": 1}, "stamp": "str", "changed": {"$list": "str"}}}},
+        {"name": "nothing", "request": {"method": "POST", "path": "/api/delete", "body": {"screens": []}},
+         "expect": {"status": 200, "json": {"deleted": {"$eq": []}, "cut": {"$eq": []}, "failed": {"$eq": []}, "stamp": "null", "changed": {"$eq": []}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/forward", "callers": ["modules/view-sync.js (Send: non-direct notes)"],
+      "request": "{text}", "response": "{via:'queue', path} | {via:'paseo', agent, path} (always writes <out>/.hd-queue/<stamp>.txt)",
+      "cases": [
+        {"name": "no agent = queue", "request": {"method": "POST", "path": "/api/forward", "body": {"text": "please fix"}}, "expect": {"status": 200, "json": {"via": {"$eq": "queue"}, "path": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/agents", "callers": ["modules/view-agents.js (menu; ?auto=1 on open)"],
+      "request": "?auto=1 optional", "response": "{agents:[{id,name,status,cwd,provider}], current, repo, error?, skipped?}",
+      "cases": [
+        {"name": "list (fake paseo prints [])", "request": {"method": "GET", "path": "/api/agents"}, "expect": {"status": 200, "json": {"agents": {"$list": {"id": "str"}}, "current": "str|null", "repo": "str|null", "error?": "str"}}},
+        {"name": "auto without repo = skipped", "request": {"method": "GET", "path": "/api/agents?auto=1"}, "expect": {"status": 200, "json": {"agents": {"$eq": []}, "current": "null", "repo": "null", "skipped": {"$eq": true}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/attach", "callers": ["modules/view-agents.js", "hd_client.py (hd attach)"],
+      "request": "{agent: id | null}", "response": "{agent}",
+      "cases": [
+        {"name": "attach", "request": {"method": "POST", "path": "/api/attach", "body": {"agent": "ag-1"}}, "expect": {"status": 200, "json": {"agent": {"$eq": "ag-1"}}}},
+        {"name": "forward now goes to (fake) paseo", "request": {"method": "POST", "path": "/api/forward", "body": {"text": "please fix"}}, "expect": {"status": 200, "json": {"via": {"$eq": "paseo"}, "agent": {"$eq": "ag-1"}, "path": "str"}}},
+        {"name": "auto when attached = skipped", "request": {"method": "GET", "path": "/api/agents?auto=1"}, "expect": {"status": 200, "json": {"agents": {"$eq": []}, "current": {"$eq": "ag-1"}, "skipped": {"$eq": true}}}},
+        {"name": "detach", "request": {"method": "POST", "path": "/api/attach", "body": {"agent": null}}, "expect": {"status": 200, "json": {"agent": "null"}}},
+        {"name": "bad id", "request": {"method": "POST", "path": "/api/attach", "body": {"agent": "a b"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "missing", "request": {"method": "POST", "path": "/api/attach", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/projects", "callers": ["modules/view-projects.js", "modules/view-tabs.js", "modules/view-home.js"],
+      "request": "- (home_api.route, same JSON as the hub)", "response": "[{name, title, out, state, url, pid, created, last_opened, starred, trashed, thumb}]",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/api/projects"},
+         "expect": {"status": 200, "json": {"$list": {"name": "str", "title": "str", "out": "str", "state": "str", "url": "str|null", "pid": "int|null", "created": "str|null", "last_opened": "str|null", "starred": "bool", "trashed": "str|null", "thumb": "str|null"}, "$min": 2}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/projects", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/tabs", "callers": ["modules/view-tabs.js", "home_client.live_hub (hub ping)"],
+      "request": "-", "response": "{tabs:[name]}",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/api/tabs"}, "expect": {"status": 200, "json": {"tabs": {"$list": "str"}}}}
+      ]
+    },
+    {
+      "method": "PUT", "path": "/api/tabs", "callers": ["modules/view-tabs.js"],
+      "request": "{tabs:[name]} (unknown/duplicate names dropped)", "response": "{tabs}",
+      "cases": [
+        {"name": "ok", "request": {"method": "PUT", "path": "/api/tabs", "body": {"tabs": ["${project}", "ghost", "${project}"]}}, "expect": {"status": 200, "json": {"tabs": {"$eq": ["proj-a"]}}}},
+        {"name": "not a list", "request": {"method": "PUT", "path": "/api/tabs", "body": {"tabs": "a"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "bad JSON", "request": {"method": "PUT", "path": "/api/tabs", "raw": "{"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/home", "callers": ["modules/view-home.js"],
+      "request": "- (helper only; spawns the hub if none answers)", "response": "{url}",
+      "cases": [
+        {"name": "hub running", "request": {"method": "GET", "path": "/api/home"}, "expect": {"status": 200, "json": {"url": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/open", "callers": ["modules/view-projects.js", "modules/view-tabs.js"],
+      "request": "{name, agent?}", "response": "{name, out, url, pid, agent, reused}",
+      "cases": [
+        {"name": "itself (reused)", "request": {"method": "POST", "path": "/api/open", "body": {"name": "${project}"}},
+         "expect": {"status": 200, "json": {"name": {"$eq": "proj-a"}, "out": "str", "url": "str", "pid": "int|null", "agent": "str|null", "reused": {"$eq": true}}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/open", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no name", "request": {"method": "POST", "path": "/api/open", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "bad agent", "request": {"method": "POST", "path": "/api/open", "body": {"name": "${project}", "agent": "a b"}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/new", "callers": ["modules/view-projects.js"],
+      "request": "{title?}", "response": "{name, title, url} (success builds + spawns a helper: covered by home/tests/test_home_hub.py, not replayed here)",
+      "cases": [
+        {"name": "bad title", "request": {"method": "POST", "path": "/api/new", "body": {"title": 5}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "success", "skip": "spawns a build and a second helper — see test_home_hub.test_new_project_real_empty_canvas_opens",
+         "request": {"method": "POST", "path": "/api/new", "body": {"title": "x"}}, "expect": {"status": 200, "json": {"name": "str", "title": "str|null", "url": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/project", "callers": ["modules/view-tabs.js"],
+      "request": "{name, title?, starred?, trashed?: bool}", "response": "{row}",
+      "cases": [
+        {"name": "star", "request": {"method": "POST", "path": "/api/project", "body": {"name": "${other}", "starred": true}},
+         "expect": {"status": 200, "json": {"row": {"name": {"$eq": "proj-b"}, "starred": {"$eq": true}, "thumb": "str|null"}}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/project", "body": {"name": "zz", "starred": true}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "nothing to change", "request": {"method": "POST", "path": "/api/project", "body": {"name": "${other}"}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/forget", "callers": ["(none in canvas; home.js only)"],
+      "request": "{name} (trashed only)", "response": "{ok}",
+      "cases": [
+        {"name": "not trashed", "request": {"method": "POST", "path": "/api/forget", "body": {"name": "${project}"}}, "expect": {"status": 409, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/forget", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/reveal", "callers": ["modules/view-tabs.js"],
+      "request": "{name}", "response": "{ok} (success opens Explorer — not replayed)",
+      "cases": [
+        {"name": "no name", "request": {"method": "POST", "path": "/api/reveal", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/reveal", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/pick-folder", "callers": ["modules/view-projects.js"],
+      "request": "{} (opens a native folder dialog)", "response": "{name} | {cancel:true} | 400 {error}",
+      "cases": [
+        {"name": "any", "skip": "opens a native dialog; covered in-process by home/tests/test_home_api.py with a fake picker",
+         "request": {"method": "POST", "path": "/api/pick-folder", "body": {}}, "expect": {"status": 200, "json": "dict"}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/stop", "callers": ["hd_client.py (hd stop)"],
+      "request": "{}", "response": "{stopping:true}, then the server shuts down (must stay last)",
+      "cases": [
+        {"name": "ok", "request": {"method": "POST", "path": "/api/stop", "body": {}}, "expect": {"status": 200, "json": {"stopping": {"$eq": true}}}}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "server": "home hub — hd.py home → home/home_server.py (one per HD_HOME, 127.0.0.1:12270 or free port; record <HD_HOME>/home.json)",
+  "auth": "X-HD-Token header on /api/* (GET and POST/PUT); Host must be 127.0.0.1:<port> or localhost:<port> on every path. Page, static files and /thumb/* need no token. Page URL = /?hd=<token>; the page also gets window.__hdToken.",
+  "errors": "always JSON {error}, including 403 bad Host and 404 unknown paths. Body over 1 MB = 413 before the token check.",
+  "start_state": "projects proj-a (running helper) and proj-b (link only, no index.html); <HD_HOME>/thumbs/proj-a.png exists. Cases run in order and share state.",
+  "routes": [
+    {
+      "method": "GET", "path": "/", "callers": ["browser (home page)"],
+      "request": "no token (also /index.html, /home.html)", "response": "home.html with window.__hdHub=true; window.__hdToken=\"…\" in <head>",
+      "cases": [
+        {"name": "page", "request": {"method": "GET", "path": "/", "token": false}, "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdHub=true", "window.__hdToken="]}},
+        {"name": "index.html", "request": {"method": "GET", "path": "/index.html", "token": false}, "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdToken="]}},
+        {"name": "home.html", "request": {"method": "GET", "path": "/home.html", "token": false}, "expect": {"status": 200, "ctype": "text/html", "contains": ["window.__hdToken="]}},
+        {"name": "bad host", "request": {"method": "GET", "path": "/", "token": false, "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/<static>", "callers": ["browser (home.js, home.css, home-model.js)"],
+      "request": "no token; only *.html|css|js|svg|png directly in home/", "response": "the file | 404 {error}",
+      "cases": [
+        {"name": "home.js", "request": {"method": "GET", "path": "/home.js", "token": false}, "expect": {"status": 200, "ctype": "text/javascript"}},
+        {"name": "home.css", "request": {"method": "GET", "path": "/home.css", "token": false}, "expect": {"status": 200, "ctype": "text/css"}},
+        {"name": "python source hidden", "request": {"method": "GET", "path": "/home_api.py", "token": false}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "missing", "request": {"method": "GET", "path": "/nope.js", "token": false}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/thumb/<name>.png", "callers": ["home.js / canvas tabs (row.thumb URL)"],
+      "request": "no token; known project names only", "response": "image/png | 404 {error}",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/thumb/${project}.png", "token": false}, "expect": {"status": 200, "ctype": "image/png"}},
+        {"name": "unknown", "request": {"method": "GET", "path": "/thumb/zz.png", "token": false}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/<any>", "callers": ["(guards shared by every /api GET)"],
+      "request": "-", "response": "403 / 404 {error}",
+      "cases": [
+        {"name": "no token", "request": {"method": "GET", "path": "/api/projects", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "wrong token", "request": {"method": "GET", "path": "/api/projects", "token": "wrong"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad host", "request": {"method": "GET", "path": "/api/tabs", "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "GET", "path": "/api/nope"}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "helper-only GET routes are 404 on the hub", "request": {"method": "GET", "path": "/api/state"}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/<any>", "callers": ["(guards shared by every POST/PUT)"],
+      "request": "body read (up to 1 MB), then size, Host + token, JSON parse, route", "response": "413 / 403 / 400 / 404 {error}",
+      "cases": [
+        {"name": "no token", "request": {"method": "POST", "path": "/api/open", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad host", "request": {"method": "POST", "path": "/api/open", "body": {}, "host": "evil.example:80"}, "expect": {"status": 403, "json": {"error": "str"}}},
+        {"name": "bad JSON", "request": {"method": "POST", "path": "/api/open", "raw": "{not json"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/nope", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "helper-only POST routes are 404 on the hub", "request": {"method": "POST", "path": "/api/apply", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "PUT /api/state is 404 on the hub", "request": {"method": "PUT", "path": "/api/state", "body": {"rev": 0, "state": {}}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "too large", "request": {"method": "POST", "path": "/api/open", "size": 1048577}, "expect": {"status": 413, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/projects", "callers": ["home.js"],
+      "request": "-", "response": "[{name, title, out, state, url, pid, created, last_opened, starred, trashed, thumb}] (also schedules stale thumbnails)",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/api/projects"},
+         "expect": {"status": 200, "json": {"$list": {"name": "str", "title": "str", "out": "str", "state": "str", "url": "str|null", "pid": "int|null", "created": "str|null", "last_opened": "str|null", "starred": "bool", "trashed": "str|null", "thumb": "str|null"}, "$min": 2}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/tabs", "callers": ["home_client.live_hub (ping)"],
+      "request": "-", "response": "{tabs:[name]}",
+      "cases": [
+        {"name": "ok", "request": {"method": "GET", "path": "/api/tabs"}, "expect": {"status": 200, "json": {"tabs": {"$list": "str"}}}}
+      ]
+    },
+    {
+      "method": "PUT", "path": "/api/tabs", "callers": ["(no hub caller; canvas tabs use the helper copy)"],
+      "request": "{tabs:[name]}", "response": "{tabs}",
+      "cases": [
+        {"name": "ok", "request": {"method": "PUT", "path": "/api/tabs", "body": {"tabs": ["${other}", "ghost", "${project}"]}}, "expect": {"status": 200, "json": {"tabs": {"$eq": ["proj-b", "proj-a"]}}}},
+        {"name": "not a list", "request": {"method": "PUT", "path": "/api/tabs", "body": {"tabs": "a"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no tabs key", "request": {"method": "PUT", "path": "/api/tabs", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/home", "callers": ["(helper only)"],
+      "request": "-", "response": "404 on the hub",
+      "cases": [
+        {"name": "hub answers 404", "request": {"method": "GET", "path": "/api/home"}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/open", "callers": ["home.js"],
+      "request": "{name, agent?}", "response": "{name, out, url, pid, agent, reused}",
+      "cases": [
+        {"name": "running helper (reused)", "request": {"method": "POST", "path": "/api/open", "body": {"name": "${project}"}},
+         "expect": {"status": 200, "json": {"name": {"$eq": "proj-a"}, "out": "str", "url": "str", "pid": "int|null", "agent": "str|null", "reused": {"$eq": true}}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/open", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no name", "request": {"method": "POST", "path": "/api/open", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/new", "callers": ["home.js"],
+      "request": "{title?}", "response": "{name, title, url}",
+      "cases": [
+        {"name": "bad title", "request": {"method": "POST", "path": "/api/new", "body": {"title": 5}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "success", "skip": "builds and spawns a helper — see home/tests/test_home_hub.test_new_project_real_empty_canvas_opens",
+         "request": {"method": "POST", "path": "/api/new", "body": {"title": "x"}}, "expect": {"status": 200, "json": {"name": "str", "title": "str|null", "url": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/project", "callers": ["home.js"],
+      "request": "{name, title?, starred?, trashed?: bool}", "response": "{row}",
+      "cases": [
+        {"name": "title + star", "request": {"method": "POST", "path": "/api/project", "body": {"name": "${other}", "title": "B", "starred": true}},
+         "expect": {"status": 200, "json": {"row": {"name": {"$eq": "proj-b"}, "title": {"$eq": "B"}, "starred": {"$eq": true}, "trashed": "null", "thumb": "str|null"}}}},
+        {"name": "bad value", "request": {"method": "POST", "path": "/api/project", "body": {"name": "${other}", "starred": "y"}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/project", "body": {"name": "zz", "starred": true}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "trash", "request": {"method": "POST", "path": "/api/project", "body": {"name": "${other}", "trashed": true}},
+         "expect": {"status": 200, "json": {"row": {"name": {"$eq": "proj-b"}, "trashed": "str"}}}},
+        {"name": "trash drops it from tabs", "request": {"method": "GET", "path": "/api/tabs"}, "expect": {"status": 200, "json": {"tabs": {"$eq": ["proj-a"]}}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/forget", "callers": ["home.js"],
+      "request": "{name} (trashed only)", "response": "{ok:true}",
+      "cases": [
+        {"name": "not trashed", "request": {"method": "POST", "path": "/api/forget", "body": {"name": "${project}"}}, "expect": {"status": 409, "json": {"error": "str"}}},
+        {"name": "ok", "request": {"method": "POST", "path": "/api/forget", "body": {"name": "${other}"}}, "expect": {"status": 200, "json": {"ok": {"$eq": true}}}},
+        {"name": "gone", "request": {"method": "POST", "path": "/api/forget", "body": {"name": "${other}"}}, "expect": {"status": 404, "json": {"error": "str"}}},
+        {"name": "no name", "request": {"method": "POST", "path": "/api/forget", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/reveal", "callers": ["home.js"],
+      "request": "{name}", "response": "{ok} (success opens Explorer — not replayed)",
+      "cases": [
+        {"name": "no name", "request": {"method": "POST", "path": "/api/reveal", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "unknown", "request": {"method": "POST", "path": "/api/reveal", "body": {"name": "zz"}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/pick-folder", "callers": ["home.js"],
+      "request": "{} (opens a native folder dialog)", "response": "{name} | {cancel:true} | 400 {error}",
+      "cases": [
+        {"name": "any", "skip": "opens a native dialog; covered in-process by home/tests/test_home_api.py with a fake picker",
+         "request": {"method": "POST", "path": "/api/pick-folder", "body": {}}, "expect": {"status": 200, "json": "dict"}}
+      ]
+    }
+  ]
+}
