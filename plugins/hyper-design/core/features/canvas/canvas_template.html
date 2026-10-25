@@ -201,6 +201,9 @@ var ST = HD.viewStateSync.mount({hash: hashStr(KEYPATH), on: !!window.__hdHelper
 var PKEY = 'hd-card-pos:' + hashStr(KEYPATH), cardPos = {};
 var NKEY = 'hd-notes:' + hashStr(KEYPATH);         // 메모 목록 하나(modules/notes.js) — 바꾼 뒤 saveNotes() 가 저장하고 닿은 카드만 다시 그린다
 var NS = HD.notes.store(HD.notes.parse((function () { try { return ST.getItem(NKEY); } catch (e) { return null; } })()));
+// 화면 파일을 바꾸는 편집을 쌓는 길(modules/view-edit-path.js) — 바로 쓰기(VS) 또는 반영 대기 + 되돌리기 한 줄 · 잇기·도착 바꾸기·선 자르기
+var ED = HD.viewEditPath.mount({notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms) { toast(m, u, ms); },
+  title: function (id) { return titleOf(id); }, sync: function () { return VS; }, linksOf: function (from, cb) { VL.linksOf(from, cb); }});
 var QKEY = 'hd-note-seq:' + hashStr(KEYPATH);       // 화면마다 지금까지 쓴 가장 큰 메모 번호(modules/annotation.js) — 지워도 번호를 다시 쓰지 않게
 var noteSeq = (function () {
   var t = null; try { t = ST.getItem(QKEY); } catch (e) { t = null; }   // 저장소를 못 읽으면 빈 값(번호는 목록에서 다시 맞춘다)
@@ -673,7 +676,7 @@ var LN = HD.viewLines.mount({rowsEl: rowsEl, svg: $('#ar'), $: $, $$: $$, esc: e
                              names: names, redraw: function () { drawArrows(); },
                              graph: function () { return G; }, pending: function () { return HD.edits.overviewPending(NS.list()); }});   // 판의 선 — 체계 하나(E7·E20)
 var LP = HD.viewLinkPanel.mount({$: $, esc: esc, circled: circled, title: function (id) { return titleOf(id); }, names: names,   // 연결 패널: 줄마다 이름 · 휴지통(E13)
-                                 cut: function (from, to) { cutPairs([[from, to]], true); },
+                                 cut: function (from, to) { ED.cutPairs([[from, to]], true); },
                                  rename: function (from, to, v) { names.set(from, to, v); drawArrows(); }});
 var VL = HD.viewLinks.mount({rowsEl: rowsEl, CARD: CARD, sizeOf: sizeOf, $: $, $$: $$, title: function (id) { return titleOf(id); }, pending: pendingFor, tagScale: tagScale, rows: LP.render,
                              mark: LN.mark, isHidden: function (id) { return LF.isHidden(id) || !!deleted[id]; }});   // 고른 화면 안: 버튼 테두리·번호·소켓·연결 패널
@@ -688,13 +691,13 @@ var LE = HD.viewLineEnds.mount({svg: $('#ar'), rowsEl: rowsEl,
   emphasise: function (from, to) { LN.pair(from, to); }, unemphasise: function () { LN.pair(null); },
   retarget: function (from, oldTo, newTo, pending) {   // 반영 대기 선 = 그 잇기 편집을 새 도착으로 바꿔 끼움(되돌리기 한 단계) · 아니면 화면 안 링크를 묻고 도착 바꾸기
     var pend = pending ? NS.list().filter(function (n) { return !n.sent && n.edit === 'link' && n.op === 'link' && n.screen === from && String(n.to) === String(oldTo); }) : [];
-    if (!pend.length) { linksTo(from, oldTo, function (its) { if (its.length) linkTo(from, its, newTo); else toast('옮길 연결을 찾지 못했어요'); }); return; }
+    if (!pend.length) { ED.linksTo(from, oldTo, function (its) { if (its.length) ED.linkTo(from, its, newTo); else toast('옮길 연결을 찾지 못했어요'); }); return; }
     var list = pend.filter(function (n) { return String(n.was || '') !== String(newTo); }).map(function (n) {
-      var m = editNote(from, {path: n.path, text: n.text, rect: n.rect}, n.was ? HD.edits.say.retarget(scr(n.was), scr(newTo)) : HD.edits.say.link(scr(newTo)), 'link', newTo);
+      var m = ED.note(from, {path: n.path, text: n.text, rect: n.rect}, n.was ? HD.edits.say.retarget(ED.scr(n.was), ED.scr(newTo)) : HD.edits.say.link(ED.scr(newTo)), 'link', newTo);
       if (n.was) m.was = n.was;
       return m;
     });
-    addEdits('트리거 도착 바꾸기', list, titleOf(newTo) + '(으)로 이었어요 — 반영 대기', pend);
+    ED.add('트리거 도착 바꾸기', list, titleOf(newTo) + '(으)로 이었어요 — 반영 대기', pend);
   },
   toast: function (m) { toast(m); }});
 // 움직임 View(modules/view-motion.js): Ctrl+클릭 카메라 · 움직임 줄이기(#mvOff) — 전환 메뉴는 G4 로 없앴고 T 는 글자 도구
@@ -820,8 +823,8 @@ pane.addEventListener('contextmenu', function (e) {
     CM.open(x, y, '연결 → ' + titleOf(lt), [
       {label: '이름 고치기', key: '더블클릭', act: function () { LN.rename(lf, lt); }},
       {label: '도착으로 가기', key: 'Ctrl+클릭', act: function () { VM.goLink(lf, lt); }},
-      {label: '도착 바꾸기', act: function () { linksTo(lf, lt, function (its) { if (its.length) startPick(lf, its, x, y); }); }},
-      {label: '끊기', act: function () { cutPairs([[lf, lt]], true); }}]);
+      {label: '도착 바꾸기', act: function () { ED.linksTo(lf, lt, function (its) { if (its.length) startPick(lf, its, x, y); }); }},
+      {label: '끊기', act: function () { ED.cutPairs([[lf, lt]], true); }}]);
     return;
   }
   if (card) {
@@ -889,72 +892,11 @@ addEventListener('message', function (e) {
     hitWait.splice(i, 1); clearTimeout(w.t); w.cb(d.path ? d : {none: true}); return;
   }
 });
-function scr(id) { return '"' + titleOf(id) + '"(' + id + ')'; }
-function editNote(screen, h, text, op, to) { return HD.edits.note(screen, h, text, op, to); }   // op: link · cut · untrigger · trigger · new
-function addEdits(label, list, msg, drops, keep) {   // drops = 같이 취소할 보내지 않은 편집(E4) — 되돌리면 돌아온다 · keep = 바로 쓰지 않고 반영 대기로
-  drops = drops || [];
-  if (!list.length && !drops.length) return;
-  if (VS && VS.on && !keep && !drops.length && list.every(HD.edits.instantOf)) {   // 잇기·끊기 = 화면 파일에 바로(조각 2.2)
-    VS.write(label, list).then(function (res) {      // 도우미가 거절한 까닭(한국어)을 알린다 — 그 편집은 반영 대기로 남았다
-      var f = res && res.failed && res.failed[0]; if (f && f.reason) toast(label + ' — 파일에 쓰지 못해 반영 대기로 남겼어요: ' + f.reason, false, 6000);
-    }, function () { addEdits(label, list, msg, drops, true); });
-    return;
-  }
-  var lids = list.map(function (n) { return n.id; }), dids = drops.map(function (d) { return d.id; });
-  var put = function () {
-    NS.remove(function (x) { return dids.indexOf(x.id) >= 0; });
-    list.forEach(function (n) { if (!NS.find(n.id)) { n.sent = false; NS.add(n); } });
-    saveNotes();
-  };
-  var take = function () {
-    NS.remove(function (x) { return lids.indexOf(x.id) >= 0; });
-    drops.forEach(function (d) { if (!NS.find(d.id)) NS.add(d); });
-    saveNotes();
-  };
-  put();
-  record({label: label, status: 'pending', undo: take, redo: put});
-  toast(msg || label + ' — 반영 대기', true);
-}
-function linkTo(from, hits, to) {                    // 요소들 → 도착 화면 to (지금 가는 곳이 있으면 도착 바꾸기)
-  var list = hits.filter(function (h) { return h.to !== to; }).map(function (h) {
-    var n = editNote(from, h, h.to ? HD.edits.say.retarget(scr(h.to), scr(to)) : HD.edits.say.link(scr(to)), 'link', to);
-    if (h.to) n.was = h.to;                          // 도착 바꾸기: 판의 선에서 예전 도착을 뺀다
-    return n;
-  });
-  if (!list.length) { toast('이미 그 화면으로 가요'); return; }
-  addEdits(hits.some(function (h) { return h.to; }) ? '트리거 도착 바꾸기' : '트리거 연결', list, titleOf(to) + '(으)로 이었어요 — 반영 대기');
-}
-function cutText(to) { return HD.edits.say.cut(scr(to)); }
-// 그 방향(from → to)의 화면 안 링크 — 고른 화면이면 바로, 아니면 그 화면에 물어서
-function linksTo(from, to, cb) {
-  VL.linksOf(from, function (its) {
-    if (!its) { toast('이 화면은 연결을 알려 주지 않아요(palette.js 없음)'); cb([]); return; }
-    cb(its.filter(function (it) { return it.to === to; }).map(function (it) { return {path: it.path, text: it.text, rect: it.rect, to: it.to}; }));
-  });
-}
-// 선 자르기: 쌍마다 그 화면 안 링크 전부 끊기 메모. 아직 반영 안 된 연결(점선·바뀐 도착)이면 끊기 대신 그 편집 취소(E4). oneWay = 태그 하나(그 방향만)
-function cutPairs(pairs, oneWay) {
-  var dirs = [];
-  pairs.forEach(function (p) { dirs.push([p[0], p[1]]); if (!oneWay) dirs.push([p[1], p[0]]); });
-  var list = [], drops = [], left = dirs.length;
-  dirs.forEach(function (dr) {
-    linksTo(dr[0], dr[1], function (its) {
-      its.forEach(function (it) {
-        var pn = HD.edits.pendingLink(NS.list(), dr[0], it.path, it.to);
-        if (pn) { if (drops.indexOf(pn) < 0) drops.push(pn); } else list.push(editNote(dr[0], it, cutText(it.to), 'cut', it.to));
-      });
-      if (--left) return;
-      if (!list.length && !drops.length) { toast('끊을 연결을 찾지 못했어요'); return; }
-      addEdits(list.length ? '선 자르기' : '반영 대기 연결 취소', list,
-               (list.length ? list.length + '개 연결을 끊었어요' : '') + (list.length && drops.length ? ' · ' : '') + (drops.length ? '반영 대기 ' + drops.length + '개를 취소했어요' : ''), drops);
-    });
-  });
-}
 function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기 · 지우기 · 복제 · 옮기기(task 49a) — 크게 보기 = 판에서 도착을 고르는 항목 빼고
   var app = appCard(from), sel = {screen: from, h: h, app: app, where: inModal ? 'modal' : 'board', at: {x: x, y: y}};
   var els = app ? [] : h.to ? [{label: '도착 바꾸기', pick: 1, act: function () { startPick(from, [h], x, y); }},
-                    {label: '트리거 해제', act: function () { addEdits('트리거 해제', [editNote(from, h, HD.edits.say.untrigger(scr(h.to)), 'untrigger', h.to)]); }}]
-                 : [{label: '트리거 지정', act: function () { addEdits('트리거 지정', [editNote(from, h, HD.edits.say.trigger(), 'trigger')]); }},
+                    {label: '트리거 해제', act: function () { ED.add('트리거 해제', [ED.note(from, h, HD.edits.say.untrigger(ED.scr(h.to)), 'untrigger', h.to)]); }}]
+                 : [{label: '트리거 지정', act: function () { ED.add('트리거 지정', [ED.note(from, h, HD.edits.say.trigger(), 'trigger')]); }},
                     {label: '잇기', key: 'L 끌기', pick: 1, act: function () { startPick(from, [h], x, y); }}];
   if (inModal) els = els.filter(function (it) { return !it.pick; });
   var MENU = {text: ['글자 고치기', '더블클릭'], remove: ['요소 지우기', 'Del'], dup: ['요소 복제', 'Ctrl+D'], up: ['위로 옮기기', 'Alt+↑'], down: ['아래로 옮기기', 'Alt+↓'], memo: ['요소에 메모', '']};
@@ -985,7 +927,7 @@ function pickList(from, h, inModal, put) {
     }));
   });
 }
-// 요소 막대·요소 메뉴의 한 동작 → 셸의 편집 길(글자 칸·편집 메모·메모 창). 셸 함수인 까닭: editScreenText·removeElement·addEdits·showPop 이 셸 것이라 잇기만 한다
+// 요소 막대·요소 메뉴의 한 동작 → 셸의 편집 길(글자 칸·편집 메모·메모 창). 셸 함수인 까닭: editScreenText·removeElement·showPop 이 셸 것이고 편집 쌓기는 ED.add(view-edit-path) 라 잇기만 한다
 function blockAct(act, s) {
   var id = s.screen, h = s.h, inModal = s.where === 'modal';
   var done = function () { if (inModal) { if (BK) BK.hide('modal'); } else unselectEl(); };
@@ -998,13 +940,13 @@ function blockAct(act, s) {
     var pt = s.part || null;
     if (!pt || !pt.ok || s.ask || !VS.on) { var r2 = s.anchor ? s.anchor() : null; done(); elemMemo(id, h, HD.blocks.partAsk(act, pt && pt.title), inModal, r2 ? {x: r2.x + r2.w, y: r2.y} : null); return; }
     if (LF.guard([id])) return;
-    var pn = editNote(id, h, act === 'swap' ? HD.edits.say.replace(pt.title) : HD.edits.say.insert(pt.title)); pn.edit = act === 'swap' ? 'replace' : 'insert'; pn.value = pt.key;
-    addEdits(act === 'swap' ? '부품으로 바꾸기' : '부품 넣기', [pn]); return;
+    var pn = ED.note(id, h, act === 'swap' ? HD.edits.say.replace(pt.title) : HD.edits.say.insert(pt.title)); pn.edit = act === 'swap' ? 'replace' : 'insert'; pn.value = pt.key;
+    ED.add(act === 'swap' ? '부품으로 바꾸기' : '부품 넣기', [pn]); return;
   }
   if (act === 'attr') {                               // 속성 칸(task 49b) — 바뀐 속성마다 편집 하나, 한 번에 쓰고 되돌리기 한 번
     if (LF.guard([id])) return;
-    var an = Object.keys(s.attrs || {}).map(function (k) { var x = editNote(id, h, HD.edits.say.attr(k, s.attrs[k])); x.edit = 'attr'; x.op = k; x.value = s.attrs[k]; return x; });
-    if (an.length) addEdits('속성 바꾸기', an, '속성을 바꿨어요 — 반영 대기');
+    var an = Object.keys(s.attrs || {}).map(function (k) { var x = ED.note(id, h, HD.edits.say.attr(k, s.attrs[k])); x.edit = 'attr'; x.op = k; x.value = s.attrs[k]; return x; });
+    if (an.length) ED.add('속성 바꾸기', an, '속성을 바꿨어요 — 반영 대기');
     return;
   }
   done();
@@ -1016,15 +958,15 @@ function blockAct(act, s) {
     var dp = h.drop ? HD.reorder.plan(h.drop.from, h.drop.slot, !!h.drop.copy) : null;
     if (!dp) { console.warn('[hd] 끌어 옮기기: 놓은 자리(h.drop)가 없거나 제자리예요 — ' + JSON.stringify(h.drop || null)); return; }
     if (dp.dup) { toast('Alt 로 복제해 놓기는 도우미로 열었을 때만 돼요 — [복제] 뒤 끌어 옮겨 주세요'); return; }   // view-blocks 와 같은 알림
-    var mn = editNote(id, h, HD.edits.say.moveTo(dp.to)); mn.edit = 'move'; mn.op = 'to'; mn.to = dp.to;
-    addEdits(rl, [mn], '요소를 옮겼어요 — 반영 대기');
+    var mn = ED.note(id, h, HD.edits.say.moveTo(dp.to)); mn.edit = 'move'; mn.op = 'to'; mn.to = dp.to;
+    ED.add(rl, [mn], '요소를 옮겼어요 — 반영 대기');
     return;
   }
-  var dup = act === 'dup', n = editNote(id, h, dup ? HD.edits.say.duplicate() : HD.edits.say.move(act), dup ? '' : act);
+  var dup = act === 'dup', n = ED.note(id, h, dup ? HD.edits.say.duplicate() : HD.edits.say.move(act), dup ? '' : act);
   n.edit = dup ? 'duplicate' : 'move';
   var lb = dup ? '요소 복제' : act === 'up' ? '요소 위로 옮기기' : '요소 아래로 옮기기';
   if (OP && VS.on) { OP.run(lb, id, [n], [dup ? {path: h.path, dup: true} : {path: h.path, move: act}], s.where); return; }   // 화면 먼저, 도우미는 뒤에서(49c)
-  addEdits(lb, [n], (dup ? '요소를 복제했어요' : '요소를 옮겼어요') + ' — 반영 대기');
+  ED.add(lb, [n], (dup ? '요소를 복제했어요' : '요소를 옮겼어요') + ' — 반영 대기');
 }
 function elemMemo(id, h, note, inModal, at) {         // 요소 하나에 메모 창(note = 미리 채울 요청 글) — 판 = 그 자리 옆, 크게 보기 = 고른 요소 아래
   var it = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null};
@@ -1051,14 +993,14 @@ function finishTrig(tr, moved, cx, cy) {
       var tc = VL.cardEl(tr.from); if (tc) selectEl(tc, hits[0]);
       return;
     }
-    if (to && to !== tr.from) { linkTo(tr.from, hits, to); return; }
+    if (to && to !== tr.from) { ED.linkTo(tr.from, hits, to); return; }
     if (to) return;                                  // 제 화면에 놓음 = 취소
     var items = [{label: '새 화면 만들고 잇기', act: function () {           // 빈 레이아웃 카드를 그 자리에 놓고, 끈 요소를 그 카드로 — 되돌리기 한 단계
       var ln = layoutNote(cx, cy);
-      addEdits('새 화면 잇기', [ln].concat(hits.map(function (h) {
-        return editNote(tr.from, h, HD.edits.say.linkNew(ln.value, ln.screen), 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
+      ED.add('새 화면 잇기', [ln].concat(hits.map(function (h) {
+        return ED.note(tr.from, h, HD.edits.say.linkNew(ln.value, ln.screen), 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
-      addEdits('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return editNote(tr.from, h, cutText(h.to), 'cut', h.to); })); }});
+      ED.add('선 자르기', hits.filter(function (h) { return h.to; }).map(function (h) { return ED.note(tr.from, h, ED.cutText(h.to), 'cut', h.to); })); }});
     items.push('-', {label: '취소', act: function () {}});
     CM.open(cx, cy, '연결 → 빈 곳', items);
   });
@@ -1076,7 +1018,7 @@ function finishCut(pts) {                            // 그은 선 × 판의 선
   var hit = cutHits(pts, 1);
   $$('#ar path.ln.cutting').forEach(function (p) { p.classList.remove('cutting'); });
   if (!hit.length) return;
-  cutPairs(hit.map(function (p) { return [p.getAttribute('data-from'), p.getAttribute('data-to')]; }));
+  ED.cutPairs(hit.map(function (p) { return [p.getAttribute('data-from'), p.getAttribute('data-to')]; }));
 }
 function drawGhost(cx, cy) {
   var r = pane.getBoundingClientRect(), d;
@@ -1098,7 +1040,7 @@ function pickClick(e) {
   var c = e.target.closest ? e.target.closest('.card') : null, pt = pickT;
   e.preventDefault(); endPick(); swallowClick();
   if (c && c.classList.contains('del')) { toast('삭제 대기 화면에는 이을 수 없어요'); return; }   // E18
-  if (c && !c.classList.contains('hid') && c.dataset.id !== pt.from) linkTo(pt.from, pt.hits, c.dataset.id);
+  if (c && !c.classList.contains('hid') && c.dataset.id !== pt.from) ED.linkTo(pt.from, pt.hits, c.dataset.id);
 }
 pane.addEventListener('pointermove', function (e) { if (pickT) drawGhost(e.clientX, e.clientY); });
 
@@ -1145,7 +1087,7 @@ function foldCards(ids) {
   });
 }
 // 카드 아래 글 한 상자(H16) — 제목·설명·정책 줄을 한 상자에서. 그리기·글쇠 = modules/view-caption.js, 비교 = modules/caption.js
-// 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 addEdits = 되돌리기 한 번
+// 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 ED.add = 되돌리기 한 번
 var CAPX, CAP = HD.viewCaption.mount(CAPX = {
   values: function (id) {
     var o = ORIG[id];
@@ -1159,11 +1101,11 @@ var CAPX, CAP = HD.viewCaption.mount(CAPX = {
     if (!ORIG[id]) { editLayout(id, changes); return; }
     var list = changes.map(function (ch) {
       var path = 'screens.json > screens[id=' + id + '] > ' + ch.field, old = Array.isArray(ch.old) ? ch.old.join(' · ') : ch.old;
-      var n = editNote(id, {path: path, text: old, rect: null}, HD.edits.say.field(ch.field, ch.value, null, ch.old));
+      var n = ED.note(id, {path: path, text: old, rect: null}, HD.edits.say.field(ch.field, ch.value, null, ch.old));
       n.edit = ch.field; n.value = ch.value;           // policies = 줄 목록 통째로
       return n;
     });
-    addEdits('카드 글', list);
+    ED.add('카드 글', list);
   },
   hasPolicies: function (id) { return !!ORIG[id]; },   // 빈 레이아웃은 이름·목적만(#225)
   toast: function (m) { toast(m); },
@@ -1207,9 +1149,9 @@ function closeTedit(save) {
   var ta = $('textarea', tedit); if (document.activeElement === ta) ta.blur();   // 숨긴 칸에 포커스가 남으면 다음 단축키를 '입력 중'으로 먹는다
   if (!modal.hidden) $('#mclose').focus({preventScroll: true});   // 크게 보기: 키(Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
   if (save && v !== t.old) {                          // 빈 글 = 글 비우기(요소는 남음, task 30)
-    var n = editNote(t.id, t.h, HD.edits.say.text(v));
+    var n = ED.note(t.id, t.h, HD.edits.say.text(v));
     n.edit = 'text'; n.value = v;
-    addEdits('글자 고치기', [n]);
+    ED.add('글자 고치기', [n]);
   }
 }
 $('textarea', tedit).addEventListener('keydown', function (e) {
@@ -1223,9 +1165,9 @@ $('#tedel').addEventListener('click', function () { var t = tedCtx; if (!t) retu
 function removeElement(id, h) {                      // 요소 지우기(task 30) — 편집 메모 edit:'remove' 하나 = 되돌리기 한 번. 도우미가 있으면 파일에 바로(instantOf)
   CM.close();
   if (LF.guard([id])) return;
-  var n = editNote(id, h, HD.edits.say.remove()); n.edit = 'remove';
+  var n = ED.note(id, h, HD.edits.say.remove()); n.edit = 'remove';
   if (OP && VS.on && OP.edit('요소 지우기', id, n)) return;   // 화면 먼저 떼어 두고 도우미는 뒤에서 — 거절이면 제자리로 + 알림(49d)
-  addEdits('요소 지우기', [n], '요소를 지웠어요 — 반영 대기');
+  ED.add('요소 지우기', [n], '요소를 지웠어요 — 반영 대기');
 }
 pane.addEventListener('dblclick', function (e) {
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
@@ -1326,14 +1268,14 @@ function layoutText(n) { return HD.edits.say.layout(n.value, n.screen, n.purpose
 function layoutOf(id) { return NS.list().filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0] || null; }
 function layoutNote(cx, cy) {
   var p = boardPt(cx, cy), id = 'new-' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
-  var n = editNote(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
+  var n = ED.note(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
   n.edit = 'new-screen'; n.value = '빈 레이아웃'; n.x = p.x; n.y = p.y; n.note = layoutText(n);
   return n;
 }
 function addLayout(cx, cy, size, name) {            // size·name = 새 화면 대화상자에서 고른 크기·이름(task 46) — 크기는 그 카드 크기로(되돌리기는 카드와 함께: 빈 카드가 사라지면 크기는 쓰이지 않음)
   var n = layoutNote(cx, cy);
   if (name) { n.value = name; n.note = layoutText(n); }
-  addEdits('빈 레이아웃', [n], '빈 레이아웃을 놓았어요 — 메모를 남기고 보내면 채워져요');
+  ED.add('빈 레이아웃', [n], '빈 레이아웃을 놓았어요 — 메모를 남기고 보내면 채워져요');
   if (size && AB) AB.seed(n.screen, size);
 }
 function newScreenAt(cx, cy) {                      // N 도구·여기에 레이아웃·레이어 [+] = 새 화면 대화상자(크기·이름) 뒤 그 자리에 빈 카드 — 대화상자가 붙지 못했으면 기본 크기로 바로
@@ -1370,7 +1312,7 @@ function editLayout(id, changes) {                  // 빈 레이아웃 카드 �
   changes.forEach(function (ch) { if (ch.field === 'title') after.value = ch.value; else if (ch.field === 'purpose') after.purpose = ch.value; });
   var set = function (v) {
     var n = layoutOf(id); if (!n) return;
-    n.value = v.value; n.purpose = v.purpose; n.note = n.copyOf ? HD.edits.say.copy(v.value, n.screen, scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes();
+    n.value = v.value; n.purpose = v.purpose; n.note = n.copyOf ? HD.edits.say.copy(v.value, n.screen, ED.scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes();
   };
   set(after);
   record({label: '빈 레이아웃 글', undo: function () { set(before); }, redo: function () { set(after); }});
@@ -1427,8 +1369,8 @@ function deleteCards(ids) {                          // 진짜 화면 = 삭제 �
   var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
   var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
   SL.dispatch({type: 'clear'});
-  var pend = function () { if (real.length) addEdits('화면 삭제', real.map(function (id) {
-    var n = editNote(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.removeScreen(scr(id))); n.edit = 'delete'; return n;
+  var pend = function () { if (real.length) ED.add('화면 삭제', real.map(function (id) {
+    var n = ED.note(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.removeScreen(ED.scr(id))); n.edit = 'delete'; return n;
   }), real.length + '개 화면을 지웠어요 — 반영 대기'); };
   if (real.length && VS && VS.on) VS.del(real).catch(pend); else pend();   // 파일에 바로 지우고 오는 연결도 끊음(E1·E10)
   if (drafts.length) {
@@ -1449,8 +1391,8 @@ function duplicateCards(ids) {                       // Ctrl+D·메뉴 [복제](
 function duplicateCard(id) {                         // 도우미 없음·빈 레이아웃: 오른쪽 옆에 흰 복제 카드(빈 레이아웃과 같은 메모, 보내면 AI 가 복제)
   var c = VL.cardEl(id); if (!c) return;
   var r = $('.phone', c).getBoundingClientRect(), n = layoutNote(r.right + 40 * tagScale(), r.top);
-  n.value = titleOf(id) + ' 복사'; n.copyOf = id; n.note = HD.edits.say.copy(n.value, n.screen, scr(id));
-  addEdits('복제', [n], '복제했어요 — 반영 대기');
+  n.value = titleOf(id) + ' 복사'; n.copyOf = id; n.note = HD.edits.say.copy(n.value, n.screen, ED.scr(id));
+  ED.add('복제', [n], '복제했어요 — 반영 대기');
   if (AB && sizeOf(id).custom) AB.seed(n.screen, sizeOf(id));   // 복제 카드는 원본 크기 그대로
 }
 addEventListener('keydown', function (e) {           // Ctrl/Cmd+D = 고른 카드 복제(51-6) — 고른 요소가 있으면 요소 복제(view-blocks 가 먼저 받는다)
@@ -1459,8 +1401,8 @@ addEventListener('keydown', function (e) {           // Ctrl/Cmd+D = 고른 카�
   e.preventDefault(); duplicateCards(ids);
 });
 function cutIncoming(ids) {
-  addEdits('들어오는 연결 끊기', ids.map(function (id) {
-    var n = editNote(id, {path: '(이 화면으로 오는 연결)', text: titleOf(id), rect: null}, HD.edits.say.cutIn(scr(id))); n.edit = 'cut-in'; return n;
+  ED.add('들어오는 연결 끊기', ids.map(function (id) {
+    var n = ED.note(id, {path: '(이 화면으로 오는 연결)', text: titleOf(id), rect: null}, HD.edits.say.cutIn(ED.scr(id))); n.edit = 'cut-in'; return n;
   }), '이 화면으로 오는 연결을 끊었어요');
 }
 addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
@@ -1727,7 +1669,7 @@ function swapCard(id, f, url) {
 }
 var LV = null;                                       // 실시간 알림(modules/view-live.js · 규칙 live.js, 47-4b) — VB 뒤에서 붙는다
 var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: window.__hdAgent || null, on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
-  toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { list = list.filter(function (n) { return !n.opt; }); if (list.length) addEdits(label, list, null, null, true); },   // 바로 반영(49c)의 실패는 화면을 되돌리고 알렸다 — 반영 대기로 다시 넣지 않는다
+  toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { list = list.filter(function (n) { return !n.opt; }); if (list.length) ED.add(label, list, null, null, true); },   // 바로 반영(49c)의 실패는 화면을 되돌리고 알렸다 — 반영 대기로 다시 넣지 않는다
   fresh: function (stamp, ids) { return !LV || LV.own(stamp, ids, false); },   // 실시간 알림이 같은 쓰기를 이미 실었으면 다시 싣지 않음(47-4b)
   wrote: function (res, list) { if (BK) BK.wrote(res, list); },   // 쓴 뒤 고른 요소 따라가기(task 49b) — 다시 실린 카드에서 막대가 같은 요소로
   request: function (list) { return HD.edits.request(list, outDir(), AB ? AB.sizes() : null); },
@@ -1755,7 +1697,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
   }});
 // 바로 반영(modules/view-optimistic.js, task 49c) — 글자·복제·옮기기를 화면 틀에 먼저, 도우미 답이 실패면 되돌림. 쓰기·반영 대기·틀 찾기·막대 다시 고르기만 넘긴다
 OP = HD.viewOptimistic ? HD.viewOptimistic.mount({on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
-  queue: function (l, list, msg) { addEdits(l, list, msg, null, true); }, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
+  queue: function (l, list, msg) { ED.add(l, list, msg, null, true); }, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
   frames: function (id) {                            // 그 화면의 실린 틀(판 카드 · 크게 보기) — 교체 중 숨은 틀·전/후 겹침은 빼고
     var out = [];
     cardsOf([id]).forEach(function (c) { $$('.phone iframe', c).forEach(function (f) { if (!f.hasAttribute('data-src') && !f.classList.contains('hd-swap-next') && !f.classList.contains('hd-swap-before')) out.push({f: f, where: 'board'}); }); });
@@ -1898,7 +1840,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
 PP = FT.popPlace || null;
 // 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
 BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
-  queue: function (l, list, msg) { addEdits(l, list, msg, null, true); }, hide: LF.hide, hidden: LF.hidden, tool: function () { return tool; },
+  queue: function (l, list, msg) { ED.add(l, list, msg, null, true); }, hide: LF.hide, hidden: LF.hidden, tool: function () { return tool; },
   pickCard: function (id) { if (id) { if (!(SL.ids().length === 1 && SL.has(id))) SL.dispatch({type: 'only', id: id}); } else SL.dispatch({type: 'clear'}); },
   guard: function (ids) { return LF.guard(ids); },
   caption: {values: function (id) { return CAPX.values(id); }, commit: function (id, ch) { CAPX.commit(id, ch); }, open: function (el, focus) { openCaption(el, focus); }},
