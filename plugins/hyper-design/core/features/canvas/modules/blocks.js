@@ -3,7 +3,8 @@
    HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 — 요소 메뉴·단축키), shown(items) → 막대에 보일 것(↑·↓ 는 단축키·메뉴만, 49c),
                 grip(h, o) → {on, title} — 끌어서 순서 바꾸기 손잡이(49c: 앱 카드·화면 뿌리·형제 없음 = 꺼짐), isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [·Shift+Enter 상위 · Enter 'enter' · Tab 'next' · Shift+Tab 'prev'),
                 enterOf(h) → 'text'|'down'(Enter: 글자면 그 자리 고치기, 아니면 첫 자식),
-                askText(act, h) → 요청 글(앱 카드), place(anchor, size, view, avoid, others?) → {x, y, below, side, over}(others = 둘레 글 상자, 무르게 비킴), parentPick(h, chain) → 고를 상위 hit|null,
+                askText(act, h) → 요청 글(앱 카드), chainOf(h, chain) → '고르기 ▸' 목록(그 요소 + 조상, 같은 상자 감싸기는 건너뜀, 51-3),
+                tone(h, o) → 'app'|''(요소 상자 색 — 앱 카드 = 요청으로만, Figma 인스턴스 보라 자리, 51-3), place(anchor, size, view, avoid, others?) → {x, y, below, side, over}(others = 둘레 글 상자, 무르게 비킴), parentPick(h, chain) → 고를 상위 hit|null,
                 barLimit(anchor, view) → 막대 최대 너비, fit(widths, limit, more) → 막대에 남길 단추 수(나머지는 ⋯),
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글} */
 (function () {
@@ -124,6 +125,19 @@ function parentPick(h, chain) {
   return null;
 }
 
+// '고르기 ▸'(51-3, Figma F6 Select layer): 그 요소 + 조상(가까운 것부터) — 앞에 남긴 것과 상자가 같으면(감싸기만 한 요소) 건너뛴다
+function chainOf(h, chain) {
+  if (!h || !h.path) return [];
+  var out = [h], last = h.rect;
+  (Array.isArray(chain) ? chain : []).forEach(function (c) {
+    if (!c || !c.path || same(c.rect, last)) return;
+    out.push(c); last = c.rect;
+  });
+  return out;
+}
+// 요소 상자 색(51-3): 앱 카드(개발 서버 화면 또는 소스 줄이 있는 요소) = 'app' — 막대의 앱 카드 판정(bar)과 같은 규칙
+function tone(h, o) { return (o && o.app) || (h && h.src && h.src.file) ? 'app' : ''; }
+
 // 막대 자리(화면 좌표): 위(왼쪽 맞춤 → 오른쪽 맞춤) → 아래(같은 차례) → 오른쪽 옆 → 왼쪽 옆 — 고른 요소 위에는 놓지 않는다(요소가 보이는 칸을 다 덮을 때만 over).
 // view = 보이는 칸 {x, y, w, h}(크게 보기 = 그 창 · 판 = 판 칸) · avoid = 비킬 사각형 하나 또는 목록(창 제목 막대·카드 선택 막대·도구 막대 — 절대)
 // others = 둘레 글 상자들(화면 좌표, 선택) — 무르게 비킨다: 아무 글도 덮지 않는 첫 자리, 없으면 덮는 넓이가 가장 작은 자리(같으면 차례). 고른 요소 안 상자는 셈하지 않는다
@@ -166,6 +180,6 @@ function fit(widths, limit, more) {
   return Math.max(Math.min(1, widths.length), n);
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, place: place, parentPick: parentPick,
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, place: place, parentPick: parentPick, chainOf: chainOf, tone: tone,
              attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, barLimit: barLimit, fit: fit};
 })();

@@ -10,7 +10,8 @@
      접힌 줄·폴더는 남고 그 화면만 빠진다.
    rowId(name) → 'row:' + 줄 이름 — 줄(묶음) 줄 id(51-4, 예전 'g'+차례). 줄이 빠지거나 끼어도 접힘이 다른 줄로 옮겨 가지 않는다
    renameRow(folded, from, to) → 새 접힘 표(이름을 바꾼 줄의 접힘이 새 id 로) — 저장하지 않는 상태라 옮길 저장값은 없다
-   HD.layers = {build, filter, rowId, renameRow} */
+   hoverIds(list, id) → 레이어 줄에 올리면 판에 강조할 id(51-3, Figma F10) — 화면 = 그 하나 · 줄·폴더 = 그 아래 보이는 화면 · 판 글 = 그 id · 숨긴 화면·모르는 id = []
+   HD.layers = {build, filter, rowId, renameRow, hoverIds} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -77,5 +78,12 @@ function renameRow(folded, from, to) {
   return out;
 }
 
-HD.layers = {build: build, filter: filter, rowId: rowId, renameRow: renameRow};
+function hoverIds(list, id) {
+  var xs = Array.isArray(list) ? list : [], x = xs.filter(function (y) { return y && y.id === id; })[0];
+  if (!x || x.hid) return [];
+  if (x.kind === 'row' || x.kind === 'folder') return xs.filter(function (y) { return y.kind === 'screen' && !y.hid && (y.folder || y.row) === id; }).map(function (y) { return y.id; });
+  return [x.id];
+}
+
+HD.layers = {build: build, filter: filter, rowId: rowId, renameRow: renameRow, hoverIds: hoverIds};
 })();

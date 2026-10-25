@@ -21,7 +21,7 @@
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
     hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸} 으로(없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'}.
-    hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) — 경로는 모두 바꾸기 전 문서에서 찾는다.
+    hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) · {path, to}(형제 사이 자리 — hd-opt 의 to 와 같은 뜻, 51-3) — 경로는 모두 바꾸기 전 문서에서 찾는다.
   블록 조립(task 49b): hd-hit 계열 답에 up(감싼 요소가 있나 — body·html 은 아님) · tag · attrs(허용 목록 ATTR_OK 의 지금 값).
     {type:'hd-up', path, tag} → {type:'hd-upchain', tag, path, chain:[조상 hd-hit 칸…](가까운 것부터 8개)} ·
     {type:'hd-find', path, tag} → 문서가 다 실린 뒤 {type:'hd-found', tag, …hd-hit 칸}(없으면 path null) — 쓴 뒤 같은 요소 다시 고르기 ·
@@ -575,6 +575,11 @@
         [cp].concat(Array.prototype.slice.call(cp.querySelectorAll('[id],[data-region]'))).forEach(function (n) { n.removeAttribute('id'); n.removeAttribute('data-region'); });
         cp.setAttribute('data-hd-dup', ''); cp.style.outline = '2px dashed #f59e0b'; cp.style.outlineOffset = '2px';
         el.parentNode.insertBefore(cp, el.nextSibling); q.added = cp; pend.push(q); return;
+      }
+      if (it.to != null) {                             // 자리로 옮기기(51-3, 도우미 없이 끈 반영 대기) — hd-opt {path, to} 와 같은 자리, 되돌릴 때 원래 다음 마디 앞으로
+        var back = {parent: el.parentNode, next: el.nextSibling};
+        if (!placeAt(el, kids(el.parentElement).filter(function (c) { return c !== el; }), it.to, el.parentNode)) return;
+        q.back = back; el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px'; pend.push(q); return;
       }
       if (it.move) {                                   // 옮기기: 형제와 자리 바꿈 — 되돌릴 때 원래 다음 마디 앞으로
         var to = sib(el, it.move === 'up' ? -1 : 1); if (!to) return;

@@ -8,7 +8,7 @@
 <link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'">
 <style>
 /* 판 바깥 UI 색(무채색 고정) — 색은 판 위 내용(화면·연결선)과 그 순간 위험한 곳(--ui-danger)에만. 테마가 바꾸는 앱 색(--c-*)과 섞지 않는다 */
-:root{--ui-accent:#c2590a;--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f;--ui-surface:#fff;--ui-line:#e3e3df;--ui-muted:#8a8a85}
+:root{--ui-accent:#c2590a;--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f;--ui-surface:#fff;--ui-line:#e3e3df;--ui-muted:#8a8a85;--ui-app:#7c5cd6}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden}
 body{display:flex;flex-direction:column;background:#ECECE8;color:#1c1c1c;font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;word-break:keep-all;-webkit-text-size-adjust:100%}
@@ -323,6 +323,12 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 .elbox::before{content:attr(data-label);position:absolute;left:-2px;bottom:100%;margin-bottom:2px;background:var(--kc);font:600 11px/1.5 system-ui,sans-serif;color:#fff;padding:0 6px;border-radius:4px;white-space:nowrap;transform:scale(var(--ts,1));transform-origin:0 100%}
 .elbox.in::before{bottom:auto;top:0;margin:0;transform-origin:0 0}
 .elbox.sel{background:rgba(15,126,194,.08)}
+.elbox.hov{border-style:solid}.elbox.hov::before,.elbox.par::before{display:none}   /* 51-3: 다음 클릭이 고를 요소 = 얇은 실선(이름표 없음, Figma F10) */
+.elbox.par{border-style:dashed;--kc:var(--ui-muted);background:none;z-index:4}   /* 고른 요소의 부모 = 더 얇은 점선(F11) */
+.elbox[data-tone=app]:not(.par){--kc:var(--ui-app)}   /* 앱 카드 = 요청으로만(Figma 인스턴스 보라 자리, F11) */
+.elbox.sel[data-tone=app]::after{content:'요청으로만';position:absolute;right:-2px;top:100%;margin-top:2px;background:var(--ui-app);color:#fff;font:600 11px/1.5 system-ui,sans-serif;padding:0 6px;border-radius:4px;white-space:nowrap;transform:scale(var(--ts,1));transform-origin:100% 0}
+.card.lyhov .phone,.lyhov-t{outline:calc(2px * var(--ts,1)) solid var(--ui-mark);outline-offset:calc(2px * var(--ts,1))}   /* 레이어 줄에 올린 카드·판 글(F10) */
+.cm button .sub{margin-left:auto;color:#888}
 .sock.selsock{display:block;background:var(--ui-mark)}
 .card.picked .phone{outline:calc(3px * var(--ts,1)) solid var(--ui-mark);outline-offset:calc(5px * var(--ts,1))}
 .card.del{opacity:.35}
@@ -618,6 +624,7 @@ body.split-lr #screens{right:calc(50% + var(--dockw) / 2)}
 <div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="size" class="ab-size" aria-haspopup="dialog" aria-expanded="false" title="카드 크기" aria-label="카드 크기" hidden></button><button type="button" data-act="memo" aria-label="메모" title="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button><button type="button" data-act="hide" aria-label="숨기기" title="숨기기"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg></button><button type="button" data-act="del" aria-label="삭제" title="삭제 (Del)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
 <div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · 다 지우고 Enter = 글 비우기 · Esc 취소 <button type="button" id="tedel">요소 지우기</button></div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
+<div id="cmsub" class="cm" role="menu" aria-label="고르기" hidden></div>
 <div id="vmenu" class="vm" role="menu" aria-label="보기" hidden></div>
 <div id="wmenu" class="wm" role="menu" aria-label="창" hidden></div>
 <div id="pop" hidden role="dialog" aria-label="메모 남기기">
@@ -1354,6 +1361,10 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
   picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
   hide: hide, lock: lockCards, del: deleteCards,
   reveal: function (id) { SL.dispatch({type: 'only', id: id}); fitCards([id]); },
+  hover: function (ids) {                        // 레이어 줄에 올림 = 판의 그 카드·판 글 강조(51-3, Figma F10) — 고르기는 바꾸지 않는다
+    $$('.card.lyhov, .lyhov-t').forEach(function (n) { n.classList.remove('lyhov', 'lyhov-t'); });
+    ids.forEach(function (id) { var el = id.charAt(0) === '@' ? $('#' + id.slice(1)) : VL.cardEl(id); if (el) el.classList.add(id.charAt(0) === '@' ? 'lyhov-t' : 'lyhov'); });
+  },
   addLayout: function () { var r = pane.getBoundingClientRect(); newScreenAt(r.left + r.width / 2, r.top + r.height / 2); }});
 // 정렬 패널 View(modules/view-align.js · 계산 modules/align.js, H18) — 고른 카드(잠김·숨김 빼고) 맞추기·간격 같게·늘어놓기
 VA = HD.viewAlign.mount({root: $('#pAlign'), $: $, esc: esc, key: 'hd-align-gap',
@@ -1405,11 +1416,13 @@ function lockCards(ids, on) {
   record({label: on ? '화면 잠그기' : '잠금 풀기', undo: function () { setLocked(ids, !on); }, redo: function () { setLocked(ids, on); }});
 }
 $('#thid').addEventListener('click', openHidl);
-function closeCmenu() { if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
-function openCmenu(x, y, head, items) {            // items: [{label, key?, act()}] · '-' = 구분선 · {head} = 소제목
-  cmenu.tok = null;
+function closeCmenu() { closeSub(); if (cmenu.hidden) return; cmenu.hidden = true; cmenu.classList.remove('is-open'); }
+function openCmenu(x, y, head, items) {            // items: [{label, key?, act()} | {label, sub(cb)}(옆 목록 — cb([{label, act}]|null))] · '-' = 구분선 · {head} = 소제목
+  cmenu.tok = null; closeSub();
   cmenu.innerHTML = (head ? '<div class="cmh">' + esc(head) + '</div>' : '') + items.map(function (it, i) {
-    return it === '-' ? '<hr>' : it.head ? '<div class="cmh sub">' + esc(it.head) + '</div>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + '</button>';
+    return it === '-' ? '<hr>' : it.head ? '<div class="cmh sub">' + esc(it.head) + '</div>' :
+      '<button type="button" role="menuitem" data-i="' + i + '"' + (it.sub ? ' aria-haspopup="menu" aria-expanded="false"' : '') + '>' + esc(it.label) +
+      (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + (it.sub ? '<span class="sub" aria-hidden="true">▸</span>' : '') + '</button>';
   }).join('');
   cmenu.items = items;
   cmenu.hidden = false; cmenu.classList.add('is-open');
@@ -1419,9 +1432,48 @@ function openCmenu(x, y, head, items) {            // items: [{label, key?, act(
 }
 cmenu.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-i]'); if (!b) return;
-  var it = cmenu.items[+b.dataset.i]; closeCmenu(); it.act();
+  var it = cmenu.items[+b.dataset.i];
+  if (it.sub) { openSub(b, it, true); return; }
+  closeCmenu(); it.act();
 });
-cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 항목 사이 이동
+// 옆 목록(51-3 '고르기 ▸', Figma F6 Select layer) — 올리거나 누르거나 → 키로 연다. 목록은 it.sub(cb) 가 늦게 줄 수 있다(화면에 조상 묻기)
+var cmsub = $('#cmsub');
+function closeSub() { if (cmsub.hidden) return; cmsub.hidden = true; cmsub.tok = null; $$('button[aria-expanded="true"]', cmenu).forEach(function (b) { b.setAttribute('aria-expanded', 'false'); }); }
+function openSub(b, it, focus) {
+  if (!cmsub.hidden && cmsub.from === b) { if (focus) { var f0 = $('button', cmsub); if (f0) f0.focus(); } return; }
+  var tok = cmsub.tok = {}; cmsub.from = b; b.setAttribute('aria-expanded', 'true');
+  var put = function (list) {
+    if (cmsub.tok !== tok || cmenu.hidden) return;
+    cmsub.items = list || [];
+    cmsub.innerHTML = list == null ? '<div class="cmh">찾는 중…</div>' : list.length ? list.map(function (x, i) {
+      return '<button type="button" role="menuitem" data-j="' + i + '"' + (x.title ? ' title="' + esc(x.title) + '"' : '') + '>' + esc(x.label) + '</button>'; }).join('') : '<div class="cmh">고를 요소가 없어요</div>';
+    cmsub.hidden = false;
+    var r = b.getBoundingClientRect(), w = cmsub.offsetWidth, x = r.right + 2 + w > innerWidth - 8 ? r.left - w - 2 : r.right + 2;
+    cmsub.style.left = Math.max(8, x) + 'px'; cmsub.style.top = Math.max(8, Math.min(innerHeight - cmsub.offsetHeight - 8, r.top - 5)) + 'px';
+    if (focus && list && list.length) $('button', cmsub).focus({preventScroll: true});
+  };
+  put(null);
+  it.sub(put);
+}
+cmenu.addEventListener('mouseover', function (e) {
+  var b = e.target.closest('button[data-i]'); if (!b) return;
+  var it = cmenu.items[+b.dataset.i];
+  if (it.sub) openSub(b, it, false); else closeSub();
+});
+cmsub.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-j]'); if (!b) return;
+  var x = cmsub.items[+b.dataset.j]; closeCmenu(); if (x) x.act();
+});
+cmsub.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowLeft' || e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); var f = cmsub.from; closeSub(); if (f) f.focus(); return; }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  var bs = $$('button', cmsub), i = bs.indexOf(document.activeElement);
+  bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length].focus();
+});
+cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 항목 사이 이동 · → = 옆 목록
+  if (e.key === 'ArrowRight') { var sb = document.activeElement && document.activeElement.closest && document.activeElement.closest('button[data-i]'), si = sb && cmenu.items[+sb.dataset.i];
+    if (si && si.sub) { e.preventDefault(); openSub(sb, si, true); } return; }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   e.preventDefault();
   var bs = $$('button', cmenu), i = bs.indexOf(document.activeElement);
@@ -1429,7 +1481,7 @@ cmenu.addEventListener('keydown', function (e) {    // 위·아래 화살표로 
 });
 document.addEventListener('pointerdown', function (e) {   // 밖을 누르면 닫기
   var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
-  if (!cl('#cmenu')) closeCmenu();
+  if (!cl('#cmenu') && !cl('#cmsub')) closeCmenu();
 }, true);
 addEventListener('resize', function () { closeCmenu(); });
 pane.addEventListener('contextmenu', function (e) {
@@ -1591,7 +1643,25 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지
     var m = MENU[b.act];
     els.push({label: m[0] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask ? '' : m[1], act: function () { blockAct(b.act, Object.assign({}, sel, {ask: b.ask})); }});
   });
-  openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
+  var pick = {label: '고르기', sub: function (put) { pickList(from, h, inModal, put); }};   // Figma Select layer ▸(51-3) — 맨 위
+  openCmenu(x, y, titleOf(from), [{head: '요소 · ' + (h.text || h.path)}, pick].concat(els, tail && tail.length ? ['-'].concat(tail) : []));
+}
+// '고르기 ▸' 목록: 그 요소 + 조상(같은 상자 감싸기는 건너뜀 — blocks.chainOf) · 고르면 판 = 그 카드만 고르고 그 요소 · 크게 보기 = 요소 막대
+function pickList(from, h, inModal, put) {
+  var card = inModal ? null : VL.cardEl(from);
+  askChain(inModal ? mframe : lastFrame(card), h, function (chain) {
+    if (!chain) { toast('이 화면에 조상을 물을 수 없어요'); put([]); return; }
+    put(HD.blocks.chainOf(h, chain).map(function (x, i) {
+      var t = String(x.text || '').replace(/\s+/g, ' ').trim();
+      return {label: (i ? '' : '✓ ') + (x.tag || HD.tools.LABEL[x.kind] || '요소') + (t ? ' · ' + (t.length > 24 ? t.slice(0, 24) + '…' : t) : ''), title: x.path,
+              act: function () {
+                if (inModal) { if (BK && !modal.hidden) BK.show(modalSel(from, x)); return; }
+                var c = VL.cardEl(from); if (!c) { toast('그 화면 카드가 없어요'); return; }
+                if (!(SL.ids().length === 1 && SL.has(from))) SL.dispatch({type: 'only', id: from});
+                selectEl(c, x);
+              }};
+    }));
+  });
 }
 // 요소 막대·요소 메뉴의 한 동작 → 셸의 편집 길(글자 칸·편집 메모·메모 창). 셸 함수인 까닭: editScreenText·removeElement·addEdits·showPop 이 셸 것이라 잇기만 한다
 function blockAct(act, s) {
@@ -1618,11 +1688,14 @@ function blockAct(act, s) {
   done();
   if (act === 'remove') { removeElement(id, h); return; }
   if (lockGuard([id])) return;
-  if (act === 'reorder') {                           // 끌어서 순서 바꾸기(49c) — 같은 부모 안 k칸 = 도우미 move 를 차례로 k번(바로 반영) · 도우미 없음 = 옮기기 반영 대기 k개
+  if (act === 'reorder') {                           // 끌어서 순서 바꾸기(49c·51-5) — 놓은 자리 h.drop = {from, slot, copy} → 끌기 한 번 = 쓰기 하나(move op:to) · 도우미 없음 = 옮기기 반영 대기 하나
     var dirs = (s.dirs || []).filter(function (d) { return d === 'up' || d === 'down'; }), rl = '요소 옮기기';
-    if (!dirs.length) return;
     if (OP && VS.on) { OP.moves(rl, id, h, dirs, s.where); return; }
-    addEdits(rl, dirs.map(function (d) { var x = editNote(id, h, HD.edits.say.move(d), d); x.edit = 'move'; return x; }), '요소를 옮겼어요 — 반영 대기');
+    var dp = h.drop ? HD.reorder.plan(h.drop.from, h.drop.slot, !!h.drop.copy) : null;
+    if (!dp) { console.warn('[hd] 끌어 옮기기: 놓은 자리(h.drop)가 없거나 제자리예요 — ' + JSON.stringify(h.drop || null)); return; }
+    if (dp.dup) { toast('Alt 로 복제해 놓기는 도우미로 열었을 때만 돼요 — [복제] 뒤 끌어 옮겨 주세요'); return; }   // view-blocks 와 같은 알림
+    var mn = editNote(id, h, HD.edits.say.moveTo(dp.to)); mn.edit = 'move'; mn.op = 'to'; mn.to = dp.to;
+    addEdits(rl, [mn], '요소를 옮겼어요 — 반영 대기');
     return;
   }
   var dup = act === 'dup', n = editNote(id, h, dup ? HD.edits.say.duplicate() : HD.edits.say.move(act), dup ? '' : act);
@@ -1842,18 +1915,18 @@ pane.addEventListener('dblclick', function (e) {
 });
 /* ---------- 요소 테두리(요소 도구 — modules/tools.js 의 hit 가 있는 도구): 마우스를 올린 카드 안 요소를 화면에 물어(hd-hit-at) 종류별 테두리 ---------- */
 var hov = {busy: false, next: null, card: null};
-function clearElbox() { $$('.elbox:not(.sel)', rowsEl).forEach(function (b) { b.remove(); }); hov.card = null; }
+function clearElbox() { $$('.elbox:not(.sel):not(.par)', rowsEl).forEach(function (b) { b.remove(); }); hov.card = null; }
 var selEl = null;                                    // 트리거 도구에서 고른 요소 {card, h} — 테두리 고정 + 소켓(끌면 잇기)
-function unselectEl() { $$('.elbox.sel, .sock.selsock', rowsEl).forEach(function (n) { n.remove(); }); selEl = null; if (BK) BK.hide('board'); }
+function unselectEl() { $$('.elbox.sel, .elbox.par, .sock.selsock', rowsEl).forEach(function (n) { n.remove(); }); selEl = null; if (BK) BK.hide('board'); }
 function selectEl(card, h) {
   unselectEl(); clearElbox(); drawElbox(card, h);
-  var b = $('.elbox:not(.sel)', card); if (!b) return;
+  var b = $('.elbox:not(.sel):not(.par)', card); if (!b) return;
   b.classList.add('sel'); hov.card = null;
   var ph = $('.phone', card), sc = ph.offsetWidth / wOf(card), ts = tagScale(), q = h.rect, sk = document.createElement('span'), d = 16 * ts;
   sk.className = 'sock selsock'; sk.title = '끌어서 다른 화면에 놓으면 연결';
   sk.style.left = ((q.x + q.w) * sc) + 'px'; sk.style.top = ((q.y + q.h / 2) * sc) + 'px';
   sk.style.width = sk.style.height = d + 'px'; sk.style.margin = (-d / 2) + 'px 0 0 ' + (-d / 2) + 'px'; sk.style.borderWidth = (2 * ts) + 'px';
-  ph.appendChild(sk); selEl = {card: card, h: h};
+  ph.appendChild(sk); selEl = {card: card, h: h}; drawParent(card, h);
   if (BK) BK.show({screen: card.dataset.id, h: h, app: appCard(card.dataset.id), where: 'board',   // 요소 막대(task 49a) — 고른 테두리 옆, 판이 움직이면 placeSelbar 가 다시 놓는다
                    frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
                    anchor: function () { var bx = $('.elbox.sel', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * tagScale() * z; return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
@@ -1866,33 +1939,64 @@ function pickElAt(card, x, y, deep) {                // 이동(V)으로 고른 �
     selectEl(card, h);
   }, false, deep);
 }
-function drawElbox(card, h) {
-  clearElbox();
+function drawElbox(card, h, how) {                  // how: 'hov' = 다음 클릭이 고를 요소(얇은 실선, 51-3) · 'par' = 고른 요소의 부모(점선) · 없음 = 요소 도구 테두리
+  if (how !== 'par') clearElbox();
   if (!h || h.none || !h.rect) return;
   var ph = $('.phone', card), sc = ph.offsetWidth / wOf(card), ts = tagScale(), q = h.rect, b = document.createElement('div');
-  b.className = 'elbox' + (q.y * sc < 18 * ts ? ' in' : '');
+  b.className = 'elbox' + (q.y * sc < 18 * ts ? ' in' : '') + (how ? ' ' + how : '');
   b.dataset.kind = h.kind || 'box';
+  var tn = HD.blocks.tone(h, {app: appCard(card.dataset.id)}); if (tn) b.dataset.tone = tn;   // 앱 카드 = 요청으로만 색·꼬리표(51-3)
   b.dataset.label = (HD.tools.LABEL[h.kind] || '영역') + (h.kind === 'link' && h.to ? ' → ' + titleOf(h.to) : '');
   b.style.left = q.x * sc + 'px'; b.style.top = q.y * sc + 'px'; b.style.width = q.w * sc + 'px'; b.style.height = q.h * sc + 'px';
-  b.style.borderWidth = (2 * ts) + 'px'; b.style.setProperty('--ts', ts);
-  ph.appendChild(b); hov.card = card;
+  b.style.borderWidth = ((how ? 1 : 2) * ts) + 'px'; b.style.setProperty('--ts', ts);
+  ph.appendChild(b); if (how !== 'par') hov.card = card;
 }
-function hoverAsk(card, x, y) {                      // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억
-  var mode = HD.tools.hitOf(tool); if (!mode) return;
-  if (hov.busy) { hov.next = [card, x, y]; return; }
+// 고른 요소의 부모 점선(51-3, Figma F11): 화면에 조상을 묻고(hd-up) 상자가 다른 첫 조상(blocks.parentPick — [상위] 와 같은 판정)
+function drawParent(card, h) {
+  askChain(lastFrame(card), h, function (chain) {
+    if (!selEl || selEl.card !== card || selEl.h !== h || !chain) return;   // 그 사이 다른 요소를 골랐다
+    var p = HD.blocks.parentPick(h, chain); if (p) drawElbox(card, p, 'par');
+  });
+}
+function lastFrame(card) { var fs = card ? $$('.phone iframe', card) : []; return fs[fs.length - 1] || null; }   // 교체 중이면 새 틀(48a)
+var upWait = {}, upSeq = 0;                          // 셸이 묻는 hd-up(tag 'cue…') — view-blocks 의 [상위] 는 제 tag 로 따로 묻는다
+function askChain(f, h, cb) {                        // cb(조상 hit 목록, 가까운 것부터 | null = 답 없음)
+  var w = f && f.contentWindow; if (!w || !h || !h.path) { cb(null); return; }
+  var tag = 'cue' + (++upSeq);
+  upWait[tag] = {win: w, cb: cb, t: setTimeout(function () { if (!upWait[tag]) return; delete upWait[tag]; console.warn('[hd] 조상을 묻지 못함(답 없음) — ' + h.path); cb(null); }, 1500)};
+  try { w.postMessage({type: 'hd-up', path: h.path, tag: tag}, '*'); } catch (e) { clearTimeout(upWait[tag].t); delete upWait[tag]; console.warn('[hd] 조상 묻기 실패 — ' + e); cb(null); }
+}
+addEventListener('message', function (e) {
+  var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-upchain' || !upWait[d.tag]) return;
+  var u = upWait[d.tag]; if (u.win !== e.source) return;
+  clearTimeout(u.t); delete upWait[d.tag]; u.cb(Array.isArray(d.chain) ? d.chain : []);
+});
+function hoverMode(card) {                            // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 이동(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
+  return HD.tools.hoverOf(tool, {only: SL.ids().length === 1 && SL.has(card.dataset.id), typing: card.classList.contains('hd-typing')});
+}
+function hoverAsk(card, x, y, deep) {                // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억 · deep = Alt(가장 안쪽 — 이동 도구의 Alt+클릭과 같게)
+  var mode = hoverMode(card); if (!mode) return;
+  if (hov.busy) { hov.next = [card, x, y, deep]; return; }
   hov.busy = true;
   askHit(card, x, y, true, function (h) {
     hov.busy = false;
-    if (HD.tools.hitOf(tool) && !(drag && drag.moved) && !pickT) drawElbox(card, h);
-    var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2]);
-  }, mode === 'leaf');
+    var mv = tool === 'move';
+    if (hov.live === card && hoverMode(card) && !(drag && drag.moved) && !pickT) {
+      if (mv && h && selEl && selEl.card === card && h.path === selEl.h.path) clearElbox();   // 고른 요소 위 = 이미 고른 상자
+      else drawElbox(card, h, mv ? 'hov' : undefined);
+    }
+    var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2], n[3]);
+  }, mode === 'leaf', tool === 'move' && !!deep);
 }
+function hoverOff() { hov.live = null; hov.next = null; if (hov.card) clearElbox(); }
 pane.addEventListener('mousemove', function (e) {
-  if (!HD.tools.hitOf(tool) || (drag && drag.moved) || pickT) { if (hov.card) clearElbox(); return; }
+  if ((drag && drag.moved) || pickT) { hoverOff(); return; }
   var c = e.target.closest ? e.target.closest('.card:not(.draft)') : null, ph = c ? $('.phone', c) : null;
-  if (!ph || !ph.contains(e.target) || e.target.closest('.sock')) { if (hov.card) clearElbox(); hov.next = null; return; }
-  hoverAsk(c, e.clientX, e.clientY);
+  if (!ph || !ph.contains(e.target) || e.target.closest('.sock') || !hoverMode(c)) { hoverOff(); return; }
+  if (hov.card && hov.card !== c) clearElbox();
+  hov.live = c; hoverAsk(c, e.clientX, e.clientY, e.altKey);
 });
+pane.addEventListener('mouseleave', hoverOff);       // 판 밖으로 = 미리 표시 걷기(늦게 온 답도 그리지 않게 hov.live)
 
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }

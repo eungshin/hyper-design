@@ -9,7 +9,7 @@
 | `modules/blocks.js` | Model | 요소 막대 규칙 — 단추 차례·켜짐(`bar`)·앱 카드 판정(`isApp`, `build_canvas.DEV_URL` 과 같은 규칙)·단축키(`keyAct`)·앱 카드 요청 글(`askText`)·막대 자리(`place`)·막대 너비(`barLimit`·`fit`)·상위 고르기(`parentPick`)·속성 허용 목록(`ATTRS`·`attrOk`·`attrFields`)·부품 요청 글(`partAsk`). 상태 없음 |
 | `modules/view-blocks.js` | View | `#elbar`·`#elpop`(속성 칸·부품 목록·⋯ 목록) 과 그 CSS · 둘레 글 상자 읽기(같은 출처 화면만, 1초 기억). 상태 = 지금 고른 요소 하나 `{screen, h, app, where, anchor(), frame(), view?(), avoid?()}` + 따라갈 요소 하나(쓴 뒤 15초, 저장하지 않음). `HD.feature('blocks', {needs: ['$','toast','esc','api','cardEl']})` → `{show, hide(where?), place, sel, onAct(fn), onPick(fn), wrote(res, list)}` — 편집은 셸이 `onAct` 로 준 `blockAct` 하나로만 나가고, 상위·따라가기로 새로 고른 요소는 `onPick` 으로 셸이 그린다 |
 | `specimen_parts.py` | Model(Python) | 부품 견본(`components.html`·`specimens.html` 의 `section.spec[data-key]`) → 화면에 넣을 뼈대(`sections`·`skeleton`·`parts`·`markup`). 파일·네트워크 없음 — 읽기는 `helper.py` 가(`parts_of`·`apply_edits`) |
-| 셸 `blockAct`·`modalSel`·`elemMemo`·`pickElAt`·`appCard`·`setMode` | — | 요소 막대·요소 메뉴의 동작을 이미 있는 편집 길(`editScreenText`·`removeElement`·`addEdits`·`showPop`)로 잇기만 한다 — 그 길이 모두 셸 것이라 모듈로 빼면 셸 함수를 ctx 로 다 넘겨야 해서. `modalSel` = 크게 보기 고른 요소의 sel(셸 `mbox`·`mscale`·`mframe` 을 읽는다) |
+| 셸 `blockAct`·`modalSel`·`elemMemo`·`pickElAt`·`appCard`·`setMode` · 고르기 안내(51-3) `hoverMode`·`drawParent`·`askChain`·`pickList`·`openSub` | — | 요소 막대·요소 메뉴의 동작을 이미 있는 편집 길(`editScreenText`·`removeElement`·`addEdits`·`showPop`)로 잇기만 한다 — 그 길이 모두 셸 것이라 모듈로 빼면 셸 함수를 ctx 로 다 넘겨야 해서. `modalSel` = 크게 보기 고른 요소의 sel(셸 `mbox`·`mscale`·`mframe` 을 읽는다). 51-3 함수도 같은 까닭 — 셸의 hover 묻기(`hov`·`askHit`)·고른 요소(`selEl`·`selectEl`)·우클릭 메뉴(`#cmenu`)를 그대로 쓴다(두 번째 hit-test 없음) |
 
 ## 규칙
 
@@ -32,6 +32,14 @@
 - 크게 보기 도구: 손(눌러 보기) · 이동(요소 고르기 → 막대) · 주석(메모) · 글자(누른 글자 고치기). 나머지는 판에서만. 오른쪽 클릭 = 판과 같은 요소 메뉴(도착을 판에서 고르는 잇기·도착 바꾸기, 막대에만 있는 상위·속성·부품은 뺌)
 - 화면 메시지(palette.js, 기존 것은 그대로): `hd-hit` 계열 답에 `prev`·`next`·`root`·`up`·`tag`·`attrs`(허용 목록의 지금 값) · `hd-pick {on, mode:'text'|'select'}` → 누르면 `hd-dbl` · `hd-sel` · `hd-edit` 이 켜진 화면의 오른쪽 클릭 → `hd-ctx {…hd-hit 칸, x, y}` · 고르는 중 스크롤 → `hd-scroll` · `hd-up {path, tag}` → `hd-upchain {tag, path, chain}` · `hd-find {path, tag}` → 다 실린 뒤 `hd-found {tag, …hd-hit 칸}`(없으면 path null) · `hd-down {path, tag}`(첫 자식) · `hd-sib {path, dir:1|-1, tag}`(형제, 끝에서 돈다) → `hd-hop {tag, …hd-hit 칸}`(없으면 path null) · `hd-hit-at` 의 `deep:true` = 그 자리 요소 그대로(가장 안쪽) · `hd-pending` 항목 `{path, dup:true}` · `{path, move}` · `{path, attr, value}`
 
+- 보이는 고르기 안내(51-3, Figma F6·F10·F11) — 규칙은 Model(`tools.hoverOf` · `blocks.chainOf`·`tone` · `layers.hoverIds`), 그리기는 셸:
+  - 다음 클릭 미리 표시: 이동(V)으로 그 카드 하나만 고른 동안 그 카드 안에 올리면 다음 클릭이 고를 요소(누를 수 있는 요소 → 그 요소, Alt = 가장 안쪽)에 얇은 실선 `.elbox.hov`(이름표 없음) — 예전 hover 묻기(`hd-hit-at`) 그대로. 카드 밖·판 밖·글자를 고치는 카드(`.hd-typing`) = 없음, 고른 요소 위 = 없음. 요소 도구(L·P·T)는 예전 테두리 그대로
+  - 부모 점선: 요소를 고르면(판) 셸이 `hd-up`(tag `cue…` — 막대 `[상위]` 와 따로)으로 조상을 묻고 `parentPick`(상자가 다른 첫 조상)에 `.elbox.par` — `--ui-muted` 점선, 고른 테두리보다 얇다(1 대 2). 답이 1.5초 없으면 `[hd]` 경고만
+  - 레이어 줄에 올리면 판 강조: 화면 = 그 카드, 줄·폴더 = 그 아래 보이는 화면, 판 글 = 그 글(`.lyhov`·`.lyhov-t`, `--ui-mark` 윤곽) — 고르기는 바꾸지 않는다(view-layers `ctx.hover`)
+  - 앱 카드: 요소 상자 `data-tone="app"` = `--ui-app`(Figma 인스턴스 보라 자리) · 고른 상자 아래 오른쪽 꼬리표 '요청으로만'
+  - 요소 오른쪽 클릭 메뉴 맨 위 '고르기 ▸'(Figma Select layer): 올리기·누르기·→ 로 옆 목록 `#cmsub` = 그 요소(✓) + 조상(`chainOf` — 앞에 남긴 것과 같은 상자인 감싸기는 건너뜀, 가까운 것부터 최대 8) · 고르면 판 = 그 카드만 고르고 그 요소(막대·부모 점선), 크게 보기 = 막대. ← ·Esc = 옆 목록만 닫기
+- 도우미 없이 끌어 옮기기(51-3 셸 빚): `h.drop = {from, slot, copy}` → `reorder.plan` → 반영 대기 메모 하나 `{edit:'move', op:'to', to}`(글 `say.moveTo`) · 미리보기 `hd-pending {path, to}`(palette.js — `hd-opt` 의 to 와 같은 자리) · Alt 복제는 도우미 없이 안 됨(view-blocks 와 같은 토스트)
+
 ## 아직
 
 - 끌어서 순서 바꾸기 = 49c(`instant.md`) — 같은 부모 안만
@@ -42,4 +50,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/blocks.js` · `view-blocks.js` · `specimen_parts.py`(+ `tests/test_canvas_unit_blocks.py` · `test_canvas_unit_blocks_b.py` · `test_canvas_unit_blocks_place.py` · `test_canvas_unit_figma_keys.py` · 브라우저 `test_canvas_blocks.py` · `test_canvas_blocks_b.py` · `test_canvas_blocks_place.py` · `test_canvas_figma_keys.py`) · `helper.py` duplicate·move·attr·insert·replace·`/api/parts` | `unit or tools or modal or helper` |
+| `modules/blocks.js` · `view-blocks.js` · `specimen_parts.py`(+ `tests/test_canvas_unit_blocks.py` · `test_canvas_unit_blocks_b.py` · `test_canvas_unit_blocks_place.py` · `test_canvas_unit_figma_keys.py` · `test_canvas_unit_cues.py` · 브라우저 `test_canvas_blocks.py` · `test_canvas_blocks_b.py` · `test_canvas_blocks_place.py` · `test_canvas_figma_keys.py` · `test_canvas_cues.py`) · `helper.py` duplicate·move·attr·insert·replace·`/api/parts` | `unit or tools or modal or helper` |

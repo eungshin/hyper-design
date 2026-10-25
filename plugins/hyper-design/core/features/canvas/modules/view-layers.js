@@ -13,7 +13,8 @@
    HD.viewLayers.mount(ctx) → {render(), only(f)} · HD.viewLayers.CSS = 셸에 붙일 폴더 모양(문자열)
    ctx = {$, esc, root, tree() → {groups, texts}, state() → {hidden, locked, memo}, picked() → [id],
           hide(ids, on), lock(ids, on), reveal(id), addLayout(), del(ids),
-          folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y')} — 폴더 셋은 없으면 그 기능만 빠진다 */
+          folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y'), hover(ids)} — 폴더 셋·hover 는 없으면 그 기능만 빠진다
+   줄에 마우스를 올리면 ctx.hover(HD.layers.hoverIds(나무, 그 줄 id)) — 판이 그 카드·판 글을 강조(51-3, Figma F10), 나무 밖으로 나가면 hover([]) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -136,6 +137,11 @@ function mount(ctx) {
     if (d.renamed) folded = L.renameRow(folded, d.renamed.from, d.renamed.to);
     if (!renaming) render();
   });
+
+  var hovId = null;                                  // 올린 줄(51-3) — 같은 줄 안 움직임은 한 번만 알린다
+  function hoverTo(id) { if (id === hovId) return; hovId = id; if (ctx.hover) ctx.hover(id ? L.hoverIds(list, id) : []); }
+  tree.addEventListener('mouseover', function (e) { var r = e.target.closest && e.target.closest('[data-ly]'); hoverTo(r && !dragId ? r.dataset.ly : null); });
+  tree.addEventListener('mouseleave', function () { hoverTo(null); });
 
   q.addEventListener('input', render);
   ['pointerdown', 'keydown', 'wheel'].forEach(function (ev) { q.addEventListener(ev, function (e) { e.stopPropagation(); }); });   // 판 단축키·끌기와 겹치지 않게
