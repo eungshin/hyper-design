@@ -184,3 +184,90 @@ def test_ctrl_backspace_on_heading_merges_row_into_the_row_above_with_one_undo(c
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+# ---------------------------------------------------------------- S1c 셸 후속(51-4 알려진 한계 · 고른 줄 설명이 아래 줄 제목을 덮음)
+CARD_LEFT = "(id) => { const c = document.querySelector('.card[data-id=\"' + id + '\"]'); return c ? [c.style.left, c.style.top, c.classList.contains('moved')] : null; }"
+
+
+def _drag_card(pg, sid, dx, dy):
+    pg.keyboard.press("v")
+    b = pg.locator(f'.card[data-id="{sid}"] .cover').bounding_box()
+    x, y = b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
+    pg.mouse.move(x, y); pg.mouse.down()
+    for i in range(1, 6):
+        pg.mouse.move(x + dx * i / 5, y + dy * i / 5)
+    pg.mouse.up()
+    pg.wait_for_timeout(200)
+
+
+@pytest.mark.area("tools", "layers")
+def test_rename_row_keeps_moved_card_position_after_reload(ctx, out):
+    srv, pg, errors = _open(ctx, out)
+    try:
+        _drag_card(pg, "job", 60, 40)
+        moved = pg.evaluate(CARD_LEFT, "job")
+        assert moved[2] and moved[0], f"카드를 옮겼다 {moved}"
+        pg.keyboard.press("Escape")
+        _head(pg, SET).dblclick()
+        pg.wait_for_function("document.activeElement && document.activeElement.classList.contains('glabel')")
+        pg.keyboard.press("Control+A"); pg.keyboard.type("설정")
+        pg.keyboard.press("Enter")
+        assert _wait(lambda: _sj(out)["groups"][1] == "설정"), _sj(out)["groups"]
+        pg.wait_for_timeout(1500)                          # 상태 저장(.hd-canvas.json)
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_function("[...document.querySelectorAll('#rows .flow .glabel')][1].textContent === '설정'")
+        assert pg.evaluate(CARD_LEFT, "job") == moved, "줄 이름을 바꿔도 옮긴 카드 자리는 새로고침 뒤 그대로"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools", "layers")
+def test_dissolve_row_keeps_moved_card_position_after_reload(ctx, out):
+    srv, pg, errors = _open(ctx, out)
+    try:
+        sid = pg.evaluate("(n) => [...document.querySelectorAll('#rows .flow')].find(f => f.querySelector('.glabel').textContent === n).querySelector('.card').dataset.id", TRY)
+        _drag_card(pg, sid, 50, 30)
+        moved = pg.evaluate(CARD_LEFT, sid)
+        assert moved[2], moved
+        pg.keyboard.press("Escape")
+        _head(pg, TRY).click()
+        pg.wait_for_timeout(150)
+        pg.keyboard.press("Control+Backspace")
+        assert _wait(lambda: TRY not in _sj(out)["groups"])
+        pg.wait_for_timeout(1500)
+        pg.reload()
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_function("document.querySelectorAll('#rows .flow').length === 3")
+        assert pg.evaluate(CARD_LEFT, sid) == moved, "줄만 걷어도 옮긴 카드 자리는 새로고침 뒤 그대로"
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+@pytest.mark.area("tools", "layers")
+def test_picked_row_descriptions_do_not_cover_next_row_heading(ctx, out):
+    srv, pg, errors = _open(ctx, out)
+    try:
+        _head(pg, SET).click()
+        pg.wait_for_timeout(200)
+        covered = pg.evaluate("""(n) => { const g = [...document.querySelectorAll('#rows .flow > .glabel')].find(x => x.textContent === n);
+            const r = g.getBoundingClientRect(), out = [];
+            for (const fx of [0.1, 0.3, 0.5, 0.7, 0.9]) { const e = document.elementFromPoint(r.left + r.width * fx, r.top + r.height / 2);
+              if (!e || !g.contains(e)) out.push(e ? e.className : null); }
+            return out; }""", TRY)
+        assert covered == [], f"고른 줄 카드 설명이 아래 줄 제목을 덮는다: {covered}"
+        _head(pg, TRY).hover()
+        pg.wait_for_timeout(100)
+        bg = pg.evaluate("(n) => getComputedStyle([...document.querySelectorAll('#rows .flow > .glabel')].find(x => x.textContent === n)).backgroundColor", TRY)
+        assert bg not in ("rgba(0, 0, 0, 0)", "transparent"), "아래 줄 제목에 올리면 hover 바탕"
+        if SHOTS:
+            pg.screenshot(path=os.path.join(SHOTS, "s1c-row-heading-over.png"))
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

@@ -5,7 +5,9 @@
    끼우기 = want 에 있고 판에 없는 줄 — want 에서 그 뒤에 오는 남은 줄 앞(없으면 끝, before null). 차례대로 끼우면 want 차례가 된다.
    줄 = 섹션(51-4, Figma F16·F17) — 도우미에 묻기 전 같은 규칙(session.plan_group_rename · plan_group_dissolve 와 같은 글):
    target(names, name) → {into, where: 'above'|'below'} | {error} — 줄만 걷기 때 화면이 갈 줄: 위 줄, 첫 줄이면 아래 줄(사용자 결정 ①)
-   checkName(names, from, to) → {name} | {name, same: true} | {error} — 앞뒤 빈칸을 자른 새 이름, 빈 이름·80자 넘음·같은 이름 줄·없는 줄은 이유 */
+   checkName(names, from, to) → {name} | {name, same: true} | {error} — 앞뒤 빈칸을 자른 새 이름, 빈 이름·80자 넘음·같은 이름 줄·없는 줄은 이유
+   rekeyPos(pos, live) → {pos, changed} — 옮긴 카드 자리(card-pos {id: {dx, dy, g}})의 줄 이름 g 를 지금 줄(live {id: 줄 이름})로 옮긴 새 값(S1c).
+     줄 이름 바꾸기·줄만 걷기 뒤 셸이 부른다 — 새로고침 뒤 loadCardPos 가 g 가 다른 자리를 버리지 않게. live 에 없는 카드는 그대로, 입력은 고치지 않는다 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -48,5 +50,18 @@ function checkName(names, from, to) {
   return {name: n};
 }
 
-HD.rows = {plan: plan, target: target, checkName: checkName};
+function rekeyPos(pos, live) {
+  var out = {}, changed = false;
+  live = live && typeof live === 'object' ? live : {};
+  if (!pos || typeof pos !== 'object') return {pos: out, changed: false};
+  Object.keys(pos).forEach(function (id) {
+    var p = pos[id]; if (!p || typeof p !== 'object') return;
+    var g = Object.prototype.hasOwnProperty.call(live, id) ? live[id] : p.g;
+    if (g !== p.g) changed = true;
+    out[id] = {dx: p.dx, dy: p.dy, g: g};
+  });
+  return {pos: out, changed: changed};
+}
+
+HD.rows = {plan: plan, target: target, checkName: checkName, rekeyPos: rekeyPos};
 })();

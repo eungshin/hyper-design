@@ -31,6 +31,12 @@ out.newMiddle = R.plan([row('A', 1), row('C', 1)], ['A', 'B', 'C']);
 out.newEnds = R.plan([row('B', 1)], ['A', 'B', 'C', 'D']);
 out.swapOut = R.plan([row('A', 0), row('C', 1)], ['B', 'C']);
 out.bad = R.plan(null, undefined);
+// 옮긴 카드 자리의 줄 이름 옮기기(S1c) — 줄 이름 바꾸기·줄만 걷기 뒤 지금 줄 이름으로
+const pos = {a: {dx: 10, dy: 5, g: '옛'}, b: {dx: -3, dy: 0, g: '걷힘'}, c: {dx: 1, dy: 1, g: '그대로'}, gone: {dx: 9, dy: 9, g: '옛'}};
+out.rekey = R.rekeyPos(pos, {a: '새', b: '위 줄', c: '그대로'});
+out.rekeySame = R.rekeyPos({c: {dx: 1, dy: 1, g: '그대로'}}, {c: '그대로'});
+out.rekeyBad = R.rekeyPos(null, null);
+out.posUntouched = pos.a.g;
 console.log(JSON.stringify(out));
 """
 
@@ -104,3 +110,14 @@ def test_delete_screens_drops_emptied_group_and_restore_brings_it_back():
         assert (o / "screens.json").read_bytes() == before, "되살리기 = groups 까지 바이트 그대로"
     finally:
         shutil.rmtree(o, ignore_errors=True)
+
+
+def test_rekey_pos_follows_renamed_or_dissolved_row(js):
+    r = js["rekey"]
+    assert r["pos"]["a"] == {"dx": 10, "dy": 5, "g": "새"}, "이름 바꾼 줄 = 새 이름으로(자리 그대로)"
+    assert r["pos"]["b"] == {"dx": -3, "dy": 0, "g": "위 줄"}, "걷은 줄의 카드 = 들어간 줄 이름으로"
+    assert r["pos"]["c"] == {"dx": 1, "dy": 1, "g": "그대로"}
+    assert r["pos"]["gone"] == {"dx": 9, "dy": 9, "g": "옛"}, "판에 없는 카드(떼어 둠)는 건드리지 않는다"
+    assert r["changed"] is True and js["rekeySame"]["changed"] is False
+    assert js["rekeyBad"] == {"pos": {}, "changed": False}
+    assert js["posUntouched"] == "옛", "입력은 고치지 않는다"

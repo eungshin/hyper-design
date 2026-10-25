@@ -8,7 +8,7 @@
 <link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'">
 <style>
 /* 판 바깥 UI 색(무채색 고정) — 색은 판 위 내용(화면·연결선)과 그 순간 위험한 곳(--ui-danger)에만. 테마가 바꾸는 앱 색(--c-*)과 섞지 않는다 */
-:root{--ui-accent:#c2590a;--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f}
+:root{--ui-accent:#c2590a;--ui-primary:#2b2b29;--ui-mark:#2b2b29;--ui-badge:#5f5f5a;--ui-badge-soft:#E4E4DF;--ui-on-badge-soft:#3a3a37;--ui-pending:#6f6450;--ui-ok:#4f7d5f;--ui-danger:#c8463f;--ui-surface:#fff;--ui-line:#e3e3df;--ui-muted:#8a8a85}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden}
 body{display:flex;flex-direction:column;background:#ECECE8;color:#1c1c1c;font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Apple SD Gothic Neo',sans-serif;word-break:keep-all;-webkit-text-size-adjust:100%}
@@ -102,7 +102,7 @@ body:not([data-tab="screens"]) .view #wbtn{visibility:visible}   /* 창 메뉴(�
 
 .rows{position:relative;padding-bottom:40px}
 .flow{padding-top:90px}
-.glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap}
+.glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap;position:relative;z-index:7}   /* 줄 제목은 위 줄 카드의 펼친 설명(.cbody z 6) 위 — 고른 줄 아래 줄 제목도 보이고 눌린다(S1c) */
 .cards{display:flex;gap:84px;align-items:flex-start}
 .card{flex:none;width:var(--card-w,375px);position:relative}
 .phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:var(--card-r,28px);overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
@@ -2480,6 +2480,10 @@ renderNotes();
   $('#intro').style.maxWidth = mw; $('#foot').style.maxWidth = mw;
 })();
 loadCardPos();
+document.addEventListener('hd-rows-changed', function () {   // 줄 이름 바꾸기·줄만 걷기(view-rows 의도) 뒤 옮긴 카드 자리의 줄 이름을 지금 줄로 — 새로고침 뒤에도 그 자리(S1c)
+  var live = {}; $$('.card', rowsEl).forEach(function (c) { live[c.dataset.id] = groupOf(c); });
+  var r = HD.rows.rekeyPos(cardPos, live); if (r.changed) { cardPos = r.pos; saveCardPos(); }
+});
 pruneFolders(); LY.render();                       // 빈 레이아웃 카드까지 그린 뒤에 없는 화면 id 를 버린다
 if (PR) PR.check();                                // AI 가 답한 빈 레이아웃이 있고 그 화면이 이제 데이터에 있으면 그 자리로(새로고침 뒤)
 drawArrows();
