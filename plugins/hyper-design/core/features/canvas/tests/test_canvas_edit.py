@@ -1445,7 +1445,7 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.wait_for_timeout(400)
     items = cmenu_items(dpage)
     assert items[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"], items
-    dpage.get_by_role("menuitem", name="복제", exact=True).click()   # 카드 복제(요소 항목 '요소 복제'와 다름, task 49a)
+    dpage.get_by_role("menuitem", name=__import__("re").compile(r"^복제")).click()   # 카드 복제(요소 항목 '요소 복제'와 다름, task 49a · 51-6 키 Ctrl+D 표시) — file:// = 예전 흰 복제 카드
     dpage.wait_for_timeout(200)
     d = drafts(dpage)
     assert len(d) == 1 and "복사" in dpage.text_content(f'.card[data-id="{d[0]["id"]}"] .ftitle')

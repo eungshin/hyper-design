@@ -15,7 +15,7 @@
   EventBus       — 바뀐 것 알림(events.py, 47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 모듈 함수(apply_edits · restore · state_put …)는 helper.py 가 예전 이름 그대로 다시 내보낸다(테스트·hd 가 부름).
 """
-import datetime, hashlib, json, os, pathlib, secrets, shutil, subprocess, sys, threading, time, urllib.parse
+import datetime, hashlib, json, os, pathlib, posixpath, secrets, shutil, subprocess, sys, threading, time, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import board_text as BT  # 판 글 고치기·지우기 계획(순수 Model, t51-9)
@@ -25,6 +25,7 @@ import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import memo_archive as MA  # 완료 메모 보관 고르기(순수 Model, task 47-5a)
 import presence as PR  # 접속한 에이전트(task 47-5a)
+import screen_copy as SC  # 카드 바로 복제 계획(순수 Model, 51-6)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit_one
 
@@ -141,10 +142,13 @@ def apply_edits(out, edits, stamp=None, build=None):
     files = _screen_files(data)
     applied, failed, html_ops, json_ops, owner, parts_html, paths = [], [], {}, [], {}, None, {}
     board = []                                       # 판 글(t51-9) — 화면이 아니라 screens.json story·people · decisions.json
+    clones = []                                      # 카드 바로 복제(51-6) — screens.json 항목 + 화면 파일 하나 더
     for e in edits:
         eid, sid, kind = e.get("id"), e.get("screen"), e.get("edit")
         if kind == "board":
             board.append(e); continue
+        if kind == "clone":
+            clones.append(e); continue
         try:
             if sid not in files:
                 raise ValueError("없는 화면: %s" % sid)
@@ -192,7 +196,7 @@ def apply_edits(out, edits, stamp=None, build=None):
             html_ops.setdefault(f, []).append((eid, e.get("path") or "", op[0], op[1])); owner[f] = sid
         except ValueError as err:
             failed.append({"id": eid, "reason": str(err)})
-    if not html_ops and not json_ops and not board:
+    if not html_ops and not json_ops and not board and not clones:
         return {"applied": applied, "failed": failed, "stamp": None, "changed": []}
     w, changed = _Writes(out, stamp, build), set()
     for f, ops in html_ops.items():                 # 한 화면 안에서 하나가 실패하면 그 하나만 빼고 다시
@@ -232,6 +236,22 @@ def apply_edits(out, edits, stamp=None, build=None):
         if dec_dirty:
             raw = dj.read_text(encoding="utf-8")
             w.keep(dj); _write_json(dj, dec, raw)
+    for e in clones:                                 # 카드 복제: 하나씩 계획(앞 것 위에) — 거절은 그 하나만
+        try:
+            src = next((x for x in data.get("screens") or [] if isinstance(x, dict) and x.get("id") == e.get("screen")), None)
+            local = bool(src) and not SC.is_app(SC.file_of(src))
+            folder = posixpath.dirname(SC.file_of(src)) if local else ""
+            d = out / folder                         # 새 이름이 그 폴더의 있는 파일을 덮지 않게(plan 의 files)
+            have = {posixpath.join(folder, p.name) if folder else p.name for p in d.iterdir()} if local and _inside(out, d) and d.is_dir() else set()
+            r = SC.plan(data, e.get("screen"), want=e.get("to"), title=e.get("value"), files=have)
+            sf, df = out / r["src_file"], out / r["file"]
+            if not _inside(out, sf) or not sf.is_file() or not _inside(out, df):
+                raise SC.CopyError("out 밖이거나 없는 파일: %s" % r["src_file"], "missing")
+        except SC.CopyError as err:
+            failed.append({"id": e.get("id"), "reason": str(err)}); continue
+        w.keep(df); df.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(sf, df)
+        data, sj_dirty = r["data"], True
+        applied.append(e.get("id")); changed.add(r["id"])
     if json_ops:
         by = {s["id"]: s for s in data["screens"]}
         drop = {}                                   # 화면 → 지울 정책 줄 번호(원래 번호) — 바꾸기를 다 한 뒤 큰 번호부터

@@ -655,6 +655,7 @@ var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.mo
 })(document.documentElement.style, D.radius == null ? 28 : D.radius);
 var BK = null;                                   // 요소 막대(modules/view-blocks.js · 규칙 blocks.js, task 49a) — 기능 등록부로 아래에서 붙는다
 var BT = null;                                   // 판 글 레이어(modules/view-board-text.js, t51-9) — 기능 등록부로 아래에서 붙는다
+var CC = null;                                   // 카드 바로 복제(modules/view-card-copy.js · 규칙 card-copy.js, 51-6) — 기능 등록부로 아래에서 붙는다
 var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
 function sizeOf(id) { return AB ? AB.of(id) : {w: CARD.w, h: CARD.h, custom: false}; }   // 카드 크기를 읽는 곳 하나(없으면 프로젝트 카드 크기)
@@ -1482,7 +1483,7 @@ pane.addEventListener('contextmenu', function (e) {
       {label: '이름', act: function () { var t = $('.ftitle', card); if (t) openCaption(t, {field: 'title'}); }},
       {label: '설명', act: function () { var d = $('.fdesc', card); if (d) openCaption(d, {field: 'purpose'}); else toast('설명 줄이 없는 화면이에요'); }},
       {label: '메모', act: function () { openCardMemo(id); }},
-      {label: '복제', act: function () { duplicateCard(id); }},
+      {label: '복제' + suf, key: 'Ctrl+D', act: function () { duplicateCards(ids); }},
       {label: '들어오는 연결 끊기' + suf, act: function () { cutIncoming(ids); }},
       '-',
       {label: '숨기기' + suf, act: function () { hide(ids, true); SL.dispatch({type: 'clear'}); }},
@@ -2088,13 +2089,25 @@ function deleteCards(ids) {                          // 진짜 화면 = 삭제 �
     toast('빈 레이아웃을 지웠어요', true);
   }
 }
-function duplicateCard(id) {                         // 오른쪽 옆에 흰 복제 카드(빈 레이아웃과 같은 메모, 보내면 AI 가 복제)
+function duplicateCards(ids) {                       // Ctrl+D·메뉴 [복제](51-6, Figma F19): 도우미 = 파일째 바로 복제(CC — 오른쪽 옆, 복사본이 골라짐) · 없으면 예전 흰 복제 카드 · 앱 카드 = 거절
+  var app = ids.filter(appCard), rest = ids.filter(function (id) { return !appCard(id); });
+  if (app.length) toast('앱 카드는 복제할 수 없어요 — 요청(메모)으로만 바꿀 수 있어요');
+  var real = rest.filter(function (id) { var c = VL.cardEl(id); return c && !c.classList.contains('draft'); });
+  if (real.length && CC && CC.copy(real)) rest = rest.filter(function (id) { return real.indexOf(id) < 0; });
+  rest.forEach(duplicateCard);
+}
+function duplicateCard(id) {                         // 도우미 없음·빈 레이아웃: 오른쪽 옆에 흰 복제 카드(빈 레이아웃과 같은 메모, 보내면 AI 가 복제)
   var c = VL.cardEl(id); if (!c) return;
   var r = $('.phone', c).getBoundingClientRect(), n = layoutNote(r.right + 40 * tagScale(), r.top);
   n.value = titleOf(id) + ' 복사'; n.copyOf = id; n.note = HD.edits.say.copy(n.value, n.screen, scr(id));
   addEdits('복제', [n], '복제했어요 — 반영 대기');
   if (AB && sizeOf(id).custom) AB.seed(n.screen, sizeOf(id));   // 복제 카드는 원본 크기 그대로
 }
+addEventListener('keydown', function (e) {           // Ctrl/Cmd+D = 고른 카드 복제(51-6) — 고른 요소가 있으면 요소 복제(view-blocks 가 먼저 받는다)
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key || '').toLowerCase() !== 'd' || e.defaultPrevented || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens' || selEl) return;
+  var ids = SL.ids(); if (!ids.length) return;
+  e.preventDefault(); duplicateCards(ids);
+});
 function cutIncoming(ids) {
   addEdits('들어오는 연결 끊기', ids.map(function (id) {
     var n = editNote(id, {path: '(이 화면으로 오는 연결)', text: titleOf(id), rect: null}, HD.edits.say.cutIn(scr(id))); n.edit = 'cut-in'; return n;
@@ -2437,7 +2450,7 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
   aiWrites: function () { if (FT && FT.aiUndo && FT.aiUndo.poll) FT.aiUndo.poll(); },
   built: function (ids) { if (OP) OP.built(ids); },
   revert: function (ids, why, screens) {             // 뒤 빌드가 깨져 도우미가 쓰기를 되돌림 — 먼저 보인 변경을 거두고 알린 뒤 그 화면을 파일대로 다시
-    var mine = (OP ? OP.reverted(ids, why) : []).concat(BT ? BT.reverted(ids) : []);   // BT = 판 글(t51-9) — 파일대로 다시 불러온다
+    var mine = (OP ? OP.reverted(ids, why) : []).concat(BT ? BT.reverted(ids) : [], CC ? CC.reverted(ids, why) : []);   // CC = 카드 복제(51-6) — 복사본을 거둔다   // BT = 판 글(t51-9) — 파일대로 다시 불러온다
     if (!mine.length) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
     if (screens.length) VS.refresh(screens, 'f' + Date.now());
   },
@@ -2540,6 +2553,20 @@ BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on
   caption: {values: function (id) { return CAPX.values(id); }, commit: function (id, ch) { CAPX.commit(id, ch); }, open: function (el, focus) { openCaption(el, focus); }},
   reload: function () { VS.refresh([], 'f' + Date.now()); },
   changed: function () { drawArrows(); scheduleVisible(); if (LY) LY.render(); }}) : null;
+// 카드 바로 복제(modules/view-card-copy.js · 규칙 card-copy.js, 51-6) — 쓰기 길·카드 그리기(줄 HTML·원래 글·크기)·고르기는 셸 것을 넘긴다
+CC = FT.cardCopy ? FT.cardCopy.attach({on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); }, app: appCard,
+  card: function (it) {                              // 복사본 카드 = 줄 HTML 과 같은 모양 · 파일이 생기기 전이라 틀은 원본 파일을 먼저 싣는다(쓴 뒤 바뀐 카드 다시 싣기가 새 파일로)
+    var o = ORIG[it.src] || {purpose: '', policies: []}, tmp = document.createElement('div'), src = VL.cardEl(it.src), cv = src && $('.cover', src);
+    tmp.innerHTML = RW.html([{group: '', screens: [{id: it.id, file: it.file, title: it.title, purpose: o.purpose, policies: o.policies, state: it.id.indexOf('--') >= 0}]}]);
+    var c = $('.card', tmp), f = c && $('.phone iframe', c); if (!c) return null;
+    if (f && cv) f.setAttribute('data-src', cv.dataset.file);
+    ORIG[it.id] = {title: it.title, purpose: o.purpose, policies: o.policies.slice()};
+    if (AB && sizeOf(it.src).custom) setTimeout(function () { AB.seed(it.id, sizeOf(it.src)); }, 0);   // 원본 크기 그대로(끼운 뒤)
+    return c;
+  },
+  placed: function (ids) { cardsOf(ids).forEach(function (c) { c.classList.toggle('hid', !!hidden[c.dataset.id]); placeCard(c); }); if (AB) AB.paint(ids); paintCardText(ids); drawArrows(); scheduleVisible(); if (LY) LY.render(); },
+  removed: function () { drawArrows(); scheduleVisible(); RW.space(); if (LY) LY.render(); },
+  select: function (ids) { SL.dispatch(ids.length ? {type: 'set', ids: ids} : {type: 'clear'}); }}) : null;
 BK = FT.blocks || null; if (BK) { BK.onAct(blockAct); BK.onPick(function (p) {   // 상위·쓴 뒤 따라가기로 새로 고른 요소(task 49b) — 판 = 테두리·소켓·막대, 크게 보기 = 막대
   if (p.where === 'modal') { if (!modal.hidden && p.screen === mscreen) BK.show(modalSel(p.screen, p.h)); return; }
   var c = VL.cardEl(p.screen); if (c) selectEl(c, p.h);

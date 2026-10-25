@@ -41,7 +41,7 @@ SURFACES = {
     "board": ("판 위 줄 배치·겹침(판 글·DS 카드·화면 줄·하단 대화창·탭·카메라 첫 자리)",
               ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
                "test_canvas_artboard.py", "test_canvas_tabs.py", "test_canvas_rows.py",
-               "test_canvas_receivers.py", "test_canvas_board_text.py")),
+               "test_canvas_receivers.py", "test_canvas_board_text.py", "test_canvas_card_copy.py")),
 }
 
 
