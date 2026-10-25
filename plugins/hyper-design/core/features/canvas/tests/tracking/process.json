@@ -893,6 +893,36 @@
         "test_canvas_edit.py::test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards (HEAD 셸에서도 혼자 4번 중 3번 실패 — 이 조각과 무관, 51-2 에서 봄)"
       ],
       "note": "줄 그리기를 view-rows.js 하나로 빼서 첫 그리기와 data() 가 같은 길. 걷은 줄은 이름별로 떼어 두었다가 되살리기 때 같은 요소를 끼운다"
+    },
+    {
+      "slice": "51-2 Figma 고르기 키 (Enter/Shift+Enter/Tab · 고친 뒤 고른 채 · Alt+클릭 deep)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 2,
+        "minutes": 11
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "browser",
+          "what": "빠르게 Shift+Tab 두 번 = 둘째 키가 첫 답 전에 같은 요소에서 출발해 한 칸만 감 → 답 기다리는 중 키는 줄로(셸이 다시 그리며 hide 가 줄을 비워 pickThen 이 줄을 이어 감)"
+        },
+        {
+          "by": "area",
+          "what": "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards 의 원인 = 그 자리 고치기 Esc 뒤 다음 키가 아직 초점을 가진 틀로 감(HEAD 에서도 4번 중 3번 실패) → palette inlineEnd 가 window.parent.focus() — 4/4 통과"
+        }
+      ],
+      "waste": "51-2 첫 영역 실행이 그 깨짐을 다시 보여 줌(이미 51-1 에서 HEAD 깨짐으로 적어 둔 것)",
+      "flaky": [
+        "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 2/2 통과 — S1b 에 적힌 것과 같음)"
+      ],
+      "note": "Tab 은 끝에서 돈다(Figma). Enter = enterOf(h): textOk 이고 글이 있으면 그 자리 고치기, 아니면 첫 자식. palette 메시지 hd-down·hd-sib → hd-hop, hd-hit-at deep"
     }
   ]
 }

@@ -1,7 +1,8 @@
 /* Model — 요소 막대 규칙(블록 편집, task 49a·49b): 고른 요소에 띄울 단추·켜짐·앱 카드면 AI 요청·단축키·막대 자리·상위 고르기·속성 칸·부품 요청 글. DOM·저장소·메시지를 쓰지 않는다.
    h = palette.js hd-hit 답 {path, text, full, textOk, prev, next, root, up, tag, attrs, rect, src?} · o = {app}(앱 카드 = 개발 서버 주소 화면, 또는 h.src 가 있음)
    HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 — 요소 메뉴·단축키), shown(items) → 막대에 보일 것(↑·↓ 는 단축키·메뉴만, 49c),
-                grip(h, o) → {on, title} — 끌어서 순서 바꾸기 손잡이(49c: 앱 카드·화면 뿌리·형제 없음 = 꺼짐), isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [ 상위),
+                grip(h, o) → {on, title} — 끌어서 순서 바꾸기 손잡이(49c: 앱 카드·화면 뿌리·형제 없음 = 꺼짐), isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [·Shift+Enter 상위 · Enter 'enter' · Tab 'next' · Shift+Tab 'prev'),
+                enterOf(h) → 'text'|'down'(Enter: 글자면 그 자리 고치기, 아니면 첫 자식),
                 askText(act, h) → 요청 글(앱 카드), place(anchor, size, view, avoid, others?) → {x, y, below, side, over}(others = 둘레 글 상자, 무르게 비킴), parentPick(h, chain) → 고를 상위 hit|null,
                 barLimit(anchor, view) → 막대 최대 너비, fit(widths, limit, more) → 막대에 남길 단추 수(나머지는 ⋯),
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글} */
@@ -11,7 +12,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var ACTS = ['parent', 'text', 'attr', 'remove', 'dup', 'up', 'down', 'swap', 'insert', 'memo'];
 var SPEC = {
-  parent: {label: '상위', title: '감싼 요소 고르기 ([)'},
+  parent: {label: '상위', title: '감싼 요소 고르기 ([ · Shift+Enter)'},
   text:   {label: '글자', title: '글자 고치기 (T · 크게 보기에서 더블클릭)'},
   attr:   {label: '속성', title: '이미지 주소·대체 글 · 링크 주소 · 안내 글 고치기'},
   remove: {label: '지우기', title: '요소 지우기 (Del)'},
@@ -77,13 +78,23 @@ function grip(h, o) {
 }
 
 function keyAct(e) {
-  if (!e || typeof e.key !== 'string' || e.shift) return null;
+  if (!e || typeof e.key !== 'string') return null;
   var mod = !!(e.ctrl || e.meta);
+  if ((e.key === 'Enter' || e.key === 'Tab') && !mod && !e.alt) {   // Figma(51-2): Enter 안으로 · Shift+Enter 부모 · Tab/Shift+Tab 형제
+    return e.key === 'Enter' ? (e.shift ? 'parent' : 'enter') : (e.shift ? 'prev' : 'next');
+  }
+  if (e.shift) return null;
   if ((e.code === 'BracketLeft' || e.key === '[') && !mod && !e.alt) return 'parent';   // 자판 자리(한글 자판도) — Ctrl+Shift+[ 는 프로젝트 탭(view-tabs)
   if ((e.key === 'Delete' || e.key === 'Backspace') && !mod && !e.alt) return 'remove';   // Backspace 도(Figma)
   if (e.alt && !mod) return e.key === 'ArrowUp' ? 'up' : e.key === 'ArrowDown' ? 'down' : null;
   if (mod && !e.alt && e.key.toLowerCase() === 'd') return 'dup';
   return null;
+}
+
+// Enter(51-2): 글을 바꿀 수 있고 글이 있는 요소 = 그 자리 글자 고치기('text'), 아니면 첫 자식 요소 고르기('down')
+function enterOf(h) {
+  if (!h || h.textOk !== true) return 'down';
+  return String(h.full || h.text || '').trim() ? 'text' : 'down';
 }
 
 function partAsk(kind, title) {                      // 부품 넣기·바꾸기를 AI 에게(뼈대를 못 뽑았거나 앱 카드·도우미 없음) — 견본 글은 넣지 않고 데이터는 화면에 맞게
@@ -155,6 +166,6 @@ function fit(widths, limit, more) {
   return Math.max(Math.min(1, widths.length), n);
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, askText: askText, place: place, parentPick: parentPick,
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, place: place, parentPick: parentPick,
              attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, barLimit: barLimit, fit: fit};
 })();

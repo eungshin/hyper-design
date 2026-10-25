@@ -26,6 +26,9 @@
     {type:'hd-up', path, tag} → {type:'hd-upchain', tag, path, chain:[조상 hd-hit 칸…](가까운 것부터 8개)} ·
     {type:'hd-find', path, tag} → 문서가 다 실린 뒤 {type:'hd-found', tag, …hd-hit 칸}(없으면 path null) — 쓴 뒤 같은 요소 다시 고르기 ·
     hd-pending 항목 {path, attr, value}(허용 목록 속성을 잠시 바꿈).
+  Figma 고르기 키(51-2): {type:'hd-down', path, tag} → 첫 자식 요소 · {type:'hd-sib', path, dir:1|-1, tag} → 다음·앞 형제(끝에서 돈다) —
+    둘 다 {type:'hd-hop', tag, …hd-hit 칸} 로 답한다(없으면 path null). 자식·형제 = script·style·template·link·meta·data-hd-dup·data-hd-pick·data-hd-links 를 뺀 요소(옮기기 sibsOf 와 같은 규칙).
+    hd-hit-at 에 deep:true = 그 자리 가장 안쪽 요소 그대로(Alt+클릭) · 크게 보기 고르기(select)에서 Alt+클릭도 가장 안쪽 요소.
   바로 반영(task 49c — 캔버스가 화면을 먼저 바꾸고 도우미 답이 실패면 되돌린다):
     {type:'hd-inline', path, tag} → 그 요소 하나만 contenteditable(글꼴·크기 그대로, 글 전체 선택) · {type:'hd-inline-on', tag, screen} 로 알림(없으면 캔버스는 예전 글 칸).
       Enter = 저장 · Shift+Enter = 줄바꿈(br) · Esc = 취소(원래 글로) · 요소 밖으로 나가기(blur) = 저장. 끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?}
@@ -252,7 +255,7 @@
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
-    if (pickMode === 'select') { selEl = linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel'); return; }   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
+    if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
 
@@ -318,8 +321,8 @@
     if (t === 'input' || t === 'select' || t === 'textarea') return 'field';
     return ownText(el) ? 'text' : 'box';
   }
-  function sendHit(at, leaf, type) {                       // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소
-    var el = leaf ? leafOf(at) : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
+  function sendHit(at, leaf, type, deep) {                 // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소 · deep = 그 자리 요소 그대로(51-2)
+    var el = leaf ? leafOf(at) : deep ? at : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
     send(hitMsg(el, type || 'hd-hit'));
   }
@@ -465,6 +468,7 @@
     el.style.outline = q.o; el.style.outlineOffset = q.oo;
     try { var sl = getSelection(); if (sl && sl.anchorNode && el.contains(sl.anchorNode)) sl.removeAllRanges(); } catch (e) { console.warn('[hd] 선택 풀기 실패 — ' + e); }
     if (document.activeElement === el) el.blur();
+    try { if (window.parent && window.parent !== window) window.parent.focus(); } catch (e) { console.warn('[hd] 캔버스로 초점 돌리기 실패 — ' + e); }   // 다음 키(도구 키·Tab·Enter)가 이 틀이 아니라 캔버스로(답 메시지보다 먼저, 51-2)
     var v = plainOf(el), path = pathOf(el);
     if (!save || v === q.was) {                        // 취소·그대로 = 원래 마디로
       putKids(el, q.kids);
@@ -473,6 +477,21 @@
     }
     setText(el, v); optRec(q.tag, {el: el, kids: q.kids});
     send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: true, path: path, text: v, old: q.was});
+  }
+  function kids(p) {                                 // 고를 수 있는 자식 요소(51-2) — 옮기기 sibsOf 와 같은 빼기
+    return p ? Array.prototype.filter.call(p.children, function (c) {
+      return !SIB_SKIP.test(c.tagName.toLowerCase()) && !c.hasAttribute('data-hd-dup') && !c.hasAttribute('data-hd-pick') && !c.hasAttribute('data-hd-links');
+    }) : [];
+  }
+  function hop(d) {                                   // hd-down(첫 자식) · hd-sib(다음·앞 형제, 끝에서 돈다) → hd-hop
+    var el = find(d.path), to = null;
+    if (el && d.type === 'hd-down') to = kids(el)[0] || null;
+    else if (el && el.parentElement && el.parentElement !== document.documentElement) {
+      var list = kids(el.parentElement), i = list.indexOf(el), n = list.length;
+      if (i >= 0 && n > 1) to = list[(i + (+d.dir < 0 ? -1 : 1) + n) % n];
+    }
+    var m = to ? hitMsg(to, 'hd-hop') : {type: 'hd-hop', screen: screenId(), path: null};
+    m.tag = d.tag || ''; send(m);
   }
   function sibsOf(d) {
     var el = find(d.path), p = el && el.parentElement, list = [];
@@ -613,7 +632,8 @@
     else if (d.type === 'hd-links') { if (d.on) send({type: 'hd-links', screen: screenId(), accent: accent(), docHeight: docHeight(), links: links()}); else paint([]); }
     else if (d.type === 'hd-links-paint') paint(d.items);
     else if (d.type === 'hd-link-at') sendGo(linkAt(document.elementFromPoint(+d.x || 0, +d.y || 0)));
-    else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf);
+    else if (d.type === 'hd-hit-at') sendHit(document.elementFromPoint(+d.x || 0, +d.y || 0), !!d.leaf, 'hd-hit', !!d.deep);
+    else if (d.type === 'hd-down' || d.type === 'hd-sib') hop(d);
     else if (d.type === 'hd-pending') pending(d.items);
     else if (d.type === 'hd-inline') inlineStart(d);
     else if (d.type === 'hd-opt') opt(d.tag, d.items);

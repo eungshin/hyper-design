@@ -6,7 +6,7 @@
    상태 = 진행 중 변경(HD.optimistic reduce) + 화면마다 '방금 낙관 반영함'(take 가 한 번 읽고 지움) + 열린 글자 고치기(tag 마다). 저장 없음.
    HD.viewOptimistic.mount(ctx) → {inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where), hold(screen), take(screen), typing(where)}
    ctx = {on() → 도우미로 바로 쓰나, write(label, list) → Promise<res>(view-sync write), queue(label, list, msg)(반영 대기로 — 도우미 없음·연결 끊김),
-          frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(크게 보기 고른 요소를 옮긴 자리로), warn(msg)} */
+          frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(고른 요소를 옮긴 자리로 · 그 자리 글자 고치기를 마치거나 취소한 뒤 그 요소를 다시 — 판·크게 보기, 51-2), warn(msg)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -122,8 +122,9 @@ function mount(ctx) {
     q.f.setAttribute('data-hd-opt', '');
     if (document.activeElement === q.f) q.f.blur();   // 키(도구 키·Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
     if (!d.ok) {
-      if (d.why === 'missing') ctx.toast('고칠 요소를 화면에서 찾지 못했어요 — 다시 골라 주세요');
-      else if (d.why === 'text') ctx.toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요');
+      if (d.why === 'missing') { ctx.toast('고칠 요소를 화면에서 찾지 못했어요 — 다시 골라 주세요'); return; }
+      if (d.why === 'text') ctx.toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요');
+      repick(q);                                       // 취소·그대로 = 그 요소가 골라진 채(Figma F14, 51-2)
       return;
     }
     var v = String(d.text == null ? '' : d.text), n = E.note(q.screen, q.h, E.say.text(v));
@@ -131,16 +132,29 @@ function mount(ctx) {
     if (!ctx.on()) {                                   // 도우미 없음 = 예전처럼 반영 대기(미리보기 점선) — 그 자리 바꿈은 거두고 미리보기가 맡는다
       post(q.f, {type: 'hd-opt-undo', tag: q.tag});
       ctx.queue('글자 고치기', [n]);
+      repick(q);
       return;
     }
     each(q.screen, {type: 'hd-opt', tag: q.tag, items: [{path: q.h.path, text: v}]}, q.f);
+    repick(q);                                         // 고친 뒤에도 그 요소가 골라진 채(새 글 상자로)
     settle('글자 고치기', q.screen, q.tag, [mark(n)]).then(function (r) {
       if (!r.kept && !r.offline) ctx.toast(O.failText('글자 고치기', r.why, 0, 1), false, 6000);
     });
   }
 
+  // 그 자리 고치기를 마친 뒤 그 요소 다시 고르기(51-2): 그 틀에 hd-find → hd-found(지금 상자) → ctx.picked
+  var finds = {};
+  function repick(q) {
+    var tag = newTag('pk'); finds[tag] = q;
+    post(q.f, {type: 'hd-find', path: q.h.path, tag: tag});
+  }
   addEventListener('message', function (e) {
     var d = e.data; if (!d || typeof d !== 'object' || typeof d.tag !== 'string') return;
+    if (d.type === 'hd-found' && finds[d.tag]) {
+      var fq = finds[d.tag]; delete finds[d.tag];
+      if (fq.f.contentWindow === e.source && d.path) ctx.picked(fq.screen, d, fq.where);
+      return;
+    }
     var q = ins[d.tag];
     if (d.type === 'hd-inline-on' && q && e.source === q.f.contentWindow) { q.on = true; clearTimeout(q.t); typingMark(q.f, true); }
     else if (d.type === 'hd-inline-done' && q && e.source === q.f.contentWindow) inlineDone(d);

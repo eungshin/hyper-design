@@ -4,7 +4,8 @@
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
    편집 자체는 셸이 한다 — 단추는 onAct(fn) 로 받은 fn(act, sel) 하나로만 나간다(sel.attrs = 바꿀 속성 {이름: 값} · sel.part = 고른 부품 {key, title, ok}|null).
    상위·따라가기로 새 요소를 고르면 onPick(fn) 의 fn({screen, h, where}) — 셸이 그 자리 테두리·막대를 다시 그린다(View 끼리 부르지 않음).
-   화면 메시지(palette.js): hd-up → hd-upchain · 다시 실린 화면의 hd-here → hd-find → hd-found. 부품 목록 = ctx.api GET /api/parts(도우미 없으면 AI 요청).
+   Figma 고르기 키(51-2, 막대가 떠 있고 입력 칸·메뉴 밖): Enter = 글자면 [글자](그 자리 고치기), 아니면 첫 자식(hd-down) · Shift+Enter = [상위] · Tab/Shift+Tab = 다음·앞 형제(hd-sib, 끝에서 돈다).
+   화면 메시지(palette.js): hd-up → hd-upchain · hd-down·hd-sib → hd-hop · 다시 실린 화면의 hd-here → hd-find → hd-found. 부품 목록 = ctx.api GET /api/parts(도우미 없으면 AI 요청).
    끌어서 순서 바꾸기(49c): 손잡이 [⠿] 를 누른 채 끌기 · 크게 보기에서 고른 요소를 눌러 끌기(palette.js hd-grab) → 화면에 hd-sibs(형제 상자) → 끼울 선 #eldrop(HD.reorder.slot·line)
      → 놓으면 fn('reorder', sel + {dirs: HD.reorder.moves(…), from, to}) — 같은 부모 안만. Esc = 끌기 취소
    HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), onAct(fn), onPick(fn), wrote(res, list)} */
@@ -45,7 +46,7 @@ var RO = '이 탭은 읽기만 해요 — 위쪽 "여기서 편집하기"를 누
 var FOLLOW_MS = 15000;
 
 function mount(ctx) {
-  var B = HD.blocks, cur = null, act = null, picked = null, follow = null, upWait = null, seq = 0, done = null;   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
+  var B = HD.blocks, cur = null, act = null, picked = null, follow = null, upWait = null, hopWait = null, navQ = [], seq = 0, done = null;   // navQ = 묻는 중에 더 누른 고르기 키(빠르게 Tab 여러 번 — 답이 오면 차례로)   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var bar = document.createElement('div');
   bar.id = 'elbar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '고른 요소'); bar.hidden = true;
@@ -146,7 +147,7 @@ function mount(ctx) {
   }
   function hide(where) {
     if (where && cur && cur.where !== where) return;
-    cur = null; bar.hidden = true; closePop(); upWait = null; dragStop();
+    cur = null; bar.hidden = true; closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
   }
   function run(a, extra) {
     var s = Object.assign({}, cur, extra || {});
@@ -172,6 +173,19 @@ function mount(ctx) {
     upWait = {tag: 'up:' + (++seq), win: w, screen: cur.screen, where: cur.where, h: cur.h};
     try { w.postMessage({type: 'hd-up', path: cur.h.path, tag: upWait.tag}, '*'); } catch (e) { upWait = null; ctx.toast('이 화면에 물을 수 없어요'); }
   }
+  // ---- Figma 고르기 키(51-2): 첫 자식(hd-down) · 형제(hd-sib) — 답 hd-hop 을 상위 고르기와 같은 길(pick)로
+  function hop(type, dir) {
+    var f = cur.frame && cur.frame(), w = f && f.contentWindow;
+    if (!w) { ctx.toast('이 화면에 물을 수 없어요 — 다시 골라 주세요'); return; }
+    hopWait = {tag: 'hop:' + (++seq), win: w, screen: cur.screen, where: cur.where, type: type};
+    try { w.postMessage({type: type, path: cur.h.path, dir: dir, tag: hopWait.tag}, '*'); } catch (e) { hopWait = null; ctx.toast('이 화면에 물을 수 없어요'); }
+  }
+  function nav(a) {
+    if (a === 'next' || a === 'prev') { hop('hd-sib', a === 'next' ? 1 : -1); return; }
+    if (B.enterOf(cur.h) === 'text') fire('text'); else hop('hd-down');
+  }
+  function step(a) { if (NAV[a]) nav(a); else fire(a); }
+  function pickThen(sel) { var q = navQ; pick(sel); navQ = q; var a = navQ.shift(); if (a && cur) step(a); }   // 셸이 다시 그리며 막대를 걷었다 붙인다(hide 가 줄을 비움) — 줄은 이어 간다
   function pick(sel) { if (picked) picked(sel); else show(Object.assign({}, cur || {}, sel)); }
 
   // ---- 속성 칸(허용 목록만)
@@ -240,8 +254,13 @@ function mount(ctx) {
       var u = upWait; upWait = null;
       if (!cur || cur.screen !== u.screen) return;
       var p = B.parentPick(u.h, d.chain);
-      if (!p) { ctx.toast('맨 바깥 요소예요 — 더 위가 없어요'); return; }
-      pick({screen: u.screen, h: p, where: u.where});
+      if (!p) { navQ = []; ctx.toast('맨 바깥 요소예요 — 더 위가 없어요'); return; }
+      pickThen({screen: u.screen, h: p, where: u.where});
+    } else if (d.type === 'hd-hop' && hopWait && d.tag === hopWait.tag && e.source === hopWait.win) {
+      var hw = hopWait; hopWait = null;
+      if (!cur || cur.screen !== hw.screen) return;
+      if (!d.path) { navQ = []; ctx.toast(hw.type === 'hd-down' ? '안에 고를 요소가 없어요' : '옆에 고를 요소가 없어요'); return; }
+      pickThen({screen: hw.screen, h: d, where: hw.where});
     } else if (d.type === 'hd-here' && follow) {
       if (Date.now() > follow.until) { follow = null; return; }
       if (String(d.screen) !== follow.screen || !frameOf(e.source, follow)) return;
@@ -355,12 +374,16 @@ function mount(ctx) {
     if (e.key === 'Escape') { e.preventDefault(); closePop(); }
     else if (e.key === 'Enter' && pop.dataset.kind === 'attr' && e.target.tagName === 'INPUT') { e.preventDefault(); applyAttr(); }
   });
-  addEventListener('keydown', function (e) {        // 고른 요소가 있을 때만: [ 상위 · Alt+↑↓ 옮기기 · Ctrl+D 복제 · Delete 지우기
+  var NAV = {enter: 1, next: 1, prev: 1};
+  addEventListener('keydown', function (e) {        // 고른 요소가 있을 때만: [·Shift+Enter 상위 · Enter 안으로 · Tab 형제 · Alt+↑↓ 옮기기 · Ctrl+D 복제 · Delete 지우기
     if (!cur || bar.hidden) return;
     var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     var a = B.keyAct({key: e.key, code: e.code, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey});
     if (!a) return;
-    e.preventDefault(); e.stopPropagation(); fire(a);
+    if ((e.key === 'Enter' || e.key === 'Tab') && t && t.closest && t.closest('[role=menu], [role=dialog], dialog, #elpop, #cmenu')) return;   // 메뉴·창 안 Enter/Tab 은 그 메뉴 것
+    e.preventDefault(); e.stopPropagation();
+    if ((NAV[a] || a === 'parent') && (hopWait || upWait)) { navQ.push(a); return; }   // 앞 고르기의 답을 기다리는 중 — 그 뒤에 차례로
+    step(a);
   }, true);
   addEventListener('resize', place);
   return {show: show, hide: hide, place: place, sel: function () { return cur; }, wrote: wrote,
