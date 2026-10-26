@@ -254,6 +254,27 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/image", "callers": ["modules/view-attach.js (paste / drop / clip button in the memo popup and the chat composer, R22)"],
+      "request": "{data: base64 | 'data:image/…;base64,…', name?} — type by magic bytes (PNG, JPEG, WebP, GIF), 10 MB decoded, body cap 14 MB", "response": "{path (absolute), rel ('.hd-attach/<stamp>-<n>.<ext>'), type, size} | 400 (shape/base64) · 413 (size) · 415 (not an image) · 500 (write failed, nothing left) {error}",
+      "cases": [
+        {"name": "png saved", "request": {"method": "POST", "path": "/api/image", "body": {"data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "name": "shot.png"}},
+         "save": {"rel": "rel"},
+         "expect": {"status": 200, "json": {"path": "str", "rel": "str", "type": {"$eq": "image/png"}, "size": "int"}}},
+        {"name": "not an image by magic = 415", "request": {"method": "POST", "path": "/api/image", "body": {"data": "aGVsbG8gd29ybGQ=", "name": "x.png"}}, "expect": {"status": 415, "json": {"error": "str"}}},
+        {"name": "no data = 400", "request": {"method": "POST", "path": "/api/image", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/api/image", "body": {"data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "GET", "path": "/api/image", "callers": ["modules/view-attach.js (memo thumbnails of saved attachments)"],
+      "request": "?rel=.hd-attach/<name> (only names the POST makes)", "response": "{rel, path, type, data (base64)} | 400 bad rel · 404 missing",
+      "cases": [
+        {"name": "read back", "request": {"method": "GET", "path": "/api/image?rel=${rel}"}, "expect": {"status": 200, "json": {"rel": "str", "path": "str", "type": {"$eq": "image/png"}, "data": "str"}}},
+        {"name": "path escape = 400", "request": {"method": "GET", "path": "/api/image?rel=../screens.json"}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/image?rel=${rel}", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "GET", "path": "/api/projects", "callers": ["modules/view-projects.js", "modules/view-tabs.js", "modules/view-home.js"],
       "request": "- (home_api.route, same JSON as the hub)", "response": "[{name, title, out, state, url, pid, created, last_opened, starred, trashed, thumb}]",
       "cases": [

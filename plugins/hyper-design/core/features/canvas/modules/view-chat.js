@@ -12,6 +12,9 @@
    진행 줄(S2, 47-4b): document 'hd-event'(view-live)를 HD.chat.progress 로 — 보낸 요청 화면의 claim·AI 쓰기·release 를 줄 하나(마지막 상태)로. 저장하지 않음(새로고침 = 메모 상태 줄).
    받는 곳(47-5b): 알약 점은 #aichip[data-state](view-presence — 접속 중 초록 · 자리 비움 회색)를 따른다. 진행 줄은 이 요청의 메모 id 로 request.sent(via) →
      agent.progress(진행 글) → agent.reply 를 따라가고, 받는 곳 이름은 보낼 때의 알약 글(HD.chat.line opt.agentName).
+   첨부 이미지(R22): 카드 .ch-box 가 [data-hd-attach] 상자(칩 자리 = 카드 맨 위 · 📎 = 보내기 앞) — 붙이기·저장·썸네일은 등록부 기능 attach(view-attach), 여기서는 의도만:
+     보낼 때 'hd-attach-get' → 글 끝에 '첨부 이미지: <절대 경로>' 줄(HD.attach.withText) + 메모마다 attach 칸 · 올리는 중이면 토스트하고 보내지 않음 · 보낸 뒤 'hd-attach-set' [] ·
+     'hd-attach-changed' 를 들어 글 없이 이미지만 있어도 보내기를 켠다. 대화 패널 안(docked)도 같은 요소라 같다.
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
 'use strict';
@@ -59,6 +62,12 @@ var CSS =
   '#hdchat .ch-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
   '#hdchat .ch-send{flex:none;margin-left:auto;width:28px;height:28px;padding:0;border:0;border-radius:50%;background:var(--ui-primary,#2b2b29);color:#fff;display:grid;place-items:center;cursor:pointer}' +
   '#hdchat .ch-send:disabled{background:#E4E4DF;color:var(--ui-muted,#8a8a85);cursor:default}' +
+  '#hdchat .ch-att{padding-right:24px}' +
+  '#hdchat.docked .ch-att{padding-right:0}' +
+  '#hdchat .ch-clip{flex:none;margin-left:auto;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:none;color:#6b6b66;display:grid;place-items:center;cursor:pointer}' +
+  '#hdchat .ch-clip:hover{background:#F2F2EF;color:var(--ui-primary,#2b2b29)}' +
+  '#hdchat .ch-clip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
+  '#hdchat .ch-clip+.ch-send{margin-left:0}' +
   '#hdchat .ch-send svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
   'html body.has-chat:not(.no-chat):not(.bare):not(.modal-open):not(.chat-docked) #toast{bottom:var(--hd-chat-top,120px)}' +
   // 대화 패널 안(S3): 같은 카드, 패널 폭 · 패널 아래 — 상태 줄(패널이 진행을 보인다)·숨김 ⌄(패널을 닫으면 된다)은 감춘다
@@ -74,13 +83,16 @@ function mount(ctx) {
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   root.id = 'hdchat'; root.setAttribute('role', 'form'); root.setAttribute('aria-label', 'AI 에게 요청');
   root.innerHTML = '<div class="ch-line" hidden aria-live="polite"><b class="ch-req"></b><span class="ch-st"></span></div>' +
-    '<div class="ch-box"><button type="button" class="ch-hide" title="대화창 숨기기 — 창 메뉴에서 다시 보여요" aria-label="대화창 숨기기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>' +
+    '<div class="ch-box" data-hd-attach="chat"><button type="button" class="ch-hide" title="대화창 숨기기 — 창 메뉴에서 다시 보여요" aria-label="대화창 숨기기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>' +
+    '<div class="ch-att hd-att" data-hd-attach-slot hidden aria-label="첨부 이미지"></div>' +
     '<div class="ch-chips" aria-label="요청 범위" hidden></div>' +
     '<textarea rows="1" aria-label="요청 글"></textarea>' +
     '<div class="ch-tools"><button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+    '<button type="button" class="ch-clip" data-hd-attach-pick aria-label="이미지 첨부" title="이미지 첨부 — 붙여넣기(Ctrl+V)·끌어 놓기도 돼요"><svg viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>' +
     '<button type="button" class="ch-send" disabled aria-label="보내기" title="보내기 (Enter)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>';
   document.body.appendChild(root); document.body.classList.add('has-chat');
   var ta = root.querySelector('textarea'), btn = root.querySelector('.ch-send'), chipsEl = root.querySelector('.ch-chips'), lineEl = root.querySelector('.ch-line');
+  var boxEl = root.querySelector('.ch-box'), attN = 0;
   var hideB = root.querySelector('.ch-hide'), agentB = root.querySelector('.ch-agent'), ai = ctx.$('#aichip');
   ta.placeholder = C.placeholder([]);
 
@@ -159,7 +171,7 @@ function mount(ctx) {
     var h = ta.scrollHeight;
     ta.style.height = Math.min(200, Math.max(32, h)) + 'px';
     ta.style.overflowY = h > 200 ? 'auto' : 'hidden';
-    btn.disabled = !ta.value.trim(); place();
+    btn.disabled = !ta.value.trim() && !attN; place();
   }
   function renderAgent() {                                // 위쪽 받는 곳 칩(#aichip)을 그대로 비춘다 — 진실은 view-sync(도우미 attach) 하나
     if (!ai) { agentB.hidden = true; return; }
@@ -177,20 +189,30 @@ function mount(ctx) {
 
   function mkId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function firstScreen() { var c = ctx.rowsEl.querySelector('.card:not(.draft):not(.hid)'); return c ? c.dataset.id : null; }
+  function att(type, items) {                             // 첨부 상자 의도(view-attach) — 그 기능이 없으면 done=false, 첨부 없음
+    var d = {items: items || [], busy: 0, done: false};
+    boxEl.dispatchEvent(new CustomEvent(type, {bubbles: true, detail: d}));
+    return d;
+  }
   function send(text) {
     if (typeof ctx.sendNotes !== 'function') { warnOnce('send', 'ctx.sendNotes 가 없어요 — 보낼 수 없어요'); ctx.toast('대화창 보내기가 아직 연결되지 않았어요 — 메모 도구와 위쪽 [보내기]를 써 주세요'); return false; }
-    var r = C.build(chipsNow(), text, {first: firstScreen(), titleOf: ctx.title}, mkId);
+    var a = att('hd-attach-get');
+    if (a.busy) { ctx.toast('이미지를 올리는 중이에요 — 끝나면 보내 주세요'); return false; }
+    var items = a.items || [], full = HD.attach.withText(text, items);
+    var r = C.build(chipsNow(), full, {first: firstScreen(), titleOf: ctx.title}, mkId);
     if (!r.memos.length) { ctx.toast(r.why); return false; }
+    if (items.length) r.memos.forEach(function (m) { m.attach = items.slice(); });   // 메모가 첨부 목록을 지닌다
     var ok;
     try { ok = ctx.sendNotes(r.memos); }
     catch (e) { console.error('[hd] 대화창 보내기: ' + (e && e.message || e)); ctx.toast('보내지 못했어요 — ' + (e && e.message || e)); return false; }
     if (ok === false) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 보내 주세요'); return false; }
-    last = C.record(text, r.memos, Date.now());
+    if (items.length) att('hd-attach-set', []);
+    last = C.record(text.trim() ? text : '이미지 ' + items.length + '장', r.memos, Date.now());   // 상태 줄은 쓴 글(경로 줄 없이)
     prog = {screens: r.memos.some(function (m) { return m.scope === 'all'; }) ? [] :   // 진행 줄(S2) — 이 요청 화면의 이벤트만(모든 화면 요청 = 아무 화면)
       r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null,
       ids: last.ids.slice(), agent: window.__hdAgent || null, name: ai && ai.classList.contains('on') ? agentB.querySelector('span').textContent : null};   // 받는 곳(47-5b) = 보낼 때의 알약
     try { ctx.local.setItem(LKEY, JSON.stringify(last)); } catch (e) {}   // 저장 공간이 꽉 차도 이 창의 상태 줄은 그대로 보인다
-    document.dispatchEvent(new CustomEvent('hd-chat-sent', {detail: {text: text, notes: last.ids.slice(), agent: prog.name,   // 대화 패널(S3)이 기록한다
+    document.dispatchEvent(new CustomEvent('hd-chat-sent', {detail: {text: full, notes: last.ids.slice(), agent: prog.name,   // 대화 패널(S3)이 기록한다
       chips: chipsNow().map(function (c) { return c.label; }), screens: prog.screens.length ? prog.screens.slice() : []}}));
     render();
     return true;
@@ -224,6 +246,7 @@ function mount(ctx) {
   if (ai && window.MutationObserver) new MutationObserver(renderAgent).observe(ai, {childList: true, characterData: true, subtree: true, attributes: true});
   else if (!ai) warnOnce('aichip', '위쪽 받는 곳 칩(#aichip)이 없어요 — 대화창 받는 곳 칩 없이');
   ta.addEventListener('input', grow);
+  boxEl.addEventListener('hd-attach-changed', function (e) { attN = (e.detail && e.detail.count) || 0; grow(); });
   ta.addEventListener('keydown', function (e) {
     e.stopPropagation();                                   // 도구 키·Delete 가 판으로 가지 않게(입력 중)
     if (e.key === 'Escape') { ta.blur(); return; }

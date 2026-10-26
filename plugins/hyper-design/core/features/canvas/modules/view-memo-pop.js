@@ -3,7 +3,10 @@
    HD.viewMemoPop.mount(ctx) → {card(id | [id]), element(id, h, x?, y?, note?), elem(id, h, note, inModal, at?), edit(id), del(id), reply(ids, kind, label),
      isOpen(), close(), draft() → 쓰는 중인 초안|null(핀이 고른 요소 테두리)}
    ctx = {$, $$, esc, notes(NS), save(), record(op), toast(msg), title(id), modal() → {open, screen, scale, box, picking, frame}, setScreen(id), frame() → popPlace|null,
-          cardEl(id), pins()(핀 다시), focusPin(id)} */
+          cardEl(id), pins()(핀 다시), focusPin(id)}
+   첨부 이미지(R22): #pop 이 [data-hd-attach] 상자(칩 자리·📎 는 mount 가 만든다) — 붙이기·저장·칩은 등록부 기능 attach(view-attach), 여기서는 의도만:
+     열 때 'hd-attach-set'(새 메모 = 비움 · 고치기 = 메모의 attach) · 추가/저장 때 'hd-attach-get' → 메모 칸 attach:[{path, rel, type, size, name}] + 글 끝 '첨부 이미지: <경로>' 줄(HD.attach.withText)
+     · 올리는 중이면 토스트하고 기다림 · 닫으면 비움 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -11,6 +14,25 @@ var HD = globalThis.HD = globalThis.HD || {};
 function mount(ctx) {
   var $ = ctx.$, $$ = ctx.$$, NS = ctx.notes, pop = $('#pop'), draft = null, editing = null;
   var newId = function () { return HD.annotation.makeId(Date.now(), Math.random()); };
+  var AT = HD.attach;
+
+  function att(type, items) {                         // 첨부 상자 의도(view-attach) — 그 기능이 없으면(붙지 못함·테스트) done=false, 첨부 없음
+    var d = {items: items || [], busy: 0, done: false};
+    if (typeof CustomEvent === 'function' && pop.dispatchEvent) pop.dispatchEvent(new CustomEvent(type, {bubbles: true, detail: d}));
+    return d;
+  }
+  (function attachBox() {                             // 칩 자리(글 칸 아래) · 클립 단추(취소 앞) — 마크업은 셸이 아니라 이 창의 것
+    if (!pop.setAttribute || typeof document.createElement !== 'function') return;
+    pop.setAttribute('data-hd-attach', 'memo');
+    var note = $('#pnote'), cancel = $('#pcancel');
+    var slot = document.createElement('div'); slot.className = 'hd-att pattach'; slot.setAttribute('data-hd-attach-slot', ''); slot.hidden = true; slot.style.marginTop = '6px';
+    if (note && note.parentNode) note.parentNode.insertBefore(slot, note.nextSibling);
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'nbtn patt'; b.setAttribute('data-hd-attach-pick', '');
+    b.title = '이미지 첨부 — 붙여넣기(Ctrl+V)·끌어 놓기도 돼요'; b.setAttribute('aria-label', '이미지 첨부');
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">' +
+      '<path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>';
+    if (cancel && cancel.parentNode) cancel.parentNode.insertBefore(b, cancel);
+  })();
 
   function popItem(dr, last) {
     var n = dr.targets.length;
@@ -53,48 +75,53 @@ function mount(ctx) {
   }
   function hide() {
     if (pop.contains(document.activeElement)) document.activeElement.blur();
+    att('hd-attach-set', []);
     pop.hidden = true; draft = null; editing = null;
     var PP = ctx.frame(); if (PP) PP.close();
     ctx.pins();
   }
   function commit() {
-    var note = $('#pnote').value.trim(), intent = curIntent(), scope = curScope();
+    var a = att('hd-attach-get');
+    if (a.busy) { ctx.toast('이미지를 올리는 중이에요 — 끝나면 다시 눌러 주세요'); return; }
+    var items = a.items || [], note = AT.withText($('#pnote').value.trim(), items), intent = curIntent(), scope = curScope();
+    var withAtt = function (m) { if (items.length) m.attach = items.slice(); else delete m.attach; return m; };   // 메모가 첨부 목록을 지닌다(다시 열면 썸네일)
     if (editing) {
       var n = NS.find(editing);
-      if (n) { n.note = note; n.intent = intent; n.sent = false; if (scope === 'element') delete n.scope; else n.scope = scope; }   // 이 요소 = 칸 없음(옛 메모와 같음)
+      if (n) { n.note = note; n.intent = intent; n.sent = false; withAtt(n); if (scope === 'element') delete n.scope; else n.scope = scope; }   // 이 요소 = 칸 없음(옛 메모와 같음)
     } else if (draft && HD.memoBatch.multi(draft)) {   // 고른 화면마다 메모 하나(같은 batch) — 되돌리기 한 단계
-      var ms = HD.memoBatch.build(draft, {note: note, intent: intent, scope: scope}, newId);
+      var ms = HD.memoBatch.build(draft, {note: note, intent: intent, scope: scope}, newId).map(withAtt);
       var put = function () { ms.forEach(function (m) { NS.add(m); }); ctx.save(); };
       put();
       ctx.record({label: '메모 ' + ms.length + '개', redo: put,
                   undo: function () { var ids = ms.map(function (m) { return m.id; }); NS.remove(function (x) { return ids.indexOf(x.id) >= 0; }); ctx.save(); }});
     } else if (draft) {
       if (!ctx.modal().open) ctx.focusPin(draft.screen);   // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
-      NS.add(HD.annotation.make({id: newId(), screen: draft.screen, targets: draft.targets, note: note, intent: intent, scope: scope}));
+      NS.add(withAtt(HD.annotation.make({id: newId(), screen: draft.screen, targets: draft.targets, note: note, intent: intent, scope: scope})));
     }
     hide(); ctx.save();
   }
   function card(id) {                                 // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body) · id 배열 = 고른 화면마다 같은 메모(memo-batch)
-    editing = null; draft = HD.memoBatch.draft([].concat(id), ctx.title);
+    editing = null; draft = HD.memoBatch.draft([].concat(id), ctx.title); att('hd-attach-set', []);
     show({text: HD.memoBatch.label(draft), path: 'body', rect: null}, '', 'change');
   }
   function element(id, h, x, y, note) {               // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이) · note = 미리 채울 글(요소 막대, task 49a)
     editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect, quote: h.quote || null, src: h.src || null}]};   // src = 앱 소스 줄(요청문 '소스:')
+    att('hd-attach-set', []);
     show({text: h.text || h.path, path: h.path, rect: null}, note || '', 'change', x == null ? null : {x: x, y: y});
     ctx.pins();                                       // 메모 창이 열린 동안 그 카드에 고른 요소 테두리
   }
   function elem(id, h, note, inModal, at) {           // 요소 하나에 메모 창(note = 미리 채울 요청 글) — 판 = 그 자리 옆, 크게 보기 = 고른 요소 아래
     var it = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null};
     if (!inModal) { element(id, h, at ? at.x : null, at ? at.y : null, note); return; }
-    editing = null; draft = {screen: id, targets: [it]};
+    editing = null; draft = {screen: id, targets: [it]}; att('hd-attach-set', []);
     ctx.pins(); show(popItem(draft, it), note || '', 'change');
   }
   function edit(id) {                                 // 메모 고치기 — 메모 패널·카드 메모 묶음(#224)이 같이 쓴다
     var n = NS.find(id); if (!n) { ctx.toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
-    editing = id; draft = null;
+    editing = id; draft = null; att('hd-attach-set', n.attach || []);   // 메모의 첨부 = 칩(썸네일은 view-attach 가 도우미에서)
     var ts = HD.notes.targets(n);
     show({text: ts.length > 1 ? ts.length + '개 요소 · ' + (ts[0].text || '') : ts[0].text, path: ts.map(function (t) { return t.path; }).join('\n'),
-          rect: n.screen === ctx.modal().screen ? ts[0].rect : null}, n.note, n.intent, null, HD.annotation.scopeOf(n));
+          rect: n.screen === ctx.modal().screen ? ts[0].rect : null}, AT.strip(n.note), n.intent, null, HD.annotation.scopeOf(n));
   }
   function del(id) {                                  // 메모 지우기·편집 빼기 — 메모 패널·카드 메모 묶음이 같이 쓴다, 되돌리기 한 단계(제자리로)
     var at = -1; NS.list().forEach(function (x, i) { if (x.id === id) at = i; });
@@ -133,7 +160,7 @@ function mount(ctx) {
       ctx.pins(); show(popItem(draft, it), note, intent, null, sc);
       return;
     }
-    editing = null;
+    editing = null; att('hd-attach-set', []);
     draft = {screen: String(d.screen || ctx.modal().screen || ''), targets: [it]};
     ctx.pins(); show(popItem(draft, it), '', 'change');
   });

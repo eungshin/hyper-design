@@ -7,6 +7,7 @@
   AgentPresence  — presence.py(47-5a): hello·맥박·임대 끝 = away·진행 한 줄
   Ticker         — ticker.py(47-5a): 세션 시계 — 간격(PRESENCE_EVERY · ARCHIVE_EVERY · TRP.EVERY)은 여기서 정한다
   Busy · AiUndo  — busy.py · ai_undo.py: AI 작업 덮개 + 화면 파일 지켜보기 · 덮개 동안 AI 가 쓴 화면 되돌리기(48c)
+  Attachments    — attach_store.py(R22): <out>/.hd-attach/ 첨부 이미지 저장·읽기(규칙 attach_rules.py)
   ChatLog        — chat_store.py: <out>/.hd-chat.jsonl 대화 기록(S3, 버스 탭)
   Archive        — note_archive.py: <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep)
   Builder        — builder.py: 쓰기 확인(데이터만) · 페이지 빌드 하나씩 · hd-data · 부품 견본 목록
@@ -26,6 +27,7 @@ import presence as PR  # 접속한 에이전트(task 47-5a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
 import transcript_pump as TRP  # 터미널 대화 펌프(S3b — 출처는 transcripts.py, 해석은 transcript_parse.py)
 from adapters import _paseo_cmd
+from attach_store import Attachments  # R22 첨부 이미지 <out>/.hd-attach
 from ai_undo import AiUndo  # 48c AI 반영 되돌리기
 from builder import Builder  # 다시 빌드 하나씩 · hd-data · 부품 목록
 from busy import Busy  # AI 덮개 + 화면 파일 지켜보기
@@ -72,6 +74,7 @@ class ProjectSession:
         self.queue = Queue(self.out, self.lock, agent, paseo, on_attach, self.events, self.presence, self.config)
         self.spawner = AD.PaseoSpawner(lambda: _paseo_cmd(paseo), enabled=bool(self.config.get("allow_spawn")))
         self.archive = Archive(self.out, self.lock, self.events)
+        self.images = Attachments(self.out)          # R22 첨부 이미지 — 붙인 이미지를 out 안에 두고 절대 경로를 요청 글에
         self.chat = ChatLog(self.out)                # S3 대화 기록 — 이미 내는 이벤트를 탭으로 받아 한 줄씩
         self.events.taps.append(self.chat.tap)
         self.transcripts = TRP.pump_for(self, paseo)  # S3b 터미널 대화 — 고른·접속한 에이전트만, 'agent.transcript' 를 publish

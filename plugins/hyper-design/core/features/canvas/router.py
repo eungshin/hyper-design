@@ -10,6 +10,7 @@ SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나
 import json, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
+import attach_rules as AR  # 첨부 이미지 본문 한도(R22)
 import chat_log as CL
 import events as EV
 from state_store import STATE_MAX  # out_io 가 hd 폴더를 sys.path 에 넣는다
@@ -85,6 +86,7 @@ ROUTES = {
         "/api/chat": get_chat,                                          # S3 대화 기록(.hd-chat.jsonl)
         "/api/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),   # S3b 터미널 대화(고른 에이전트만, 그 뒤 새 줄은 이벤트)
         "/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),
+        "/api/image": lambda s, q, b: s.images.read(q),                 # R22 첨부 이미지 읽기(?rel=.hd-attach/<이름>) → {type, data(base64)}
     },
     "POST": {
         "/api/data": lambda s, q, b: (200, s.builder.data()),
@@ -111,12 +113,14 @@ ROUTES = {
         "/agents/spawn": lambda s, q, b: s.spawn(b),                    # 기본 꺼짐(HD_ALLOW_SPAWN=1)
         "/api/agents/spawn": lambda s, q, b: s.spawn(b),
         "/api/attach": lambda s, q, b: s.queue.attach(b),
+        "/api/image": lambda s, q, b: s.images.save(b),                 # R22 첨부 이미지 저장 {data} → {path, rel, type, size}(본문 한도 BODY_MAX)
         "/api/watch": lambda s, q, b: (200, s.busy.mtimes(b.get("files") if isinstance(b, dict) else None)),
     },
     "PUT": {
         "/api/state": lambda s, q, b: s.store.put(b),
     },
 }
+BODY_MAX = {"/api/image": AR.BODY_MAX}              # 본문 한도가 STATE_MAX(2 MB)와 다른 주소 — 이미지 한 장(base64)
 
 
 class Router:
@@ -277,9 +281,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not self._host_ok() or not self._token_ok(sess):
             self._drain(n)
             return self._json(403, {"error": FORBIDDEN})
-        if n > STATE_MAX:
+        cap = BODY_MAX.get(rest, STATE_MAX)
+        if n > cap:
             self._drain(n)
-            return self._json(413, {"error": helper_model.too_big(n, STATE_MAX)})
+            return self._json(413, {"error": helper_model.too_big(n, cap)})
         raw = self.rfile.read(n) if n else b""
         if not self.router.knows(method, rest):
             return self._json(404, {"error": "모르는 주소"})

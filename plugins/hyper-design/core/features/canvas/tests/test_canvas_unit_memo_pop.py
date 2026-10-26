@@ -12,7 +12,7 @@ NODE = shutil.which("node")
 JS = r"""
 const fs = require('fs'), vm = require('vm');
 globalThis.window = globalThis; globalThis.addEventListener = () => {}; globalThis.document = {activeElement: null}; globalThis.innerWidth = 1200; globalThis.innerHeight = 800;
-for (const f of ['annotation.js', 'notes.js', 'memo-batch.js', 'view-memo-pop.js']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f});
+for (const f of ['annotation.js', 'attach.js', 'notes.js', 'memo-batch.js', 'view-memo-pop.js']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f});
 const HD = globalThis.HD, A = HD.annotation, out = {};
 out.id = A.makeId(1700000000000, 0.123456789); out.idWant = (1700000000000).toString(36) + (0.123456789).toString(36).slice(2, 6);
 const tg = [{path: 'a > b', text: '버튼', rect: {x: 1, y: 2, w: 3, h: 4}}, {path: 'c', text: 'C', rect: null}];
