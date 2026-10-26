@@ -47,8 +47,8 @@ PRD '표면': "(그 절의 첫 줄 인용, 없으면 이 줄을 뺀다)"
   - **범위**: 커버한다 / 커버하지 않는다(이유) / 경계(추천 결정). 사람 나누는 방식(권한).
   - **시나리오 데이터 표 + 사실 표**: 등장인물·주요 항목 3~5개, 그리고 화면에 나올 **모든 사실**(날짜·시간·인원 수·누가 어디에 속하는지·무엇이 무엇과 겹치는지·각 대상의 상태 이름)을 한 표에. 모든 화면이 이 표만 인용한다(원칙 19). 숫자를 쓰는 제목("23명")은 표에서 센 값.
   - **가정 로그**: 하네스가 대신 정한 것과 이유(팔레트 선택 이유 포함 — `out/palettes.json`의 why).
-- 명세 목록이 오면 **병합**: 같은 화면의 탭·섹션으로 쪼개진 screen은 feature로 합친다. screen+step ≥ 15면 `mode: "spec"` — screen·step은 **전부 화면**이 된다(빼려면 1.5단계 결정 + 확인). 아니면 `brief` — 지금처럼 여정에서 화면을 끌어낸다. **흐름 고리를 먼저 채운다** — 모양은 `out/surface.json`의 `flow`. `flow.field: steps`(단계 마법사)면 spec_inventory.json `steps`에 순서대로 단계마다 `{name, screen, pass}`(`pass` = 무엇을 하면 다음이 열리는가 한 줄), 마지막 단계의 화면은 `kind: "result"`(selfcheck). `flow.field: objects`면 `objects`에 대상마다 create(처음 만드는 시작점)·view·edit(고치기·지우기·취소)·after(끝: **그 행동의 결과 화면** — 완료 확인·바뀐 결과가 보이는 화면. 목록·상세로 대신하지 않는다)에 화면 id. after에는 결과 화면(`kind: "result"` 또는 `<id>--done`)이 하나 이상 있어야 한다(selfcheck). 빈 칸이 있으면 그 화면을 화면 목록에 추가한다(시작과 끝이 빠지는 것은 치명적이다). n/a는 edit에만, 이유와 함께. 이어서 각 항목의 `covered_by`(화면 id) 또는 `decision`을 채운다(요소 단위는 목록에 없다 — 빌드 에이전트가 PRD의 그 화면 절을 읽는다). rule은 `target`(화면 id)·`state`(error|confirm|done) 또는 `policy`(정책 문구로만 반영할 화면 id).
-- **시장 관례 합치기**(conventions.json이 오면, screens.json 전에): 탭 구성·온보딩 순서·홈 첫 블록·결제 흐름은 `follow`가 기본값 — 벗어나려면 이 앱의 core 때문이어야 하고 이유는 decisions.json에. `consider`(후킹 장치)는 1.5단계 후보로, `avoid`(리뷰 불만)는 해당 화면 정책으로. 리서치가 3분 안에 안 오면 기다리지 않는다(`market.md` 3절).
+- 명세 목록이 오면 **병합**: 같은 화면의 탭·섹션으로 쪼개진 screen은 feature로 합친다. screen+step ≥ 15면 `mode: "spec"` — screen·step은 **전부 화면**이 된다(빼려면 1.5단계 결정 + 확인). 아니면 `brief` — 지금처럼 여정에서 화면을 끌어낸다. **흐름 고리를 먼저 채운다** — 모양은 `out/surface.json`의 `flow`. `flow.field: steps`(단계 마법사)면 spec_inventory.json `steps`에 순서대로 단계마다 `{name, screen, pass}`(`pass` = 무엇을 하면 다음이 열리는가 한 줄), 마지막 단계의 화면은 `kind: "result"`(selfcheck). `flow.field: objects`면 `objects`에 대상마다 create(처음 만드는 시작점)·view·edit(고치기·지우기·취소)·after(끝: **그 행동의 결과 화면** — 완료 확인·바뀐 결과가 보이는 화면. 목록·상세로 대신하지 않는다)에 화면 id. after에는 결과 화면(`kind: "result"` 또는 `<id>--done`)이 하나 이상 있어야 한다(selfcheck). 빈 칸이 있으면 그 화면을 화면 목록에 추가한다(시작과 끝이 빠지는 것은 치명적이다). n/a는 edit에만, 이유와 함께. 이어서 각 항목의 `covered_by`(화면 id) 또는 `decision`을 채운다(요소 단위는 목록에 없다 — 빌드 에이전트가 PRD의 그 화면 절을 읽는다). rule은 `target`(화면 id)·`state`(error|confirm|done) 또는 `policy`(그 화면 본문 `purpose`의 규칙 줄로만 반영할 화면 id).
+- **시장 관례 합치기**(conventions.json이 오면, screens.json 전에): 탭 구성·온보딩 순서·홈 첫 블록·결제 흐름은 `follow`가 기본값 — 벗어나려면 이 앱의 core 때문이어야 하고 이유는 decisions.json에. `consider`(후킹 장치)는 1.5단계 후보로, `avoid`(리뷰 불만)는 해당 화면 본문(`purpose`)의 규칙 줄로. 리서치가 3분 안에 안 오면 기다리지 않는다(`market.md` 3절).
 - 이어서 `out/screens.json`. **`screens.json`은 한 번만 쓴다**(파일 하나에 쓰고 끝 — 도우미 스크립트를 따로 만들거나 같은 내용을 두 번 쓰지 않는다). 부분 수정은 Edit 도구로 — 인라인 python 치환 금지(`journey.md`·`decisions.json`도 같다). 화면 항목의 `file`·`role`·`traits` 기본값(false)과 `states`는 생략해도 된다 — `expand_states.py`가 채운다(`traits`는 true인 것만 적으면 된다). `kind`는 `out/surface.json` `kinds`의 키에서, `traits` 키는 `states.traits`·`states.extra_traits`에서 고른다(아래 예시는 mobile):
 
 ```json
@@ -56,7 +56,7 @@ PRD '표면': "(그 절의 첫 줄 인용, 없으면 이 줄을 뺀다)"
  "story": {"headline": "이 앱이 PRD의 갈등을 푸는 방식 한 문장(<em>강조</em>)", "summary": "2~3문장",
            "ideas": [{"title": "", "desc": ""}]},
  "screens": [{"id": "home", "file": "screens/home.html", "title": "홈 · 출발 50일 전", "group": "…",
-   "purpose": "한 줄", "role": "everyone|editor", "policies": ["화면 정책 1~3줄: 규칙·경계·엣지 케이스"],
+   "purpose": "본문 — 첫 줄은 이 화면이 하는 일, 이어서 줄바꿈으로 규칙·경계·엣지 케이스·메모 1~3줄(\n- 규칙 …). 따로 정책 목록 칸은 쓰지 않는다(옛 policies는 캔버스가 본문에 합쳐 읽기만)", "role": "everyone|editor",
    "branches": [{"to": "home-edit", "label": "갈래 조건"}],
    "traits": {"list_first_use": false, "form": false, "shares": false, "large_list": false, "long_task": false}, "kind": "home|list|detail|form|result"}],
  "photo_centric": false,
@@ -72,7 +72,7 @@ PRD '표면': "(그 절의 첫 줄 인용, 없으면 이 줄을 뺀다)"
   - 화면은 **여정의 궁금해지는 순간**에서 끌어낸다. 같은 화면이 시기에 따라 달라지면 별도 화면 id로(예: `home`, `home-d7`, `home-trip`).
   - `kind: "list"` 화면은 `large_list`(30개 넘게 쌓일 수 있나)를 반드시 적는다 — true면 검색 칸 필수(selfcheck).
   - **1차는 기본 화면 + 결과 화면만.** 행동의 끝(예약 완료·출석 완료·취소 완료·신청 뒤)은 별도 화면(`kind: "result"`)이나 `traits.shares`(→ `--done`)로 그린다.
-  - **상태 화면 항목·`states`는 손으로 쓰지 않는다** — `expand_states.py`가 traits와 명세 규칙에서 펼친다(특성→상태 표와 화면당 상한은 `out/surface.json` `states` — 단계 마법사는 단계마다 `can_error`→오류 · `wrong_action`→잘못 누름(`fail`) · `may_timeout`→시간 초과(`timeout`) · `waits`→기다림(`progress`)). mobile: 목록 + 첫 사용 → `empty`, 폼 → `error`, 밖으로 내보내는 행동·한 번 누르는 요청 → `done`, 사용자가 지켜봐야 하는 긴 작업(사진 여러 장 업로드 등, `long_task`) → `progress`, 명세 규칙 → 그 규칙의 `error`(같은 요소 오류) 또는 `confirm`(되돌릴 수 없음·중복 경고 대화상자). `loading`·`success`는 상태가 아니다. 화면당 상태 2개 이하(기본 포함 3) — 넘으면 규칙을 정책 문구로 내린다.
+  - **상태 화면 항목·`states`는 손으로 쓰지 않는다** — `expand_states.py`가 traits와 명세 규칙에서 펼친다(특성→상태 표와 화면당 상한은 `out/surface.json` `states` — 단계 마법사는 단계마다 `can_error`→오류 · `wrong_action`→잘못 누름(`fail`) · `may_timeout`→시간 초과(`timeout`) · `waits`→기다림(`progress`)). mobile: 목록 + 첫 사용 → `empty`, 폼 → `error`, 밖으로 내보내는 행동·한 번 누르는 요청 → `done`, 사용자가 지켜봐야 하는 긴 작업(사진 여러 장 업로드 등, `long_task`) → `progress`, 명세 규칙 → 그 규칙의 `error`(같은 요소 오류) 또는 `confirm`(되돌릴 수 없음·중복 경고 대화상자). `loading`·`success`는 상태가 아니다. 화면당 상태 2개 이하(기본 포함 3) — 넘으면 규칙을 본문 규칙 줄로 내린다.
   - 탭·세그먼트로 내용이 바뀌는 화면은 `"tabs": [{"label": "지난 수업", "screen": "my-bookings-past"}]` — 칸마다 그 내용을 보여 주는 화면(현재 칸은 자기 id).
   - `accent`(선택, 기본은 빼둔다): 강조색(`.accent-text`·`.accent-dot`)이 맡을 **뜻 하나**(할인·마감 임박·새 소식·내 손이 필요한 것 중 이 앱에서 첫눈에 걸려야 하는 것). 선언하지 않으면 강조 부품을 쓸 수 없다. 팔레트가 강조색을 가졌으면 `out/palettes.json`의 `accent_seen`이 그 서비스의 쓰임새다. CTA·선택 상태를 강조색으로 칠하지 않는다 — 버튼은 계속 브랜드 색.
   - `photo_centric`: 사진·이미지가 사용자가 만들거나 보는 **핵심 콘텐츠**면 true.
@@ -119,7 +119,7 @@ PRD '표면': "(그 절의 첫 줄 인용, 없으면 이 줄을 뺀다)"
 **먼저 사진 생성을 기다린다**: `out/.images/status.json`의 `state`가 `running`이 아닐 때까지 15초마다 확인(최대 10분). 시간이 넘으면 자리표시 그대로 진행하고 마지막 메시지에 적는다.
 
 한 메시지에서 동시에(**포그라운드로 실행해 같은 턴에서 결과를 받는다 — 백그라운드로 돌려 놓고 "끝나면 알려드릴게요"로 턴을 끝내지 않는다. 턴이 끝나면 다시 이어지지 않는다**):
-- `python3 $SK/features/canvas/build_canvas.py out` — 캔버스 `out/index.html`(Screens·Foundation·Components 탭, 드래그 이동, 색 점 3개, 갈래 화살표, 정책 3줄 — 스크립트가 만들고 AI는 손대지 않는다)
+- `python3 $SK/features/canvas/build_canvas.py out` — 캔버스 `out/index.html`(Screens·Foundation·Components 탭, 드래그 이동, 색 점 3개, 갈래 화살표, 카드 아래 제목·본문 — 스크립트가 만들고 AI는 손대지 않는다)
 - `python3 $SK/scripts/selfcheck.py out` — 매니페스트·파일·상태·금지 문구
 - `python3 $SK/scripts/audit.py out --shots out/.shots` — 렌더링 측정(대비·토큰 밖 색·의미 배지·CTA·터치 또는 키보드 초점(`surface.json` `audit`)·캔버스) + 표면 뷰포트로 화면 캡처
 - **사실 대조 서브에이전트 1개** `hyper-design:fact-checker`(같은 메시지에서, `model` 인자 없이, 프롬프트 `OUT=<out 경로>` + 화면 파일 목록): `journey.md` 사실 표와 모든 `screens/*.html`의 글자를 대조해 어긋남(날짜·시간·인원·겹침·상태 이름)과 "누른 뒤 갈 곳이 없는 조작"만 목록으로 돌려준다. 고치지는 않는다.

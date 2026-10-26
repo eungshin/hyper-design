@@ -19,7 +19,7 @@ python3 build_canvas.py <out_dir>
 
 screens.json:
 {"groups": [...], "story": {...}, "badges": {"뜻": "is-brand", ...},
- "screens": [{"id", "file", "title", "group", "purpose", "policies": [], "branches": [{"to", "label"}]}]}
+ "screens": [{"id", "file", "title", "group", "purpose"(본문, 여러 줄), "branches": [{"to", "label"}]}]}
  file = out 안 경로(기본 screens/<id>.html) 또는 이 PC 개발 서버 주소 http(s)://127.0.0.1|localhost[:포트]/…(앱 카드 — features/app, 링크 미리 뽑기 없음)
 선택: decisions.json · palettes.json · credits.json([{slot,file,author,license,url,title}]) · surface.json(표면 프로필 — 카드·모달 크기, 없으면 폰)
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).

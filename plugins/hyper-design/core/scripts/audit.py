@@ -562,7 +562,7 @@ def main():
             ng = len({x.get("group") for x in mm.get("screens", [])})
             na = len(hd["arrows"]) if "arrows" in hd else len(re.findall(r"<path d=\"M", ih))
             add("캔버스", "canvas_arrows", na, f"<= 갈래 {nb} + 흐름 {ng}", na <= nb + ng)
-            longpol = [x["id"] for x in mm.get("screens", []) if len(x.get("policies", []) or []) > 3 and "capfold-d" not in ih]   # R21: 정책 줄은 카드 본문에 합쳐 보이고 본문은 고를 때만 펼친다
+            longpol = [x["id"] for x in mm.get("screens", []) if len((x.get("purpose") or "").splitlines()[1:]) + len(x.get("policies", []) or []) > 3 and "capfold-d" not in ih]   # R21: 본문 = purpose(여러 줄) + 옛 policies 줄 — 첫 줄 뒤 3줄 넘으면 고를 때만 펼친다
             add("캔버스", "canvas_policy_lines", len(longpol), "0 (긴 본문은 접기)", not longpol)
         except Exception as e:
             add("캔버스", "canvas_arrows", "n/a", "", False, str(e))

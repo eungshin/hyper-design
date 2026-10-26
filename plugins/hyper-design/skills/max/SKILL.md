@@ -13,7 +13,7 @@ description: hyper-design의 끝까지 버전 — 1차(모든 흐름의 처음�
 - `"stage": "max"`면 이미 끝났다 — 캔버스 경로만 알려 주고 무엇을 고칠지 묻는다.
 
 ## 1. 상태 펼치기 (1분)
-- `python3 $SK/scripts/expand_states.py out --stage max` → 오류(`error`)·확인 대화상자(`confirm`)·빈 상태(`empty`)·진행 중(`progress`)·규칙 상태가 screens.json에 추가된다(어떤 상태가 생기는지는 `out/surface.json` `states` — 단계 마법사는 단계마다 오류·잘못 누름(`fail`)·시간 초과(`timeout`)·기다림(`progress`)). 화면당 상태 상한(`states.cap`) 초과 오류가 나면 해당 규칙을 정책 문구(`policy`)로 내리고 다시.
+- `python3 $SK/scripts/expand_states.py out --stage max` → 오류(`error`)·확인 대화상자(`confirm`)·빈 상태(`empty`)·진행 중(`progress`)·규칙 상태가 screens.json에 추가된다(어떤 상태가 생기는지는 `out/surface.json` `states` — 단계 마법사는 단계마다 오류·잘못 누름(`fail`)·시간 초과(`timeout`)·기다림(`progress`)). 화면당 상태 상한(`states.cap`) 초과 오류가 나면 해당 규칙을 그 화면 본문(`purpose`)의 규칙 줄(명세 `policy`)로 내리고 다시.
 - 새로 생긴 상태 화면 목록(`state_of`·`state`·`rules`)을 흐름(group)별로 묶는다.
 
 ## 2. 병렬 빌드 (5분)

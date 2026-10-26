@@ -58,7 +58,8 @@ def test_screens_doc_cards_are_stage_urls_and_tabs_follow_settings(stages):
     assert all(board_data.is_dev_url(f) for f in files.values())
     assert doc["groups"] == ["유기체", "분자"]
     wh = doc["screens"][1]
-    assert wh["title"] == "WordHeader" and wh["purpose"].startswith("단어 헤더") and wh["policies"][0] == "소스: ui_host/popup/src/lookup/WordHeader.svelte"
+    assert wh["title"] == "WordHeader" and wh["purpose"].startswith("단어 헤더") and "policies" not in wh
+    assert wh["purpose"].split("\n")[1] == "- 소스: ui_host/popup/src/lookup/WordHeader.svelte"
 
 
 def test_app_doc_is_relaunchable(stages):

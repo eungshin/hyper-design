@@ -352,7 +352,7 @@ def market_text(out):
     avoid = [f"- [{a.get('id')}] {a.get('what', '')}" for a in conv.get("avoid") or []]
     if avoid:
         lines.append("")
-        lines.append("피할 것(리뷰 불만 — 해당 화면이면 정책·문구로 막는다):")
+        lines.append("피할 것(리뷰 불만 — 해당 화면이면 본문 규칙·문구로 막는다):")
         lines += avoid
     return "\n".join(lines).strip()
 

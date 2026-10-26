@@ -110,3 +110,41 @@ def test_list_screen_large_list_stays_undeclared(tmp_path):
     txt = run("selfcheck.py", tmp_path).stdout
     assert "lst: traits.large_list(30개 넘게 쌓이는 목록인가) 미선언" in txt
     assert "lst2: traits.large_list" not in txt
+
+
+# 5. R21 단일 본문 — 새 screens.json은 policies 없이 purpose(여러 줄) 하나로 통과, 옛 policies도 그대로 통과
+def _one_screen(out, **extra):
+    (out / "screens").mkdir(exist_ok=True)
+    (out / "screens" / "home.html").write_text('<!doctype html><html><head><link id="tokens" rel="stylesheet" href="../tokens.css">'
+                                               '</head><body><h1>홈</h1></body></html>', encoding="utf-8")
+    wjson(out / "screens.json", {"screens": [{"id": "home", "file": "screens/home.html", "title": "홈", "group": "g",
+                                              "states": [], "traits": {}, **extra}]})
+    return run("selfcheck.py", out).stdout
+
+
+def test_selfcheck_body_without_policies_passes(tmp_path):
+    txt = _one_screen(tmp_path, purpose="출발 50일 전 — 큰 흐름\n- 확정된 일정만 보인다\n- 바뀐 항목은 3일 동안 '바뀜'")
+    assert "home: policies" not in txt and "home: purpose" not in txt, txt
+
+
+def test_selfcheck_legacy_policies_still_pass(tmp_path):
+    txt = _one_screen(tmp_path, purpose="한 줄", policies=["옛 정책 줄"])
+    assert "home: policies" not in txt and "home: purpose" not in txt, txt
+
+
+def test_expand_states_rule_names_go_to_body(tmp_path):
+    wjson(tmp_path / "screens.json", {"groups": ["g"], "screens": [
+        {"id": "f", "title": "폼", "group": "g", "purpose": "p", "kind": "form"}]})
+    wjson(tmp_path / "spec_inventory.json", {"items": [{"id": "R1", "kind": "rule", "name": "시간 없이 확정 불가", "target": "f", "state": "done"}]})
+    for _ in range(2):   # 다시 돌려도 줄이 겹치지 않는다
+        r = run("expand_states.py", tmp_path, "--stage", "go")
+        assert r.returncode == 0, r.stdout + r.stderr
+    by = {s["id"]: s for s in json.loads((tmp_path / "screens.json").read_text(encoding="utf-8"))["screens"]}
+    st = by["f--done"]
+    assert "policies" not in st
+    assert st["purpose"].count("- [R1] 시간 없이 확정 불가") == 1 and "\n" in st["purpose"]
+
+
+def test_go_skill_teaches_single_body():
+    go = (PLUGIN / "skills" / "go" / "SKILL.md").read_text(encoding="utf-8")
+    assert '"policies"' not in go

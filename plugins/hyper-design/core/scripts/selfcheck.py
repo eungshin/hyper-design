@@ -31,7 +31,7 @@ for it in INV.get("items", []):
     if k == "step" and it.get("covered_by") and not any(x in ids for x in it["covered_by"]): errs.append(f"명세 단계 {iid}: 화면 없음")
     if k == "rule":
         if it.get("target") and it.get("state"): RULE_ST.setdefault(it["target"], set()).add(it["state"])
-        elif not it.get("policy"): errs.append(f"명세 규칙 {iid}: target·state(상태 화면) 또는 policy(정책 문구로 내린 화면 id) 필요")
+        elif not it.get("policy"): errs.append(f"명세 규칙 {iid}: target·state(상태 화면) 또는 policy(본문 규칙 줄로만 내린 화면 id) 필요")
 base = [s for s in S if "--" not in s["id"]]
 if len(base) < 10: errs.append(f"기본 화면 {len(base)}장 < 10")
 for k, v in (m.get("prd_coverage") or {}).items():
@@ -52,7 +52,7 @@ PASSIVE = re.compile(r"보기만|읽기 전용|게스트|확인만 하")
 for s in S:
     for key in ("title", "group", "purpose", "file"):
         if not s.get(key): errs.append(f'{s["id"]}: {key} 없음')
-    if len(s.get("policies", []) or []) == 0 and "--" not in s["id"]: errs.append(f'{s["id"]}: policies(화면 정책) 없음')
+    # R21: 카드 본문은 purpose 하나(여러 줄 — 규칙·경계·메모 포함). 옛 policies는 있어도 되고 없어도 된다(캔버스가 본문에 합쳐 보인다)
     for b in s.get("branches", []) or []:
         if b.get("to") not in ids: errs.append(f'{s["id"]}: 갈래가 없는 화면으로 {b.get("to")}')
     # 상태: traits 에서만 파생

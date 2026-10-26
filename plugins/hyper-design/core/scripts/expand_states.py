@@ -6,9 +6,9 @@ python3 expand_states.py out [--stage go|max]
 입력: out/screens.json(기본 화면) + out/spec_inventory.json(있으면, kind=rule 의 target·state)
 파생: 표면 프로필(out/surface.json, 없으면 mobile)의 states.traits — mobile: list_first_use→empty · form→error · shares→done · long_task→progress,
       desktop-wizard: can_error→error · wrong_action→fail · may_timeout→timeout · waits→progress — 그리고 rule(state=error|confirm|done)
-- 같은 화면·같은 상태의 규칙 여럿은 상태 화면 하나로 묶고, 규칙 이름은 그 화면 policies에 한 줄씩
+- 같은 화면·같은 상태의 규칙 여럿은 상태 화면 하나로 묶고, 규칙 이름은 그 화면 본문(purpose)에 '- [id] 이름' 한 줄씩(R21 — policies는 쓰지 않는다)
 - 기본 화면의 states를 채우고 <id>--<state> 항목을 추가(이미 있으면 필요한 필드만 보충), 파생되지 않는 상태 항목은 지운다
-- 화면당 상태 > 프로필 states.cap(mobile 2 — 기본 포함 3)이면 종료코드 1(규칙 일부를 정책 문구로 내린다)
+- 화면당 상태 > 프로필 states.cap(mobile 2 — 기본 포함 3)이면 종료코드 1(규칙 일부를 본문 규칙 줄로 내린다)
 """
 import sys, json, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "surfaces")); import surface
@@ -50,7 +50,7 @@ for s in base:
     full = list(states)
     if STAGE == "go": states = [x for x in states if x in GO_ONLY]
     pending += len(full) - len(states)
-    if len(full) > CAP: errs.append(f"{s["id"]}: 상태 {len(full)}개 > {CAP}(기본 포함 {CAP + 1}) — 규칙 일부를 정책 문구로 내릴 것")
+    if len(full) > CAP: errs.append(f"{s["id"]}: 상태 {len(full)}개 > {CAP}(기본 포함 {CAP + 1}) — 규칙 일부를 본문 규칙 줄로 내릴 것")
     s["states"] = states
     new.append(s)
     for st in states:
@@ -59,15 +59,15 @@ for s in base:
         e = old.get(sid, {})
         e.update({"id": sid, "file": e.get("file") or f"screens/{sid}.html", "group": s.get("group"),
                   "title": e.get("title") or f"{s.get('title', s['id'])} · {KO.get(st, st)}",
-                  "purpose": e.get("purpose") or (" · ".join(x["name"] for x in r) if r else f"{KO.get(st, st)} 모습"),
+                  "purpose": e.get("purpose") or f"{KO.get(st, st)} 모습",
                   "role": s.get("role"), "kind": s.get("kind"), "state_of": s["id"], "state": st})
         if r:
             e["rules"] = [x.get("id") for x in r]
-            pol = list(e.get("policies") or [])
+            body = e["purpose"].split("\n"); pol = e.get("policies") or []   # 옛 policies 줄이 이미 있으면 그대로 둔다(캔버스가 본문에 합쳐 보인다)
             for x in r:
                 line = f"[{x.get('id')}] {x['name']}"
-                if line not in pol: pol.append(line)
-            e["policies"] = pol
+                if f"- {line}" not in body and line not in pol: body.append(f"- {line}")
+            e["purpose"] = "\n".join(body)
         new.append(e)
 M["screens"] = new; M["stage"] = STAGE; M["pending_states"] = pending
 (out / "screens.json").write_text(json.dumps(M, ensure_ascii=False, indent=1), encoding="utf-8")

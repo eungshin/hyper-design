@@ -7,7 +7,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 ```
 
 ## 입력 (out 안)
-- `screens.json` — 필수. `groups`·`screens[{id,file,title,group,purpose,policies,branches}]`
+- `screens.json` — 필수. `groups`·`screens[{id,file,title,group,purpose,branches}]` — `purpose` = 카드 본문 하나(여러 줄, R21). `policies`(글 목록)는 옛 데이터 — 있으면 본문 끝 `- 줄`로 합쳐 읽고, 새 생성은 쓰지 않는다
 - 선택: `decisions.json` · `palettes.json` · `credits.json` · `tokens.css`
 - 플러그인 쪽: `foundation/palette.js`, `foundation/specimens.html`(환경변수 `HD_SPECIMENS`로 바꿈)
 

@@ -162,13 +162,13 @@ def screens_doc(stages, tabs, dev_url, title="Dayfine — 앱 화면(twin 무대
         g = GROUP_NAMES.get(s["group"], s["group"] or "기타")
         if g not in groups:
             groups.append(g)
-        pol = [p for p in (f"소스: {s['file']}" if s["file"] else "", f"픽스처: {s['fixture']}" if s["fixture"] else "") if p]
-        screens.append({"id": s["id"], "file": stage_url(dev_url, s["id"]), "title": s["name"], "group": g,
-                        "purpose": s["label"] or s["name"], "policies": pol, "branches": []})
+        pol = [f"- {p}" for p in (f"소스: {s['file']}" if s["file"] else "", f"픽스처: {s['fixture']}" if s["fixture"] else "") if p]
+        screens.append({"id": s["id"], "file": stage_url(dev_url, s["id"]), "title": s["name"], "group": g,   # R21: 본문 하나(purpose 여러 줄)
+                        "purpose": "\n".join([s["label"] or s["name"], *pol]), "branches": []})
         if s["id"] == SETTINGS_STAGE:
             for t in tabs:
                 screens.append({"id": f"{s['id']}--{t}", "file": stage_url(dev_url, f"{s['id']}--{t}"), "title": f"{s['name']} · {t}",
-                                "group": g, "purpose": f"설정 창 — {t} 탭", "policies": pol[:1], "branches": []})
+                                "group": g, "purpose": "\n".join([f"설정 창 — {t} 탭", *pol[:1]]), "branches": []})
     return {"title": title, "groups": groups, "screens": screens}
 
 

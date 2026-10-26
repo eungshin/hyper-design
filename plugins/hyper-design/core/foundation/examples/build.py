@@ -253,7 +253,7 @@ for sid, (title, role, group, body, cls) in S.items():
 PURPOSE = {"join": "초대 링크로 처음 들어오는 화면", "home": "출발 50일 전 — 큰 흐름", "home-d7": "출발 3일 전 — 모이는 곳·챙길 것",
            "home-trip": "여행 중 — 오늘", "day": "날짜 상세 + 궁금해요", "checklist": "내가 챙길 것", "home-edit": "일정 짜는 사람 — 정할 것",
            "day-edit": "날짜별 일정 편집", "item-edit": "일정 고치기", "item-edit--error": "시간 없이 저장하면", "tasks": "할 일 나누기", "family": "일정 같이 짜기 권한"}
-POLICIES = {
+POLICIES = {   # 화면 규칙 — manifest에서는 purpose 본문 아래 '- ' 줄로 들어간다(policies 칸은 쓰지 않는다)
     "join": ["초대 링크는 7일 뒤 만료", "처음엔 '일정 같이 짜기' 꺼진 상태로 합류"],
     "home": ["확정된 일정만 보인다 — 후보는 '정하는 중' 한 줄", "출발 7일 전부터 맨 위가 모이는 곳, 여행 중엔 '오늘'", "바뀐 항목은 3일 동안 '바뀜' 표시(알림 없음)"],
     "home-d7": ["챙길 것은 본인 몫만", "날씨는 출발지·도착지 중 도착지 기준"],
@@ -275,7 +275,7 @@ BRANCHES = {
 }
 GROUPS = ["처음 들어올 때", "홈 — 시기마다 맨 위가 바뀐다", "홈에서 들어가는 곳", "일정을 짜는 사람에게만 더 보이는 것"]
 BADGES = {"확정": "is-brand", "바뀜": "is-warning", "궁금해하세요": "is-info", "후보": ""}
-manifest = {"groups": GROUPS, "badges": BADGES, "screens": [{"id": sid, "file": f"{sid}.html", "title": t, "role": r, "group": g, "purpose": PURPOSE.get(sid, ""),
-             "policies": POLICIES.get(sid, []), "branches": BRANCHES.get(sid, [])} for sid, (t, r, g, _, _) in S.items()]}
+manifest = {"groups": GROUPS, "badges": BADGES, "screens": [{"id": sid, "file": f"{sid}.html", "title": t, "role": r, "group": g, "purpose": "\n".join([PURPOSE.get(sid, "")] + [f"- {x}" for x in POLICIES.get(sid, [])]),   # R21: 본문 하나
+             "branches": BRANCHES.get(sid, [])} for sid, (t, r, g, _, _) in S.items()]}
 (HERE / "screens.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
 print(len(S), "screens")
