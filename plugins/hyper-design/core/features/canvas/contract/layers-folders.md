@@ -4,7 +4,7 @@
 
 ## 규칙
 
-- `folders`(Model)·`layers`(Model, 폴더 줄)·`view-layers`(View) — 레이어 폴더(H17): 패널에서만 묶음(판 카드·화면 파일 그대로, 키 `hd-folders:`), 데이터 줄 = 고정 폴더, 폴더·줄의 [가로로/세로로 늘어놓기]는 정렬 패널 간격으로 셸 `arrangeCards`
+- `folders`(Model)·`layers`(Model, 폴더 줄)·`view-layers`(View) — 레이어 폴더(H17): 패널에서만 묶음(판 카드·화면 파일 그대로, 키 `hd-folders:`), 데이터 줄 = 고정 폴더, 폴더·줄의 [가로로/세로로 늘어놓기]는 정렬 패널 간격으로 `CP.arrange`(view-card-pos)
 
 ## 고치면 돌릴 것
 
