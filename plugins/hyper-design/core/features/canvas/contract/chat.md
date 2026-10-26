@@ -8,7 +8,7 @@
 |---|---|---|
 | `modules/chat.js` | Model | 칩(고른 카드 + 고른 요소 − 지운 칩)·범위·칩 줄 접기 `fold`·입력 안내 글 `placeholder`(S1c)·메모 초안·마지막 요청 상태 한 줄. 상태 없음. 메모 모양은 `memo-batch.build`(화면) · 셸 `commitPop` 과 같은 요소 메모, 상태는 `annotation.status` — 규칙을 새로 만들지 않는다. `HD.chat` |
 | `modules/view-chat.js` | View | `#hdchat`(입력 카드·칩·상태 줄·숨기기 단추·받는 곳 알약)과 그 CSS. 상태 = 지운 칩 표시 · 칩 펼침(둘 다 저장 안 함) · 마지막 요청 `{text, ids, at}`(`ctx.local` 키 `hd-chat-last:<해시>`, 주인 이 파일). `HD.feature('chat', {needs: ['$','toast','esc','notes','local','store','key','title','rowsEl']})` → `{render, send(text), last}` |
-| 셸 ctx `selected()`·`picked()`·`sendNotes(list)` | — | 고른 카드 id · 요소 막대의 고른 요소 `{screen, h, app}` · 메모를 더하고 위쪽 [보내기]와 같은 `sendList` 로 보내기(보내는 중이면 false). 셸 줄은 이 셋뿐(5d2942c) |
+| 셸 ctx `selected()`·`picked()`·`sendNotes(list)` | — | 고른 카드 id · 요소 막대의 고른 요소 `{screen, h, app}` · 메모를 더하고 위쪽 [보내기]와 같은 `SN.send`(view-send) 로 보내기(보내는 중이면 false). 셸 줄은 이 셋뿐(5d2942c) |
 
 ## 규칙
 

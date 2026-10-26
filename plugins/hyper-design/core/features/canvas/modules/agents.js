@@ -9,7 +9,10 @@
      먼저(접속 중 here 먼저 · 이름), Paseo 줄(rows)은 접속 목록에 같은 id 가 있으면 뺀다. orphan = 지금 받는 곳(current)이 어느 목록에도 없으면 {id, label}(예전에 붙인 것 — 보이게).
      접속 줄 = {id, name, label, kind, kindSay, state:'here'|'away', stateSay, listen, progress(60자), current}. empty = 고를 에이전트가 하나도 없음
    KIND_SAY · STATE_SAY · PROGRESS_MAX = 60
-   보낸 뒤(47-5b): delivery(fw, n) → {ok, text} — /api/forward 답 via 가 paseo·event·claude 면 에이전트가 받음(ok, 카드 덮개 'AI 수정 중'), 아니면 ok false·text null(대기열 — 셸의 지금 글) */
+   보낸 뒤(47-5b): delivery(fw, n) → {ok, text} — /api/forward 답 via 가 paseo·event·claude 면 에이전트가 받음(ok, 카드 덮개 'AI 수정 중'), 아니면 ok false·text null(대기열 — 셸의 지금 글)
+   sentSay(r, {agent, warn}) → {text, ms, ok} — 도우미로 보낸 한 번(r = VS.send 답 {done, left, fw, res})의 알림 글(셸 C6, view-send):
+     바로 반영 N건 · 받은 곳(delivery) 또는 대기열 글(agent 가 있으면 '보내지 못해', 없으면 터미널 안내) · 거절된 바로 쓰기의 까닭을 앞에 · warn(빈 레이아웃)을 맨 앞에.
+     ms = 대기열·받은 곳·warn 이 있으면 9000, 아니면 0(기본) · ok = 에이전트가 받음(덮개 'AI 수정 중') */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -108,5 +111,17 @@ function delivery(fw, n) {
   return Object.prototype.hasOwnProperty.call(DELIVERED, via) ? {ok: true, text: DELIVERED[via](n)} : {ok: false, text: null};
 }
 
-HD.agents = {delivery: delivery, menu: menu, KIND_SAY: KIND_SAY, STATE_SAY: STATE_SAY, PROGRESS_MAX: PROGRESS_MAX, rows: rows, rank: rank, suggest: suggest, inRepo: inRepo, key: key, label: label, folder: folder, NAME_MAX: NAME_MAX};
+function sentSay(r, opt) {
+  r = r || {}; opt = opt || {};
+  var done = r.done || [], left = r.left || [], warn = opt.warn || '', dv = delivery(r.fw, left.length);
+  var ai = !left.length ? '' : dv.ok ? dv.text :
+    opt.agent ? 'AI 에이전트에게 보내지 못해 ' + left.length + '건을 대기열 파일에만 저장했어요' :
+    'AI 터미널이 연결돼 있지 않아요 — ' + left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요. 받게 하려면 터미널 에이전트에 hd 명령(hd notes)으로 읽게 하거나 도우미를 --paseo-agent <id> 로 다시 띄우세요';
+  var said = (done.length ? '바로 반영 ' + done.length + '건' : '') + (done.length && ai ? ' · ' : '') + ai;
+  var refused = ((r.res && r.res.failed) || []).filter(function (f) { return f && f.reason; })[0];   // 도우미가 거절한 바로 쓰기(예: 정책 줄 500자 넘음) — 그 편집은 요청문으로 넘어갔다
+  if (refused) said = '파일에 쓰지 못함: ' + refused.reason + (said ? ' · ' + said : '');
+  return {text: (warn ? warn + (said ? ' · ' : '') : '') + said, ms: ai || warn ? 9000 : 0, ok: dv.ok};
+}
+
+HD.agents = {delivery: delivery, sentSay: sentSay, menu: menu, KIND_SAY: KIND_SAY, STATE_SAY: STATE_SAY, PROGRESS_MAX: PROGRESS_MAX, rows: rows, rank: rank, suggest: suggest, inRepo: inRepo, key: key, label: label, folder: folder, NAME_MAX: NAME_MAX};
 })();

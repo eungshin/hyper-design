@@ -1400,12 +1400,6 @@ function adoptExternal(names) {
   if (PR) PR.check();                                // 빈 레이아웃에 온 반영됨·대체됨 답 — 그 화면이 있으면 승격
 }
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
-function outDir() {
-  if (window.__hdOut) return window.__hdOut;
-  var p = decodeURIComponent(location.pathname).replace(/\/[^\/]*$/, '');
-  if (/^\/[A-Za-z]:/.test(p)) p = p.slice(1);
-  return p || '/';
-}
 // 크게 보기 도구(task 49a): 손 = 눌러 보기 · 이동 = 요소 고르기(요소 막대) · 주석 = 메모(picking) · 글자 = 누른 글자 고치기. 나머지 도구는 판에서만
 var MODAL_TOOLS = {hand: 1, move: 1, annotate: 1, text: 1}, mmode = 'hand';
 function sendPick() { try { if (mframe.contentWindow) mframe.contentWindow.postMessage({type: 'hd-pick', on: mmode !== 'hand', mode: mmode === 'text' ? 'text' : mmode === 'move' ? 'select' : ''}, '*'); } catch (e) {} }
@@ -1551,7 +1545,7 @@ var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { retu
                               edit: editMemo, del: delMemo, add: function (id) { openCardMemo(id); },
                               done: function (id) { addReply([id], '확인', '메모 완료'); }, reopen: function (id) { addReply([id], '다시', '메모 다시 열기'); },
                               lost: function (n) { return PN ? PN.lost(n) : false; }, highlight: function (id, no) { if (PN) PN.highlight(id, no); },
-                              choose: function (id, c) { answerQuestion(id, c); }, queued: function () { return !!(VS && VS.on && !window.__hdAgent); },
+                              choose: function (id, c) { SN.answer(id, c); }, queued: function () { return !!(VS && VS.on && !window.__hdAgent); },
                               showSent: function () { return VN.showSent(); }});
 // 메모 핀(modules/view-pins.js, task 11): 판 카드·크게 보기의 번호 핀 — 누르면 그 화면 메모 묶음이 그 메모로 열린다
 var PN = HD.viewPins.mount({rowsEl: rowsEl, mpins: $('#mpins'), $: $, $$: $$, esc: esc, CARD: CARD, sizeOf: sizeOf, list: function () { return NS.list(); },
@@ -1577,30 +1571,6 @@ function renderNotes(ids) {                          // ids = 메모가 바뀐 �
   if (PN) PN.render(ids);
   if (TH) TH.refresh();
 }
-function copyText(t) {                              // → Promise<복사됐나>
-  function fallback() {
-    var ta = document.createElement('textarea'), ok = false; ta.value = t; ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
-    document.body.appendChild(ta); ta.select();
-    try { ok = !!document.execCommand('copy'); } catch (e) {}
-    ta.remove();
-    return ok;
-  }
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, fallback);
-  } catch (e) {}
-  return Promise.resolve(fallback());
-}
-function copySend(list, msg, warn) {                 // 복사가 된 때만 '보냄'(되돌리기 경계도) — 안 되면 보내지 않은 그대로 · warn = 알림 앞에 붙일 말
-  var t = HD.edits.request(list, outDir(), AB ? AB.sizes() : null);
-  window.__hdLastSend = t;
-  return copyText(t).then(function (ok) {
-    if (!ok) { $('#nmsg').textContent = '복사하지 못했어요 — 다시 눌러 보세요(보내지 않은 그대로예요)'; toast($('#nmsg').textContent); return; }
-    list.forEach(function (n) { n.sent = true; });
-    saveNotes(); HI.sent();
-    $('#nmsg').textContent = (warn ? warn + ' · ' : '') + (msg || '복사했어요 — 터미널에 붙여넣으세요'); toast($('#nmsg').textContent, false, warn ? 9000 : 0);
-  });
-}
 // 화면 파일에 바로 쓰기(helper.py 로 열렸을 때, modules/view-sync.js) — 아니면 지금처럼 반영 대기 + 복사
 var gone = {};                                       // 파일에서 지운 카드: 떼어 두었다가 되살리면 제자리로
 // 바뀐 카드 다시 싣기 자리 하나(쓴 뒤·AI 덮개 걷힘 둘 다) — 등록부 기능 'swap' 이 swap(id, frame, url) 을 내주면 그것이 맡고, 없으면 비워 두고 보일 때 싣는다
@@ -1613,7 +1583,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
   toast: function (m, u) { toast(m, u); }, record: function (op) { record(op); }, pend: function (label, list) { list = list.filter(function (n) { return !n.opt; }); if (list.length) ED.add(label, list, null, null, true); },   // 바로 반영(49c)의 실패는 화면을 되돌리고 알렸다 — 반영 대기로 다시 넣지 않는다
   fresh: function (stamp, ids) { return !LV || LV.own(stamp, ids, false); },   // 실시간 알림이 같은 쓰기를 이미 실었으면 다시 싣지 않음(47-4b)
   wrote: function (res, list) { if (BK) BK.wrote(res, list); },   // 쓴 뒤 고른 요소 따라가기(task 49b) — 다시 실린 카드에서 막대가 같은 요소로
-  request: function (list) { return HD.edits.request(list, outDir(), AB ? AB.sizes() : null); },
+  request: function (list) { return SN.request(list); },
   data: function (nd, changed, v) {                  // 쓴 뒤 새 데이터: 선·이름은 새로, 바뀐 카드만 다시 싣는다(E17) — 보던 자리·배율·고른 것 그대로
     D.links = nd.links; D.arrows = nd.arrows; G = HD.graph.fromData(D);
     var live = {};
@@ -1686,69 +1656,10 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
     if (screens.length) VS.refresh(screens, 'f' + Date.now());
   },
   reloadCards: function (ids) { reloadCards(ids); }}) : null;
-var sending = false;                                 // 보내는 중에는 다시 보내지 않는다(두 번 누르기 = AI 에게 같은 요청 두 번 · S1)
-function sendDone() { sending = false; $('#nsend').disabled = !NS.list().some(HD.annotation.isOpen); }
-$('#nsend').addEventListener('click', function (e) {
-  if (sending || (e && e.detail > 1)) return;       // 더블클릭의 두 번째 누르기도 한 번으로
-  var open = NS.list().filter(HD.annotation.isOpen), list = open.filter(function (n) { return !n.sent; });   // 완료한 메모는 보내지 않는다
-  if (!list.length) list = open;                          // 다 보냈으면 다시 보내기(따로 누른 한 번)
-  if (!list.length) return;
-  sendList(list);
-});
-// 보내기 길 하나(위쪽 [보내기]·질문 고르기) — 셸 함수인 까닭: VS·VB·HI·복사 대체를 잇기만 한다
-function sendList(list) {
-  sending = true; $('#nsend').disabled = true;
-  var warn = HD.edits.emptyLayouts(list).length ? HD.edits.say.emptyLayout : '';   // 목적·메모 없는 빈 레이아웃(R5) — 보내기는 그대로, 결과 알림 앞에 한 번
-  if (!VS.on) { copySend(list, null, warn).then(sendDone, sendDone); return; }
-  $('#nmsg').textContent = '보내는 중…';
-  VS.send(list).then(function (r) {
-    NS.remove(function (n) { return r.ok[n.id]; });
-    r.left.forEach(function (n) { n.sent = true; });
-    saveNotes();
-    if (r.left.length) HI.sent(); else HI.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
-    var dv = HD.agents.delivery(r.fw, r.left.length), ai = !r.left.length ? '' :   // 어디로 갔는지·AI 가 켜졌는지 말로(대기열이면 아무도 안 읽는다) — paseo·접속한 에이전트(event)·claude = 받음(47-5b)
-      dv.ok ? dv.text :
-      window.__hdAgent ? 'AI 에이전트에게 보내지 못해 ' + r.left.length + '건을 대기열 파일에만 저장했어요' :
-      'AI 터미널이 연결돼 있지 않아요 — ' + r.left.length + '건을 대기열 파일(.hd-queue)에만 저장했어요. 받게 하려면 터미널 에이전트에 hd 명령(hd notes)으로 읽게 하거나 도우미를 --paseo-agent <id> 로 다시 띄우세요';
-    var said = (r.done.length ? '바로 반영 ' + r.done.length + '건' : '') + (r.done.length && ai ? ' · ' : '') + ai;
-    var refused = ((r.res && r.res.failed) || []).filter(function (f) { return f.reason; })[0];   // 도우미가 거절한 바로 쓰기(예: 정책 줄 500자 넘음) — 까닭을 말한다(그 편집은 요청문으로 넘어갔다)
-    if (refused) said = '파일에 쓰지 못함: ' + refused.reason + (said ? ' · ' + said : '');
-    toast($('#nmsg').textContent = (warn ? warn + (said ? ' · ' : '') : '') + said, false, ai || warn ? 9000 : 0);
-    window.__hdLastHelper = {apply: r.res, forward: r.fw};
-    if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)
-      var seen = {}, scs = [];
-      r.left.forEach(function (n) { var c = VL.cardEl(n.screen), b = c && $('.cover', c); if (b && !seen[n.screen]) { seen[n.screen] = 1; scs.push({id: n.screen, file: b.dataset.file}); } });
-      VB.mark(scs, dv.ok ? 'paseo' : 'queue');       // 받은 곳이 있으면 'AI 수정 중'(덮개 종류 paseo — 접속한 에이전트·claude 도)
-    }
-  }).catch(function () { return copySend(list, '파일에 바로 쓰기가 꺼져 있어 복사했어요 — 터미널에 붙여넣으세요', warn); }).then(sendDone, sendDone);
-}
-// 질문 고르기(view-thread): 질문 메모에 고른 답(확인 + answer) = 닫기 + 같은 자리 새 메모 '질문 "…" → 고른 것' 을 그것만 보내기
-// 되돌리기 한 단계(둘을 함께) — 보내지면 보낸 자리가 기록의 경계라 그 앞으로는 되돌리지 않는다(보내기와 같음). 셸 함수인 까닭: NS·record·sendList 를 잇기만 한다
-function answerQuestion(id, choice) {
-  var A = HD.annotation, q = NS.find(id), ask = q && A.question(q);
-  if (!ask || ask.choices.indexOf(choice) < 0) { toast('그 질문은 이미 답했거나 없어요'); return; }
-  if (sending) { toast('보내는 중이에요 — 잠시 뒤 다시 골라 주세요'); return; }
-  var at = new Date().toISOString(), k = q.replies.length, ts = tgts(q);
-  var n = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), screen: q.screen, targets: ts.slice(), path: ts[0].path, text: ts[0].text, rect: ts[0].rect,
-           note: A.followUp(ask.question, choice), intent: 'change', sent: false};
-  if (A.scopeOf(q) !== 'element') n.scope = q.scope;   // 질문 메모의 범위(R7)를 이어받는다
-  var go = function () { q.replies = q.replies.slice(0, k).concat([A.answer(choice, at)]); if (!NS.find(n.id)) NS.add(n); saveNotes(); };
-  go();
-  record({label: '질문에 답하기', redo: go, undo: function () { q.replies = q.replies.slice(0, k); NS.remove(function (x) { return x.id === n.id; }); saveNotes(); }});
-  sendList([n]);
-}
-$('#nclear').addEventListener('click', function () {   // 보낸 메모 = 완료(답 '확인'을 덧붙여 기록은 남긴다) · 보낸 편집(반영 대기)은 예전처럼 목록에서 뺀다 — 되돌리기 한 단계
-  var A = HD.annotation, at = new Date().toISOString(), before = NS.list().slice();
-  var memos = before.filter(function (n) { return n.sent && !n.edit && A.isOpen(n); }), k = memos.map(function (n) { return (n.replies || []).length; });
-  var edits = before.filter(function (n) { return n.sent && n.edit; });
-  if (!memos.length && !edits.length) return;
-  var go = function () {
-    memos.forEach(function (n) { n.replies = (n.replies || []).concat([A.reply('확인', at)]); });
-    NS.remove(function (n) { return edits.indexOf(n) >= 0; }); $('#nmsg').textContent = ''; saveNotes();
-  };
-  go();
-  record({label: '보낸 것 완료로', redo: go, undo: function () { memos.forEach(function (n, i) { n.replies = n.replies.slice(0, k[i]); }); NS.set(before); saveNotes(); }});
-});
+// 보내기 길 하나(modules/view-send.js): 위쪽 [보내기]·질문 고르기·등록부 sendNotes · 복사 대체 · [보낸 것 완료로] — 보낸 뒤 말은 HD.agents.sentSay
+var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms) { toast(m, u, ms); },
+  history: {sent: function () { HI.sent(); }, applied: function () { HI.applied(); }}, sync: function () { return VS; }, cover: function () { return VB; },
+  cardEl: function (id) { return VL.cardEl(id); }, sizes: function () { return AB ? AB.sizes() : null; }, agent: function () { return window.__hdAgent || null; }, out: function () { return window.__hdOut || ''; }});
 addEventListener('keydown', function (e) {
   if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
   var k = (e.key || '').toLowerCase();
@@ -1767,7 +1678,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   view: {get: function () { return {z: z, tx: tx, ty: ty}; }, set: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }, pane: pane},   // 카메라(S5 만드는 중 틀 따라가기)
   refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
-  sendNotes: function (list) { if (sending) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); sendList(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
+  sendNotes: function (list) { if (SN.busy()) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); SN.send(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
   store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},
   local: {getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }},

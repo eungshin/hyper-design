@@ -16,7 +16,7 @@
 | `view-chat.js` | View | 알약 점이 `#aichip[data-state]` 를 따른다(자리 비움 = 회색) · 알약 ⌄. 진행 줄 = `HD.chat.progress(p, ev, screens, ids)`: `request.sent`(이 요청 메모 id) → `보냄 · <이름> (실시간|Paseo|Claude)` / `보냄 · 대기열 — …` → `agent.progress` → `AI 작업 중 · <글>` → `agent.reply` → `답 옴 · <짧은 답>`. 예전 claim·AI 쓰기·release 줄 그대로 |
 | `view-sync.js` | View | `/api/forward {text, notes:[메모 id ≤200]}` · 되돌리기 답 already = 토스트 + 기록 줄 표시(`op.bind`) |
 | `view-history.js` | View | `op.bind(f)` — 줄 옆 표시 `.hn`(이번 세션만, 저장 안 함) |
-| 셸 `sendList` | — | 보낸 뒤 말·덮개 종류를 `HD.agents.delivery` 로(접속한 에이전트 = 'AI 수정 중', 대기열이라 하지 않음) |
+| `view-send.js` `send`(`send.md`) | View | 보낸 뒤 말·덮개 종류를 `HD.agents.sentSay`·`delivery` 로(접속한 에이전트 = 'AI 수정 중', 대기열이라 하지 않음) |
 
 받는 곳의 진실은 도우미 `Queue.agent`(POST `/api/attach`) 하나 — 접속한 에이전트를 골라도 같은 attach, 서버가 `adapters.choose` 로 이벤트·paseo·claude·대기열을 고른다. 캔버스는 `to` 를 보내지 않는다.
 
@@ -29,4 +29,4 @@
 | 고친 곳 | `-m` |
 |---|---|
 | 위 Model(`tests/test_canvas_unit_receivers.py`) | `unit` |
-| View · 셸 `sendList`(브라우저 `tests/test_canvas_receivers.py` — 영역 chat, 이웃 board) | `unit or chat or helper --surface board` |
+| View · `view-send`(브라우저 `tests/test_canvas_receivers.py` — 영역 chat, 이웃 board) | `unit or chat or helper --surface board` |

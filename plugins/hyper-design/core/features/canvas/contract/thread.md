@@ -12,4 +12,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/view-thread.js`(카드 메모 배지 → 그 화면 메모 묶음: 고치기·지우기·메모 추가·완료·다시 열기·답 줄·질문 고르기) · 셸 `editMemo`·`delMemo`·`addReply`·`answerQuestion`·`sendList` | `unit or notes or modal or tools or helper` |
+| `modules/view-thread.js`(카드 메모 배지 → 그 화면 메모 묶음: 고치기·지우기·메모 추가·완료·다시 열기·답 줄·질문 고르기) · 셸 `editMemo`·`delMemo`·`addReply` · `view-send` `answer`·`send` | `unit or notes or modal or tools or helper` |
