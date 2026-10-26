@@ -43,7 +43,7 @@ SURFACES = {
               ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
                "test_canvas_artboard.py", "test_canvas_tabs.py", "test_canvas_rows.py",
                "test_canvas_receivers.py", "test_canvas_board_text.py", "test_canvas_card_copy.py", "test_canvas_placeholder.py",
-               "test_canvas_chat_log.py", "test_canvas_attach.py")),
+               "test_canvas_chat_log.py", "test_canvas_attach.py", "test_canvas_board_notes.py")),
 }
 
 
