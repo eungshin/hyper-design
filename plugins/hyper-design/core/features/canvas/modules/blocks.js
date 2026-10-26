@@ -1,45 +1,10 @@
 /* Model — 요소 막대 규칙(블록 편집, task 49a·49b): 고른 요소에 띄울 단추·켜짐·앱 카드면 AI 요청·단축키·상위 고르기·속성 칸·부품 요청 글. DOM·저장소·메시지를 쓰지 않는다.
    h = palette.js hd-hit 답 {path, text, full, textOk, prev, next, root, up, tag, attrs, rect, src?} · o = {app}(앱 카드 = 개발 서버 주소 화면, 또는 h.src 가 있음)
-   // ---- R17 시안 A: 작은 아이콘 막대 + 전체 메뉴(오른쪽 클릭 = ⋯). 힌트는 실제로 듣는 키만(keyAct · 크게 보기 hd-dbl)
-var MENU = {parent: '상위 고르기', inner: '안쪽 고르기', chain: '레이어 고르기',
-            text: '글자 고치기', attr: '속성 고치기…', dup: '복제', remove: '지우기', up: '위로 옮기기', down: '아래로 옮기기',
-            insert: '아래에 넣기…', swap: '다른 부품으로 바꾸기…', memo: '메모 달기', ai: 'AI에게 바꿔 달라기'};
-var GROUPS = [['고르기', ['parent', 'inner', 'chain']], ['고치기', ['text', 'attr', 'dup', 'remove', 'up', 'down', 'insert', 'swap']], ['요청', ['memo', 'ai']]];
-var PICK_ONLY = {inner: 1, chain: 1, ai: 1};          // bar 에 없는 항목 — 고르기·요청이라 늘 켜짐(앱 카드도 그대로)
-var KEY = {parent: 'Shift+Enter', dup: 'Ctrl+D', remove: 'Del', up: 'Alt+↑', down: 'Alt+↓'};   // keyAct 와 같은 키
-function keyOf(act, h, where) {
-  if (act === 'inner') return enterOf(h) === 'down' ? 'Enter' : '';
-  if (act === 'text') return where === 'modal' ? '더블클릭' : enterOf(h) === 'text' ? 'Enter' : '';
-  return KEY[act] || '';
-}
-function menu(h, o) {
-  h = h || {}; o = o || {};
-  var by = {};
-  bar(h, o).forEach(function (b) { by[b.act] = b; });
-  return GROUPS.map(function (g) {
-    return {head: g[0], items: g[1].map(function (act) {
-      if (PICK_ONLY[act]) return {act: act, label: MENU[act], key: keyOf(act, h, o.where), on: true, ask: false, title: ''};
-      var b = by[act];
-      if (!b || (!b.on && act !== 'text')) return null;   // 꺼진 것은 빼되 글자 고치기는 남긴다(누르면 까닭)
-      return {act: act, label: MENU[act] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask || !b.on ? '' : keyOf(act, h, o.where), on: b.on, ask: b.ask, title: b.title};
-    }).filter(Boolean)};
-  }).filter(function (g) { return g.items.length; });
-}
-function icons(h, o) {
-  h = h || {}; o = o || {};
-  var out = [{act: 'memo', label: MENU.memo, key: '', ask: false}];
-  var t = bar(h, o).filter(function (b) { return b.act === 'text'; })[0];
-  if (t && t.on) out.push({act: 'text', label: MENU.text + (t.ask ? ' — AI에게 요청' : ''), key: t.ask ? '' : keyOf('text', h, o.where), ask: t.ask});
-  out.push({act: 'ai', label: MENU.ai, key: '', ask: false}, {act: 'more', label: '전체 메뉴', key: '오른쪽 클릭', ask: false});
-  return out;
-}
-
-HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 — 요소 메뉴·단축키), shown(items) → 막대에 보일 것(↑·↓ 는 단축키·메뉴만, 49c),
+HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 — 요소 메뉴·단축키),
                 grip(h, o) → {on, title} — 끌어서 순서 바꾸기 손잡이(49c: 앱 카드·화면 뿌리·형제 없음 = 꺼짐), isApp(file), keyAct({key, code, alt, ctrl, meta, shift}) → act|null(Alt+↑↓ 옮기기 · Ctrl/Cmd+D 복제 · Delete 지우기 · [·Shift+Enter 상위 · Enter 'enter' · Tab 'next' · Shift+Tab 'prev'),
                 enterOf(h) → 'text'|'down'(Enter: 글자면 그 자리 고치기, 아니면 첫 자식),
                 askText(act, h) → 요청 글(앱 카드), chainOf(h, chain) → '고르기 ▸' 목록(그 요소 + 조상, 같은 상자 감싸기는 건너뜀, 51-3),
                 tone(h, o) → 'app'|''(요소 상자 색 — 앱 카드 = 요청으로만, Figma 인스턴스 보라 자리, 51-3), parentPick(h, chain) → 고를 상위 hit|null,
-                barLimit(anchor, view) → 막대 최대 너비, fit(widths, limit, more) → 막대에 남길 단추 수(나머지는 ⋯),
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글,
                 R17 시안 A: icons(h, o) → 막대 아이콘 [{act, label, key, ask}](메모 · 글자(글을 바꿀 수 있을 때만) · AI · 전체 메뉴 ⋯),
                 menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title}]}], keyOf(act, h, where) → 실제로 듣는 키 힌트|''} */
@@ -104,8 +69,6 @@ function bar(h, o) {
   });
 }
 
-var OFF_BAR = {up: 1, down: 1};                     // 막대에서 뺀 단추(49c) — 끌어서 옮기기 손잡이가 대신, Alt+↑/↓·요소 메뉴는 그대로
-function shown(items) { return (Array.isArray(items) ? items : []).filter(function (it) { return it && !OFF_BAR[it.act]; }); }
 function grip(h, o) {
   h = h || {}; o = o || {};
   if (o.app || (h.src && h.src.file)) return {on: false, title: '앱 카드는 끌어서 옮길 수 없어요 — 메모로 AI에게 요청하세요'};
@@ -175,17 +138,6 @@ function chainOf(h, chain) {
 // 요소 상자 색(51-3): 앱 카드(개발 서버 화면 또는 소스 줄이 있는 요소) = 'app' — 막대의 앱 카드 판정(bar)과 같은 규칙
 function tone(h, o) { return (o && o.app) || (h && h.src && h.src.file) ? 'app' : ''; }
 
-// 막대 너비: 요소 칸(요소 너비, 너무 좁으면 220)까지 — 보이는 칸 안. 넘으면 뒤 단추를 "⋯" 로(fit)
-function barLimit(anchor, view) { return Math.max(0, Math.min(view.w - 16, Math.max(anchor.w || 0, 220))); }
-// widths = 단추마다 너비(앞 구분선 포함) · more = "⋯" 너비 → 막대에 남길 단추 수(다 들어가면 전부, 아니면 ⋯ 자리를 남기고 앞에서부터, 최소 1)
-function fit(widths, limit, more) {
-  var sum = widths.reduce(function (s, w) { return s + w; }, 0);
-  if (sum <= limit) return widths.length;
-  var n = 0, acc = more;
-  while (n < widths.length && acc + widths[n] <= limit) { acc += widths[n]; n++; }
-  return Math.max(Math.min(1, widths.length), n);
-}
-
 // ---- R17 시안 A: 작은 아이콘 막대 + 전체 메뉴(오른쪽 클릭 = ⋯). 힌트는 실제로 듣는 키만(keyAct · 크게 보기 hd-dbl)
 var MENU = {parent: '상위 고르기', inner: '안쪽 고르기', chain: '레이어 고르기',
             text: '글자 고치기', attr: '속성 고치기…', dup: '복제', remove: '지우기', up: '위로 옮기기', down: '아래로 옮기기',
@@ -220,6 +172,6 @@ function icons(h, o) {
   return out;
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, shown: shown, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
-             attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, barLimit: barLimit, fit: fit, icons: icons, menu: menu, keyOf: keyOf};
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
+             attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, icons: icons, menu: menu, keyOf: keyOf};
 })();

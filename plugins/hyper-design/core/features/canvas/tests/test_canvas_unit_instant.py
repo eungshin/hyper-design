@@ -83,7 +83,7 @@ out.sameDiff = [S.same({changed: [], added: [], removed: [], many: false}), S.sa
                 S.same({changed: [], added: [], removed: [], many: true}), S.same(null), S.same({})];
 // 막대: ↑·↓ 는 막대에서 빼고 단축키는 그대로 · 손잡이
 const h = {path: 'ul > li:nth-of-type(2)', prev: true, next: true, root: false, up: true, textOk: true, tag: 'li'};
-out.shown = B.shown(B.bar(h, {})).map(x => x.act);
+out.shown = B.icons(h, {}).map(x => x.act);
 out.all = B.bar(h, {}).map(x => x.act);
 out.keys = [B.keyAct({key: 'ArrowUp', alt: true}), B.keyAct({key: 'ArrowDown', alt: true})];
 out.grip = [B.grip(h, {}).on, B.grip(h, {app: true}).on, B.grip(Object.assign({}, h, {root: true}), {}).on, B.grip(Object.assign({}, h, {prev: false, next: false}), {}).on,
@@ -217,7 +217,7 @@ def test_same_means_no_changed_added_or_removed_block(r):
 
 # ---------------------------------------------------------------- 막대
 def test_bar_hides_up_down_but_keeps_them_for_shortcuts_and_menu(r):
-    assert "up" not in r["shown"] and "down" not in r["shown"] and "dup" in r["shown"], r["shown"]
+    assert "up" not in r["shown"] and "down" not in r["shown"] and "memo" in r["shown"], r["shown"]   # 막대 = 아이콘(R17) — ↑·↓ 는 메뉴(bar)·단축키만
     assert "up" in r["all"] and "down" in r["all"]
     assert r["keys"] == ["up", "down"]
 

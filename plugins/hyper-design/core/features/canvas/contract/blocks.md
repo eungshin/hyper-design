@@ -6,7 +6,7 @@
 
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
-| `modules/blocks.js` | Model | 요소 막대 규칙 — 막대 아이콘(`icons`)·요소 메뉴 묶음과 단축키 힌트(`menu`·`keyOf`, R17)·단추 차례·켜짐(`bar`)·앱 카드 판정(`isApp`, `build_canvas.DEV_URL` 과 같은 규칙)·단축키(`keyAct`)·앱 카드 요청 글(`askText`)·막대 너비(`barLimit`·`fit`)·상위 고르기(`parentPick`)·속성 허용 목록(`ATTRS`·`attrOk`·`attrFields`)·부품 요청 글(`partAsk`). 상태 없음 |
+| `modules/blocks.js` | Model | 요소 막대 규칙 — 막대 아이콘(`icons`)·요소 메뉴 묶음과 단축키 힌트(`menu`·`keyOf`, R17)·단추 차례·켜짐(`bar`)·앱 카드 판정(`isApp`, `build_canvas.DEV_URL` 과 같은 규칙)·단축키(`keyAct`)·앱 카드 요청 글(`askText`)·상위 고르기(`parentPick`)·속성 허용 목록(`ATTRS`·`attrOk`·`attrFields`)·부품 요청 글(`partAsk`). 상태 없음 |
 | `modules/bar-place.js` | Model | 막대 자리(51-7a) — `HD.barPlace.place({anchor, label, size, view, bars, content})` → `{x, y}`. 위 먼저 → 아래 → 옆; 고른 요소·이름표는 덮지 않고, 붙은 둘레 글은 막대 높이 + 12px 까지 비켜 가고, 다 덮으면 가장 적게 덮는 자리. 상태 없음 |
 | `modules/view-blocks.js` | View | `#elbar`·`#elpop`(속성 칸·부품 목록·⋯ 목록) 과 그 CSS · 둘레 글 상자 읽기(같은 출처 화면만, 1초 기억). 상태 = 지금 고른 요소 하나 `{screen, h, app, where, anchor(), frame(), view?(), avoid?()}` + 따라갈 요소 하나(쓴 뒤 15초, 저장하지 않음). `HD.feature('blocks', {needs: ['$','toast','esc','api','cardEl']})` → `{show, hide(where?), place, sel, fire(act), onAct(fn), onPick(fn), onMenu(fn), wrote(res, list)}` — `[⋯]` 는 `onMenu` 로 받은 fn(sel, {x, y}) 로 셸의 요소 메뉴를 막대 아래에 연다 — 편집은 셸이 `onAct` 로 준 `blockAct` 하나로만 나가고, 상위·따라가기로 새로 고른 요소는 `onPick` 으로 셸이 그린다 |
 | `specimen_parts.py` | Model(Python) | 부품 견본(`components.html`·`specimens.html` 의 `section.spec[data-key]`) → 화면에 넣을 뼈대(`sections`·`skeleton`·`parts`·`markup`). 파일·네트워크 없음 — 읽기는 `helper.py` 가(`parts_of`·`apply_edits`) |
@@ -25,7 +25,7 @@
 - Alt+클릭(51-2, 사용자 결정 ③) = 그 자리 가장 안쪽 요소를 바로 고르기 — 판은 카드를 안 골랐어도(그 카드를 고르고 `hd-hit-at deep:true`), 크게 보기는 선택(V) 도구에서. Ctrl/Cmd+클릭은 지금 뜻(어디로 가나) 그대로
 - 읽기만인 탭(`<html data-hd-tab="reader">`)은 막대 단추를 흐리게, 누르면 알리기만(상위는 고르기라 됨)
 - 막대 자리(`HD.barPlace.place`, polish-1 → 51-7a 이사): 후보 = 위(왼쪽 맞춤 → 오른쪽 맞춤) → 아래(같은 차례) → 오른쪽 옆 → 왼쪽 옆. 단단한 규칙: 고른 요소 위에는 놓지 않는다(요소가 보이는 칸을 다 덮을 때만 겹침 `over`) · 보이는 칸 안 · 비킬 것(목록)과 겹치지 않음. 무른 규칙: 둘레 글 상자(`others` — 글 마디·그림·입력 칸, 고른 요소 안 것은 빼고)를 덮지 않는 첫 후보, 모두 덮으면 덮는 넓이가 가장 작은 후보(같으면 차례). 둘레 글은 같은 출처 화면(도우미 http)에서만 읽는다 — `file://`·앱 카드는 못 읽어 예전 차례 그대로. 보이는 칸 = 크게 보기는 덮개 `#modal`(도크·위쪽 줄 위가 아님), 판은 판 칸. 비킬 것 = 크게 보기는 창 제목 막대(닫기), 판은 카드 선택 막대 + 왼쪽 도구 막대 `#tools`(둘 다). 판 이동·확대(`placeSelbar`)마다 다시 놓는다. 크게 보기 안 스크롤 = 막대 걷기
-- 막대 모양(polish-1 → R17): 한 줄·낮게(약 24px, 22px 아이콘 단추), 흰 바탕 + `--ui-line` 테두리, 마우스가 없으면 반투명(0.9, 올리면 1). 아이콘 넷이라 늘 요소 칸(`barLimit` 최소 220) 안 — 예전 넘침 `⋯`(`fit`·`data-more`·`#elpop` 목록)은 없앴다(`fit`·`barLimit`·`shown` 은 Model 에 남음, 지금 View 는 안 씀)
+- 막대 모양(polish-1 → R17): 한 줄·낮게(약 24px, 22px 아이콘 단추), 흰 바탕 + `--ui-line` 테두리, 마우스가 없으면 반투명(0.9, 올리면 1). 아이콘 넷이라 늘 요소 칸 안 — 예전 넘침 `⋯`(`fit`·`data-more`·`#elpop` 목록)은 없앴다(`fit`·`barLimit`·`shown` 도 10-26 지움)
 - 상위 고르기: 화면에 `hd-up` → 조상 hit 들(가까운 것부터 8개) → `parentPick` = 상자가 다른 첫 조상(같은 상자 = 감싸기만 한 요소는 건너뜀). 그 요소도 막대의 모든 편집(지우기·복제·옮기기·바꾸기)을 그대로 받는다 — 섹션 통째로
 - 바로 쓰기: 글자·지우기·복제·옮기기·속성·넣기·바꾸기는 `edits.instantOf` — 글자·복제·옮기기는 화면에 먼저 보이고 실패면 되돌림(49c `instant.md`) — 도우미가 있으면 누르는 즉시 파일에(되돌리기 = `/api/restore` 되살리기), 없으면 반영 대기(미리보기: 복제 = 점선 복사본, 옮기기 = 자리 바꿈, 속성 = 잠시 바꿈 — 넣기·바꾸기는 미리보기 없음)
 - 쓴 뒤 따라가기(49b): 도우미 `/api/apply` 답 `paths = {편집 id: 그 요소의 새 경로}`(그 화면에 요소 편집 하나일 때 — 옮긴 것·넣은/바꾼 부품·같은 요소) → `view-sync` `ctx.wrote` → 막대가 기억 → 다시 실린 틀(`?v=<stamp>`)의 `hd-here` 에 `hd-find` → `hd-found` 로 다시 고른다(판·크게 보기 모두, 48a 교체 틀). Alt+↑ 를 이어 눌러도 다시 고를 필요가 없다
