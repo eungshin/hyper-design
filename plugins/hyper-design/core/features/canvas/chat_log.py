@@ -17,7 +17,7 @@ CAP = 500                                            # 남길 턴 수
 SLACK = 50                                           # 이만큼 넘치면 한 번에 옮긴다(덧붙일 때마다 다시 쓰지 않게)
 OPEN_MS = 10 * 60 * 1000                             # 마지막 턴이 '열림'인 시간(빌드 줄 붙이기)
 NOTES_MAX = 200
-CUT = {"text": 2000, "progress": 300, "reply": 1000, "reason": 300, "label": 120, "chip": 60}
+CUT = {"text": 2000, "progress": 300, "reply": 50000, "reason": 300, "label": 120, "chip": 60}   # reply = 답 전체(R24 — 대화 패널이 다 보인다, 예전 1000)
 CHIPS_MAX = 20
 KINDS = ("ask", "sent", "progress", "reply", "write", "built", "failed", "undone")
 
@@ -35,14 +35,19 @@ def _ids(v):
 
 
 def reply_text(reply):
-    """POST /api/reply 의 reply → 보일 짧은 글 | None — 답변 = text · 반영됨 = what · 일부 = done · 질문 = question."""
+    """POST /api/reply 의 reply → 보일 글(다, R24) | None — 답변 = text · 반영됨 = what · 일부 = done · 질문 = question,
+    그리고 자세한 설명 detail 이 있으면 빈 줄 뒤에 붙인다(요약 칸은 프로토콜이 짧게 받고, 긴 설명은 detail — 대화 패널이 다 보인다)."""
     if not isinstance(reply, dict):
         return None
+    head = None
     for k in ("text", "what", "done", "question"):
-        t = _s(reply.get(k), CUT["reply"])
-        if t:
-            return t
-    return None
+        head = _s(reply.get(k), CUT["reply"])
+        if head:
+            break
+    detail = _s(reply.get("detail"), CUT["reply"])
+    if head and detail and detail != head:
+        return head + "\n\n" + detail
+    return head or detail
 
 
 def from_event(ev):

@@ -24,6 +24,8 @@
 - 읽기: 처음 · `hd-event`(request.sent · agent.* · ai.write · build.* · notes.changed) 80ms 뒤 · 패널이 보이는 동안 4초마다(숨은 탭 건너뜀). 맨 아래를 보고 있으면 새 줄을 따라가고, 올려 읽는 중이면 그대로(24px)
 - 입력창 자리: 패널이 보이면(왼쪽·오른쪽·떠 있는 창 — `#pTalk` 에 자리가 있음, ResizeObserver) 의도 `hd-composer {host}` → view-chat 이 같은 `#hdchat` 을 패널 아래로(`.docked`, 상태 줄·⌄ 감춤). 안 보이면 `{host:null}` = 판 아래. 창 메뉴: `대화` = 패널 켜고 끄기 · `대화창` = 판 아래 떠 있는 입력창 설정 — 패널이 보이면 꺼진 줄(입력창은 늘 패널에)
 - 터미널 대화(S3b 계약, 공급자 모름): 받는 곳(`window.__hdAgent`)이 있으면 `GET /api/agents/transcript?agent=&since=<cursor>` → `{entries:[{id, role:'user'|'assistant'|'tool', text, at}], cursor, source}` + 이벤트 `agent.transcript {agent, entries}`. 턴과 `at` 차례로 섞음 · user = '터미널에서' 오른쪽 말풍선 · tool = 회색 '도구 · <짧게>'(펼침, 다시 그려도 펼친 채) · 캔버스 요청이 터미널에도 찍히면(요청 글 또는 요청문 앞 80자가 들어 있음) 한 번만. 404·깨진 답·source none = 조용한 한 줄 `이 터미널의 대화는 가져올 수 없어요`
+- 답 전체(R24): 답 줄(reply)·터미널 답(assistant)은 자르지 않는다 — 서버도(`transcript_parse.TEXT_MAX` 200000 · `chat_log.CUT.reply` 50000, `reply_text` = 요약 칸 + 빈 줄 + `detail`). 줄바꿈 그대로, ``` 울타리 = 고정폭 `<pre>`(가로 스크롤) · `인라인` = `<code>`(나누기 = `HD.chatLog.blocks/spans`, 닫히지 않은 울타리 = 끝까지 코드). 목록 글은 골라 복사(도크의 `user-select:none` 을 목록만 풀고, 글을 고른 채 떼면 턴 누르기 아님) · 답마다 [복사](올리면 보임, 클립보드 API → 안 되면 `execCommand('copy')` → 그래도 안 되면 토스트). 짧게 남는 것: 진행 줄(한 줄) · 도구 줄 요약(누르면 펼침) · 칩 · 판 아래 대화창 상태 한 줄(`chat.js` REPLY_CUT 40·PROGRESS_CUT 60 — 패널이 전체를 보인다)
+- 다시 그리기(R24): 줄마다 key(`t<턴>`·`e<터미널 줄 id>`) + 맥박 없는 html 을 견주어 바뀐 줄만 새 요소로, 차례만 맞춘다 — 긴 기록에서 이벤트마다 목록 전체를 다시 만들지 않는다(펼친 도구 줄·글 고르기가 그대로)
 - 움직임(§8): 새 줄 맥박 600ms(scale 1→1.02→1, 처음 그림은 없음) · 패널 나타남 400ms `cubic-bezier(0.34,0.88,0.34,1)` fade+6px · 회전 1s linear — `prefers-reduced-motion` 이면 모두 끔
 - 오류 탐지: `#pTalk` 없음 = `[hd]` + 기능 빠짐 · `/api/chat` 404(옛 도우미)·깨진 답·못 닿음 = `[hd]` 한 번(기록 없이) · ask/undone 기록 실패 = `[hd]` · view-chat 이 `hd-composer` 를 받지 않음 = `[hd]` · ctx.focus 없음 = `[hd]` + 강조만 · 되돌리기 실패 = 토스트. 서버: 깨진 줄 건너뜀 + `[hd]` · 쓰기 실패 `[hd]`(메모리 기록은 남음) · 보관 실패 = 그대로 두고 `[hd]`. 도우미 없음(file://) = 대화 패널은 이 페이지에 없다(view-dock `absent` — 그리지 않고 창 메뉴 줄은 꺼짐, 저장 배치는 그대로), 입력창은 판 아래 그대로
 - S3b 가 붙는 자리: `session.py` `ProjectSession.__init__` 의 `# ── S3b 자리` 주석(펌프 — `agent.transcript` publish, 시계 일이면 Ticker) · `router.py` ROUTES GET 의 `# ── S3b 자리` 줄(`/api/agents/transcript`). `agent.transcript` 는 이미 `events.TYPES` · `live.js` TYPES 에 있다
@@ -33,5 +35,5 @@
 | 고친 곳 | `-m` |
 |---|---|
 | `chat_log.py` · `chat_store.py` `ChatLog` · `router.py` `/api/chat` · `events.py` taps | `unit`(test_canvas_unit_chat_log_py.py — ChatLog 파일은 `-m slow -k chatlog`) + `unit or helper` |
-| `modules/chat-log.js` | `unit`(test_canvas_unit_chat_log.py) |
-| `view-chat-log.js` · 셸 `#pTalk`·`#ldock`·`focus` · view-chat `hd-composer` | `unit or chat or dock or helper --surface board`(브라우저 test_canvas_chat_log.py) |
+| `modules/chat-log.js` | `unit`(test_canvas_unit_chat_log.py · 답 전체 test_canvas_unit_chat_full.py) |
+| `view-chat-log.js` · 셸 `#pTalk`·`#ldock`·`focus` · view-chat `hd-composer` | `unit or chat or dock or helper --surface board`(브라우저 test_canvas_chat_log.py · 답 전체 test_canvas_r24_chat.py) |

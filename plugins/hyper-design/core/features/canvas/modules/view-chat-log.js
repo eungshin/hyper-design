@@ -9,6 +9,9 @@
    입력창 자리(S3): 패널이 보이면(도크·떠 있는 창 어디든) 의도 'hd-composer' {host: 패널 아래 칸} → view-chat 이 같은 #hdchat 을 그리로 옮긴다, 안 보이면 {host:null} = 판 아래로.
    터미널 대화(S3b 계약): 받는 곳(window.__hdAgent)이 있으면 GET /api/agents/transcript?agent=&since=<cursor> + 이벤트 agent.transcript — 턴과 시간 차례로 섞는다.
      user = '터미널에서' 오른쪽 말풍선 · assistant = 에이전트 답 · tool = 회색 한 줄 '도구 · …'(누르면 펼침). 같은 요청은 한 번(HD.chatLog.echo). 없음·못 읽음 = 조용한 한 줄.
+   답 전체(R24): 답 줄·터미널 답은 다 그린다 — 줄바꿈 그대로, ``` 덩이 = 고정폭 <pre>(가로 스크롤), `인라인` = <code>(나누기는 HD.chatLog.blocks/spans).
+     글은 골라 복사할 수 있고(도크의 user-select:none 을 목록만 풀어 줌 · 글을 고르는 중이면 턴 누르기를 하지 않음), 답마다 [복사](올리면 보임). 도구 줄은 한 줄 요약 · 누르면 펼침.
+     다시 그리기는 줄마다(턴·터미널 줄 key) 바뀐 것만 새로 만들고 나머지 요소는 그대로 둔다 — 긴 기록에서도 이벤트마다 목록 전체를 다시 만들지 않는다.
    움직임(FINDINGS §8): 새 줄 맥박 600ms · 패널 나타남 spring-fade 400ms · 진행 회전 1s — 움직임 줄이기면 모두 끔.
    HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl']}) → {refresh(), records(), shown()} */
 (function () {
@@ -22,7 +25,7 @@ var NO_TERM = '이 터미널의 대화는 가져올 수 없어요';
 
 var CSS =
   '#pTalk{padding:0;height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box}' +
-  '#pTalk .tk-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0;padding:10px 12px 4px;list-style:none;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin}' +
+  '#pTalk .tk-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0;padding:10px 12px 4px;list-style:none;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;-webkit-user-select:text;user-select:text;cursor:auto}' +
   '#pTalk .tk-empty{margin:auto 0;padding:24px 8px;color:var(--ui-muted,#8a8a85);font-size:12.5px;text-align:center;line-height:1.5}' +
   '#pTalk .tk-foot{flex:none;padding:0 8px 8px}' +
   '#pTalk .tk-foot:empty{display:none}' +
@@ -59,6 +62,12 @@ var CSS =
   '#pTalk details.tk-tool{font-size:11.5px;color:#7a7a75}#pTalk details.tk-tool summary{cursor:pointer;list-style:none;padding-left:14px;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
   '#pTalk details.tk-tool summary::before{content:"\\203A";position:absolute;left:3px}#pTalk details.tk-tool[open] summary::before{content:"\\2304"}' +
   '#pTalk details.tk-tool pre{margin:4px 0 0 14px;padding:6px 8px;background:#F6F6F3;border-radius:6px;font:11px/15px ui-monospace,Menlo,monospace;white-space:pre-wrap;max-height:160px;overflow:auto}' +
+  '#pTalk .tk-md{position:relative;white-space:normal}#pTalk .tk-md .tk-p{white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere}#pTalk .tk-md .tk-p+.tk-p,#pTalk .tk-md .tk-p+pre,#pTalk .tk-md pre+.tk-p{margin-top:6px}' +
+  '#pTalk .tk-md code{font:12px/17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#EFEFEB;border-radius:4px;padding:0 3px}' +
+  '#pTalk .tk-md pre.tk-code{margin:6px 0 0;padding:8px 10px;background:#F4F4F0;border:1px solid #E6E6E1;border-radius:8px;font:12px/17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow-x:auto;scrollbar-width:thin;color:#2b2b29;tab-size:2}' +
+  '#pTalk .tk-md pre.tk-code code{background:none;padding:0;font:inherit}' +
+  '#pTalk .tk-copy{display:block;margin:4px 0 0 auto;padding:1px 7px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#6b6b66;font:500 11px system-ui,sans-serif;cursor:pointer;opacity:0;transition:opacity .12s;-webkit-user-select:none;user-select:none}' +
+  '#pTalk .tk-copy:focus-visible,#pTalk .tk-term:hover .tk-copy,#pTalk .tk-l:hover .tk-copy{opacity:1}#pTalk .tk-copy:hover{background:#F2F2EF;color:#2b2b29}' +
   '#pTalk .tk-quiet{font-size:11.5px;color:var(--ui-muted,#8a8a85);text-align:center}' +
   '#pTalk .tk-new{animation:tkPulse .6s ease-out;transform-origin:left center}' +
   '@keyframes tkPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}' +
@@ -73,7 +82,7 @@ function mount(ctx) {
   var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot');
   var on = !!(ctx.api && ctx.api.on), records = [], seq = null, seen = null, sig = null, warned = {};
   var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, openTools = {}, undoing = {};
-  var fetching = false, again = false, tick = 0, shownNow = false;
+  var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {};
 
   function warnOnce(k, m) { if (warned[k]) return; warned[k] = 1; console.warn('[hd] 대화 패널: ' + m); }
   function shown() { return host.getClientRects().length > 0; }
@@ -85,7 +94,8 @@ function mount(ctx) {
     var ask = a ? '<div class="tk-ask' + (a.fromRequest ? ' req' : '') + (fresh(t.recs[0].seq) ? ' tk-new' : '') + '">' + ctx.esc(a.text) +
       (a.chips.length ? '<div class="tk-chips">' + a.chips.map(chipHtml).join('') + '</div>' : '') + '</div>' : '';
     var lines = t.lines.length ? '<ol class="tk-lines">' + t.lines.map(function (l) {
-      return '<li class="tk-l' + (fresh(l.seq) ? ' tk-new' : '') + '" data-kind="' + l.kind + '" data-tone="' + (l.tone || '') + '">' + ctx.esc(l.text) + '</li>';
+      var body = l.kind === 'reply' ? rich(l.text, 'r' + l.seq) : ctx.esc(l.text);   // 답 = 전체(R24)
+      return '<li class="tk-l' + (l.kind === 'reply' ? ' tk-md' : '') + (fresh(l.seq) ? ' tk-new' : '') + '" data-kind="' + l.kind + '" data-tone="' + (l.tone || '') + '">' + body + '</li>';
     }).join('') + '</ol>' : '';
     var ic = t.state === 'done' ? '✓' : t.state === 'failed' ? '!' : '';
     var undo = t.undoable && on ? '<button type="button" class="tk-undo"' + (undoing[t.id] ? ' disabled' : '') + ' title="이 요청으로 AI 가 바꾼 화면을 되돌려요">' +
@@ -93,12 +103,20 @@ function mount(ctx) {
     return '<li class="tk-turn" data-turn="' + t.id + '" data-state="' + t.state + '" tabindex="0" title="누르면 이 요청이 닿은 화면으로">' + ask + lines +
       '<div class="tk-st"><span class="tk-ic" aria-hidden="true">' + ic + '</span><span class="tk-say">' + ctx.esc(say) + '</span>' + undo + '</div></li>';
   }
+  function rich(text, key) {                             // 답 글 → html(R24): 글 덩이 = 줄바꿈 그대로 · ``` = <pre> · `인라인` = <code> · [복사]
+    copies[key] = text;
+    var html = L.blocks(text).map(function (b) {
+      if (b.type === 'code') return '<pre class="tk-code"' + (b.lang ? ' data-lang="' + ctx.esc(b.lang) + '"' : '') + '><code>' + ctx.esc(b.text) + '</code></pre>';
+      return '<div class="tk-p">' + L.spans(b.text).map(function (x) { return x.code ? '<code>' + ctx.esc(x.text) + '</code>' : ctx.esc(x.text); }).join('') + '</div>';
+    }).join('');
+    return html + '<button type="button" class="tk-copy" data-copy="' + ctx.esc(key) + '" title="이 답을 복사">복사</button>';
+  }
   function termHtml(e, fresh) {
     var v = L.entryView(e), nw = fresh ? ' tk-new' : '';
     if (v.role === 'tool') return '<li class="tk-term' + nw + '" data-role="tool" data-id="' + ctx.esc(e.id) + '"><details class="tk-tool"' + (openTools[e.id] ? ' open' : '') +
       '><summary>' + ctx.esc(v.label) + '</summary><pre>' + ctx.esc(v.text) + '</pre></details></li>';
     return '<li class="tk-term' + nw + '" data-role="' + v.role + '" data-id="' + ctx.esc(e.id) + '">' + (v.label ? '<span class="tk-who">' + ctx.esc(v.label) + '</span>' : '') +
-      '<div class="tk-tx">' + ctx.esc(v.text) + '</div></li>';
+      (v.role === 'assistant' ? '<div class="tk-tx tk-md">' + rich(v.text, 'e' + e.id) + '</div></li>' : '<div class="tk-tx">' + ctx.esc(v.text) + '</div></li>');
   }
   function render(force) {
     var ts = L.turns(records, Date.now()), ents = L.echo(term.entries, ts);
@@ -107,20 +125,46 @@ function mount(ctx) {
     sig = s;
     var bottom = L.stick(list.scrollTop, list.scrollHeight, list.clientHeight);
     var first = seen == null, seenIds = render.ids || {};
-    var fresh = function (q) { return !first && q > seen; };
-    var items = L.timeline(ts, ents), ids = {};
-    var html = items.map(function (x) {
-      if (x.type === 'turn') return turnHtml(x.turn, fresh);
-      ids[x.entry.id] = 1;
-      return termHtml(x.entry, !first && !seenIds[x.entry.id]);
-    }).join('');
-    if (term.agent && (term.failed || term.source === 'none')) html += '<li class="tk-quiet">' + NO_TERM + '</li>';
-    if (!html) html = '<li class="tk-empty">' + (on ? '아래 입력창으로 보낸 요청과 AI 의 진행·답이 여기에 쌓여요' :
-      '도우미로 열면 보낸 요청과 AI 의 진행·답이 여기에 남아요') + '</li>';
-    list.innerHTML = html;
+    var fresh = function (q) { return !first && q > seen; }, never = function () { return false; };
+    var items = L.timeline(ts, ents), ids = {}, rows = [];
+    copies = {};
+    items.forEach(function (x) {                          // 줄마다 key + 맥박 없는 html — 같으면 있던 요소 그대로(patch)
+      if (x.type === 'turn') { rows.push({key: 't' + x.turn.id, html: turnHtml(x.turn, never), make: function () { return turnHtml(x.turn, fresh); }}); return; }
+      var e = x.entry; ids[e.id] = 1;
+      rows.push({key: 'e' + e.id, html: termHtml(e, false), make: function () { return termHtml(e, !first && !seenIds[e.id]); }});
+    });
+    if (term.agent && (term.failed || term.source === 'none')) rows.push({key: 'quiet', html: '<li class="tk-quiet">' + NO_TERM + '</li>'});
+    if (!rows.length) rows.push({key: 'empty', html: '<li class="tk-empty">' + (on ? '아래 입력창으로 보낸 요청과 AI 의 진행·답이 여기에 쌓여요' :
+      '도우미로 열면 보낸 요청과 AI 의 진행·답이 여기에 남아요') + '</li>'});
+    patch(rows);
     render.ids = ids;
     seen = records.length ? records[records.length - 1].seq : 0;
     if (bottom || first) list.scrollTop = list.scrollHeight;   // 맨 아래를 보고 있었으면 따라간다 — 위로 올려 읽는 중이면 그대로
+  }
+
+  function patch(rows) {                                 // 바뀐 줄만 새 요소로, 차례는 맞춘다(긴 기록에서 이벤트마다 전체를 다시 만들지 않게)
+    var next = {}, tpl = document.createElement('template');
+    rows.forEach(function (r, i) {
+      var have = nodes[r.key], el;
+      if (have && have.html === r.html) el = have.el;
+      else { tpl.innerHTML = r.make ? r.make() : r.html; el = tpl.content.firstElementChild; }
+      next[r.key] = {html: r.html, el: el};
+      var at = list.children[i];
+      if (at !== el) list.insertBefore(el, at || null);
+    });
+    while (list.children.length > rows.length) list.removeChild(list.lastElementChild);
+    nodes = next;
+  }
+  function copy(text) {
+    var ok = function () { ctx.toast('복사했어요'); };
+    var old = function () {                               // 클립보드 API 가 없거나 막힘(권한) = 옛 길
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+      document.body.appendChild(ta); ta.select();
+      var done = false; try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      ta.remove();
+      if (done) ok(); else { ctx.toast('복사하지 못했어요 — 글을 골라 Ctrl+C 로 복사해 주세요'); console.warn('[hd] 대화 패널: 복사 실패'); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, old); else old();
   }
 
   /* ---------- 서버 ---------- */
@@ -183,6 +227,10 @@ function mount(ctx) {
       .then(function () { delete undoing[t.id]; return fetchLog(); }).then(function () { render(true); });
   }
   list.addEventListener('click', function (e) {
+    var cp = e.target.closest('.tk-copy');
+    if (cp) { e.stopPropagation(); var tx = copies[cp.dataset.copy]; if (typeof tx === 'string') copy(tx); return; }
+    var sl = window.getSelection && window.getSelection();
+    if (sl && !sl.isCollapsed && String(sl).trim() && list.contains(sl.anchorNode)) return;   // 글을 골라 복사하는 중 = 턴 누르기 아님
     var d = e.target.closest('details.tk-tool');
     if (d) { var li = d.closest('.tk-term'); setTimeout(function () { if (li) openTools[li.dataset.id] = d.open; }, 0); return; }
     var li2 = e.target.closest('.tk-turn'); if (!li2) return;

@@ -12,7 +12,9 @@
    터미널 대화(S3b 계약 — 공급자 모름, 모양만): parseTranscript(body) → {entries, cursor, source} | null · mergeEntries(have, new) → id 하나씩, at 차례 ·
      echo(entries, turns) → 캔버스 요청이 터미널에도 찍힌 user 줄 빼기(요청 글 또는 요청문 앞부분이 들어 있으면 같은 것) ·
      timeline(turns, entries) → [{type:'turn', turn} | {type:'term', entry}] 시간(at) 차례 · entryView(e) → {role, label, text, short}(tool = '도구 · <짧게>').
-   HD.chatLog = {IDLE_MS, STICK, parse, merge, turns, state, stick, parseTranscript, mergeEntries, echo, timeline, entryView} */
+   답 전체(R24): 답 줄(reply)·터미널 답(assistant)은 자르지 않고 줄바꿈 그대로(진행·도구 요약만 한 줄). 그리기 나누기 —
+     blocks(text) → [{type:'text', text} | {type:'code', lang, text}] (``` 울타리 코드 덩이, 닫히지 않으면 끝까지 코드) · spans(text) → [{code, text}] (`인라인 코드`, 짝 없는 ` 는 글).
+   HD.chatLog = {IDLE_MS, STICK, parse, merge, turns, state, stick, parseTranscript, mergeEntries, echo, timeline, entryView, blocks, spans} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -25,6 +27,7 @@ var KINDS = ['ask', 'sent', 'progress', 'reply', 'write', 'built', 'failed', 'un
 
 function flat(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
 function cut(s, n) { s = flat(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+function whole(s) { return String(s == null ? '' : s).replace(/\r\n?/g, '\n').replace(/^\s*\n/, '').replace(/\s+$/, '').replace(/^[ \t]+/, ''); }   // 답 글 = 앞뒤만 걷기(줄바꿈·들여쓰기 그대로, R24)
 function int(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
 function okRec(r) { return !!r && typeof r === 'object' && int(r.seq) && int(r.at) && int(r.turn) && KINDS.indexOf(r.kind) >= 0; }
 
@@ -66,7 +69,7 @@ function lineOf(r, t, wrote) {
   switch (r.kind) {
     case 'sent': return {seq: r.seq, kind: 'sent', text: sentText(r, t.ask), tone: 'muted'};
     case 'progress': return {seq: r.seq, kind: 'progress', text: flat(r.text), tone: 'muted'};
-    case 'reply': return {seq: r.seq, kind: 'reply', text: (r.status === 'decide' ? '결정 필요 · ' : '') + (flat(r.text) || flat(r.rkind) || '답했어요'), tone: r.status === 'decide' ? 'accent' : ''};
+    case 'reply': return {seq: r.seq, kind: 'reply', text: (r.status === 'decide' ? '결정 필요 · ' : '') + (whole(r.text) || flat(r.rkind) || '답했어요'), tone: r.status === 'decide' ? 'accent' : ''};
     case 'write': return {seq: r.seq, kind: 'write', text: flat(r.label) || 'AI 반영 · ' + (r.screen || ''), tone: 'ok'};
     case 'built': return wrote ? {seq: r.seq, kind: 'built', text: '빌드 완료', tone: 'muted'} : null;
     case 'failed': return {seq: r.seq, kind: 'failed', text: '빌드 실패' + (flat(r.reason) ? ' — ' + cut(r.reason, 160) : ''), tone: 'red'};
@@ -136,12 +139,41 @@ function timeline(ts, entries) {
   return items.map(function (x) { return x.type === 'turn' ? {type: 'turn', turn: x.turn} : {type: 'term', entry: x.entry}; });
 }
 function entryView(e) {
-  var text = String(e.text || '').trim(), short = cut(text.split('\n')[0], SHORT_CUT);
+  var text = whole(e.text), short = cut(text.split('\n')[0], SHORT_CUT);
   if (e.role === 'tool') return {role: 'tool', label: '도구 · ' + (short || '…'), text: text, short: short};
   if (e.role === 'user') return {role: 'user', label: '터미널에서', text: text, short: short};
   return {role: 'assistant', label: '', text: text, short: short};
 }
 
+/* ---------- 답 글 나누기(R24 — View 가 코드 덩이를 pre 로) ---------- */
+var FENCE = /^ {0,3}(`{3,}|~{3,})\s*([\w+#.-]*)\s*$/;
+function blocks(text) {
+  var out = [], buf = [], code = null;
+  var push = function () { var t = buf.join('\n').replace(/^\n+|\n+$/g, ''); if (t) out.push({type: 'text', text: t}); buf = []; };
+  String(text == null ? '' : text).replace(/\r\n?/g, '\n').split('\n').forEach(function (ln) {
+    var m = FENCE.exec(ln);
+    if (code) {
+      if (m && !m[2] && m[1].charAt(0) === code.mark.charAt(0) && m[1].length >= code.mark.length) { out.push({type: 'code', lang: code.lang, text: code.lines.join('\n')}); code = null; }
+      else code.lines.push(ln);
+      return;
+    }
+    if (m) { push(); code = {mark: m[1], lang: m[2] || '', lines: []}; return; }
+    buf.push(ln);
+  });
+  if (code) { push(); out.push({type: 'code', lang: code.lang, text: code.lines.join('\n')}); }   // 닫히지 않은 울타리 = 끝까지 코드(쓰는 중인 답)
+  else push();
+  return out;
+}
+function spans(text) {
+  var s = String(text == null ? '' : text), out = [], re = /`([^`\n]+)`/g, at = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > at) out.push({code: false, text: s.slice(at, m.index)});
+    out.push({code: true, text: m[1]}); at = re.lastIndex;
+  }
+  if (at < s.length) out.push({code: false, text: s.slice(at)});
+  return out;
+}
+
 HD.chatLog = {IDLE_MS: IDLE_MS, STICK: STICK, parse: parse, merge: merge, turns: turns, state: state, stick: stick,
-              parseTranscript: parseTranscript, mergeEntries: mergeEntries, echo: echo, timeline: timeline, entryView: entryView};
+              parseTranscript: parseTranscript, mergeEntries: mergeEntries, echo: echo, timeline: timeline, entryView: entryView, blocks: blocks, spans: spans};
 })();

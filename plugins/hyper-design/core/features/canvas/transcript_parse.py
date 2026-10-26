@@ -9,7 +9,7 @@ entry = {id: 바뀌지 않는 글, role: 'user'|'assistant'|'tool', text: 글(to
 """
 import datetime, hashlib, json, re
 
-TEXT_MAX = 4000                                      # 줄 하나의 글 최대(넘으면 자르고 '…')
+TEXT_MAX = 200_000                                   # 줄 하나의 글 최대(넘으면 자르고 '…') — 답은 다 보인다(R24, 예전 4000 은 긴 답을 잘랐다). 이 한도는 터무니없는 줄만 막는다
 TOOL_MAX = 120                                       # 도구 요약 한 줄 최대
 ENTRIES_MAX = 100                                    # read() 한 번에 내는 줄 최대
 ROLES = ("user", "assistant", "tool")

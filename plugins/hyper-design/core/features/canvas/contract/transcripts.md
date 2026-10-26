@@ -11,7 +11,7 @@
 ## 객체 (층 · 맡은 일 · 상태)
 | 파일 | 층 | 객체 | 맡은 일 | 상태 |
 |---|---|---|---|---|
-| `transcript_parse.py` | Model(순수) | `parse_claude` · `claude_entries` · `parse_paseo` · `tool_summary` · `cap` · 커서 글 | 형식마다 바이트·글 → entries. 덜 쓴 마지막 줄은 먹지 않음 · 깨진 줄 건너뜀 · 글 4000자 · 도구 120자 · 100줄/번 | 없음 |
+| `transcript_parse.py` | Model(순수) | `parse_claude` · `claude_entries` · `parse_paseo` · `tool_summary` · `cap` · 커서 글 | 형식마다 바이트·글 → entries. 덜 쓴 마지막 줄은 먹지 않음 · 깨진 줄 건너뜀 · 글 200000자(R24 — 답은 다 보인다, 예전 4000 이 긴 답을 잘랐다) · 도구 120자 · 100줄/번 | 없음 |
 | `transcripts.py` | Client 어댑터 | `TranscriptSource`(kind · every · read) · `ClaudeTranscript` · `PaseoTranscript` · `NoTranscript` · `source_for` · `REGISTRY` | 파일(지난 바이트 자리부터 1 MB 씩) · `paseo logs <id> --json`(읽기만, NO_WINDOW) | 찾은 파일 경로 하나 |
 | `transcript_pump.py` | Service | `TranscriptPump` · `pump_for(session)` | 지켜보는 에이전트마다 읽어 이벤트로 · HTTP 지난 기록 | 지켜보는 표(id → 소스·커서·마지막 오류) — 자물쇠 하나 |
 
