@@ -132,6 +132,19 @@ def test_apply_duplicate_and_move_then_restore_brings_the_file_back(out):
     assert _job(out) == before
 
 
+def test_screen_write_and_restore_swap_the_file_whole(out, monkeypatch):
+    """화면 파일은 임시 파일 뒤 바꿔 끼우기 — 자물쇠 없이 읽는 쪽(카드·/api)이 빈·반쪽 파일을 보지 않게(10-26 전체 실행에서 빈 파일을 읽음)."""
+    import os
+    swapped, real = [], os.replace
+    monkeypatch.setattr(os, "replace", lambda a, b: (swapped.append(Path(b).name), real(a, b))[1])
+    assert helper.apply_edits(out, [{"id": "d", "screen": "job", "edit": "duplicate", "path": "#a"}], stamp="s1")["applied"] == ["d"]
+    assert "job.html" in swapped, ("쓰기", swapped)
+    swapped.clear()
+    assert helper.restore(out, "s1").get("restored")
+    assert "job.html" in swapped, ("되돌리기", swapped)
+    assert not list((out / "screens").glob("*.tmp")), "임시 파일이 남지 않는다"
+
+
 def test_apply_refuses_move_without_direction_and_app_cards(out):
     res = helper.apply_edits(out, [{"id": "m", "screen": "job", "edit": "move", "path": "#a"},
                                    {"id": "a", "screen": "app", "edit": "duplicate", "path": "div"}], stamp="s3")

@@ -33,6 +33,18 @@ def _write_json(sj, data, raw):                      # 원래 들여쓰기·끝 
 
 
 
+def _write_text(p, text):                            # 화면 파일 쓰기 — _write_json 과 같은 까닭으로 임시 파일 뒤 바꿔 끼우기
+    _write_bytes(p, text.encode("utf-8"))
+
+
+
+def _write_bytes(p, b):
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_bytes(b)
+    _replace(tmp, p)
+
+
+
 def _replace(tmp, p):
     for i in range(REPLACE_TRIES):                   # 읽기는 자물쇠 없이 한다(#271) — Windows 는 읽는 중인 파일을 바꾸지 못해 잠깐 기다렸다 다시
         try:

@@ -6,7 +6,7 @@
 """
 import datetime, json, os, pathlib, shutil, subprocess, sys
 
-from out_io import _inside, _sha, _stamp  # out_io 가 hd 폴더를 sys.path 에 넣는다
+from out_io import _inside, _sha, _stamp, _write_bytes  # out_io 가 hd 폴더를 sys.path 에 넣는다
 
 import helper_model  # noqa: E402  — 정리 고르기(history_prune · queue_prune)
 
@@ -129,7 +129,7 @@ def restore(out, stamp, build=None, keep=False):
     for rel, info in files.items():
         f = out / rel
         if info.get("before"):
-            f.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(hist / rel, f)
+            f.parent.mkdir(parents=True, exist_ok=True); _write_bytes(f, (hist / rel).read_bytes())
         elif f.exists():
             f.unlink()
     build = build or run_build
@@ -139,7 +139,7 @@ def restore(out, stamp, build=None, keep=False):
             if b is None:
                 (out / rel).unlink(missing_ok=True)
             else:
-                (out / rel).write_bytes(b)
+                _write_bytes(out / rel, b)
         build(out)
         if w is not None:
             shutil.rmtree(w.hist, ignore_errors=True)

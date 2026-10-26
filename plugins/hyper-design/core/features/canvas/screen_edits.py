@@ -12,7 +12,7 @@ import screen_copy as SC  # 카드 바로 복제 계획(순수 Model, 51-6)
 import specimen_parts  # 부품 견본 → 넣을 뼈대(순수 Model, task 49b)
 from board_rows import emptied_groups
 from html_edit import Tree, _link_to, _patch, _path_of, _relink, edit_html, edit_one
-from out_io import _inside, _screen_files, _write_json
+from out_io import _inside, _screen_files, _write_json, _write_text
 from write_record import _Writes
 
 
@@ -150,7 +150,7 @@ def apply_edits(out, edits, stamp=None, build=None):
                 at = edit_one(src, good[0][1], good[0][2], good[0][3])[1]
                 if at:
                     paths[good[0][0]] = at
-            w.keep(f); f.write_text(new, encoding="utf-8", newline="")
+            w.keep(f); _write_text(f, new)
             applied += [o[0] for o in good]; changed.add(owner[f])
     sj_dirty = bool(json_ops)
     if board:                                        # 판 글: 하나씩 계획(앞 것 위에) — 거절은 그 하나만
@@ -261,7 +261,7 @@ def delete_screens(out, ids, stamp=None, build=None):
                 path = _path_of(n)
                 patches.append(_relink(src, n, "cut", None, path)); cut.append({"screen": sid, "path": path, "to": to})
         if patches:
-            w.keep(f); f.write_text(_patch(src, patches), encoding="utf-8", newline=""); changed.add(sid)
+            w.keep(f); _write_text(f, _patch(src, patches)); changed.add(sid)
     kept = [s for s in data["screens"] if s["id"] not in gone]
     if "groups" in data:
         data["groups"] = emptied_groups(data["groups"], data["screens"], kept)
