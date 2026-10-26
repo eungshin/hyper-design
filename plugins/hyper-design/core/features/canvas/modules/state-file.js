@@ -22,7 +22,7 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy', 'note-seq', 'card-size'];   // card-size = 카드마다 크기(task 46, modules/artboard.js)
+var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy', 'note-seq', 'card-size', 'board-notes'];   // card-size = 카드마다 크기(task 46, modules/artboard.js) · board-notes = 판 메모(R23, modules/board-notes.js)
 var LIVE = {notes: 1, 'note-seq': 1, busy: 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름(view-state-sync) — 나머지는 다시 불러오기
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 
