@@ -15,6 +15,9 @@
    첨부 이미지(R22): 카드 .ch-box 가 [data-hd-attach] 상자(칩 자리 = 카드 맨 위 · 📎 = 보내기 앞) — 붙이기·저장·썸네일은 등록부 기능 attach(view-attach), 여기서는 의도만:
      보낼 때 'hd-attach-get' → 글 끝에 '첨부 이미지: <절대 경로>' 줄(HD.attach.withText) + 메모마다 attach 칸 · 올리는 중이면 토스트하고 보내지 않음 · 보낸 뒤 'hd-attach-set' [] ·
      'hd-attach-changed' 를 들어 글 없이 이미지만 있어도 보내기를 켠다. 대화 패널 안(docked)도 같은 요소라 같다.
+   판 노트(R25): 셸 ctx.boardNotes() → 고른 판 메모 [{id, text, x, y, w, h}](판 좌표 — 주인은 view-board-notes, 읽기만)마다 [노트 "글" ×] 칩(HD.chat.chips notes).
+     가까운 화면 = HD.chat.nearest(메모 상자, 카드 상자 — 둘 다 판 좌표, 메모 자리·크기가 바뀔 때만 다시 잼). 보내면 요청 글 끝 '노트:' 줄(HD.chat.build) — 글이 비어도 노트가 있으면 보낸다.
+     ctx.boardNotes 가 없으면(옛 셸) [hd] 경고 한 번 + 노트 칩 없이.
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
 'use strict';
@@ -43,6 +46,7 @@ var CSS =
   '#hdchat .ch-chips[hidden]{display:none}' +
   '#hdchat .ch-chip{display:inline-flex;align-items:center;gap:2px;max-width:240px;height:22px;box-sizing:border-box;padding:0 4px 0 8px;border-radius:999px;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-on-badge-soft,#3a3a37);font-size:12px;font-weight:600}' +
   '#hdchat .ch-chip.el{background:#2b2b29;color:#fff}' +
+  '#hdchat .ch-chip.note{background:#fff7c2;color:#5a4b00;box-shadow:inset 0 0 0 1px #eadb85}' +
   '#hdchat .ch-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
   '#hdchat .ch-chip button{border:0;background:none;color:inherit;font:inherit;width:18px;height:18px;border-radius:999px;cursor:pointer;opacity:.7;line-height:1}' +
   '#hdchat .ch-chip button:hover{opacity:1;background:rgba(0,0,0,.12)}' +
@@ -92,7 +96,7 @@ function mount(ctx) {
     '<button type="button" class="ch-send" disabled aria-label="보내기" title="보내기 (Enter)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>';
   document.body.appendChild(root); document.body.classList.add('has-chat');
   var ta = root.querySelector('textarea'), btn = root.querySelector('.ch-send'), chipsEl = root.querySelector('.ch-chips'), lineEl = root.querySelector('.ch-line');
-  var boxEl = root.querySelector('.ch-box'), attN = 0;
+  var boxEl = root.querySelector('.ch-box'), attN = 0, noteN = 0;
   var hideB = root.querySelector('.ch-hide'), agentB = root.querySelector('.ch-agent'), ai = ctx.$('#aichip');
   ta.placeholder = C.placeholder([]);
 
@@ -111,7 +115,27 @@ function mount(ctx) {
     if (typeof ctx.pickedAll === 'function') { var a = ctx.pickedAll() || []; if (a.length) return a; }
     var p = picked(); return p ? [p] : [];
   }
-  function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls()}); }
+  var nearBy = {};                                       // 판 노트 id → {k: 자리 열쇠, id: 가까운 카드}(메모 자리·크기가 바뀔 때만 다시 잼)
+  function boardNotes() {                                // 고른 판 메모(R25) — 주인은 view-board-notes, 셸이 ctx.boardNotes 로 건넨다(읽기만)
+    if (typeof ctx.boardNotes !== 'function') { warnOnce('bnotes', 'ctx.boardNotes 가 없어요 — 노트 칩 없이'); return []; }
+    var list = ctx.boardNotes() || [];
+    return list.map(function (n) {
+      var k = [n.x, n.y, n.w, n.h].join(':'), c = nearBy[n.id];
+      if (!c || c.k !== k) nearBy[n.id] = c = {k: k, id: nearCard(n)};
+      return {id: n.id, text: n.text, near: c.id};
+    });
+  }
+  function nearCard(n) {                                 // 메모 상자와 가장 가까운 카드(판 좌표 — 확대·이동과 무관)
+    var stage = ctx.$('#stage'), v = ctx.view && ctx.view.get ? ctx.view.get() : null;
+    if (!stage || !v || !v.z) return null;
+    var r = stage.getBoundingClientRect(), z = v.z;
+    var cards = Array.prototype.map.call(ctx.rowsEl.querySelectorAll('.card:not(.hid):not(.draft)'), function (c) {
+      var b = (c.querySelector('.phone') || c).getBoundingClientRect();
+      return {id: c.dataset.id, x: (b.left - r.left) / z, y: (b.top - r.top) / z, w: b.width / z, h: b.height / z};
+    }).filter(function (c) { return c.w > 0; });
+    return C.nearest({x: +n.x || 0, y: +n.y || 0, w: +n.w || 0, h: +n.h || 60}, cards);
+  }
+  function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls(), notes: boardNotes()}); }
   function chipsNow() { var raw = rawChips(); dismissed = C.prune(dismissed, raw); return C.visible(raw, dismissed); }
 
   function renderChips() {                               // 칩 줄(S1c): 고른 것이 있을 때만 · 3개를 넘으면 앞 2개 + '외 N개'(누르면 펼침) · 범위는 입력 안내 글로
@@ -121,10 +145,12 @@ function mount(ctx) {
     if (sig === chipSig) return;
     chipSig = sig;
     chipsEl.innerHTML = f.shown.map(function (c) {
-      return '<span class="ch-chip' + (c.kind === 'el' ? ' el' : '') + '" data-key="' + ctx.esc(c.key) + '" title="' + ctx.esc(c.label) + '"><span>' + ctx.esc(c.label) +
+      return '<span class="ch-chip' + (c.kind === 'el' ? ' el' : c.kind === 'note' ? ' note' : '') + '" data-key="' + ctx.esc(c.key) + '" title="' + ctx.esc(c.label) + '"><span>' + ctx.esc(c.label) +
         '</span><button type="button" aria-label="' + ctx.esc(c.label) + ' 빼기">×</button></span>';
     }).join('') + (f.more ? '<button type="button" class="ch-chip ch-more" aria-expanded="false" title="고른 것 모두 보기">외 ' + f.more + '개</button>' : '');
     chipsEl.hidden = !list.length;
+    noteN = list.filter(function (c) { return c.kind === 'note'; }).length;   // 노트만 있어도 보내기를 켠다
+    btn.disabled = !ta.value.trim() && !attN && !noteN;
     chipsEl.dataset.scope = C.scope(list);
     ta.placeholder = C.placeholder(list);
   }
@@ -171,7 +197,7 @@ function mount(ctx) {
     var h = ta.scrollHeight;
     ta.style.height = Math.min(200, Math.max(32, h)) + 'px';
     ta.style.overflowY = h > 200 ? 'auto' : 'hidden';
-    btn.disabled = !ta.value.trim() && !attN; place();
+    btn.disabled = !ta.value.trim() && !attN && !noteN; place();
   }
   function renderAgent() {                                // 위쪽 받는 곳 칩(#aichip)을 그대로 비춘다 — 진실은 view-sync(도우미 attach) 하나
     if (!ai) { agentB.hidden = true; return; }
@@ -199,7 +225,8 @@ function mount(ctx) {
     var a = att('hd-attach-get');
     if (a.busy) { ctx.toast('이미지를 올리는 중이에요 — 끝나면 보내 주세요'); return false; }
     var items = a.items || [], full = HD.attach.withText(text, items);
-    var r = C.build(chipsNow(), full, {first: firstScreen(), titleOf: ctx.title}, mkId);
+    var chipList = chipsNow(), notesN = chipList.filter(function (c) { return c.kind === 'note'; }).length;
+    var r = C.build(chipList, full, {first: firstScreen(), titleOf: ctx.title}, mkId);
     if (!r.memos.length) { ctx.toast(r.why); return false; }
     if (items.length) r.memos.forEach(function (m) { m.attach = items.slice(); });   // 메모가 첨부 목록을 지닌다
     var ok;
@@ -207,13 +234,14 @@ function mount(ctx) {
     catch (e) { console.error('[hd] 대화창 보내기: ' + (e && e.message || e)); ctx.toast('보내지 못했어요 — ' + (e && e.message || e)); return false; }
     if (ok === false) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 보내 주세요'); return false; }
     if (items.length) att('hd-attach-set', []);
-    last = C.record(text.trim() ? text : '이미지 ' + items.length + '장', r.memos, Date.now());   // 상태 줄은 쓴 글(경로 줄 없이)
+    var said = text.trim() ? text : items.length ? '이미지 ' + items.length + '장' : '노트 ' + notesN + '개';
+    last = C.record(said, r.memos, Date.now());   // 상태 줄은 쓴 글(경로 줄·노트 줄 없이)
     prog = {screens: r.memos.some(function (m) { return m.scope === 'all'; }) ? [] :   // 진행 줄(S2) — 이 요청 화면의 이벤트만(모든 화면 요청 = 아무 화면)
       r.memos.map(function (m) { return m.screen; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }), p: null,
       ids: last.ids.slice(), agent: window.__hdAgent || null, name: ai && ai.classList.contains('on') ? agentB.querySelector('span').textContent : null};   // 받는 곳(47-5b) = 보낼 때의 알약
     try { ctx.local.setItem(LKEY, JSON.stringify(last)); } catch (e) {}   // 저장 공간이 꽉 차도 이 창의 상태 줄은 그대로 보인다
-    document.dispatchEvent(new CustomEvent('hd-chat-sent', {detail: {text: full, notes: last.ids.slice(), agent: prog.name,   // 대화 패널(S3)이 기록한다
-      chips: chipsNow().map(function (c) { return c.label; }), screens: prog.screens.length ? prog.screens.slice() : []}}));
+    document.dispatchEvent(new CustomEvent('hd-chat-sent', {detail: {text: full.trim() ? full : said, notes: last.ids.slice(), agent: prog.name,   // 대화 패널(S3)이 기록한다
+      chips: chipList.map(function (c) { return c.label; }), screens: prog.screens.length ? prog.screens.slice() : []}}));
     render();
     return true;
   }
@@ -273,7 +301,7 @@ function mount(ctx) {
     var np = C.progress(prog.p, e.detail, prog.screens, prog.ids);
     if (np !== prog.p) { prog.p = np; renderLine(); }
   });
-  setInterval(render, 1000);                               // 메모 상태·덮개는 다른 길(2초 읽기·답)로 바뀐다 — 47-4 SSE 가 오면 이벤트로
+  setInterval(render, 1000);                              // 메모 상태·덮개는 다른 길(2초 읽기·답)로 바뀐다 — 47-4 SSE 가 오면 이벤트로
   renderAgent(); render(); grow(); booted = true;               // 처음 그린 줄(새로고침 뒤)은 맥박 없이
   return {render: render, send: send, last: function () { return last; }};
 }

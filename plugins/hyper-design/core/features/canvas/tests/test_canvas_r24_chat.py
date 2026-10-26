@@ -72,3 +72,37 @@ def test_panel_shows_whole_long_reply_with_code_and_copy(served, ctx, monkeypatc
     finally:
         pg.close()
     assert not errors, errors
+
+
+PAY_BOX = """() => { const c = document.querySelector('.card[data-id="pay"] .phone').getBoundingClientRect(), s = document.getElementById('stage').getBoundingClientRect();
+  const z = parseFloat(document.getElementById('stage').dataset.zoom); return {x: (c.left - s.left) / z, y: (c.bottom - s.top) / z, w: c.width / z}; }"""
+
+
+@pytest.mark.area("chat", "tools")
+def test_selected_board_note_becomes_chip_and_goes_into_the_request(served, ctx):
+    out, srv = served
+    pg, errors = open_page(ctx, srv)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    try:
+        b = pg.evaluate(PAY_BOX)
+        rev = call(srv, "GET", "/api/state")[1].get("rev", 0)
+        note = {"x": int(b["x"]), "y": int(b["y"]) + 90, "w": 260, "text": "결제 버튼을 더 눈에 띄게\n색은 진하게", "at": 1}
+        assert call(srv, "PUT", "/api/state", {"rev": rev, "state": {"board-notes": {"bn1": note}}})[0] == 200
+        pg.wait_for_selector(".bnote[data-id='bn1']", timeout=15000)
+        pg.keyboard.press("Escape"); pg.keyboard.press("v")
+        pg.click(".bnote[data-id='bn1']")
+        chip = "#hdchat .ch-chip.note"
+        pg.wait_for_selector(chip, timeout=5000)
+        assert pg.inner_text(chip + " span").startswith('노트 "결제 버튼을 더 눈에 띄게')
+        assert pg.is_enabled("#hdchat .ch-send"), "노트만 있어도 보낼 수 있다"
+        shot(pg, "r25-note-chip-in-dock.png")
+        pg.click("#hdchat textarea"); pg.keyboard.type("이 노트대로 고쳐 줘"); pg.keyboard.press("Enter")
+        nid = note_saved(pg, srv)
+        n = next(x for x in call(srv, "GET", "/api/state")[1]["state"]["notes"] if x["id"] == nid)
+        assert n["note"] == "이 노트대로 고쳐 줘\n\n노트:\n- 결제 버튼을 더 눈에 띄게\n  색은 진하게 (가까운 화면: 결제)", n["note"]
+        # × = 그 노트를 요청에서 뺀다
+        pg.click(chip + " button")
+        assert pg.locator(chip).count() == 0
+    finally:
+        pg.close()
+    assert not errors, errors

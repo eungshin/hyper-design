@@ -26,6 +26,7 @@
 - 다시 그리기: 누르기·키 놓기·화면 메시지(요소 고르기 답) 뒤 60ms, 그리고 1초마다(메모 답·덮개는 다른 길로 바뀐다 — 47-4 SSE 가 오면 이벤트로 바꾼다)
 - 오류 탐지: `#aichip` 이 없으면 `[hd]` 경고 한 번 + 받는 곳 칩 없이. ctx 칸(`selected`·`picked`·`sendNotes`)이 없으면 `[hd]` 경고 한 번 + 물러남(카드 칩 = `.card.picked`, 요소 칩 없음, 보내기 = 토스트). 마지막 요청 기록이 깨졌으면 `[hd]` 경고 + 없는 것으로. 보내기가 던지면 `[hd]` + 토스트
 - 첨부 이미지(R22, `attach.md`): 카드 `.ch-box` = `[data-hd-attach]` 상자 — 칩 자리는 카드 맨 위, 클립 단추는 보내기 앞. 보낼 때 `hd-attach-get` → 글 끝 `첨부 이미지: <절대 경로>` 줄 + 메모 `attach` 칸, 올리는 중이면 토스트하고 보내지 않음, 보낸 뒤 비움. 이미지만 있어도 보내기가 켜진다
+- 판 노트(R25): 셸 ctx `boardNotes()`(= `BN.selected()` + `BN.map()`, 읽기만 — 주인은 `view-board-notes`)로 V 로 고른 판 메모마다 `[노트 "글" ×]` 칩(`.ch-chip.note`, 옅은 노랑, key `note:<id>`, 빈 글 빼기, 화면·요소 칩 뒤, 20자 넘으면 …). 노트는 범위를 정하지 않는다(노트만 = 모든 화면 메모 하나). 보내면 요청 글 끝에 빈 줄 뒤 `노트:` 줄들 — `- <글>`(여러 줄이면 다음 줄 두 칸 들여) + 가까운 화면이 있으면 ` (가까운 화면: <이름>)`(`HD.chat.nearest` — 판 좌표로 메모 상자와 가장 가까운 카드, 메모 자리·크기가 바뀔 때만 다시 잼). 글이 비어도 노트가 있으면 보낸다(상태 줄·대화 기록 글 = `노트 N개`). × = 그 노트를 뺀다. `ctx.boardNotes` 가 없으면 `[hd]` 경고 한 번 + 노트 칩 없이
 - 주소를 직접 부르지 않는다(47-2 에서 바뀜) — 보내기는 셸의 `sendNotes` 하나
 
 ## 아직 (S2 이후)
@@ -37,6 +38,6 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/chat.js` · `view-chat.js`(+ `tests/test_canvas_unit_chat.py` · 브라우저 `test_canvas_chat.py`) · 셸 ctx `selected`·`picked`·`sendNotes` | `unit or chat or notes` |
+| `modules/chat.js` · `view-chat.js`(+ `tests/test_canvas_unit_chat.py` · 노트 칩 `test_canvas_unit_chat_notes.py` · 브라우저 `test_canvas_chat.py` · `test_canvas_r24_chat.py`) · 셸 ctx `selected`·`picked`·`sendNotes` | `unit or chat or notes` |
 | 모양·칩 접기(S1c — 브라우저 `test_canvas_chat.py` 의 `composer`·`five_picked`·`progress_line`) | `unit or chat or menu or layers or tools --surface board` |
 | 자리·숨기기·받는 곳 칩(S1b — `dock.js` `chat` 칸 `test_canvas_unit_chrome.py` · `view-menu` · `view-tabs` · `view-agents`) | `unit or chat or menu or tools --surface board` |

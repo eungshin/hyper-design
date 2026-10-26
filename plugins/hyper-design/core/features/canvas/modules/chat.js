@@ -16,7 +16,10 @@
    마지막 요청 record(text, memos, at) = {text, ids, at} · parseLast(raw) → {last, bad}(깨졌으면 bad — 셸 아닌 View 가 [hd] 경고)
    칩 줄 접기(S1c): fold(chips, open) → {shown, more} — 3개까지는 다, 넘으면 앞 2개(+ 고른 요소 칩은 늘) + '외 N개'(more), open = 펼침(다 보임).
    placeholder(chips) — 범위를 칩이 아니라 입력 안내 글로: 칩 없음 = '모든 화면에 대해 …', 있으면 '무엇을 바꿀까요?'.
-   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, stage, line, progress, record, parseLast} */
+   판 노트(R25): chips({…, notes: [{id, text, near}]}) — 고른 판 메모(board-notes)마다 [노트 "글" ×](key note:<id>, 빈 글 빼기, 화면·요소 칩 뒤). 노트는 범위를 정하지 않는다
+     (scope 는 화면·요소 칩만 — 노트만이면 모든 화면). build 는 노트 칩 글을 요청 글 끝 '노트:' 줄로(noteText) — 글이 비어도 노트가 있으면 보낸다.
+     noteText([{text, near}]) = '노트:\n- 글(줄바꿈은 두 칸 들여)( (가까운 화면: 이름))' · nearest(box, cards[{id,x,y,w,h}]) → 상자 사이 거리가 가장 짧은 카드 id | null(같은 좌표계).
+   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -73,6 +76,14 @@ function chips(sel) {
   els.forEach(function (e) { if (ids.indexOf(String(e.screen)) < 0) screen(e.screen); });
   (sel.ids || []).forEach(function (id) { if (id != null && id !== '') screen(id); });
   els.forEach(function (e) { out.push({key: 'el:' + e.screen + ':' + e.h.path, kind: 'el', screen: String(e.screen), label: elLabel(e.h), h: e.h, app: !!e.app}); });
+  var nk = {};
+  (Array.isArray(sel.notes) ? sel.notes : []).forEach(function (n) {   // 판 노트(R25) — 고른 판 메모마다, 빈 글·같은 메모 두 번은 빼고
+    var t = n && typeof n.text === 'string' ? n.text.replace(/\r\n?/g, '\n').trim() : '';
+    if (!n || n.id == null || !t || nk[n.id]) return; nk[n.id] = 1;
+    var f = flat(t);
+    out.push({key: 'note:' + n.id, kind: 'note', id: String(n.id), text: t, near: n.near == null || n.near === '' ? null : String(n.near),
+              label: '노트 "' + (f.length > CUT ? f.slice(0, CUT) + '…' : f) + '"'});
+  });
   return out;
 }
 function visible(list, dismissed) { return (list || []).filter(function (c) { return !(dismissed && dismissed[c.key]); }); }
@@ -80,12 +91,13 @@ function prune(dismissed, list) {
   var o = {}; (list || []).forEach(function (c) { if (dismissed && dismissed[c.key]) o[c.key] = 1; }); return o;
 }
 function scope(list) {
-  if (!list || !list.length) return 'all';
+  list = (list || []).filter(function (c) { return c.kind !== 'note'; });   // 노트는 범위를 정하지 않는다(R25)
+  if (!list.length) return 'all';
   return list.some(function (c) { return c.kind === 'el'; }) ? 'element' : 'screen';
 }
 function scopeLabel(list) {
   var s = scope(list);
-  return s === 'all' ? ALL : s === 'element' ? '요소' : '화면 ' + list.length + '개';
+  return s === 'all' ? ALL : s === 'element' ? '요소' : '화면 ' + list.filter(function (c) { return c.kind === 'screen'; }).length + '개';
 }
 function fold(list, open) {
   list = Array.isArray(list) ? list : [];
@@ -101,11 +113,24 @@ function elMemo(id, c, note) {
   if (h.src) t.src = h.src;                              // 앱 소스 위치 → 요청문 '소스:' 줄(task 27)
   return {id: id, screen: c.screen, targets: [t], path: t.path, text: t.text, rect: t.rect, note: note, intent: 'change', sent: false};
 }
+function noteText(notes) {                               // 판 노트 → 요청 글 끝 '노트:' 줄들(R25)
+  if (!notes || !notes.length) return '';
+  return '노트:\n' + notes.map(function (n) {
+    return '- ' + String(n.text || '').trim().split('\n').join('\n  ') + (n.near ? ' (가까운 화면: ' + n.near + ')' : '');
+  }).join('\n');
+}
 function build(list, text, opt, mkId) {
   var note = String(text == null ? '' : text).trim(), B = HD.memoBatch;
   opt = opt || {};
-  if (!note) return {memos: [], why: '무엇을 바꿀지 적어 주세요'};
   list = list || [];
+  var bn = list.filter(function (c) { return c.kind === 'note'; });
+  if (bn.length) {                                       // 노트 칩 = 글 끝 '노트:' 줄 — 가까운 화면은 이름으로(id 면 titleOf)
+    var tt = opt.titleOf || function (x) { return x; };
+    var nt = noteText(bn.map(function (c) { var t = c.near == null ? null : tt(c.near); return {text: c.text, near: t == null || t === '' ? c.near : t}; }));
+    note = note ? note + '\n\n' + nt : nt;
+    list = list.filter(function (c) { return c.kind !== 'note'; });
+  }
+  if (!note) return {memos: [], why: '무엇을 바꿀지 적어 주세요'};
   if (!list.length) {
     if (opt.first == null || opt.first === '') return {memos: [], why: '보낼 화면이 없어요'};
     return {memos: B.build(B.draft([opt.first], opt.titleOf), {note: note, intent: 'change', scope: 'all'}, mkId), why: ''};
@@ -115,6 +140,15 @@ function build(list, text, opt, mkId) {
   var rest = list.filter(function (c) { return c.kind === 'screen' && !covered[c.screen]; }).map(function (c) { return c.screen; });
   if (rest.length) memos = memos.concat(B.build(B.draft(rest, opt.titleOf), {note: note, intent: 'change', scope: 'screen'}, mkId));
   return {memos: memos, why: ''};
+}
+
+function nearest(box, cards) {                          // 상자 사이 거리(겹치면 0)가 가장 짧은 카드 — 판 노트의 '가까운 화면'
+  var best = null, bd = Infinity;
+  (cards || []).forEach(function (c) {
+    var dx = Math.max(0, c.x - (box.x + box.w), box.x - (c.x + c.w)), dy = Math.max(0, c.y - (box.y + box.h), box.y - (c.y + c.h)), d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = c.id; }
+  });
+  return best;
 }
 
 function lastReply(n) { var r = n && Array.isArray(n.replies) ? n.replies : []; return r.length ? r[r.length - 1] : null; }
@@ -209,5 +243,5 @@ function parseLast(raw) {
 }
 
 HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
-           scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
+           scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, noteText: noteText, nearest: nearest, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();
