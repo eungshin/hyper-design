@@ -9,7 +9,9 @@
      SCOPES, scopeOf(n), scopeWord(n), visible(n, showSent), hiddenCount(list)}
    보낸 메모 숨기기(task 29): visible(n, showSent) — 보낸 뒤 AI 차례(working)·끝난 것(done)은 숨김(showSent 면 다 보임). draft·decide(AI 가 사람에게 물음)·partial(남긴 것)은 늘 보임.
      다시 → 다시 보냄 = working = 다시 숨김. hiddenCount = 숨김이 될 메모 수('보낸 메모 보기 (N)', 켜짐과 상관없이)
-   범위(R7): n.scope = element|screen|all(없음·모르는 값 = element) — SCOPES = 메모 창 고르기 [값, 말] 차례, scopeWord = 묶음 줄에 보일 말(이 요소 = '') */
+   범위(R7): n.scope = element|screen|all(없음·모르는 값 = element) — SCOPES = 메모 창 고르기 [값, 말] 차례, scopeWord = 묶음 줄에 보일 말(이 요소 = '')
+   메모 만들기(셸 C7): make({id, screen, targets, note, intent, scope?}) → 새 메모 {id, screen, targets(사본), path·text·rect(첫 대상), note, intent, sent:false, scope?(element 가 아닐 때만)}
+     · makeId(now, rnd) → 메모 id(now 36진 + rnd 36진 4자리 — 부르는 쪽이 Date.now()·Math.random() 을 넘긴다) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -154,9 +156,17 @@ var SCOPE_WORD = {screen: '이 화면', all: '모든 화면'};
 function scopeOf(n) { return n && SCOPE_WORD[n.scope] ? n.scope : 'element'; }
 function scopeWord(n) { return SCOPE_WORD[scopeOf(n)] || ''; }
 
+function make(o) {
+  var ts = (o.targets || []).slice(), t0 = ts[0] || {};
+  var n = {id: o.id, screen: o.screen, targets: ts, path: t0.path, text: t0.text, rect: t0.rect, note: o.note, intent: o.intent, sent: false};
+  if (o.scope && o.scope !== 'element') n.scope = o.scope;
+  return n;
+}
+function makeId(now, rnd) { return now.toString(36) + rnd.toString(36).slice(2, 6); }
+
 function reply(kind, at) { return {by: 'user', kind: kind, at: at}; }   // 사람 답(확인·다시) — at = ISO 시각(셸이 넣는다)
 
 HD.annotation = {KINDS: KINDS, USER: USER, LABEL: LABEL, status: status, isOpen: isOpen, rework: rework, nextNo: nextNo, migrate: migrate, validReply: validReply,
-                 says: says, tip: tip, question: question, answer: answer, followUp: followUp, label: label, decideCount: decideCount, adopt: adopt, reply: reply,
+                 says: says, tip: tip, question: question, answer: answer, followUp: followUp, label: label, decideCount: decideCount, adopt: adopt, reply: reply, make: make, makeId: makeId,
                  SCOPES: SCOPES, scopeOf: scopeOf, scopeWord: scopeWord, visible: visible, hiddenCount: hiddenCount};
 })();

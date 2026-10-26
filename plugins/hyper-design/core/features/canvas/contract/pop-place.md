@@ -12,4 +12,4 @@
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/pop-place.js` · `view-pop-place.js`(메모 창 옮기기·크기·저장한 자리·대상 카드 표시) · 셸 `placePop`·`showPop`·`hidePop` | `unit or notes or modal or tools` |
+| `modules/pop-place.js` · `view-pop-place.js`(메모 창 옮기기·크기·저장한 자리·대상 카드 표시) · `view-memo-pop`(자동 자리·열기·닫기) | `unit or notes or modal or tools` |
