@@ -11,7 +11,12 @@
           hasPolicies(id) → 정책 메모를 둘지(선택, 기본 예 — 빈 레이아웃은 아니오),
           hint(id) → {title?, purpose?} 빈 칸 안내 글(선택 — 빈 레이아웃은 목적·메모의 몫을 여기서 말한다),
           toast(msg)(선택 — 제목을 비우고 닫으면 알림, 없으면 말없이 원래 제목)}
-   지우기(#243): 비운 설명 = '' 편집 · 비운 제목 = 편집 없음(원래 이름) · 정책 메모를 다 비우면 빈 목록 */
+   지우기(#243): 비운 설명 = '' 편집 · 비운 제목 = 편집 없음(원래 이름) · 정책 메모를 다 비우면 빈 목록
+   판의 카드 글(셸 C8): HD.viewCaption.cards(ctx) → {setOrig(rows), orig(id), put(id, o), cardsOf(ids?), paint(ids?), fold(ids?), open(el, focus), values(id), commit(id, changes)}
+     원래 글(ORIG = HD.caption.origOf, 처음·쓴 뒤 데이터를 합쳐 쌓음)의 주인 · 카드 제목·설명·정책 줄 그리기(반영 대기 = .pend) · 접기 · 위 상자(mount)를 그 값으로 열기 ·
+     카드 글 두 번 누르기. 바뀐 칸마다 편집 메모 하나 → ctx.add 한 번(되돌리기 한 번) · 빈 레이아웃 = ctx.editLayout
+     ctx = {$, $$, rowsEl, pane, notes(NS), polHtml(pol, cls), space(), selected() → 고른 id|null(고르기가 붙기 전), typing(e), guard(ids), closeMenus(), toast(msg),
+            placed()(닫은 뒤 판 글 다시 놓기), layoutOf(id), editLayout(id, changes), note(id, h, text), add(label, list)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -194,5 +199,88 @@ function mount(ctx) {
   return {open: open, close: close, isOpen: function () { return !!cur; }, fold: fold};
 }
 
-HD.viewCaption = {mount: mount};
+function cards(ctx) {
+  var $ = ctx.$, $$ = ctx.$$, NS = ctx.notes, ORIG = {};
+  function setOrig(rows) { var o = HD.caption.origOf(rows); Object.keys(o).forEach(function (id) { ORIG[id] = o[id]; }); }   // 합쳐 쌓는다(데이터에서 빠진 화면 글도 남음)
+  function pendingOf(id, field, index) { return HD.notes.pendingOf(NS.list(), id, field, index); }   // 그 화면·그 칸의 마지막 편집 값(없으면 null)
+  function polPending(id) { return HD.caption.pending(NS.list(), id, (ORIG[id] || {}).policies || []); }   // 그 화면의 반영 대기 정책 목록(없으면 null)
+  function cardsOf(ids) {                            // ids 없음 = 판의 카드 전부 · 있으면 그 화면 카드만(메모 저장은 닿은 카드만 다시 그린다)
+    var all = $$('.card', ctx.rowsEl);
+    return ids ? all.filter(function (c) { return ids.indexOf(c.dataset.id) >= 0; }) : all;
+  }
+  function values(id) {
+    var o = ORIG[id];
+    if (!o) { var dn = ctx.layoutOf(id); return dn ? {title: dn.value, purpose: dn.purpose || '', policies: []} : null; }   // 빈 레이아웃 = 그 메모의 이름·목적
+    var t = pendingOf(id, 'title'), d = pendingOf(id, 'purpose');
+    return {title: t != null ? t : o.title, purpose: d != null ? d : o.purpose, policies: polPending(id) || o.policies.slice()};
+  }
+  function commit(id, changes) {                     // 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 add = 되돌리기 한 번
+    if (!ORIG[id]) { ctx.editLayout(id, changes); return; }
+    var list = changes.map(function (ch) {
+      var path = 'screens.json > screens[id=' + id + '] > ' + ch.field, old = Array.isArray(ch.old) ? ch.old.join(' · ') : ch.old;
+      var n = ctx.note(id, {path: path, text: old, rect: null}, HD.edits.say.field(ch.field, ch.value, null, ch.old));
+      n.edit = ch.field; n.value = ch.value;           // policies = 줄 목록 통째로
+      return n;
+    });
+    ctx.add('카드 글', list);
+  }
+  function fold(ids) {                               // 판의 카드 아래 글 접기(task 31): 고르지 않은 카드 = 제목만(+ 반영 대기 표시) · 고른 카드·빈 레이아웃 = 다
+    var sel = ctx.selected(); if (!sel) return;       // 셸이 다 붙기 전(처음 그리기) — 고르기를 붙인 뒤 한 번 부른다
+    var on = {}; sel.forEach(function (x) { on[x] = 1; });
+    cardsOf(ids).forEach(function (c) {
+      var id = c.dataset.id;
+      CAP.fold(c, HD.caption.shown({selected: !!on[id], blank: !ORIG[id], pending: {purpose: pendingOf(id, 'purpose') != null, policies: polPending(id) != null}}));
+    });
+  }
+  function paint(ids) {
+    cardsOf(ids).forEach(function (c) {
+      var id = c.dataset.id, o = ORIG[id]; if (!o) return;
+      [['title', '.ftitle'], ['purpose', '.fdesc']].forEach(function (fs) {
+        var el = $(fs[1], c); if (!el || $('input, textarea', el)) return;
+        var v = pendingOf(id, fs[0]), keep = $('.state', el);
+        el.textContent = v != null ? v : o[fs[0]]; if (keep) el.insertBefore(keep, el.firstChild);
+        el.classList.toggle('pend', v != null);
+        if (v != null) el.title = '반영 대기 · 원래: ' + o[fs[0]]; else el.removeAttribute('title');
+      });
+      var pp = polPending(id), pol = pp || o.policies;   // 정책 = 반영 대기 목록 하나(task 31) 또는 원래 목록
+      var cls = pp ? function (i) { return pol[i] === o.policies[i] ? '' : 'pend'; } : null;
+      var key = JSON.stringify([pol, pp ? pol.map(function (x, i) { return cls(i); }) : 0]);
+      if (c.dataset.polKey !== key) {                  // 바뀐 때만 다시(다른 칸 그리기가 정책 줄을 건드리지 않게)
+        var open = !!$('details.more[open]', c);
+        var body = $(':scope > .cbody', c), d = body && $(':scope > .fdesc', body);
+        if (body) { $$(':scope > .pol, :scope > .more', body).forEach(function (x) { x.remove(); }); body.insertAdjacentHTML(d ? 'beforeend' : 'afterbegin', ctx.polHtml(pol, cls)); }
+        if (open && $('details.more', c)) $('details.more', c).open = true;
+        c.dataset.polKey = key;
+      }
+    });
+    fold(ids);
+    ctx.space();                                      // 카드 글이 바뀌면 줄 사이도(펼친 설명 자리, t51-8)
+  }
+  var CAP = mount({values: values, badge: function (c) { return $('.ftitle .state', c); }, commit: commit,
+    hasPolicies: function (id) { return !!ORIG[id]; },   // 빈 레이아웃은 이름·목적만(#225)
+    toast: function (m) { ctx.toast(m); },
+    hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로) · Shift+Enter 줄바꿈'}; },
+    onClose: function (c) { if (c) c.classList.remove('capopen'); paint(c ? [c.dataset.id] : null); ctx.placed(); }});   // 닫은 뒤에도 그 카드 글이 골라진 채(F14, t51-9)
+  function open(el, focus) {                         // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
+    ctx.closeMenus();
+    var c = el && el.closest('.card'); if (!c) return;
+    var id = c.dataset.id;
+    if (ctx.guard([id])) return;
+    if (focus.field === 'policy') focus = {field: 'policy', index: $$('.pol li', c).indexOf(el)};
+    c.classList.add('capopen');
+    CAP.open(c, focus);
+  }
+  ctx.pane.addEventListener('dblclick', function (e) {   // 카드 이름·설명·정책 줄 두 번 누르기 = 그 칸에서 상자 열기
+    var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
+    if (cl('#tools') || cl('.alabel') || ctx.typing(e)) return;
+    var ft = cl('.ftitle'), fd = cl('.fdesc'), fp = cl('.pol li');
+    if (fp) { e.preventDefault(); open(fp, {field: 'policy'}); return; }
+    if (ft) { e.preventDefault(); open(ft, {field: 'title'}); return; }
+    if (fd) { e.preventDefault(); open(fd, {field: 'purpose'}); return; }
+  });
+  return {setOrig: setOrig, orig: function (id) { return ORIG[id]; }, put: function (id, o) { ORIG[id] = o; },
+          cardsOf: cardsOf, paint: paint, fold: fold, open: open, values: values, commit: commit};
+}
+
+HD.viewCaption = {mount: mount, cards: cards};
 })();

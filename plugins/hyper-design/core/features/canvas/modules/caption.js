@@ -10,7 +10,8 @@
      목록 편집(policies)이 나오면 그것이 통째로 이긴다(그 뒤 옛 줄 편집은 번호가 맞지 않아 무시)
    shown({selected, blank, pending:{purpose, policies}}) → {purpose, policies, mark} 판의 카드 아래 글에 보일 칸
      고른 카드·빈 레이아웃 = 다 보임 · 아니면 제목만, 설명·정책에 반영 대기가 있으면 mark(작은 표시)
-   HD.caption = {FIELDS, normalise, lines, diff, pending, shown} */
+   origOf(rows) → {화면 id: {title, purpose, policies(사본)}} — 데이터 줄(D.rows·새 데이터 nd.rows)의 원래 글(셸 C8 — 처음·쓴 뒤 데이터가 같은 길)
+   HD.caption = {FIELDS, normalise, lines, diff, pending, shown, origOf} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -57,5 +58,13 @@ function shown(s) {
   return {purpose: false, policies: false, mark: !!(p.purpose || p.policies)};
 }
 
-HD.caption = {FIELDS: FIELDS, normalise: normalise, lines: lines, diff: diff, pending: pending, shown: shown};
+function origOf(rows) {
+  var o = {};
+  (Array.isArray(rows) ? rows : []).forEach(function (row) {
+    ((row && row.screens) || []).forEach(function (sc) { o[sc.id] = {title: sc.title || '', purpose: sc.purpose || '', policies: (sc.policies || []).slice()}; });
+  });
+  return o;
+}
+
+HD.caption = {FIELDS: FIELDS, normalise: normalise, lines: lines, diff: diff, pending: pending, shown: shown, origOf: origOf};
 })();
