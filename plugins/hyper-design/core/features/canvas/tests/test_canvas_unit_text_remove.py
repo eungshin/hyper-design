@@ -45,7 +45,8 @@ def test_text_keeps_surrounding_whitespace_and_escapes():
 
 def test_text_refuses_when_a_block_child_is_inside():
     for src in ('<main><div class="c">글 <p>안</p></div></main>', '<main><div class="c">가기 <a href="x.html">링크</a></div></main>',
-                '<main><div class="c"><svg></svg>글 <b>굵게</b></div></main>', '<main><div class="c"><svg></svg><span>안 글</span></div></main>'):
+                '<main><div class="c"><svg></svg>글 <p>블록</p></div></main>', '<main><div class="c"><svg></svg><span><svg></svg>안 글</span></div></main>'):
+        # 아이콘 + 글이 인라인으로 갈린 것(<svg/>글 <b>굵게</b>)은 이제 고친다 — test_canvas_unit_icon_text.py
         with pytest.raises(ValueError) as e:
             edit(src, ("div.c", "text", "x"))
         assert BLOCK_REASON in str(e.value), src

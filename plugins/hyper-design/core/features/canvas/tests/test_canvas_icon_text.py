@@ -47,3 +47,33 @@ def test_text_next_to_an_icon_is_editable_and_keeps_the_icon(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+@pytest.mark.area("helper", "modal", "tools")
+def test_icon_text_split_by_bold_keeps_the_bold_when_one_run_changes(ctx, out):
+    """R15 후속: 글이 인라인으로 갈린 아이콘 + 글(`<svg/> <b>이전</b> 화면`) — 끝에 글을 붙이면 그 마디만 바뀌고 b·아이콘 그대로(규칙 test_canvas_unit_icon_text.py)."""
+    job = out / "screens" / "job.html"
+    s = job.read_text(encoding="utf-8")
+    assert "</svg> 이전</a>" in s
+    job.write_text(s.replace("</svg> 이전</a>", "</svg> <b>이전</b> 화면</a>"), encoding="utf-8")
+    srv = _serve(out)
+    pg, errors = _open(ctx, srv.url)
+    try:
+        mf = _modal(pg)
+        assert mf.evaluate(SVG_JS, BACK) == "1|이전 화면"
+        pg.click('#tools [data-tool="text"]')
+        box = mf.locator(BACK).bounding_box()
+        mf.locator(BACK).click(position={"x": box["width"] - 4, "y": box["height"] / 2})   # '화면' 쪽 — b 가 아니라 a 를 고친다
+        mf.wait_for_function("(s) => !!document.querySelector(s + ' [contenteditable]')", arg=BACK, timeout=3000)
+        assert mf.evaluate("(s) => !document.querySelector(s + ' svg').closest('[contenteditable]')", BACK), "아이콘은 고치는 칸 밖"
+        pg.keyboard.press("End")
+        pg.keyboard.type("로")
+        pg.keyboard.press("Enter")
+        mf.wait_for_function("(s) => !document.querySelector(s + ' [contenteditable]')", arg=BACK, timeout=3000)
+        assert mf.evaluate("(s) => { const e = document.querySelector(s); return e.querySelectorAll('svg').length + '|' + (e.querySelector('b') || {}).textContent + '|' + e.textContent.trim(); }", BACK) == "1|이전|이전 화면로"
+        _wait_file(pg, out, lambda t: re.search(r'<a class="wizard-back" href="login--done.html"><svg[^>]*><path[^>]*/></svg> <b>이전</b> 화면로</a>', t),
+                   "파일에 바뀐 마디만 써지지 않았다(b 는 그대로)")
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

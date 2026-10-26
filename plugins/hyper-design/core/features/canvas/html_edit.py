@@ -138,7 +138,8 @@ def _set_attr(tag_src, name, value):                # 시작 태그 원문에서
 
 # 글자 고치기(task 30): 요소 안 내용 전부(글 + 인라인 자식)를 새 글로 — 이 태그들(글이 든 것, br·wbr)만 안에 있어도 된다.
 # 그 밖(블록·그림·입력·링크 a)이 안에 있으면 거절 — 일부만 바꾸지 않는다. palette.js 미리보기(pending)와 같은 규칙.
-# 예외(R15 아이콘 + 글): 바로 아래 글이 있고 자식 요소가 모두 글이 없으면(svg·img·빈 i/span) 글 조각만 바꾸고 아이콘은 원문 그대로(_icon_text).
+# 예외(R15 아이콘 + 글): 자식 요소가 글이 없거나(svg·img·빈 i/span = 아이콘) 글 든 인라인만으로 된 것이면 글 조각만 바꾸고 아이콘은 원문 그대로
+# (_icon_text · _icon_text_patch — 바뀐 곳이 글 마디 하나 안이면 그 마디만, 아니면 꾸밈 없이 통째로).
 INLINE = {"b", "strong", "i", "em", "span", "small", "u", "s", "mark", "sub", "sup", "code", "abbr", "cite", "q", "kbd", "var", "time",
           "font", "del", "ins", "br", "wbr"}
 BLOCK_REASON = "안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요"
@@ -164,17 +165,24 @@ def _is_root(el):                                    # html·head·body · 화�
     return [c for c in p.children if c.tag not in ("script", "style", "link", "meta")] == [el]
 
 
-def _icon_text(n):                                   # R15 아이콘 + 글: 바로 아래 글이 있고 자식 요소는 모두 글이 없음(svg·img·빈 i/span — 아이콘)
-    return any(x[2].strip() for x in n.texts) and not any(_has_text(c) for c in n.children)
+def _icon_text(n):                                   # R15 아이콘 + 글: 글이 있고, 자식 요소는 글이 없거나(아이콘 — svg·img·빈 i/span) 글 든 인라인만으로 된 것(b·span…)
+    return _has_text(n) and all(not _has_text(c) or (c.tag in INLINE and _inline_only(c)) for c in n.children)
 
 
-def _text_runs(el):                                  # 바로 아래 이어진 글 조각 묶음 [(시작, 끝)] — 엔티티·br 로 갈린 글도 한 묶음(br 은 글의 줄바꿈)
+def _text_runs(el):                                  # 글 묶음 [(시작, 끝, [항목])] — 바로 아래 글·br·글 든 인라인 요소가 이어진 것(글 없는 요소 = 아이콘에서 끊김)
     runs, cur = [], None
     for kind, x in el.order:
         if kind == "tx":
-            cur = [x[0], x[0] + x[1]] if cur is None else [cur[0], x[0] + x[1]]
-        elif cur is not None and x.tag in ("br", "wbr"):
-            cur[1] = x.open_end
+            cur = cur or [x[0], 0, []]
+            cur[1] = x[0] + x[1]; cur[2].append((kind, x))
+        elif x.tag in ("br", "wbr"):
+            if cur is not None:
+                cur[1] = x.open_end; cur[2].append((kind, x))
+        elif _has_text(x):
+            if x.close is None:
+                raise ValueError(BLOCK_REASON)
+            cur = cur or [x.start, 0, []]
+            cur[1] = x.close[1]; cur[2].append((kind, x))
         elif cur is not None:
             runs.append(tuple(cur)); cur = None
     if cur is not None:
@@ -182,11 +190,89 @@ def _text_runs(el):                                  # 바로 아래 이어진 �
     return runs
 
 
-def _icon_text_patch(src, el, value):                # 글 조각만: 첫 글 묶음 = 앞뒤 공백 + 새 글, 그 뒤 글 묶음은 비움, 아이콘(자식 요소)은 원문 그대로
-    full = [r for r in _text_runs(el) if src[r[0]:r[1]].strip()]
+def _run_chars(items):
+    """글 묶음 → (마디들, 보이는 글자들). 마디 = 같은 부모 아래 이어진 글 항목 [원문 시작, 끝, 풀어 쓴 글].
+    글자 = [글자, 마디 번호(br = -1)] — palette.js plainOf 와 같은 정리(공백 하나로 · br = 줄바꿈 · 줄바꿈 둘레 공백 없앰 · 앞뒤 자름)."""
+    leaves, order = [], []
+
+    def walk(its):
+        last = None
+        for kind, x in its:
+            if kind == "tx":
+                if last is None:
+                    leaves.append([x[0], 0, ""]); last = len(leaves) - 1; order.append(last)
+                leaves[last][1] = x[0] + x[1]; leaves[last][2] += html.unescape(x[2])
+                continue
+            last = None
+            if x.tag == "br":
+                order.append(-1)
+            elif x.tag != "wbr":
+                walk(x.order)
+    walk(items)
+    chars = []
+    for i in order:
+        chars += [["\n", -1]] if i < 0 else [[ch, i] for ch in re.sub(r"\s+", " ", leaves[i][2])]
+    out, k = [], 0                                     # .replace(/ *\n */g,'\n').replace(/ {2,}/g,' ').trim() — 글자마다 주인 마디를 지닌 채
+    while k < len(chars):
+        if chars[k][0] != " ":
+            out.append(chars[k]); k += 1; continue
+        j = k
+        while j < len(chars) and chars[j][0] == " ":
+            j += 1
+        if not (k > 0 and chars[k - 1][0] == "\n" or j < len(chars) and chars[j][0] == "\n"):
+            out.append(chars[k])
+        k = j
+    while out and out[0][0] in " \n":
+        out.pop(0)
+    while out and out[-1][0] in " \n":
+        out.pop()
+    return leaves, out
+
+
+def _one_leaf(chars, value):
+    """바뀐 곳이 글 마디 하나 안이면 (마디 번호, 그 마디의 새 글 — 앞뒤 공백 뺌) · 바뀐 것 없으면 'same' · 아니면 None.
+    바뀐 곳 = 앞뒤 같은 글자를 뺀 가운데. 넣기만이면 앞 글자의 마디(앞이 br·없으면 뒤 글자의 마디).
+    마디가 비게 되거나 마디 가장자리 공백이 바뀌면 None(꾸밈 없이 통째로 — 빈 b 가 아이콘으로 읽히지 않게)."""
+    old = "".join(c[0] for c in chars)
+    if old == value:
+        return "same"
+    p = 0
+    while p < min(len(old), len(value)) and old[p] == value[p]:
+        p += 1
+    s = 0
+    while s < min(len(old), len(value)) - p and old[-1 - s] == value[-1 - s]:
+        s += 1
+    q, chunk = len(old) - s, value[p:len(value) - s]
+    own = {chars[k][1] for k in range(p, q)}
+    if not own:
+        own = {chars[p - 1][1]} if p > 0 and chars[p - 1][1] >= 0 else ({chars[p][1]} if p < len(chars) else set())
+    if len(own) != 1 or -1 in own:
+        return None
+    leaf = own.pop()
+    at = [k for k in range(len(chars)) if chars[k][1] == leaf]
+    was, now = old[at[0]:at[-1] + 1], old[at[0]:p] + chunk + old[q:at[-1] + 1]
+    if not now.strip() or (was[:1] == " ") != (now[:1] == " ") or (was[-1:] == " ") != (now[-1:] == " "):
+        return None
+    return leaf, now.strip()
+
+
+def _icon_text_patch(src, el, value):
+    """아이콘 + 글(R15): 아이콘(글 없는 자식 요소)은 원문 그대로.
+    글 묶음이 하나이고 바뀐 곳이 글 마디 하나 안이면 그 마디만(마디 앞뒤 공백 · b·span 꾸밈 그대로 — 마디 안 공백은 하나로, 엔티티는 글자로 풀려 다시 escape).
+    아니면 첫 글 묶음 = 앞뒤 공백 + 새 글(\\n = br, 묶음 안 꾸밈은 없어짐), 그 뒤 글 묶음은 비움."""
+    full = [r for r in _text_runs(el) if _run_chars(r[2])[1]]
+    if len(full) == 1:
+        leaves, chars = _run_chars(full[0][2])
+        hit = _one_leaf(chars, value)
+        if hit == "same":
+            return full[0][0], full[0][0], ""
+        if hit:
+            x, y, dec = leaves[hit[0]]
+            lead, trail = dec[: len(dec) - len(dec.lstrip())], dec[len(dec.rstrip()):]
+            return x, y, lead + html.escape(hit[1], quote=False).replace("\n", "<br>") + trail
     a, b = full[0][0], full[-1][1]
     out, at = [], a
-    for i, (x, y) in enumerate(full):
+    for i, (x, y, _) in enumerate(full):
         out.append(src[at:x])                          # 사이 원문(아이콘·공백) 그대로
         if i == 0:
             raw = src[x:y]

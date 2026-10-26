@@ -16,7 +16,7 @@
    반영 대기 미리보기: {type:'hd-pending', items:[{path, text} | {path, remove:true}]} 를 받으면 그 요소 안 내용 전부(글 + 인라인 자식)를 잠시 새 글로(\n = 줄바꿈, '' = 비움)
    바꿔 점선으로, remove 는 그 요소를 숨겨 보여 준다(items:[] 이면 되돌린다). 글 바꾸기 규칙은 helper.py edit_html 과 같다: 안에 인라인(글 있는 b·span…, br) 아닌
    자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
-   예외 아이콘 + 글(R15): 바로 아래 글이 있고 자식 요소가 모두 글이 없으면(svg·img·빈 i/span) 글 조각만 바꾸고 아이콘은 그대로(textMode 'icon', helper.py _icon_text).
+   예외 아이콘 + 글(R15): 자식 요소가 글이 없거나(svg·img·빈 i/span) 글 든 인라인만이면 글 조각만 바꾸고 아이콘은 그대로 — 바뀐 곳이 글 마디 하나 안이면 그 마디만(textMode 'icon', html_edit._icon_text_patch).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
@@ -379,35 +379,108 @@
       return INLINE.test(t) && (t === 'br' || t === 'wbr' || !!c.textContent.trim());
     });
   }
-  // R15 아이콘 + 글: 바로 아래 글이 있고 자식 요소는 모두 글이 없음(svg·img·빈 i/span) — 글 조각만 바꾸고 아이콘은 그대로(helper.py _icon_text 와 같은 규칙)
+  // R15 아이콘 + 글: 글이 있고 자식 요소는 글이 없거나(svg·img·빈 i/span = 아이콘) 글 든 인라인만으로 된 것(b·span…) — 글 조각만 바꾸고 아이콘은 그대로
+  // (helper 쪽 html_edit._icon_text 와 같은 규칙). 글 든 자식이 블록·링크이거나 글 안에 아이콘이 들었으면 '' = 못 바꿈.
   function iconText(el) {
-    if (!el || el.nodeType !== 1 || VOIDS.test(el.tagName.toLowerCase()) || !ownText(el)) return false;
-    return Array.prototype.every.call(el.children, function (c) { return /^(script|style)$/i.test(c.tagName) || !c.textContent.trim(); });
+    if (!el || el.nodeType !== 1 || VOIDS.test(el.tagName.toLowerCase()) || !el.textContent.trim()) return false;
+    return Array.prototype.every.call(el.children, function (c) {
+      return /^(script|style)$/i.test(c.tagName) || !c.textContent.trim() || (INLINE.test(c.tagName.toLowerCase()) && allText(c));
+    });
   }
   function textMode(el) { return allText(el) ? 'all' : iconText(el) ? 'icon' : ''; }   // 'all' = 안 내용 전부 · 'icon' = 글 조각만 · '' = 못 바꿈
   function textOk(el) { return !!textMode(el); }
-  function textRuns(el) {                             // 바로 아래 이어진 글 마디 묶음(br·wbr = 글의 줄바꿈이라 이어짐) — 글이 있는 묶음만(helper.py _text_runs)
+  function textRuns(el) {                             // 글 묶음: 바로 아래 글·br·글 든 인라인 요소가 이어진 것(글 없는 요소 = 아이콘에서 끊김) — 보이는 글이 있는 묶음만(html_edit._text_runs)
     var runs = [], cur = null;
     for (var c = el.firstChild; c; c = c.nextSibling) {
       if (c.nodeType === 3) (cur = cur || []).push(c);
-      else if (c.nodeType === 1 && cur && /^(br|wbr)$/i.test(c.tagName)) cur.push(c);
+      else if (c.nodeType === 1 && /^(br|wbr)$/i.test(c.tagName)) { if (cur) cur.push(c); }
+      else if (c.nodeType === 1 && c.textContent.trim() && !/^(script|style)$/i.test(c.tagName)) (cur = cur || []).push(c);
       else if (c.nodeType === 1) { if (cur) runs.push(cur); cur = null; }
     }
     if (cur) runs.push(cur);
-    return runs.filter(function (r) { return r.some(function (n) { return n.nodeType === 3 && n.nodeValue.trim(); }); });
+    return runs.filter(function (r) { return runChars(r).chars.length; });
   }
-  function setIconText(el, v) {                       // helper.py _icon_text_patch 와 같은 모양: 첫 글 묶음 = 앞뒤 공백 + 새 글(\n = br), 뒤 묶음은 지움, 아이콘 그대로
+  function runChars(nodes) {                          // 글 묶음 → {leaves: [[글 마디…]], chars: [[글자, 마디 번호(br = -1)]]} — plainOf 와 같은 정리(html_edit._run_chars)
+    var leaves = [], order = [];
+    (function walk(list) {
+      var last = -1;
+      list.forEach(function (n) {
+        if (n.nodeType === 3) { if (last < 0) { leaves.push([]); last = leaves.length - 1; order.push(last); } leaves[last].push(n); return; }
+        if (n.nodeType !== 1) return;
+        last = -1;
+        var t = n.tagName.toLowerCase();
+        if (t === 'br') order.push(-1);
+        else if (t !== 'wbr') walk(Array.prototype.slice.call(n.childNodes));
+      });
+    })(nodes);
+    var chars = [];
+    order.forEach(function (i) {
+      if (i < 0) { chars.push(['\n', -1]); return; }
+      leaves[i].map(function (n) { return n.nodeValue; }).join('').replace(/\s+/g, ' ').split('').forEach(function (ch) { chars.push([ch, i]); });
+    });
+    var out = [], k = 0;                              // .replace(/ *\n */g,'\n').replace(/ {2,}/g,' ').trim() — 글자마다 주인 마디를 지닌 채
+    while (k < chars.length) {
+      if (chars[k][0] !== ' ') { out.push(chars[k]); k++; continue; }
+      var j = k; while (j < chars.length && chars[j][0] === ' ') j++;
+      if (!((k > 0 && chars[k - 1][0] === '\n') || (j < chars.length && chars[j][0] === '\n'))) out.push(chars[k]);
+      k = j;
+    }
+    while (out.length && /^[ \n]$/.test(out[0][0])) out.shift();
+    while (out.length && /^[ \n]$/.test(out[out.length - 1][0])) out.pop();
+    return {leaves: leaves, chars: out};
+  }
+  function oneLeaf(chars, v) {                        // html_edit._one_leaf: 바뀐 곳이 글 마디 하나 안이면 [마디, 새 글(앞뒤 공백 뺌)] · 그대로면 'same' · 아니면 null
+    var old = chars.map(function (c) { return c[0]; }).join('');
+    if (old === v) return 'same';
+    var p = 0, s = 0, m = Math.min(old.length, v.length);
+    while (p < m && old[p] === v[p]) p++;
+    while (s < m - p && old[old.length - 1 - s] === v[v.length - 1 - s]) s++;
+    var q = old.length - s, chunk = v.slice(p, v.length - s), own = {};
+    for (var k = p; k < q; k++) own[chars[k][1]] = 1;
+    if (p === q) {
+      if (p > 0 && chars[p - 1][1] >= 0) own[chars[p - 1][1]] = 1; else if (p < chars.length) own[chars[p][1]] = 1;
+    }
+    var ks = Object.keys(own);
+    if (ks.length !== 1 || ks[0] === '-1') return null;
+    var leaf = +ks[0], at = [];
+    chars.forEach(function (c, i) { if (c[1] === leaf) at.push(i); });
+    var was = old.slice(at[0], at[at.length - 1] + 1), now = old.slice(at[0], p) + chunk + old.slice(q, at[at.length - 1] + 1);
+    if (!now.trim() || (was[0] === ' ') !== (now[0] === ' ') || (was.slice(-1) === ' ') !== (now.slice(-1) === ' ')) return null;
+    return [leaf, now.trim()];
+  }
+  function linesFrag(frag, v) {                       // 글(\n = br) → 조각에 붙이기
+    String(v == null ? '' : v).split('\n').forEach(function (line, i) {
+      if (i) frag.appendChild(document.createElement('br'));
+      if (line) frag.appendChild(document.createTextNode(line));
+    });
+  }
+  function setIconText(el, v) {
+    // html_edit._icon_text_patch 와 같은 규칙: 글 묶음이 하나이고 바뀐 곳이 글 마디 하나 안이면 그 마디만(b·span 꾸밈 그대로),
+    // 아니면 첫 글 묶음 = 앞뒤 공백 + 새 글(\n = br, 꾸밈 없음), 뒤 묶음은 지움. 아이콘은 늘 그대로
     var runs = textRuns(el); if (!runs.length) return;
+    v = String(v == null ? '' : v);
+    if (runs.length === 1) {
+      var rc = runChars(runs[0]), hit = oneLeaf(rc.chars, v);
+      if (hit === 'same') return;
+      if (hit) {
+        var ns = rc.leaves[hit[0]], dec = ns.map(function (n) { return n.nodeValue; }).join(''), par = ns[0].parentNode, nx = ns[ns.length - 1].nextSibling;
+        var lead1 = dec.slice(0, dec.length - dec.replace(/^\s+/, '').length), trail1 = dec.slice(dec.replace(/\s+$/, '').length);
+        var f1 = document.createDocumentFragment();
+        if (lead1) f1.appendChild(document.createTextNode(lead1));
+        linesFrag(f1, hit[1]);
+        if (trail1) f1.appendChild(document.createTextNode(trail1));
+        ns.forEach(function (n) { par.removeChild(n); });
+        par.insertBefore(f1, nx && nx.parentNode === par ? nx : null);
+        return;
+      }
+    }
     var first = runs[0], at = first[first.length - 1].nextSibling;
     var raw = first.map(function (n) { return n.nodeType === 3 ? n.nodeValue : '\u0000'; }).join('');
     var lead = raw.slice(0, raw.length - raw.replace(/^\s+/, '').length), trail = raw.slice(raw.replace(/\s+$/, '').length);
     runs.forEach(function (r) { r.forEach(function (n) { el.removeChild(n); }); });
     var frag = document.createDocumentFragment();
     if (lead) frag.appendChild(document.createTextNode(lead));
-    String(v == null ? '' : v).split('\n').forEach(function (line, i) {
-      if (i) frag.appendChild(document.createElement('br'));
-      if (line) frag.appendChild(document.createTextNode(line));
-    });
+    linesFrag(frag, v);
     if (trail) frag.appendChild(document.createTextNode(trail));
     el.insertBefore(frag, at && at.parentNode === el ? at : null);
   }
