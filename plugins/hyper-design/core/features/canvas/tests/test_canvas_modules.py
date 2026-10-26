@@ -265,6 +265,18 @@ def test_single_file_output(res):
     assert "/* hd-motion */" not in html and "--duration-fast: 250ms" in html and html.index("--camera-glide-dur") < html.index("</style>")   # motion.css 인라인
     assert "/* hd-shell */" not in html and html.index(":root{--ui-accent") < html.index("--duration-fast: 250ms"), "shell.css 인라인 — motion.css 보다 앞(캐스케이드 차례)"
     assert not re.search(r"<script[^>]+\bsrc=", html), "외부 스크립트 참조 없음"
+    # figma-lite 6: 모듈 머리 주석(층·책임 설명)은 원본에만 — index.html 에는 싣지 않는다(그 밖 주석·코드는 그대로)
+    assert not re.search(r'<script data-hd-module="[^"]+">\s*/\* (Model|ViewModel|View) — ', html), "모듈 머리 주석이 index.html 에 실렸다"
+
+
+def test_strip_head_only_first_block():
+    """머리 주석 첫 덩어리만 뗀다 — 맨 앞이 주석이 아니거나 닫히지 않으면 그대로, 둘째 주석과 코드는 남는다."""
+    sys.path.insert(0, str(SCRIPTS))
+    from build_canvas import strip_head
+    sys.path.pop(0)
+    assert strip_head("/* View — a\n   b */\n/* keep */\nvar x = '/*';\n") == "/* keep */\nvar x = '/*';\n"
+    assert strip_head("var a; /* not head */") == "var a; /* not head */"
+    assert strip_head("/* open") == "/* open"
 
 
 EDITS_JS = r"""

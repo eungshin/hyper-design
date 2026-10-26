@@ -59,6 +59,17 @@ esc = lambda x: html.escape(str(x if x is not None else ""))
 
 
 # ---------------------------------------------------------------- index.html
+def strip_head(src):
+    """파일 맨 앞 머리 주석(`/* … */` 첫 덩어리) 하나만 뗀다 — 층·책임·API 설명은 원본 파일(책임 게이트가 읽는 곳)에 남고
+    index.html 에는 싣지 않는다(figma-lite 6: 바이트 약 1/5). 그 밖 주석·코드는 손대지 않는다(줄이기 아님).
+    맨 앞이 주석이 아니거나 닫히지 않으면 그대로."""
+    body = src.lstrip()
+    if not body.startswith("/*"):
+        return src
+    end = body.find("*/", 2)
+    return src if end < 0 else body[end + 2:].lstrip("\r\n")
+
+
 def inline_modules(tpl):
     """modules/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
     assert MODULES_MARKER in tpl, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
@@ -66,13 +77,13 @@ def inline_modules(tpl):
     for name in modules():
         f = MODULES_DIR / f"{name}.js"
         assert f.exists(), f"캔버스 모듈이 없다: {f}"
-        js = f.read_text(encoding="utf-8").replace("</", "<\\/").replace("<!--", "<\\!--")
+        js = strip_head(f.read_text(encoding="utf-8")).replace("</", "<\\/").replace("<!--", "<\\!--")
         parts.append(f'<script data-hd-module="{name}">\n{js}</script>')
     tpl = tpl.replace(MODULES_MARKER, "\n".join(parts), 1)
     # 셸 화면 틀(modules/shell.css)·움직임 토큰·전환(modules/motion.css)을 <style> 안 표시 자리에
     for marker, f in CSS_SLOTS:
         assert marker in tpl, f"canvas_template.html 에 {marker} 자리가 없다"
-        tpl = tpl.replace(marker, f.read_text(encoding="utf-8").replace("</", "<\\/"), 1)
+        tpl = tpl.replace(marker, strip_head(f.read_text(encoding="utf-8")).replace("</", "<\\/"), 1)
     return tpl
 
 
