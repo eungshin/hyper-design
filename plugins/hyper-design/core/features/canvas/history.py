@@ -1,7 +1,8 @@
 """Edge — History: 화면 파일 쓰기(apply · delete · 줄 · 되살리기)를 하나씩 세션 자물쇠 안에서, 끝나면 on_written(지켜보기 기준 옮김) + 이벤트.
 
 상태: 없음(기록은 write_record 의 .hd-history) — 이어 둔 것만: 자물쇠 · builder · 버스 · rebuilder(async apply 의 뒤 빌드, 47-4a).
-쓰기마다 screen.written(by human) · 다시 빌드가 깨지면 build.failed. apply_async = 쓰기만 하고 바로 답, 빌드는 rebuilder.
+쓰기마다 screen.written(by human) · 쓰기 확인(builder.check — 데이터만, figma-lite 5)이 깨지면 되돌리고 build.failed. apply_async = 쓰기만 하고 바로 답, 확인은 rebuilder.
+index.html 은 쓰기 때 굽지 않는다 — 페이지를 줄 때 데이터 도장이 다르면 session.refresh_data 가.
 부르는 곳: session.ProjectSession(History · Rebuilder 의 revert = revert_writes) · router(/api/apply · /api/delete · /api/restore · /api/group-*).
 오류 탐지: 답의 reason 을 상태 코드로(_code: changed-since 409 · missing 404 · invalid 400 · 그 밖 오류 500) · 뒤 빌드 실패로 못 되돌린 쓰기는 [hd] 한 줄.
 """
@@ -47,7 +48,7 @@ class History:
         return _code(r), r
 
     def apply(self, edits):
-        return self._write(lambda: apply_edits(self.out, edits, build=self.builder.run))
+        return self._write(lambda: apply_edits(self.out, edits, build=self.builder.check))
 
     def apply_async(self, edits):
         """{edits, async:true} — 화면 파일만 쓰고(원본·manifest 는 같음) 바로 답 {accepted, failed, stamp, changed, paths, rev, async}.
@@ -86,22 +87,22 @@ class History:
         return reverted, kept
 
     def delete(self, ids):
-        return self._write(lambda: delete_screens(self.out, ids, build=self.builder.run), ids)
+        return self._write(lambda: delete_screens(self.out, ids, build=self.builder.check), ids)
 
     def group_rename(self, frm, to):                 # 줄 이름 바꾸기(51-4) — screens.json 쓰기 한 번, 되돌리기 = restore
-        return self._write(lambda: group_rename(self.out, frm, to, build=self.builder.run))
+        return self._write(lambda: group_rename(self.out, frm, to, build=self.builder.check))
 
     def group_dissolve(self, name):                  # 줄만 걷기(51-4) — 그 줄 화면은 위 줄(첫 줄이면 아래 줄)로
-        return self._write(lambda: group_dissolve(self.out, name, build=self.builder.run))
+        return self._write(lambda: group_dissolve(self.out, name, build=self.builder.check))
 
     def restore(self, stamp, keep=False, notify=False):
         """notify = 되살린 화면 파일을 지켜보기가 '바뀜'으로 알리게(그 카드를 캔버스가 다시 싣는다 — 48c 기록 패널의 AI 줄 되돌리기)."""
         if notify:
             with self.lock:
-                r = restore(self.out, stamp, build=self.builder.run, keep=keep)
+                r = restore(self.out, stamp, build=self.builder.check, keep=keep)
                 self._written(r, (), r.get("redo"))
             return _code(r), r
-        return self._write(lambda: restore(self.out, stamp, build=self.builder.run, keep=keep), key="redo")
+        return self._write(lambda: restore(self.out, stamp, build=self.builder.check, keep=keep), key="redo")
 
     def prune(self):
         return prune(self.out)

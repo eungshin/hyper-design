@@ -2,6 +2,7 @@
 
 BuildPlan  = 순수 상태 기계(I/O·스레드 없음 — unit 테스트). 상태: pending(아직 빌드로 확인 안 된 쓰기들) · running(일꾼 있음) · dirty(빌드 중 새 쓰기).
 Rebuilder  = 일꾼 스레드 하나(일이 있을 때만 뜨고 다 하면 끝남 — 남는 스레드 없음). build() · revert(writes) · emit(type, **data) 는 세션이 넘긴다.
+  세션이 넘기는 build() = 쓰기 확인(builder.check — 데이터만, figma-lite 5). 이름·이벤트(build.*)는 그대로 — 전체 index.html 은 페이지를 줄 때(session.refresh_data).
 쓰기 하나 = {stamp, ids, screens}(.hd-history stamp · 편집 id · 화면). 이벤트 모양은 tests/protocol/events.json.
 """
 import threading

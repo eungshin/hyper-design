@@ -2,12 +2,14 @@
 
 out 안 파일(화면 HTML · decisions.json · palettes.json · credits.json · surface.json · tokens.css)을 읽기만 한다 — 쓰기·네트워크·하위 프로세스 없음.
 build_canvas(빌드 CLI)와 session(도우미 /api/data)이 함께 쓴다. 화면 안 링크 규칙은 links.
+데이터 도장(input_stamp = 그 입력 파일 내용, figma-lite 5): build_canvas 가 index.html 에 적고, session 이 페이지를 줄 때 견준다(쓰기는 index.html 을 다시 굽지 않는다).
 오류 탐지: 깨진 JSON · 못 읽는 tokens.css 는 멈추지 않고 기본값으로, stderr 에 '경고:' 한 줄. 없는 화면 파일은 링크 없음([]).
 """
 import json
 import re
 import sys
 
+import code_stamp as CS  # 데이터 도장 모양(순수 — input_stamp)
 import links
 
 SCALE, CARD, MODAL, RADIUS = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28   # surface.json이 없을 때(폰)
@@ -62,6 +64,36 @@ def root_vars(css):
             if n not in names:
                 names.append(n)
     return names
+
+
+SIDE_FILES = ("screens.json", "decisions.json", "palettes.json", "credits.json", "surface.json", "tokens.css")
+
+
+def input_files(out, m):
+    """index.html(과 foundation·components)이 out 에서 읽는 파일 — 데이터 도장(input_stamp)에 든다.
+    screens.json 과 곁 파일 · 화면마다 file(개발 서버 주소 빼고) · screens/*.html(components 가 쓴 클래스를 읽는 곳). m 이 깨졌으면 화면 목록 없이."""
+    names = list(SIDE_FILES)
+    for s in (m.get("screens") if isinstance(m, dict) else None) or []:
+        f = (s.get("file") or "screens/%s.html" % s.get("id")) if isinstance(s, dict) else None
+        if isinstance(f, str) and not is_dev_url(f):
+            names.append(f)
+    names += sorted("screens/" + p.name for p in (out / "screens").glob("*.html"))
+    return list(dict.fromkeys(names))
+
+
+def input_stamp(out):
+    """out 의 지금 데이터 입력 → 'd:<16>'(code_stamp.data_stamp). 없는 파일은 빠진다 · 못 읽는 screens.json 도 바이트로 든다."""
+    try:
+        m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        m = None
+    parts = []
+    for n in input_files(out, m):
+        try:
+            parts.append((n, (out / n).read_bytes()))
+        except OSError:                                 # 없는 파일 = 도장에서 빠짐(목록이 screens.json 에서 오므로 그 바뀜은 screens.json 이 담는다)
+            pass
+    return CS.data_stamp(parts)
 
 
 def index_data(out, m):

@@ -9,15 +9,17 @@
   Busy · AiUndo  — busy.py · ai_undo.py: AI 작업 덮개 + 화면 파일 지켜보기 · 덮개 동안 AI 가 쓴 화면 되돌리기(48c)
   ChatLog        — chat_store.py: <out>/.hd-chat.jsonl 대화 기록(S3, 버스 탭)
   Archive        — note_archive.py: <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep)
-  Builder        — builder.py: 다시 빌드 하나씩 · hd-data · 부품 견본 목록
+  Builder        — builder.py: 쓰기 확인(데이터만) · 페이지 빌드 하나씩 · hd-data · 부품 견본 목록
   EventBus       — events.py(47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
-상태: 토큰 · 붙은 코드 도장 함수(code) · 포기한 도장(_gave_up) — 나머지 상태는 부품마다 주인 하나.
+상태: 토큰 · 붙은 코드 도장 함수(code) · 포기한 도장(_gave_up · _data_gave_up) — 나머지 상태는 부품마다 주인 하나.
+페이지(figma-lite 5): 쓰기는 데이터만 확인하고 index.html 을 굽지 않는다 — page() 가 줄 때 데이터 도장(code_stamp.page_inputs)이 지금 out 파일과 다르면 다시 빌드(refresh_data), 닫을 때도 한 번.
 부르는 곳: helper.make_server(CLI 도우미) · home.registry(허브) · router(주소 → 부품 메서드). 모듈 함수 예전 이름은 helper.py 가 부품 모듈에서 다시 내보낸다.
 오류 탐지: 시작 정리·도장 재기·다시 빌드가 실패해도 [hd] 한 줄 뒤 있던 index.html 로 보인다(페이지를 못 주지는 않는다).
 """
 import json, os, pathlib, secrets, sys, threading, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
+import board_data as BD  # 데이터 도장 재기(input_stamp)
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import presence as PR  # 접속한 에이전트(task 47-5a)
@@ -43,6 +45,7 @@ def keypath(out):                                    # file:// 로 열었을 때
 
 PRESENCE_EVERY = 1.0                                 # 접속 임대 끝 보기(초)
 ARCHIVE_EVERY = 3600.0                               # 완료 메모 보관(초) — 캔버스 탭의 '한 시간에 한 번'과 같은 규칙, 탭이 없어도
+PAGE_WAIT = 0.25                                     # 페이지를 줄 때 쓰기 자물쇠를 이만큼만 기다린다 — 쓰기 중이면 있던 index.html 로(읽기는 쓰기를 기다리지 않는다)
 
 
 class ProjectSession:
@@ -53,6 +56,7 @@ class ProjectSession:
         self.out = pathlib.Path(out).resolve()
         self.code = code                             # () → 지금 코드 도장 | None — 있으면 페이지를 줄 때 옛 도장 index.html 을 다시 빌드(CLI 도우미·허브가 넘김)
         self._gave_up = None                         # 다시 빌드해도 그 도장이 안 나온 도장 — 같은 도장으로 매번 빌드하지 않게
+        self._data_gave_up = None                    # 데이터 도장도 같은 규칙(그 빌드가 도장을 못 적는 옛 코드 · 실패)
         self.token = token or secrets.token_urlsafe(18)
         self.lock = threading.Lock()
         self.events = EV.EventBus(name or hd_model.project_name(self.out.name, self.out.parent.name))
@@ -61,7 +65,7 @@ class ProjectSession:
         self.ai = AiUndo(self.out)
         self.busy = Busy(self.out, self.lock, self.ai, self.events)
         self.history = History(self.out, self.lock, self.builder, self.busy.absorb, self.events, lambda: self.busy.watch.seq)
-        self.rebuilder = RB.Rebuilder(lambda: self.builder.run(self.out), self.history.revert_writes, self.events.publish)
+        self.rebuilder = RB.Rebuilder(lambda: self.builder.check(self.out), self.history.revert_writes, self.events.publish)
         self.history.rebuilder = self.rebuilder
         self.config = config if config is not None else AD.config_from_env(os.environ)   # 47-5a: claude 깨우기 · 새 에이전트 열기(기본 꺼짐)
         self.presence = PR.AgentPresence(self.events.publish)
@@ -93,15 +97,52 @@ class ProjectSession:
         self.rebuilder.close()                        # 다음 뒤 빌드는 시작하지 않는다(돌고 있는 것은 끝까지) — 남은 쓰기는 다음 열기의 빌드가 담는다
         if self.rebuilder.pending():
             print("[hd] 닫는 중 — 아직 빌드하지 않은 쓰기 %d개(화면 파일에는 있어요)" % self.rebuilder.pending(), file=sys.stderr, flush=True)
+        else:
+            try:
+                self.refresh_data(wait=5.0)          # 디스크의 index.html 도 마지막 쓰기까지(도우미 없이 file:// 로 열어도)
+            except Exception as e:                    # noqa: BLE001 — 닫기는 멈추지 않는다
+                print("[hd] 닫으며 캔버스를 다시 빌드하지 못했어요(%s)" % e, file=sys.stderr, flush=True)
         self.events.close()                           # 열린 흐름(SSE)이 끝난다
+
+    def _head(self):
+        """index.html 앞 8 KB(도장 meta 는 <head> 바로 뒤) | None(없음 · 못 읽음)."""
+        try:
+            with open(self.out / "index.html", encoding="utf-8", errors="replace") as f:
+                return f.read(8192)
+        except OSError:
+            return None
 
     def page_code(self):
         """index.html 이 품은 코드 도장 | None(도장 전 빌드 · 못 읽음)."""
+        return CS.page_stamp(self._head())
+
+    def page_inputs(self):
+        """index.html 이 품은 데이터 도장 | None(도장 전 빌드 · 가짜 페이지 · 못 읽음)."""
+        return CS.page_inputs(self._head())
+
+    def refresh_data(self, wait=PAGE_WAIT):
+        """index.html 을 구운 뒤 out 의 데이터 입력이 바뀌었으면(쓰기 · AI 수정) 다시 빌드 → 'fresh' | 'rebuilt' | 'failed' | 'busy'.
+        쓰기 중이면(자물쇠를 wait 안에 못 잡음 · 뒤 확인을 기다리는 쓰기) 기다리지 않고 있던 페이지('busy' — 다음 페이지에서).
+        자물쇠 안에서 굽는다 — 확인 안 된 쓰기가 페이지에 들지 않게. 도장 없는 페이지는 견주지 않는다(code_stamp.data_stale)."""
+        if not self.lock.acquire(timeout=wait):
+            return "busy"
         try:
-            with open(self.out / "index.html", encoding="utf-8", errors="replace") as f:
-                return CS.page_stamp(f.read(8192))       # 도장은 <head> 바로 뒤
-        except OSError:
-            return None
+            if self.rebuilder.pending():
+                return "busy"
+            have = self.page_inputs()
+            want = BD.input_stamp(self.out) if have else None
+            if not CS.data_stale(have, want) or want == self._data_gave_up:
+                return "fresh"
+            r = self.builder.run(self.out)
+            if getattr(r, "returncode", 1) == 0 and self.page_inputs() == want:
+                return "rebuilt"
+            self._data_gave_up = want
+            tail = ((getattr(r, "stdout", "") or "") + (getattr(r, "stderr", "") or "")).strip().splitlines()[-1:]
+            print("[hd] 바뀐 화면으로 캔버스를 다시 빌드하지 못했어요 — 있던 index.html 로 보여요%s" % (": " + tail[0] if tail else ""),
+                  file=sys.stderr, flush=True)
+            return "failed"
+        finally:
+            self.lock.release()
 
     def refresh(self, current):
         """index.html 이 지금 코드(current)로 구운 것이 아니면 다시 빌드 → 'fresh' | 'rebuilt' | 'failed'.
@@ -120,12 +161,16 @@ class ProjectSession:
 
     def page(self):
         """index.html + <head> 에 window.__hdHelper·__hdKeyPath·__hdOut·__hdAgent(attach 로 바뀌므로 줄 때마다)·__hdState → bytes.
-        code 가 있으면 주기 전에 옛 도장 index.html 을 다시 빌드(F5 · 즐겨찾기로 열어도 지금 코드)."""
+        code 가 있으면 주기 전에 옛 도장 index.html 을 다시 빌드(F5 · 즐겨찾기로 열어도 지금 코드), 그다음 데이터가 옛것이면 다시 빌드(refresh_data)."""
         if self.code is not None:
             try:
                 self.refresh(self.code())
             except Exception as e:                    # noqa: BLE001 — 도장 재기·빌드 실패로 페이지를 못 주지는 않는다(한 줄 남김)
                 print("[hd] 코드 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+        try:
+            self.refresh_data()
+        except Exception as e:                        # noqa: BLE001 — 데이터 도장 재기·빌드 실패로 페이지를 못 주지는 않는다
+            print("[hd] 데이터 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
         snap = self.store.inject()
         inject = '<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;' % (
             json.dumps(True), json.dumps(keypath(self.out)), json.dumps(self.out.as_posix()))

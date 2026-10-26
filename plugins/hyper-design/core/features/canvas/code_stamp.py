@@ -4,6 +4,8 @@
 - index.html 은 빌드한 코드의 도장을 <meta name="hd-code" content="…"> 로 품는다(build_canvas).
 - 떠 있는 도우미·허브는 자기가 뜰 때의 도장을 표지(code)에 적는다(그 프로세스 안 Python 이 그 판).
 - 열기(hd open · 허브 open · 페이지 받기)가 지금 도장과 견줘: 페이지가 옛것이면 다시 빌드, 프로세스가 옛것이면(쉬는 중) 다시 띄움.
+데이터 도장(figma-lite 5) = 'd:<내용 해시 16>' — index.html 이 out 에서 읽은 파일(board_data.input_files) 내용. <meta name="hd-inputs" content="…">.
+- 쓰기는 데이터만 확인하고(builder.verify) index.html 은 다시 굽지 않는다 — 페이지를 줄 때 이 도장이 지금 파일과 다르면 그때 다시 빌드(session.refresh_data).
 """
 import hashlib
 import re
@@ -64,3 +66,34 @@ def reuse_verdict(page, proc, current, busy=False, movable=True):
 def page_after(verdict, page, current):
     """그 판단 뒤 페이지를 다시 빌드하나 — rebuild, 또는 busy 인데 페이지가 옛것(프로세스는 못 바꿔도 화면은 지금 코드)."""
     return verdict == "rebuild" or (verdict == "busy" and stale(page, current))
+
+
+# ---------------------------------------------------------------- 데이터 도장(figma-lite 5)
+INPUTS_META = '<meta name="hd-inputs" content="%s">'
+_INPUTS_RE = re.compile(r'<meta\s+name="hd-inputs"\s+content="([^"<>]*)"\s*/?>', re.I)
+
+
+def data_stamp(parts):
+    """[(out 안 이름, bytes)] → 'd:<16>' — content_stamp 와 같은 해시, 앞만 d:(코드 도장과 섞이지 않게)."""
+    return "d:" + content_stamp(parts)[2:]
+
+
+def stamp_inputs(html, stamp):
+    """index.html 글 → 첫 <head> 바로 뒤에 데이터 도장 meta(이미 있으면 바꿈). stamp 가 없으면 그대로."""
+    if not stamp:
+        return html
+    tag = INPUTS_META % stamp.replace('"', "")
+    if _INPUTS_RE.search(html):
+        return _INPUTS_RE.sub(lambda m: tag, html, count=1)
+    return html.replace("<head>", "<head>" + tag, 1) if "<head>" in html else tag + html
+
+
+def page_inputs(html):
+    """index.html 글 → 품은 데이터 도장 | None(도장 전 빌드 · 가짜 페이지)."""
+    m = _INPUTS_RE.search(html or "")
+    return m.group(1) or None if m else None
+
+
+def data_stale(have, want):
+    """페이지 데이터가 옛것인가 — 둘 다 알 때만. 도장 없는 페이지(옛 빌드 · 시험용 가짜)는 견주지 않는다(옛 코드 페이지는 코드 도장이 다시 굽는다)."""
+    return bool(have) and bool(want) and have != want

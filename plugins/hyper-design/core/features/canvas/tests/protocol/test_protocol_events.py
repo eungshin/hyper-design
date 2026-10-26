@@ -53,6 +53,7 @@ def hub(tmp_path, monkeypatch):
     st, _, raw = send(port, srv.token, {"method": "POST", "path": "/api/open", "body": {"name": "proj-c"}}, {})
     res = json.loads(raw)
     assert st == 200 and "/v1/p/proj-c/" in res["url"], res
+    srv.registry.get("proj-c").builder._check = fb   # 쓰기 확인도 가짜(figma-lite 5: 쓰기 = 데이터 확인 — build 단계가 이것을 바꾼다)
     try:
         yield {"port": port, "srv": srv, "build": fb, "out": out,
                "vars": {"hub": srv.token, "session": res["url"].split("?hd=")[1], "project": "proj-c"}}
@@ -240,7 +241,12 @@ def test_closing_the_session_ends_its_streams(hub):
 def test_helper_serves_events_and_real_build_async_apply(tmp_path, monkeypatch):
     import helper
     monkeypatch.setenv("HD_HOME", str(tmp_path / "hd-home"))
+    import board_data, code_stamp
     out = hdfix.make_out(tmp_path / "w")
+    r = subprocess.run([sys.executable, str(CANVAS / "build_canvas.py"), str(out)], capture_output=True, text=True, encoding="utf-8",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    assert r.returncode == 0, r.stderr               # 데이터 도장을 품은 진짜 페이지
+    built = (out / "index.html").read_text(encoding="utf-8")
     srv = helper.make_server(out)                    # 작업 트리 build_canvas(같은 프로세스 make_server)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port, tok = srv.server_address[1], srv.token
@@ -249,13 +255,19 @@ def test_helper_serves_events_and_real_build_async_apply(tmp_path, monkeypatch):
         assert s.status == 200 and s.frame().get("retry") == "2000"
         assert send(port, None, {"path": "/api/events", "token": False}, {})[0] == 403
         st, _, raw = send(port, tok, {"method": "POST", "path": "/api/apply", "body": {"async": True, "edits": [
-            {"id": "r1", "screen": "home", "edit": "text", "path": "h1", "value": "Real"}]}}, {})
+            {"id": "r1", "screen": "home", "edit": "text", "path": "h1", "value": "Real"},
+            {"id": "r2", "screen": "home", "edit": "title", "value": "Real Home"}]}}, {})
         res = json.loads(raw)
-        assert st == 200 and res["accepted"] == ["r1"], res
+        assert st == 200 and res["accepted"] == ["r1", "r2"], res
         got, errs = read_events(s, ["screen.written", "build.started", "build.done"], None, {}, "helper")
         assert not errs and got[0]["id"] == res["rev"] and got[2]["stamps"] == [res["stamp"]], (errs, got)
         assert "Real" in (out / "screens" / "home.html").read_text(encoding="utf-8")
-        assert "hd-data" in (out / "index.html").read_text(encoding="utf-8"), "뒤 빌드가 실제로 index.html 을 만들었다"
+        assert (out / "index.html").read_text(encoding="utf-8") == built, "쓰기는 데이터만 확인 — index.html 은 굽지 않는다(figma-lite 5)"
+        st, _, raw = send(port, tok, {"method": "POST", "path": "/api/data", "body": {}}, {})
+        assert st == 200 and "Real Home" in [c["title"] for row in json.loads(raw)["rows"] for c in row["screens"]], "/api/data 는 쓰기 바로 뒤에도 맞다"
+        st, _, raw = send(port, None, {"path": "/index.html", "token": False}, {})
+        assert st == 200 and "Real Home" in raw.decode("utf-8"), "페이지를 줄 때 옛 데이터면 다시 빌드"
+        assert code_stamp.page_inputs((out / "index.html").read_text(encoding="utf-8")) == board_data.input_stamp(out)
         s.close()
     finally:
         srv.shutdown(); srv.server_close()

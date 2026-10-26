@@ -355,7 +355,7 @@ def test_async_apply_whose_build_fails_reverts_the_optimistic_change(ctx, out):
         mf = _modal(pg)
         before = _job(out)
         _pick(pg, mf, TILE % 2)
-        srv.session.builder._run = broken
+        srv.session.builder._check = broken   # 쓰기 확인(figma-lite 5: 데이터만)
         if pg.is_visible('#elbar [data-act="dup"]'):
             pg.click('#elbar [data-act="dup"]')
         else:
@@ -400,7 +400,7 @@ def test_drag_whose_async_build_fails_puts_the_order_back(ctx, out):
         mf = _modal(pg)
         before = _job(out)
         _pick(pg, mf, TILE % 1)
-        srv.session.builder._run = broken
+        srv.session.builder._check = broken   # 쓰기 확인(figma-lite 5: 데이터만)
         _grip_drag(pg, mf, TILE % 3, 0.8)
         assert mf.evaluate(TILES_JS)[:3] == ["대학원생·연구원", "어학 시험 준비", "대학생"], "놓으면 화면은 바로"
         pg.wait_for_function("(document.getElementById('toast') || {}).textContent.indexOf('시험용 빌드 실패') >= 0", timeout=10000)

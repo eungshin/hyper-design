@@ -222,7 +222,8 @@ function mount(ctx) {
       n.classList.remove('hd-swap-next', 'hd-swap-in'); n.removeAttribute('aria-hidden');
       n.style.removeProperty('--hd-swap-ms'); if (!n.getAttribute('style')) n.removeAttribute('style');   // 겹치기용 값은 남기지 않는다
       if (!n.getAttribute('class')) n.removeAttribute('class');
-      delete live[id]; if (!Object.keys(live).length) watch(false);
+      if (live[id] === L) delete live[id];             // 늦게 끝난 옛 교체가 그새 시작한 새 교체의 live[id] 를 지우지 않게(빌드가 빨라지면 겹친다 — figma-lite 5)
+      if (!Object.keys(live).length) watch(false);
       if (fl) runFlash(id, n, fl, L.loadedAt);
       emit(id, 'done', null, silent ? {before: false, silent: true} : {before: !!snap});
     }

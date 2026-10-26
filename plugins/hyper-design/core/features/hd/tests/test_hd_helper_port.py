@@ -102,8 +102,8 @@ def test_state_read_does_not_wait_for_build(tmp_path, monkeypatch):
         assert release.wait(20)
         return subprocess.CompletedProcess([], 0, "", "")
 
-    monkeypatch.setattr(helper, "_build", slow_build)
     srv = helper.make_server(out)
+    srv.session.builder._check = slow_build          # 쓰기 확인을 붙든다(figma-lite 5: 쓰기는 데이터만 확인, 페이지 빌드는 줄 때)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base, tok = "http://127.0.0.1:%d" % srv.server_address[1], srv.token
     res = {}

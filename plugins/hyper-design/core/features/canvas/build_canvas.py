@@ -25,6 +25,7 @@ screens.json:
 환경변수 HD_SPECIMENS 로 specimens.html 경로를 바꿀 수 있다(테스트용).
 코드 도장(code_stamp.py): index.html 의 <head> 에 <meta name="hd-code"> — 환경변수 HD_CODE_STAMP(build_ref 가 넘기는 git 나무 도장),
 없으면 빌드 입력(템플릿·모듈·shell.css·motion.css·이 파일·palette.js) 내용 해시. 열기가 지금 도장과 견줘 옛 페이지를 다시 빌드한다.
+데이터 도장(figma-lite 5): <meta name="hd-inputs"> = out 의 데이터 입력 내용(board_data.input_stamp) — 도우미는 쓰기 때 데이터만 확인하고, 페이지를 줄 때 이 도장이 다르면 다시 빌드한다.
 """
 import sys, os, json, re, html, pathlib, shutil
 
@@ -88,6 +89,7 @@ def inline_modules(tpl):
 
 
 def build_index(out, m):
+    inputs = BD.input_stamp(out)                       # 데이터보다 먼저 잰다 — 그 사이 쓰기가 들면 도장이 옛것이 되어 다음 페이지에서 다시 빌드(안전한 쪽)
     data = BD.index_data(out, m)
     data_rows = data["rows"]
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
@@ -98,7 +100,7 @@ def build_index(out, m):
     lis = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
     nos = f'<noscript id="hd-links"><ul>{lis}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
-    tpl = code_stamp.stamp_page(inline_modules(tpl), build_stamp())
+    tpl = code_stamp.stamp_inputs(code_stamp.stamp_page(inline_modules(tpl), build_stamp()), inputs)
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
     return len(m["screens"]), len(data["arrows"]), len(data_rows)
 
