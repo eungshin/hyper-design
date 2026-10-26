@@ -508,11 +508,11 @@ def test_helper_written_edit_is_not_requeued_when_reload_fails(ctx, out):   # S2
         pg.locator('#legend .lgrow[data-from="job"][data-to="language"] .lgcut').click()
         pg.wait_for_function("() => document.querySelector('#hlist li.now .hl') && document.querySelector('#hlist li.now .hl').textContent === '선 자르기'", timeout=20000)
         assert _links_to(out, "language") == ["usage"], "파일에는 썼다"
-        pg.wait_for_timeout(2500)                                # 다시 불러오기(재시도)까지
+        # 다시 불러오기 = 실패 뒤 retryMs(1초) → /api/data → 카드 교체 — 고정 2.5초는 -n 4 부하에서 모자랐다(10-26 세 번 실패, 515행 ?v= 없음)
+        pg.wait_for_function("() => { const f = document.querySelector('.card[data-id=\"job\"] .phone iframe'); return !!f && ((f.getAttribute('src') || '') + (f.getAttribute('data-src') || '')).includes('?v='); }", timeout=15000)
         assert pg.evaluate(NOTES_NOW) == [], "이미 쓴 편집을 반영 대기로 다시 넣지 않는다(다음 보내기에서 두 번 쓰임)"
         assert len(calls) >= 2, "판 데이터를 다시 불러온다"
         assert pg.locator("#hlist li.now .hs").text_content() == "파일에 씀"
-        assert "?v=" in (pg.get_attribute('.card[data-id="job"] .phone iframe', "src") or pg.get_attribute('.card[data-id="job"] .phone iframe', "data-src") or ""), "다시 불러오기가 되어 바뀐 카드를 다시 싣는다"
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors
