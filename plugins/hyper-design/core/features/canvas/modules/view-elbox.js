@@ -46,14 +46,14 @@ function mount(ctx) {
                      frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
                      anchor: function () { var bx = $('.elbox.sel', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
   }
-  function pickAt(card, x, y, deep) {                // 이동(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2)
+  function pickAt(card, x, y, deep) {                // 선택(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2)
     ctx.ask(card, x, y, false, function (h) {
       if (!h) return;
       if (h.none) { ctx.toast('여기에는 고를 요소가 없어요'); return; }
       select(card, h);
     }, false, deep);
   }
-  function hoverMode(card) {                          // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 이동(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
+  function hoverMode(card) {                          // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 선택(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
     return HD.tools.hoverOf(ctx.tool(), {only: ctx.only(card.dataset.id), typing: card.classList.contains('hd-typing')});
   }
   function hoverAsk(card, x, y, deep) {              // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억 · deep = Alt(가장 안쪽 — 이동 도구의 Alt+클릭과 같게)

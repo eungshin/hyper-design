@@ -1,5 +1,5 @@
 """요소 막대 자리·크기(polish-1) — 브라우저. 크게 보기에서 고른 요소 바로 위 줄 글(앞 형제)을 막대가 덮지 않는다 ·
-요소 칸보다 넓으면 뒤 단추가 "⋯" 로 넘어가고 ⋯ 목록에서 누를 수 있다. 규칙은 test_canvas_unit_blocks_place.py(unit).
+막대는 작은 아이콘 줄(R17 시안 A)이라 좁은 요소에서도 요소 칸(최소 220) 안이고, [⋯] 가 모든 동작이 든 요소 메뉴(#cmenu)를 연다.
 둘레 글 상자는 같은 출처 화면에서만 읽으므로 도우미(http)로 연다."""
 import os, tempfile
 from pathlib import Path
@@ -47,21 +47,20 @@ def test_bar_skips_the_text_line_above_and_folds_extra_buttons(ctx, out):
         assert not _overlap(bar, h1), ("막대가 바로 위 줄 글(앞 형제 h1)을 덮는다", bar, h1)
         assert not _overlap(bar, lead), ("막대가 고른 요소를 덮는다", bar, lead)
         assert not _overlap(bar, mb), ("창 제목 막대를 덮는다", bar, mb)
-        assert bar["h"] <= 26, ("막대는 한 줄로 낮게", bar)
+        assert bar["h"] <= 26, ("막대는 아이콘 한 줄로 낮게", bar)
 
-        tile = ".tile-grid > button:nth-of-type(4)"                    # 좁은 요소 — 막대가 요소 칸(최소 220)을 넘으면 ⋯
+        tile = ".tile-grid > button:nth-of-type(4)"                    # 좁은 요소 — 아이콘 막대는 요소 칸(최소 220) 안, 나머지 동작은 ⋯ 메뉴
         bar = _pick(pg, mf, tile)
         pg.screenshot(path=str(SHOTS / "bar-tile-after.png"))
         el = _screen_rect(pg, mf, tile)
-        more = pg.get_attribute("#elbar", "data-more") or ""
-        assert more and pg.is_visible("#elbar [data-more]"), ("넘친 단추는 ⋯ 로", more)
+        assert pg.is_visible('#elbar [data-act="more"]'), "⋯ = 요소 메뉴"
         assert bar["w"] <= max(el["w"], 220) + 1, (bar, el)
         assert not _overlap(bar, el), (bar, el)
         assert not _overlap(bar, pg.evaluate(RECT % "#tools")), ("왼쪽 도구 막대를 덮지 않는다", bar)
-        pg.click("#elbar [data-more]")
-        pg.wait_for_selector("#elpop:not([hidden]) .ep-act", timeout=3000)
-        got = pg.evaluate("[...document.querySelectorAll('#elpop .ep-act')].map(b => b.dataset.act)")
-        assert got == more.split(), (got, more)
+        pg.click('#elbar [data-act="more"]')
+        pg.wait_for_selector("#cmenu:not([hidden]) button[data-act]", timeout=3000)
+        got = pg.evaluate("[...document.querySelectorAll('#cmenu button[data-act]')].map(b => b.dataset.act)")
+        assert {"parent", "dup", "remove", "swap", "insert", "memo", "ai"} <= set(got), got
         pg.screenshot(path=str(SHOTS / "bar-tile-more-after.png"))
         assert not errors, errors
     finally:

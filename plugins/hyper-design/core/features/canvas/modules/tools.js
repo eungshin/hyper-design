@@ -2,7 +2,7 @@
    도구마다: 키 · 카드 안 요소를 고르는 방식(hit) · 마우스를 올린 요소에 테두리를 그릴지.
      hit: null = 요소를 고르지 않음 · 'click' = 누를 수 있는 요소(링크 → 버튼 → 그 요소) · 'leaf' = 글자를 가진 그 요소 · 'any' = 그 자리 요소
    hoverOf(tool, {only, typing}) → 마우스를 올린 카드 안에서 다음 클릭이 고를 요소를 미리 그릴 방식(51-3, Figma F10): 요소 도구 = hitOf ·
-     이동(V) = 그 카드만 골라져 있을 때(only) 'click'(view-elbox pickAt 과 같은 규칙) · 그 카드에서 글자를 고치는 중(typing) = null
+     선택(V) = 그 카드만 골라져 있을 때(only) 'click'(view-elbox pickAt 과 같은 규칙) · 그 카드에서 글자를 고치는 중(typing) = null
    HD.tools = {SPEC, ORDER, byKey(k), hitOf(tool), hoverOf(tool, o), LABEL} */
 (function () {
 'use strict';

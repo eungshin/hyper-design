@@ -42,12 +42,12 @@ def _pick_element(pg, xy):
 
 
 def _act(pg, act):
-    """막대 단추 누르기 — 요소 칸보다 넓어 "⋯" 로 넘어간 단추면 ⋯ 목록에서(polish-1)."""
+    """요소 동작 하나를 뜻(data-act)으로 — 막대 아이콘에 있으면 막대에서, 아니면 막대 [⋯] 가 여는 요소 메뉴에서(R17 시안 A)."""
     if pg.is_visible('#elbar [data-act="%s"]' % act):
         pg.click('#elbar [data-act="%s"]' % act)
     else:
-        pg.click("#elbar [data-more]")
-        pg.click('#elpop .ep-act[data-act="%s"]' % act)
+        pg.click('#elbar [data-act="more"]')
+        pg.click('#cmenu:not([hidden]) button[data-act="%s"]' % act)
 
 
 def _bar(pg):
@@ -89,9 +89,8 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         xy = _xy(pg, H1)
         _pick_element(pg, xy)
         bar = _bar(pg)
-        four = [b for b in bar if b[0] in ("text", "remove", "dup", "memo")]   # 49b 가 [상위]·[바꾸기]·[아래에 넣기]를 더함 · 49c 가 [↑][↓] 를 빼고 끌기 손잡이
-        assert [b[0] for b in four] == ["text", "remove", "dup", "memo"] and not [b for b in bar if b[0] in ("up", "down")], bar
-        assert [b[1] for b in four] == ["글자", "지우기", "복제", "메모"] and all(b[2] and not b[3] for b in bar), bar
+        assert [b[0] for b in bar] == ["grip", "memo", "text", "ai", "more"], ("R17 시안 A: 손잡이 + 메모·글자·AI + ⋯ — 나머지는 ⋯ 메뉴", bar)
+        assert all(b[2] and not b[3] for b in bar), bar
         assert pg.is_visible("#elbar .eb-grip"), "끌기 손잡이"
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
@@ -180,10 +179,10 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     mf.wait_for_function("(s) => !document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
     mf.click(H1, button="right")                            # 오른쪽 클릭 = 판과 같은 요소 메뉴
     pg.wait_for_selector("#cmenu:not([hidden])", timeout=3000)
-    items = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.childNodes[0].textContent)")
-    assert {"글자 고치기", "요소 지우기", "요소 복제", "위로 옮기기", "아래로 옮기기", "요소에 메모"} <= set(items), items
-    assert "잇기" not in items and "도착 바꾸기" not in items, "크게 보기에서는 판에서 도착을 고르는 항목이 없다"
-    pg.locator("#cmenu button", has_text="요소 복제").first.click()
+    items = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
+    assert {"text", "remove", "dup", "up", "down", "memo", "ai", "parent", "swap", "insert"} <= set(items), items
+    assert "link" not in items and "retarget" not in items, "크게 보기에서는 판에서 도착을 고르는 항목이 없다"
+    pg.click('#cmenu button[data-act="dup"]')
     wait_notes(pg, 1)
     assert notes_of(pg)[0]["edit"] == "duplicate"
     mf.wait_for_function("(s) => document.querySelectorAll(s).length === 2", arg=H1, timeout=3000)   # 도우미 없음 = 반영 대기 미리보기(점선 복사본)
@@ -241,7 +240,7 @@ def test_app_card_bar_turns_edits_into_ai_requests(ctx, app_out):
     xy = _xy(pg, H1)
     _pick_element(pg, xy)
     bar = _bar(pg)
-    assert all(b[3] for b in bar if b[0] not in ("parent", "memo")) and not any(b[3] for b in bar if b[0] in ("parent", "memo")), ("앱 카드 = 편집 단추는 모두 AI 요청(상위·메모는 아님)", bar)
+    assert [b[0] for b in bar if b[3]] == ["text"], ("앱 카드 = 막대의 글자는 AI 요청(메모·AI·⋯ 는 아님)", bar)
     shot(pg, "board-elbar-app.png")
     _act(pg, "dup")
     pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
@@ -268,3 +267,40 @@ def test_backspace_on_a_picked_element_removes_the_element_not_the_card(ctx, out
         assert (out / "screens" / "job.html").is_file(), "화면 파일은 남는다"
     finally:
         srv.shutdown(); srv.server_close()
+
+
+@pytest.mark.area("tools", "notes")
+def test_icon_bar_tip_ai_request_and_more_menu(ctx, out):
+    """R17 시안 A: 막대 아이콘에 올리면 이름·단축키 꼬리말 · [AI] = 메모 창에 바꿔 달라는 글 · [⋯] = 묶음·단축키가 있는 요소 메뉴,
+    그 메뉴의 상위 고르기 = 막대의 상위 길(부모가 골라짐). 도구 꼬리말 = '선택 V'. 스크린샷 = HD_SHOTS_49A."""
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    pg.hover('#tools [data-tool="move"]')
+    pg.wait_for_selector("#ttip:not([hidden])", timeout=2000)
+    assert pg.text_content("#ttip").startswith("선택V"), pg.text_content("#ttip")
+    shot(pg, "r17-tool-tip.png")
+    xy = _xy(pg, H1)
+    _pick_element(pg, xy)
+    pg.hover('#elbar [data-act="text"]')
+    pg.wait_for_selector("#eltip:not([hidden])", timeout=2000)
+    assert pg.text_content("#eltip") == "글자 고치기Enter", pg.text_content("#eltip")
+    shot(pg, "r17-bar-tip.png")
+    pg.click('#elbar [data-act="ai"]')
+    pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+    assert pg.input_value("#pnote").startswith("바꿔 주세요"), pg.input_value("#pnote")
+    assert pg.get_attribute('#pintent [data-intent="change"]', "aria-pressed") == "true", "의도 = 바꾸기"
+    pg.keyboard.press("Escape")
+    _pick_element(pg, xy)
+    path0 = pg.get_attribute("#elbar", "data-path")
+    pg.click('#elbar [data-act="more"]')
+    pg.wait_for_selector("#cmenu:not([hidden]) button[data-act]", timeout=3000)
+    heads = pg.evaluate("[...document.querySelectorAll('#cmenu .cmh.sub')].map(h => h.textContent)")
+    assert heads[:2] == ["고르기", "고치기"] and "요청" in heads, heads
+    keys = dict(pg.evaluate("[...document.querySelectorAll('#cmenu button[data-act]')].map(b => [b.dataset.act, (b.querySelector('kbd') || {}).textContent || ''])"))
+    assert keys["parent"] == "Shift+Enter" and keys["dup"] == "Ctrl+D" and keys["remove"] == "Del" and keys["memo"] == "", keys
+    pg.wait_for_timeout(300)                              # 메뉴 열림 움직임이 끝난 뒤
+    shot(pg, "r17-more-menu.png")
+    pg.click('#cmenu button[data-act="parent"]')
+    pg.wait_for_function("(p) => { const b = document.querySelector('#elbar'); return !b.hidden && b.dataset.path && b.dataset.path !== p; }", arg=path0, timeout=5000)
+    assert "h1" not in pg.get_attribute("#elbar", "data-path"), ("메뉴의 상위 고르기 = 감싼 요소", path0, pg.get_attribute("#elbar", "data-path"))
+    assert not errors, errors
+    pg.close()

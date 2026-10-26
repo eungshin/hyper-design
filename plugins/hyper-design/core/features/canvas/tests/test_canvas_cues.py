@@ -66,10 +66,11 @@ def test_move_hover_shows_next_pick_then_parent_dashed_and_pick_menu(ctx, out):
         shot(pg, "2-picked-with-dashed-parent.png")
 
         pg.mouse.click(x, y, button="right")
-        pg.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => b.textContent.startsWith('고르기'))", timeout=4000)
-        first = pg.evaluate("document.querySelector('#cmenu button').textContent")
-        assert first.startswith("고르기") and first.endswith("▸"), ("요소 메뉴 맨 위 = 고르기 ▸", first)
-        pg.hover("#cmenu button:first-of-type")
+        pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="chain"]', timeout=4000)
+        heads = pg.evaluate("[...document.querySelectorAll('#cmenu .cmh.sub')].map(h => h.textContent)")
+        assert heads[0] == "고르기", ("요소 메뉴 첫 묶음 = 고르기(R17)", heads)
+        assert pg.get_attribute('#cmenu button[data-act="chain"]', "aria-haspopup") == "menu", "레이어 고르기 ▸ = 옆 목록"
+        pg.hover('#cmenu button[data-act="chain"]')
         pg.wait_for_selector("#cmsub:not([hidden]) button", timeout=4000)
         items = pg.evaluate("[...document.querySelectorAll('#cmsub button')].map(b => b.textContent)")
         assert len(items) >= 2 and items[0].startswith("✓ h1"), ("그 요소 + 조상", items)

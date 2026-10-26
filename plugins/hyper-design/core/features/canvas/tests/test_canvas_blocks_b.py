@@ -169,7 +169,7 @@ def test_attr_fields_write_img_alt_at_once_and_undo_restores(ctx, out):
     try:
         mf = _modal_helper(pg)
         mf.click(IMG)
-        pg.wait_for_selector('#elbar [data-act="attr"]', state="attached", timeout=8000)
+        _wait_path(pg, lambda p: "img" in p, "그림을 고른 막대")   # R17: [속성] 은 막대 ⋯ 메뉴로 — 그림이 골라졌는지로 기다린다
         _act(pg, "attr")
         pg.wait_for_selector("#elpop:not([hidden]) input[data-name]", timeout=3000)
         names = pg.evaluate("[...document.querySelectorAll('#elpop input[data-name]')].map(i => [i.dataset.name, i.value])")

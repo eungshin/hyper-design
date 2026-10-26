@@ -1,5 +1,6 @@
-/* View — 요소 막대(블록 편집, task 49a·49b·49c): 고른 요소 옆 [⠿][상위][글자][속성][지우기][복제][바꾸기][아래에 넣기][메모] · 속성 칸 · 부품 고르기 · 단축키(Alt+↑/↓ 옮기기 포함) · 끌어서 순서 바꾸기 · 쓴 뒤 같은 요소 다시 고르기.
-   규칙(켜짐·앱 = AI 요청·너비/⋯·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model), 막대 자리는 HD.barPlace(Model, t51-7a — 고른 요소·꼬리표·다른 막대를 덮지 않고 둘레 내용을 비킴).
+/* View — 요소 막대(블록 편집, task 49a·49b·49c · R17 시안 A): 고른 요소 옆 흰 아이콘 막대 [⠿][메모][글자][AI] | [⋯] + 이름·단축키 꼬리말(#eltip) · 속성 칸 · 부품 고르기 · 단축키(Alt+↑/↓ 옮기기 포함) · 끌어서 순서 바꾸기 · 쓴 뒤 같은 요소 다시 고르기.
+   [⋯] = 전체 요소 메뉴(오른쪽 클릭과 같은 것 — 셸이 onMenu(fn) 의 fn(sel, {x, y}) 로 막대 아래에 연다). 메뉴의 상위·안쪽·속성·부품은 셸이 그 요소를 고른 뒤 fire(act) 로 같은 길.
+   규칙(아이콘·켜짐·앱 = AI 요청·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model), 막대 자리는 HD.barPlace(Model, t51-7a — 고른 요소·꼬리표·다른 막대를 덮지 않고 둘레 내용을 비킴).
    둘레 내용 = 고른 요소의 형제 상자(hd-sibs — 어느 출처 화면이든) + 같은 출처 화면의 글·그림 상자(못 읽으면 형제만).
    상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형, label?() → 꼬리표 사각형|null}
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
@@ -11,31 +12,31 @@
      → 놓으면 fn('reorder', sel + {dirs, from, to, h: sel.h + {drop: {from, slot, copy}}}) — 같은 부모 안만. Esc = 끌기 취소
      Alt(51-5): 놓을 때 Alt 를 누르고 있으면 복제해 놓기(원본은 제자리) — 끄는 중 Alt = 커서 copy + 끼울 선 옆 '+' 배지 #eldrop-copy. 도우미 없으면 거절(토스트).
        셸은 아직 OP.moves(…, h, dirs) 만 넘기므로 놓기 계획은 h.drop 에 싣는다(dirs 는 셸의 빈 목록 거르기를 지나게 — 51-3 이 셸을 h.drop 으로 바꿀 때까지)
-   HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), onAct(fn), onPick(fn), wrote(res, list)} */
+   HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), fire(act), onAct(fn), onPick(fn), onMenu(fn), wrote(res, list)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
-  '#elbar{position:fixed;z-index:35;display:flex;flex-wrap:nowrap;gap:1px;padding:2px;background:#1c1c1c;border-radius:7px;box-shadow:0 3px 10px rgba(0,0,0,.22);font:600 12px/16px system-ui,sans-serif;opacity:.82;transition:opacity .12s}' +
+  '#elbar{position:fixed;z-index:35;display:flex;flex-wrap:nowrap;align-items:center;gap:1px;padding:1px;background:var(--ui-surface,#fff);border-radius:7px;box-shadow:0 0 0 1px var(--ui-line,#e3e3df),0 4px 14px rgba(0,0,0,.16);opacity:.9;transition:opacity .12s}' +
   '#elbar:hover,#elbar:focus-within,#elbar.open{opacity:1}' +
-  '#elbar[hidden],#elpop[hidden],#elbar [hidden]{display:none}' +
-  '#elbar button{border:0;background:none;color:#fff;font:inherit;padding:2px 7px;border-radius:5px;cursor:pointer;white-space:nowrap}' +
-  '#elbar button:hover{background:#3a3a3a}' +
+  '#elbar[hidden],#elpop[hidden],#elbar [hidden],#eltip[hidden]{display:none}' +
+  '#elbar button{display:grid;place-items:center;width:22px;height:22px;border:0;background:none;color:var(--ui-primary,#2b2b29);padding:0;border-radius:6px;cursor:pointer}' +
+  '#elbar button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}' +
+  '#elbar button:hover,#elbar button:focus-visible{background:var(--ui-badge-soft,#E4E4DF);outline:0}' +
   '#elbar button[aria-disabled="true"]{opacity:.35;cursor:not-allowed}' +
-  '#elbar button.ask{color:#f5c26b}' +
-  '#elbar .eb-sep{width:1px;margin:3px 2px;background:#444}' +
-  '#elbar button.eb-grip{cursor:grab;padding:2px 5px;touch-action:none}' +
+  '#elbar button.ask{color:var(--ui-app,#7c5cd6)}' +
+  '#elbar .eb-sep{width:1px;height:14px;margin:0 2px;background:var(--ui-line,#e3e3df)}' +
+  '#elbar button.eb-grip{width:14px;color:var(--ui-muted,#8a8a85);cursor:grab;touch-action:none}' +
+  '#elbar button.eb-grip svg{width:10px;height:14px;fill:currentColor;stroke:none}' +
+  '#elbar button[data-act="more"] svg{fill:currentColor;stroke:none}' +
+  '#eltip{position:fixed;z-index:41;background:#1c1c1c;color:#fff;border-radius:7px;padding:5px 9px;font:600 12px/16px system-ui,sans-serif;pointer-events:none;white-space:nowrap}' +
+  '#eltip kbd{font:600 11px system-ui,sans-serif;color:#bbb;margin-left:8px}' +
   '#elbar.dragging button.eb-grip,body.hd-dragging-el,body.hd-dragging-el *{cursor:grabbing!important}' +
   '#eldrop{position:fixed;z-index:37;pointer-events:none;background:#2563eb;border-radius:2px;box-shadow:0 0 0 2px rgba(255,255,255,.9)}' +
   '#eldrop[hidden],#eldrop-copy[hidden]{display:none}' +
   '#eldrop-copy{position:fixed;z-index:38;pointer-events:none;width:18px;height:18px;border-radius:50%;background:#2563eb;color:#fff;font:700 15px/18px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.3)}' +
   'body.hd-dragging-el.hd-drag-copy,body.hd-dragging-el.hd-drag-copy *{cursor:copy!important}' +
-  '#elpop .ep-acts{display:flex;flex-direction:column;gap:2px}' +
-  '#elpop .ep-act{border:0;background:none;text-align:left;color:#1c1c1c;border-radius:6px;padding:6px 8px;font:600 12.5px system-ui,sans-serif;cursor:pointer}' +
-  '#elpop .ep-act:hover{background:#f0f0f0}' +
-  '#elpop .ep-act[aria-disabled="true"]{opacity:.4;cursor:not-allowed}' +
-  '#elpop .ep-act.ask{color:#8a5a00}' +
   '#elpop{position:fixed;z-index:36;min-width:240px;max-width:340px;max-height:60vh;overflow:auto;padding:10px;background:#fff;color:#1c1c1c;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28);font:13px system-ui,sans-serif}' +
   '#elpop .ep-h{font-weight:700;margin:0 0 8px}' +
   '#elpop label{display:block;margin:0 0 8px;color:#555;font-size:12px}' +
@@ -47,11 +48,18 @@ var CSS =
   '#elpop .ep-part.ask{border-style:dashed;color:#8a5a00}' +
   '#elpop .ep-note{margin:8px 0 0;color:#777;font-size:12px}' +
   'html[data-hd-tab="reader"] #elbar button{opacity:.35;cursor:not-allowed}';
+var ICON = {                                         // 막대 아이콘(R17 시안 A) — 이름·단축키는 꼬리말·aria-label(blocks.icons)
+  grip: '<svg viewBox="0 0 12 16"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>',
+  memo: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H10l-6 4z"/></svg>',
+  text: '<svg viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg>',
+  ai: '<svg viewBox="0 0 24 24"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z"/><path d="M18.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/></svg>',
+  more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>'
+};
 var RO = '이 탭은 읽기만 해요 — 위쪽 "여기서 편집하기"를 누르면 여기서 편집할 수 있어요';
 var FOLLOW_MS = 15000;
 
 function mount(ctx) {
-  var B = HD.blocks, P = HD.barPlace, cur = null, near = null, act = null, picked = null, follow = null, upWait = null, hopWait = null, navQ = [], seq = 0, done = null;   // navQ = 묻는 중에 더 누른 고르기 키(빠르게 Tab 여러 번 — 답이 오면 차례로)   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
+  var B = HD.blocks, P = HD.barPlace, cur = null, near = null, act = null, picked = null, menuFn = null, follow = null, upWait = null, hopWait = null, navQ = [], seq = 0, done = null;   // navQ = 묻는 중에 더 누른 고르기 키(빠르게 Tab 여러 번 — 답이 오면 차례로)   // done = 막 단추를 누른 요소(셸이 막대를 걷은 뒤에도 쓴 결과를 따라가게)
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var bar = document.createElement('div');
   bar.id = 'elbar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', '고른 요소'); bar.hidden = true;
@@ -61,37 +69,37 @@ function mount(ctx) {
   dropLine.id = 'eldrop'; dropLine.hidden = true; dropLine.setAttribute('aria-hidden', 'true');
   var copyBadge = document.createElement('div');
   copyBadge.id = 'eldrop-copy'; copyBadge.hidden = true; copyBadge.textContent = '+'; copyBadge.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine); document.body.appendChild(copyBadge);
+  var tip = document.createElement('div');
+  tip.id = 'eltip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine); document.body.appendChild(copyBadge); document.body.appendChild(tip);
 
   function reader() { return document.documentElement.dataset.hdTab === 'reader'; }
   function items() { return B.bar(cur.h, {app: cur.app}); }
+  function btn(act, label, key, extra) {              // 아이콘 단추 하나 — 이름·단축키는 꼬리말(data-tip·data-key)과 aria-label
+    return '<button type="button" data-act="' + act + '" data-tip="' + ctx.esc(label) + '" data-key="' + ctx.esc(key || '') + '" aria-label="' + ctx.esc(label + (key ? ' (' + key + ')' : '')) + '"' + (extra || '') + '>' + ICON[act] + '</button>';
+  }
   function paint() {
     var g = B.grip(cur.h, {app: cur.app});
-    bar.innerHTML = '<button type="button" class="eb-grip" data-grip="1"' + (g.on ? '' : ' aria-disabled="true"') + ' title="' + ctx.esc(g.title) + '" aria-label="' + ctx.esc(g.title) + '">⠿</button>' +
-      B.shown(items()).map(function (it) {
-      return (it.act === 'memo' || it.act === 'swap' ? '<span class="eb-sep" data-for="' + it.act + '"></span>' : '') +
-        '<button type="button" data-act="' + it.act + '"' + (it.on ? '' : ' aria-disabled="true"') + (it.ask ? ' class="ask" data-ask="1"' : '') +
-        ' title="' + ctx.esc(it.title) + '" aria-label="' + ctx.esc(it.title) + '">' + ctx.esc(it.label) + '</button>';
-    }).join('') + '<button type="button" class="eb-more" data-more="1" title="단추 더 보기" aria-label="단추 더 보기" aria-haspopup="true" hidden>⋯</button>';
+    hideTip();
+    bar.innerHTML = btn('grip', g.title, '', ' class="eb-grip" data-grip="1"' + (g.on ? '' : ' aria-disabled="true"')) +
+      B.icons(cur.h, {app: cur.app, where: cur.where}).map(function (it) {
+        return (it.act === 'more' ? '<span class="eb-sep"></span>' : '') +
+          btn(it.act, it.label, it.key, (it.ask ? ' class="ask" data-ask="1"' : '') + (it.act === 'more' ? ' aria-haspopup="menu"' : ''));
+      }).join('');
     bar.dataset.screen = cur.screen; bar.dataset.path = cur.h.path; bar.dataset.where = cur.where; bar.dataset.app = cur.app ? '1' : '';
   }
+  function showTip(b) {                               // 막대 단추 위 꼬리말 = 이름 + 단축키(도구 막대 꼬리말과 같은 모양)
+    if (!b || bar.hidden) { hideTip(); return; }
+    tip.innerHTML = ctx.esc(b.dataset.tip || '') + (b.dataset.key ? '<kbd>' + ctx.esc(b.dataset.key) + '</kbd>' : '');
+    tip.hidden = false;
+    var r = b.getBoundingClientRect(), x = Math.max(4, Math.min(innerWidth - tip.offsetWidth - 4, r.left + r.width / 2 - tip.offsetWidth / 2)), y = r.top - tip.offsetHeight - 6;
+    if (y < 4) y = r.bottom + 6;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.hidden = true; }
   function viewRect() {
     var v = cur && cur.view && cur.view();
     return v && v.w > 0 && v.h > 0 ? v : {x: 0, y: 0, w: innerWidth, h: innerHeight};
-  }
-  // 막대가 요소 칸(blocks.barLimit)보다 넓으면 뒤 단추를 "⋯" 로 — 숨긴 단추는 ⋯ 를 누르면 목록(단축키는 그대로)
-  function fitBar(a, v) {
-    var bs = Array.prototype.slice.call(bar.querySelectorAll('button[data-act]')), more = bar.querySelector('.eb-more');
-    var sepOf = function (b) { return bar.querySelector('.eb-sep[data-for="' + b.dataset.act + '"]'); };
-    bs.forEach(function (b) { b.hidden = false; var sp = sepOf(b); if (sp) sp.hidden = false; });
-    if (more) more.hidden = false;
-    var cs = getComputedStyle(bar), pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0), gap = parseFloat(cs.columnGap) || 0;
-    var ws = bs.map(function (b) { var sp = sepOf(b); return b.offsetWidth + gap + (sp ? sp.offsetWidth + (parseFloat(getComputedStyle(sp).marginLeft) || 0) * 2 + gap : 0); });
-    var gr = bar.querySelector('.eb-grip'), gw = gr ? gr.offsetWidth + gap : 0;
-    var n = B.fit(ws, B.barLimit(a, v) - pad - gw, more ? more.offsetWidth + gap : 0);
-    bs.forEach(function (b, i) { b.hidden = i >= n; var sp = sepOf(b); if (sp) sp.hidden = i >= n; });
-    if (more) more.hidden = n >= bs.length;
-    bar.dataset.more = bs.slice(n).map(function (b) { return b.dataset.act; }).join(' ');
   }
   // 둘레 글 상자(화면 좌표) — 같은 출처 화면만 읽는다(다른 출처·file:// 는 못 읽음 → null, 막대는 예전 자리 규칙). 글 마디·그림·입력 칸, 1초 동안 문서 좌표를 기억
   var boxes = null;
@@ -136,7 +144,7 @@ function mount(ctx) {
     var a = cur.anchor && cur.anchor();
     if (!a || !a.w && !a.h) { bar.hidden = true; pop.hidden = true; return; }
     bar.hidden = false;
-    var v = viewRect(); fitBar(a, v);
+    var v = viewRect();
     var sb = ctx.$('#selbar'), tl = ctx.$('#tools');
     var bars = [cur.avoid ? cur.avoid() : sb && !sb.hidden ? rectOf(sb.getBoundingClientRect()) : null,   // 다른 막대(절대): 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대 · 왼쪽 도구 막대 — 둘레 내용은 무르게
                 tl && !tl.hidden && tl.offsetWidth ? rectOf(tl.getBoundingClientRect()) : null];
@@ -152,14 +160,11 @@ function mount(ctx) {
     pop.style.left = x + 'px'; pop.style.top = y + 'px';
   }
   function closePop() { pop.hidden = true; pop.innerHTML = ''; pop.dataset.kind = ''; bar.classList.remove('open'); }
-  function openMore() {                               // ⋯ = 막대에 들어가지 못한 단추들(같은 켜짐·까닭)
-    var hid = (bar.dataset.more || '').split(' ').filter(Boolean), its = items().filter(function (x) { return hid.indexOf(x.act) >= 0; });
-    if (!its.length) return;
-    pop.dataset.kind = 'more';
-    pop.innerHTML = '<div class="ep-acts">' + its.map(function (it) {
-      return '<button type="button" class="ep-act' + (it.ask ? ' ask' : '') + '" data-act="' + it.act + '"' + (it.on ? '' : ' aria-disabled="true"') + ' title="' + ctx.esc(it.title) + '">' + ctx.esc(it.label) + '</button>';
-    }).join('') + '</div>';
-    pop.hidden = false; bar.classList.add('open'); placePop();
+  function openMenu() {                               // ⋯ = 전체 요소 메뉴(오른쪽 클릭과 같은 것) — 셸이 막대 아래에 연다
+    if (!menuFn) { ctx.toast('요소 메뉴를 열 수 없어요'); console.error('[hd] 요소 막대: onMenu 가 없어요'); return; }
+    closePop(); hideTip();
+    var r = bar.getBoundingClientRect();
+    menuFn(Object.assign({}, cur), {x: r.left, y: r.bottom + 4});
   }
   function show(sel) {
     if (!sel || !sel.h || !sel.h.path) { hide(); return; }
@@ -167,7 +172,7 @@ function mount(ctx) {
   }
   function hide(where) {
     if (where && cur && cur.where !== where) return;
-    cur = null; near = null; bar.hidden = true; closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
+    cur = null; near = null; bar.hidden = true; hideTip(); closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
   }
   function run(a, extra) {
     var s = Object.assign({}, cur, extra || {});
@@ -176,6 +181,9 @@ function mount(ctx) {
   }
   function fire(a) {
     if (!cur || !act) return;
+    if (a === 'more') { openMenu(); return; }
+    if (a === 'inner') { hop('hd-down'); return; }        // 안쪽 고르기(R17 메뉴) = Enter 의 첫 자식 길
+    if (a === 'ai') { if (reader()) { ctx.toast(RO); return; } closePop(); run('ai', {ask: false}); return; }   // AI에게 바꿔 달라기 = 메모 창(바꾸기)에 요청 글
     var it = items().filter(function (x) { return x.act === a; })[0];
     if (!it) return;
     if (reader() && a !== 'parent') { ctx.toast(RO); return; }
@@ -382,7 +390,11 @@ function mount(ctx) {
     }
   });
 
-  bar.addEventListener('pointerdown', function (e) { e.stopPropagation(); });   // 판 끌기·고르기 풀기로 새지 않게
+  bar.addEventListener('pointerdown', function (e) { e.stopPropagation(); hideTip(); });   // 판 끌기·고르기 풀기로 새지 않게
+  bar.addEventListener('pointerover', function (e) { showTip(e.target.closest && e.target.closest('button[data-act]')); });
+  bar.addEventListener('pointerleave', hideTip);
+  bar.addEventListener('focusin', function (e) { showTip(e.target.closest && e.target.closest('button[data-act]')); });
+  bar.addEventListener('focusout', hideTip);
   pop.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
   bar.addEventListener('click', function (e) {
     e.stopPropagation();
@@ -391,7 +403,6 @@ function mount(ctx) {
       if (reader()) ctx.toast(RO); else if (gp.getAttribute('aria-disabled') === 'true') ctx.toast(B.grip(cur.h, {app: cur.app}).title);
       return;
     }
-    if (e.target.closest('button[data-more]')) { if (pop.dataset.kind === 'more' && !pop.hidden) closePop(); else { closePop(); openMore(); } return; }
     var b = e.target.closest('button[data-act]'); if (b) fire(b.dataset.act);
   });
   pop.addEventListener('click', function (e) {
@@ -399,7 +410,6 @@ function mount(ctx) {
     var b = e.target.closest('button'); if (!b || !cur) return;
     if (b.dataset.ep === 'cancel') { closePop(); return; }
     if (b.dataset.ep === 'apply') { applyAttr(); return; }
-    if (b.classList.contains('ep-act')) { closePop(); fire(b.dataset.act); return; }
     if (b.classList.contains('ep-part')) {
       var p = (pop.parts || [])[+b.dataset.i], kind = pop.dataset.kind, ask = b.classList.contains('ask');
       closePop(); if (p) run(kind, {ask: ask, part: p});
@@ -422,7 +432,8 @@ function mount(ctx) {
     step(a);
   }, true);
   addEventListener('resize', place);
-  return {show: show, hide: hide, place: place, sel: function () { return cur; }, wrote: wrote,
+  return {show: show, hide: hide, place: place, sel: function () { return cur; }, wrote: wrote, fire: fire,
+          onMenu: function (fn) { menuFn = typeof fn === 'function' ? fn : null; },
           onAct: function (fn) { act = typeof fn === 'function' ? fn : null; },
           onPick: function (fn) { picked = typeof fn === 'function' ? fn : null; }};
 }

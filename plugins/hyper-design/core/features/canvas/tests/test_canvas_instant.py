@@ -235,10 +235,7 @@ def test_refused_apply_reverts_the_optimistic_duplicate_and_says_why(ctx, out):
         _pick(pg, mf, TILE % 2)
         pg.route("**/api/apply", lambda r: held.append(r))  # 답을 잡아 두었다가 거절로 돌려준다
         shot(pg, "fail-before.png")
-        if pg.is_visible('#elbar [data-act="dup"]'):
-            pg.click('#elbar [data-act="dup"]')
-        else:                                              # 요소 칸보다 넓으면 ⋯ 목록에(polish-1)
-            pg.click("#elbar [data-more]"); pg.click('#elpop .ep-act[data-act="dup"]')
+        pg.click('#elbar [data-act="more"]'); pg.click('#cmenu:not([hidden]) button[data-act="dup"]')   # R17: 막대 ⋯ = 요소 메뉴
         mf.wait_for_function("() => document.querySelectorAll('.tile-grid > button').length === 10", timeout=3000)   # 답을 기다리지 않고 복사본
         for _ in range(50):
             if held:
@@ -305,10 +302,7 @@ def test_remove_hides_the_element_at_once_and_survives_the_swap(ctx, out):
         n0 = _job(out).count("대학원생")                 # 타일 글 + 화면 안 다른 자리
         pg.route("**/api/apply", lambda r: held.append(r))  # 다시 빌드가 느린 도우미 — 답을 잡아 둔다
         shot(pg, "remove-before.png")
-        if pg.is_visible('#elbar [data-act="remove"]'):
-            pg.click('#elbar [data-act="remove"]')
-        else:
-            pg.click("#elbar [data-more]"); pg.click('#elpop .ep-act[data-act="remove"]')
+        pg.click('#elbar [data-act="more"]'); pg.click('#cmenu:not([hidden]) button[data-act="remove"]')   # R17: 막대 ⋯ = 요소 메뉴
         mf.wait_for_function(gone, timeout=1000)            # 답을 기다리지 않고
         bf = _frame(pg)
         bf.wait_for_function(gone, timeout=1000)
@@ -356,10 +350,7 @@ def test_async_apply_whose_build_fails_reverts_the_optimistic_change(ctx, out):
         before = _job(out)
         _pick(pg, mf, TILE % 2)
         srv.session.builder._check = broken   # 쓰기 확인(figma-lite 5: 데이터만)
-        if pg.is_visible('#elbar [data-act="dup"]'):
-            pg.click('#elbar [data-act="dup"]')
-        else:
-            pg.click("#elbar [data-more]"); pg.click('#elpop .ep-act[data-act="dup"]')
+        pg.click('#elbar [data-act="more"]'); pg.click('#cmenu:not([hidden]) button[data-act="dup"]')   # R17: 막대 ⋯ = 요소 메뉴
         mf.wait_for_function("() => document.querySelectorAll('.tile-grid > button').length === 10", timeout=3000)   # 답을 기다리지 않고 복사본
         pg.wait_for_function("(document.getElementById('toast') || {}).textContent.indexOf('시험용 빌드 실패') >= 0", timeout=10000)
         assert "되돌렸어요" in pg.text_content("#toast")

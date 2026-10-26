@@ -79,7 +79,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 **격리(serial)**: `-n` 에서만 가끔 깨지는 테스트는 `tests/conftest.py` 의 `SERIAL` 에 둔다 — `-n` 실행에서는 빠지고(고르지 않음), 전체 실행 뒤 한 번 `pytest tests -m serial`(-n 없이)로 따로 돌린다. 지금: `test_line_click_shows_end_handles_and_drag_retargets`(task 20·28: 재현되지 않아 원인 미확인 — 다시 깨지면 그때 핀 아래 요소·카드 상자를 잡는다). `test_v2_no_vertical_through_cards` 는 task 28 이 원인(부하에서 카드 재배치 뒤 선이 늦게 다시 그려짐)을 잡아 다시 재기로 고치고 뺐다. 원인을 찾아 고치면 `SERIAL` 에서 뺀다.
 
 브라우저 테스트는 테스트 파일 안에서 영역 표시를 받는다 — 테스트마다 `@pytest.mark.area("tools", "notes")`(파일 전체면 `pytestmark = pytest.mark.area(...)`). conftest 가 그것을 `-m` 으로 고르는 표시로 바꿔 단다. 영역 표시가 없거나 `AREAS` 에 없는 영역이면 수집 단계에서 실패한다. `tests/conftest.py` 를 고칠 일은 새 영역(`AREAS` 한 줄)뿐이다:
-`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·카드 옮기기·편집) · `flow`(판에 늘 그리는 선) · `links`(고르기 강조·화면 안 연결) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
+`input`(판 조작) · `modal`(크게 보기·주석) · `notes`(메모) · `tools`(도구 막대·선택(V)·편집) · `flow`(판에 늘 그리는 선) · `links`(고르기 강조·화면 안 연결) · `motion`(카메라·전환) · `helper`(로컬 도우미) · `dock`(오른쪽 패널 도크).
 
 **이웃 화면 동작(surface)**: 파일이 겹치지 않아도 같은 실행 중 동작을 쓰는 조각끼리 깨진다(2026-10-25: 교체 뒤 배지·높이, DS 카드 줄이 카드를 밀어냄, 대화창이 안내 줄을 가림). 그 동작을 바꾸는 조각은 커밋 전 영역 실행에 `--surface <이름>` 을 더한다 — 예: `-m "helper or modal" --surface frame`. 이름은 `tests/conftest.py` 의 `SURFACES`: `frame`(카드 iframe 다시 싣기·교체·요소 고르기) · `board`(판 위 줄 배치·겹침). 새 테스트 파일이 그 동작을 쓰면 `SURFACES` 에 한 줄(`test_canvas_unit_surfaces.py` 가 파일이 있는지 본다). 전체 실행은 main 이 단계 끝에 한 번 — 일꾼은 영역 + 이웃까지.
 
@@ -98,7 +98,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
 | `modules/selection.js` · `view-select.js` (고른 카드: 누르기 = 고르기 + 연결 강조, Shift = 여러 장) | `unit or tools or input or links` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
-| `canvas_template.html` 도구 막대·카드 옮기기 · `drawArrows` | `tools or flow` |
+| `canvas_template.html` 도구 막대·선택(V) · `drawArrows` | `tools or flow` |
 | `modules/view-lines.js` · `graph.overview` · `style.rowColor` (판의 선 하나뿐: 쌍마다 하나·줄 색·번호·태그·강조·자르기 맞춤·보이기/굵기/투명도/색) | `unit or flow or links or tools` |
 | `foundation/palette.js` 의 `quote`·`hd-locate` | `unit or notes or modal` |
 | `foundation/palette.js` | `links or modal or tools` |

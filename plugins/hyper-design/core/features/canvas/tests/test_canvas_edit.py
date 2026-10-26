@@ -539,7 +539,7 @@ def test_context_menu_by_target(epage):
     assert cmenu_items(epage)[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"]
     assert epage.text_content("#cmenu .cmh") == title
     assert not epage.evaluate("!document.getElementById('modal').hidden"), "오른쪽 클릭은 크게 보기를 열지 않는다"
-    epage.mouse.move(c["x"], c["y"])
+    epage.mouse.move(p["x"], p["y"])                 # 메뉴 밖 판 위(R17: 묶음이 생겨 메뉴가 길어 카드 가운데를 덮을 수 있다)
     epage.mouse.wheel(0, 100)                        # 휠(판 이동)은 메뉴를 닫는다
     epage.wait_for_timeout(80)
     assert epage.evaluate("document.getElementById('cmenu').hidden")
@@ -841,10 +841,10 @@ def test_element_menu_via_hit_at(dpage):
     fit_view(dpage)
     c = visible_cover(dpage)
     dpage.mouse.click(c["x"], c["y"], button="right")
-    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /트리거/.test(b.textContent))", timeout=3000)
-    items = cmenu_items(dpage)
-    assert ("트리거 지정" in items or "트리거 해제" in items) and "크게 보기" in items, items
-    assert items.index("크게 보기") > 0, "요소 항목이 먼저, 카드 항목이 뒤"
+    dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="trigger"], #cmenu:not([hidden]) button[data-act="untrigger"]', timeout=3000)
+    items = dpage.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
+    assert ("trigger" in items or "untrigger" in items) and "card-open" in items, items
+    assert items.index("card-open") > 0, "요소 항목이 먼저, 카드 항목이 뒤"
     dpage.keyboard.press("Escape")
 
 
@@ -971,8 +971,8 @@ def test_element_menu_edit_text(dpage):
     fit_view(dpage)
     c = visible_cover(dpage)
     dpage.mouse.click(c["x"], c["y"], button="right")
-    dpage.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /글자 고치기/.test(b.textContent))", timeout=3000)
-    pick(dpage, "글자 고치기")
+    dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="text"]', timeout=3000)
+    dpage.click('#cmenu button[data-act="text"]')
     fr = frame_of(dpage, c["id"])                    # 그 자리에서(49c) — 그 카드 화면의 요소 하나가 contenteditable
     fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 1", timeout=3000)
     dpage.keyboard.press("Escape")
@@ -1445,7 +1445,7 @@ def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
     dpage.wait_for_timeout(400)
     items = cmenu_items(dpage)
     assert items[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"], items
-    dpage.get_by_role("menuitem", name=__import__("re").compile(r"^복제")).click()   # 카드 복제(요소 항목 '요소 복제'와 다름, task 49a · 51-6 키 Ctrl+D 표시) — file:// = 예전 흰 복제 카드
+    dpage.click('#cmenu button[data-act="card-dup"]')   # 카드 복제(요소 항목 복제 data-act="dup" 와 다름, task 49a · R17) — file:// = 예전 흰 복제 카드
     dpage.wait_for_timeout(200)
     d = drafts(dpage)
     assert len(d) == 1 and "복사" in dpage.text_content(f'.card[data-id="{d[0]["id"]}"] .ftitle')

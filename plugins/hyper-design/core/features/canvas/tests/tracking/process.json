@@ -1053,6 +1053,43 @@
       "waste": "",
       "flaky": [],
       "note": "셸: CC attach 한 번 + duplicateCards · Ctrl+D 키 · revert 한 줄. 서버: session.apply_edits 의 edit 'clone' → 순수 screen_copy.plan"
+    },
+    {
+      "slice": "R17 시안 A 선택 도구·요소 아이콘 막대·묶은 요소 메뉴",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 8
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "새 test_canvas_unit_elmenu 11개 빨강(icons·menu·keyOf·askText('ai') 없음) → 초록"
+        },
+        {
+          "by": "browser",
+          "what": "막대 높이 32px 이 크게 보기 넓은 창의 안내 글과 타일 사이에 안 들어가 안내 글을 덮음(test_canvas_blocks_clear) → 22px 단추·막대 24px"
+        },
+        {
+          "by": "browser",
+          "what": "요소 메뉴가 길어져 카드 가운데를 덮어 휠이 메뉴 위에서 일어남(test_context_menu_by_target) → 메뉴 밖 판에서 휠"
+        }
+      ],
+      "waste": "",
+      "flaky": [
+        {
+          "test": "test_canvas_text_remove::test_remove_with_helper_writes_the_file_and_undo_restores_it",
+          "note": "-n 4 에서 한 번 실패, 혼자·영역 실행에서 통과"
+        }
+      ],
+      "note": "막대·메뉴 단추를 글이 아니라 data-act 로 고르게 테스트를 바꿈(R56). 셸: openElemMenu 를 blocks.menu 묶음으로 · elemFire(상위·안쪽·속성·부품 = 고른 뒤 BK.fire) · BK.onMenu 한 줄 · blockAct 에 ai"
     }
   ]
 }

@@ -161,8 +161,8 @@ def test_element_menu_removes_element_from_card_and_undo_brings_it_back(ctx, out
     fr = _frame(pg)
     pg.keyboard.press("v")
     pg.mouse.click(*xy, button="right")
-    pg.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /요소 지우기/.test(b.textContent))", timeout=3000)
-    pg.locator("#cmenu button", has_text="요소 지우기").first.click()
+    pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="remove"]', timeout=3000)
+    pg.click('#cmenu button[data-act="remove"]')
     wait_notes(pg, 1)
     n = notes_of(pg)[0]
     assert n["edit"] == "remove" and n["path"].endswith("h1.title:nth-of-type(1)"), n
@@ -185,8 +185,8 @@ def test_remove_with_helper_writes_the_file_and_undo_restores_it(ctx, out):
         xy = _h1_xy(pg)
         pg.keyboard.press("v")
         pg.mouse.click(*xy, button="right")
-        pg.wait_for_function("[...document.querySelectorAll('#cmenu button')].some(b => /요소 지우기/.test(b.textContent))", timeout=3000)
-        pg.locator("#cmenu button", has_text="요소 지우기").first.click()
+        pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="remove"]', timeout=3000)
+        pg.click('#cmenu button[data-act="remove"]')
         pg.wait_for_function("document.querySelector('#hlist li.now .hs') && document.querySelector('#hlist li.now .hs').textContent === '파일에 씀'", timeout=20000)
         assert _h1_in_file(out) is None, "요소가 화면 파일에서 지워졌다"
         assert pg.evaluate("(" + NOTES_JS + ").length") == 0, "반영 대기로 남지 않는다"
@@ -217,7 +217,7 @@ def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: �
     pg.keyboard.press("Escape")
     mf.wait_for_function("(s) => !document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
     mf.click(H1, button="right")
-    pg.locator("#cmenu button", has_text="요소 지우기").first.click()
+    pg.click('#cmenu button[data-act="remove"]')
     wait_notes(pg, 1)
     assert notes_of(pg)[0]["edit"] == "remove"
     mf.wait_for_function("(s) => getComputedStyle(document.querySelector(s)).display === 'none'", arg=H1, timeout=3000)

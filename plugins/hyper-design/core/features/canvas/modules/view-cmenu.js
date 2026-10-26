@@ -1,6 +1,7 @@
 /* View — 우클릭 메뉴(#cmenu)와 그 옆 목록(#cmsub): 그리기·자리·키(↑↓ 돌기 · → 옆 목록 · ← / Esc 옆 목록 닫기)·밖 누르기·창 크기 바뀜에 닫기.
    항목을 고르는 일(무엇을 넣을지)은 셸, 이 모듈은 받은 항목을 보이고 누르면 act() 를 부른다. Esc 차례는 셸이 isOpen()/close() 로 정한다.
-   items: [{label, key?, act()} | {label, sub(cb)}(옆 목록 — cb([{label, title?, act}] | null = 찾는 중))] · '-' = 구분선 · {head} = 소제목
+   items: [{label, key?, id?, act()} | {label, id?, sub(cb)}(옆 목록 — cb([{label, title?, act}] | null = 찾는 중))] · '-' = 구분선 · {head} = 소제목
+   id = 항목의 뜻(data-act — 테스트·검사는 글이 아니라 이것으로 고른다, R17) · key = 실제로 듣는 단축키 힌트(오른쪽 맞춤 kbd)
    HD.viewCmenu.mount(ctx) → {open(x, y, head, items) → 토큰, isCurrent(토큰) → 그 열기가 아직 떠 있나, isOpen(), close()}
    ctx = {$, $$, esc, menu: #cmenu, sub: #cmsub} */
 (function () {
@@ -27,7 +28,7 @@ function mount(ctx) {
     closeSub();
     cmenu.innerHTML = (head ? '<div class="cmh">' + esc(head) + '</div>' : '') + list.map(function (it, i) {
       return it === '-' ? '<hr>' : it.head ? '<div class="cmh sub">' + esc(it.head) + '</div>' :
-        '<button type="button" role="menuitem" data-i="' + i + '"' + (it.sub ? ' aria-haspopup="menu" aria-expanded="false"' : '') + '>' + esc(it.label) +
+        '<button type="button" role="menuitem" data-i="' + i + '"' + (it.id ? ' data-act="' + esc(it.id) + '"' : '') + (it.sub ? ' aria-haspopup="menu" aria-expanded="false"' : '') + '>' + esc(it.label) +
         (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : '') + (it.sub ? '<span class="sub" aria-hidden="true">▸</span>' : '') + '</button>';
     }).join('');
     items = list;
