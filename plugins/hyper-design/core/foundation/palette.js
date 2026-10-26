@@ -43,6 +43,7 @@
    메모 자리(W3C Web Annotation 처럼 선택자 여럿): hd-picked·hd-hit 답에 quote:{exact, prefix, suffix} — 요소 글(≤200자)과 문서 글에서 그 앞·뒤 32자.
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
+   스크롤(R16): 마지막 hd-locate 항목을 기억했다가 화면 안 스크롤(문서·안쪽 칸)마다 한 애니메이션 프레임에 한 번 hd-located 를 다시 보낸다(점선·핀이 요소를 따라가게).
    소스 위치(앱 카드, Svelte 개발 서버): 요소나 그 조상에 __svelte_meta.loc 이 있으면 hd-picked·hd-hit·hd-dbl 답과 hd-located 항목에
    src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다.
    판 모드(?hd-mode=board — 캔버스 판 위 카드만, 크게 보기는 아님): 화면 스크립트보다 먼저 reduced-motion 을 켜고 움직임을 멈춘다
@@ -199,10 +200,16 @@
     if (!box || box === document.body) return {key: it.key, rect: null, how: 'none'};
     return withSrc({key: it.key, rect: rectOf(box), how: 'quote'}, box);
   }
+  var lastLoc = null, locRaf = 0;
   function locate(items) {
+    lastLoc = items && items.length ? items : null;   // 스크롤 뒤 다시 답할 것(R16)
     var d = docText();
     send({type: 'hd-located', screen: screenId(), items: (items || []).map(function (it) { return locateOne(it || {}, d); })});
   }
+  addEventListener('scroll', function () {             // R16: 메모 점선·핀은 화면 좌표라 스크롤(문서·안쪽 칸)하면 자리를 다시 답한다 — 한 애니메이션 프레임에 한 번
+    if (!lastLoc || locRaf || !window.parent || window.parent === window) return;
+    locRaf = requestAnimationFrame(function () { locRaf = 0; if (lastLoc) locate(lastLoc); });
+  }, true);
   /* 소스 위치: 가장 가까운 __svelte_meta.loc(Svelte 5 개발 런타임, 비공개 API) → {src, comp} | null */
   function srcPath(f) {
     f = slash(f); var cfg = window.__hdSrc || null; if (!cfg) return f;
