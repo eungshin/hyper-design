@@ -326,7 +326,7 @@ function setTool(t) {
   pane.classList.toggle('t-memo', t === 'memo');
   pane.classList.toggle('t-annotate', t === 'annotate');
   pane.classList.toggle('t-text', t === 'text');
-  endPick(); clearElbox(); unselectEl();
+  endPick(); EB.clear(); EB.unselect();
 }
 $$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
 $$('#tools .tb').forEach(function (b) {
@@ -360,7 +360,7 @@ pane.addEventListener('pointerdown', function (e) {
     var tc = tool === 'trigger' && !midBtn && !rightBtn && !spaceDown && e.target.closest ? e.target.closest('.card') : null;
     var cd = tool === 'move' && !midBtn && !rightBtn && !spaceDown && e.target.closest ? e.target.closest('.card') : null;
     if (rightBtn || (tool === 'knife' && !midBtn && !spaceDown)) { drag.cut = [[e.clientX, e.clientY]]; drag.right = rightBtn; }
-    else if (sk && sk.classList.contains('selsock') && selEl) startTrig([selEl.h], selEl.card, e);
+    else if (sk && sk.classList.contains('selsock') && EB.selected()) startTrig([EB.selected().h], EB.selected().card, e);
     else if (sk) startTrig([VL.item(sk.dataset.from, +sk.dataset.i)], sk.closest('.card'), e);
     else if (tc && !e.target.closest('.pres')) startTrig(null, tc, e);
     else if (cd && !e.target.closest('.pres')) {        // 고른 카드를 끌면 고른 카드 모두
@@ -447,7 +447,7 @@ pane.addEventListener('click', function (e) {
   if (mc && e.altKey && !e.shiftKey && e.detail <= 1 && !mc.classList.contains('draft') && cl('.phone')) {   // Alt+클릭 = 가장 안쪽 요소 바로 고르기(Figma deep select, 51-2) — 카드를 아직 안 골랐어도
     e.preventDefault(); e.stopPropagation();
     if (!(SL.ids().length === 1 && SL.has(mc.dataset.id))) SL.dispatch({type: 'only', id: mc.dataset.id});
-    pickElAt(mc, e.clientX, e.clientY, true); return;
+    EB.pickAt(mc, e.clientX, e.clientY, true); return;
   }
   if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
     e.preventDefault(); e.stopPropagation();
@@ -455,7 +455,7 @@ pane.addEventListener('click', function (e) {
     if (tool === 'text' && (tf || td || tp)) { CT.open(tp || tf || td, {field: tp ? 'policy' : tf ? 'title' : 'purpose'}); return; }
     if (!cl('.phone')) return;
     var cid = mc.dataset.id, mx = e.clientX, my = e.clientY;
-    askHit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
+    FA.hit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
       if (!h || h.none) { if (h) toast(tool === 'text' ? '여기에는 고칠 글자가 없어요' : '여기에는 고를 요소가 없어요'); return; }
       if (tool === 'text') editScreenText(cid, h); else MP.element(cid, h, mx, my);
     }, tool === 'text');
@@ -468,7 +468,7 @@ pane.addEventListener('click', function (e) {
   if (c && e.shiftKey) { e.preventDefault(); SL.dispatch({type: 'toggle', id: c.closest('.card').dataset.id}); return; }   // Shift+클릭 = 여러 장 고르기(더하기·빼기, E15)
   if (c) {                                         // 마우스 한 번 = 크게 보기 아님(판 위에서 고르고 고친다) · 두 번 · 키보드(Enter/Space, detail 0) = 크게 보기
     var cc = c.closest('.card');
-    if (e.detail === 1 && tool === 'move' && SL.ids().length === 1 && SL.has(cc.dataset.id) && !cc.classList.contains('draft')) { pickElAt(cc, e.clientX, e.clientY); return; }   // 고른 카드를 이동(V)으로 한 번 더 = 그 자리 요소 고르기 → 요소 막대(task 49a)
+    if (e.detail === 1 && tool === 'move' && SL.ids().length === 1 && SL.has(cc.dataset.id) && !cc.classList.contains('draft')) { EB.pickAt(cc, e.clientX, e.clientY); return; }   // 고른 카드를 이동(V)으로 한 번 더 = 그 자리 요소 고르기 → 요소 막대(task 49a)
     if (e.detail === 1) { SL.dispatch({type: 'only', id: cc.dataset.id}); return; }   // 한 번 = 그 카드 고르기 = 그 선 강조(E15·E20)
     openModal(c.dataset.file, c.dataset.title);
     return;
@@ -545,7 +545,7 @@ addEventListener('keydown', function (e) {
   if (TH && TH.close()) return;                      // 카드 메모 묶음(#224)
   if (MP.isOpen()) { MP.close(); return; }
   if (!modal.hidden) { closeModal(); return; }
-  if (selEl) { unselectEl(); return; }               // 판 위: 고른 요소 → 고른 카드 순으로 푼다
+  if (EB.selected()) { EB.unselect(); return; }               // 판 위: 고른 요소 → 고른 카드 순으로 푼다
   if (SL.ids().length) SL.dispatch({type: 'clear'});   // 고르기를 풀면 강조도 꺼진다(강조 = 고른 카드 전부)
 });
 addEventListener('resize', function () { if (!modal.hidden) { sizeModal(); drawPins(); } });
@@ -747,7 +747,7 @@ pane.addEventListener('contextmenu', function (e) {
       {label: '숨기기' + suf, act: function () { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }},
       {label: '삭제' + suf, key: 'Del', act: function () { CA.del(ids); }}]);
     var tok = CM.open(x, y, titleOf(id), cardItems);   // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
-    askHit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
+    FA.hit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(LF.hidden()).length;
@@ -772,28 +772,14 @@ LF.renderHidden();
 
 /* ---------- 트리거(L) · 소켓 끌기 · 자르기(C · 오른쪽 끌기) — 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓는다
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
-var toastT = 0, hitWait = [], pickT = null;
+var toastT = 0, pickT = null;
 function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간
   var t = $('#toast'); t.textContent = msg;
   if (withUndo) { var b = document.createElement('button'); b.type = 'button'; b.textContent = '되돌리기'; b.addEventListener('click', function () { undo(); t.hidden = true; }); t.appendChild(b); }
   t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, ms || (withUndo ? 5000 : 2600));
 }
-function askHit(card, cx, cy, quiet, cb, leaf, deep) {   // cb(null) = 1.5초 안에 답 없음(palette.js 없음) · {none} = 그 자리에 요소 없음 · 아니면 hd-hit 답 · leaf = 그 요소 그대로(글자) · deep = 가장 안쪽 요소(Alt+클릭)
-  var ph = $('.phone', card), f = ph ? $('iframe', ph) : null; if (!f) { cb(null); return; }
-  var r = ph.getBoundingClientRect(), s = r.width / wOf(card), w = {f: f, cb: cb};
-  w.t = setTimeout(function () { var i = hitWait.indexOf(w); if (i < 0) return; hitWait.splice(i, 1); if (!quiet) toast('이 화면은 편집할 수 없어요'); cb(null); }, 1500);
-  hitWait.push(w);
-  var ask = function () { try { f.contentWindow.postMessage({type: 'hd-hit-at', x: (cx - r.left) / s, y: (cy - r.top) / s, leaf: !!leaf, deep: !!deep}, '*'); } catch (e) {} };
-  if (f.hasAttribute('data-src')) { f.addEventListener('load', ask, {once: true}); LC.load(f); }
-  else ask();
-}
-addEventListener('message', function (e) {
-  var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-hit') return;
-  for (var i = 0; i < hitWait.length; i++) {
-    var w = hitWait[i]; if (w.f.contentWindow !== e.source) continue;
-    hitWait.splice(i, 1); clearTimeout(w.t); w.cb(d.path ? d : {none: true}); return;
-  }
-});
+// 카드 화면에 묻기(modules/view-frame-ask.js): 그 자리 요소(hd-hit-at → hd-hit) · 조상(hd-up → hd-upchain) — 메시지 모양은 그대로
+var FA = HD.viewFrameAsk.mount({$: $, $$: $$, toast: function (m) { toast(m); }, wOf: wOf, load: function (f) { LC.load(f); }});
 function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지정/해제 · 도착 바꾸기 · 글자 고치기 · 지우기 · 복제 · 옮기기(task 49a) — 크게 보기 = 판에서 도착을 고르는 항목 빼고
   var app = appCard(from), sel = {screen: from, h: h, app: app, where: inModal ? 'modal' : 'board', at: {x: x, y: y}};
   var els = app ? [] : h.to ? [{label: '도착 바꾸기', pick: 1, act: function () { startPick(from, [h], x, y); }},
@@ -815,7 +801,7 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소: 트리거 지
 // '고르기 ▸' 목록: 그 요소 + 조상(같은 상자 감싸기는 건너뜀 — blocks.chainOf) · 고르면 판 = 그 카드만 고르고 그 요소 · 크게 보기 = 요소 막대
 function pickList(from, h, inModal, put) {
   var card = inModal ? null : VL.cardEl(from);
-  askChain(inModal ? mframe : lastFrame(card), h, function (chain) {
+  FA.chain(inModal ? mframe : FA.lastFrame(card), h, function (chain) {
     if (!chain) { toast('이 화면에 조상을 물을 수 없어요'); put([]); return; }
     put(HD.blocks.chainOf(h, chain).map(function (x, i) {
       var t = String(x.text || '').replace(/\s+/g, ' ').trim();
@@ -824,7 +810,7 @@ function pickList(from, h, inModal, put) {
                 if (inModal) { if (BK && !modal.hidden) BK.show(modalSel(from, x)); return; }
                 var c = VL.cardEl(from); if (!c) { toast('그 화면 카드가 없어요'); return; }
                 if (!(SL.ids().length === 1 && SL.has(from))) SL.dispatch({type: 'only', id: from});
-                selectEl(c, x);
+                EB.select(c, x);
               }};
     }));
   });
@@ -832,7 +818,7 @@ function pickList(from, h, inModal, put) {
 // 요소 막대·요소 메뉴의 한 동작 → 셸의 편집 길(글자 칸·편집 메모·메모 창). 셸 함수인 까닭: editScreenText·removeElement 이 셸 것이고 메모 창은 MP.elem(view-memo-pop), 편집 쌓기는 ED.add(view-edit-path) 라 잇기만 한다
 function blockAct(act, s) {
   var id = s.screen, h = s.h, inModal = s.where === 'modal';
-  var done = function () { if (inModal) { if (BK) BK.hide('modal'); } else unselectEl(); };
+  var done = function () { if (inModal) { if (BK) BK.hide('modal'); } else EB.unselect(); };
   if (s.ask || act === 'memo') {
     var a = s.at || null, r = !a && s.anchor ? s.anchor() : null; if (r) a = {x: r.x + r.w, y: r.y};   // 메모 창 = 그 요소 오른쪽 위
     done(); MP.elem(id, h, s.ask ? HD.blocks.askText(act, h) : '', inModal, a); return;
@@ -874,7 +860,7 @@ function startTrig(hits, card, e) {                  // hits 를 알면(소켓) 
   var sr = stage.getBoundingClientRect();           // 출발점 = 판 좌표(끄는 중 판이 움직이거나 줄어도 그 요소에 붙어 있게, E6)
   var tr = {from: card.dataset.id, x: e.clientX, y: e.clientY, bx: (e.clientX - sr.left) / z, by: (e.clientY - sr.top) / z, hits: hits || undefined, fns: []};
   tr.ready = function (fn) { if (tr.hits !== undefined) fn(tr.hits); else tr.fns.push(fn); };
-  if (!hits) askHit(card, e.clientX, e.clientY, false, function (h) { tr.hits = h && !h.none ? [h] : h; tr.fns.forEach(function (fn) { fn(tr.hits); }); tr.fns = []; });
+  if (!hits) FA.hit(card, e.clientX, e.clientY, false, function (h) { tr.hits = h && !h.none ? [h] : h; tr.fns.forEach(function (fn) { fn(tr.hits); }); tr.fns = []; });
   drag.trig = tr;
 }
 function finishTrig(tr, moved, cx, cy) {
@@ -882,11 +868,11 @@ function finishTrig(tr, moved, cx, cy) {
   var to = c && !c.classList.contains('hid') ? c.dataset.id : null;
   if (moved && c && c.classList.contains('del') && to !== tr.from) { toast('삭제 대기 화면에는 이을 수 없어요'); return; }   // E18
   tr.ready(function (hits) {
-    if (!hits) return;                               // 화면이 답하지 않음 — 알림은 askHit 가 띄웠다
+    if (!hits) return;                               // 화면이 답하지 않음 — 알림은 FA.hit 가 띄웠다
     if (hits.none) { toast('여기에는 누를 요소가 없어요'); return; }
     if (!moved) {                                    // 누르기 = 요소 고르기(테두리 + 소켓) + 그 카드 고르기 = 그 선 강조(E3) — 메뉴는 우클릭
       if (!SL.has(tr.from) || SL.ids().length > 1) SL.dispatch({type: 'only', id: tr.from});
-      var tc = VL.cardEl(tr.from); if (tc) selectEl(tc, hits[0]);
+      var tc = VL.cardEl(tr.from); if (tc) EB.select(tc, hits[0]);
       return;
     }
     if (to && to !== tr.from) { ED.linkTo(tr.from, hits, to); return; }
@@ -953,7 +939,7 @@ function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 �
   CM.close(); endPick();
   if (LF.guard([id])) return;
   if (h.textOk === false) { toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요'); return; }   // helper.py edit_html 과 같은 규칙(palette.js textOk)
-  if (!appCard(id) && OP && OP.inline(id, h, inModal ? 'modal' : 'board', function () { textBox(id, h, inModal); })) { clearElbox(); return; }
+  if (!appCard(id) && OP && OP.inline(id, h, inModal ? 'modal' : 'board', function () { textBox(id, h, inModal); })) { EB.clear(); return; }
   textBox(id, h, inModal);
 }
 function textBox(id, h, inModal) {                   // 예전 글 칸(textarea) — 그 요소 자리 위에 띄운다
@@ -961,7 +947,7 @@ function textBox(id, h, inModal) {                   // 예전 글 칸(textarea)
   var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / wOf(c), q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
   tedCtx = {id: id, h: h, old: old};
-  ta.value = old; clearElbox();                      // 칸이 요소 자리에 딱 — 위 줄·종류 꼬리표를 덮지 않게
+  ta.value = old; EB.clear();                      // 칸이 요소 자리에 딱 — 위 줄·종류 꼬리표를 덮지 않게
   ta.style.fontSize = Math.max(13, Math.min(28, q.h * s * 0.6)) + 'px';
   tedit.hidden = false;
   ta.style.width = Math.max(180, Math.min(innerWidth - 40, q.w * s + 16)) + 'px';
@@ -997,90 +983,11 @@ function removeElement(id, h) {                      // 요소 지우기(task 30
   ED.add('요소 지우기', [n], '요소를 지웠어요 — 반영 대기');
 }
 /* ---------- 요소 테두리(요소 도구 — modules/tools.js 의 hit 가 있는 도구): 마우스를 올린 카드 안 요소를 화면에 물어(hd-hit-at) 종류별 테두리 ---------- */
-var hov = {busy: false, next: null, card: null};
-function clearElbox() { $$('.elbox:not(.sel):not(.par)', rowsEl).forEach(function (b) { b.remove(); }); hov.card = null; }
-var selEl = null;                                    // 트리거 도구에서 고른 요소 {card, h} — 테두리 고정 + 소켓(끌면 잇기)
-function unselectEl() { $$('.elbox.sel, .elbox.par, .sock.selsock', rowsEl).forEach(function (n) { n.remove(); }); selEl = null; if (BK) BK.hide('board'); }
-function selectEl(card, h) {
-  unselectEl(); clearElbox(); drawElbox(card, h);
-  var b = $('.elbox:not(.sel):not(.par)', card); if (!b) return;
-  b.classList.add('sel'); hov.card = null;
-  var ph = $('.phone', card), sc = ph.offsetWidth / wOf(card), ts = tagScale(), q = h.rect, sk = document.createElement('span'), d = 16 * ts;
-  sk.className = 'sock selsock'; sk.title = '끌어서 다른 화면에 놓으면 연결';
-  sk.style.left = ((q.x + q.w) * sc) + 'px'; sk.style.top = ((q.y + q.h / 2) * sc) + 'px';
-  sk.style.width = sk.style.height = d + 'px'; sk.style.margin = (-d / 2) + 'px 0 0 ' + (-d / 2) + 'px'; sk.style.borderWidth = (2 * ts) + 'px';
-  ph.appendChild(sk); selEl = {card: card, h: h}; drawParent(card, h);
-  if (BK) BK.show({screen: card.dataset.id, h: h, app: appCard(card.dataset.id), where: 'board',   // 요소 막대(task 49a) — 고른 테두리 옆, 판이 움직이면 placeSelbar 가 다시 놓는다
-                   frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
-                   anchor: function () { var bx = $('.elbox.sel', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * tagScale() * z; return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
-}
+// 요소 테두리·고른 요소(modules/view-elbox.js): 올린 요소 미리 테두리(도구마다) · 고른 요소 = 테두리 + 소켓 + 부모 점선 + 요소 막대
+var EB = HD.viewElbox.mount({$: $, $$: $$, rowsEl: rowsEl, pane: pane, wOf: wOf, tagScale: tagScale, zoom: function () { return z; }, app: function (id) { return appCard(id); },
+  title: function (id) { return titleOf(id); }, toast: function (m) { toast(m); }, ask: FA.hit, chain: FA.chain, lastFrame: FA.lastFrame, blocks: function () { return BK; },
+  tool: function () { return tool; }, only: function (id) { return SL.ids().length === 1 && SL.has(id); }, busy: function () { return !!((drag && drag.moved) || pickT); }});
 function appCard(id) { var c = VL.cardEl(id), cv = c && $('.cover', c); return HD.blocks.isApp(cv ? cv.dataset.file : ''); }   // 앱 카드 = 개발 서버 주소(build_canvas.is_dev_url)
-function pickElAt(card, x, y, deep) {                // 이동(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2)
-  askHit(card, x, y, false, function (h) {
-    if (!h) return;
-    if (h.none) { toast('여기에는 고를 요소가 없어요'); return; }
-    selectEl(card, h);
-  }, false, deep);
-}
-function drawElbox(card, h, how) {                  // how: 'hov' = 다음 클릭이 고를 요소(얇은 실선, 51-3) · 'par' = 고른 요소의 부모(점선) · 없음 = 요소 도구 테두리
-  if (how !== 'par') clearElbox();
-  if (!h || h.none || !h.rect) return;
-  var ph = $('.phone', card), sc = ph.offsetWidth / wOf(card), ts = tagScale(), q = h.rect, b = document.createElement('div');
-  b.className = 'elbox' + (q.y * sc < 18 * ts ? ' in' : '') + (how ? ' ' + how : '');
-  b.dataset.kind = h.kind || 'box';
-  var tn = HD.blocks.tone(h, {app: appCard(card.dataset.id)}); if (tn) b.dataset.tone = tn;   // 앱 카드 = 요청으로만 색·꼬리표(51-3)
-  b.dataset.label = (HD.tools.LABEL[h.kind] || '영역') + (h.kind === 'link' && h.to ? ' → ' + titleOf(h.to) : '');
-  b.style.left = q.x * sc + 'px'; b.style.top = q.y * sc + 'px'; b.style.width = q.w * sc + 'px'; b.style.height = q.h * sc + 'px';
-  b.style.borderWidth = ((how ? 1 : 2) * ts) + 'px'; b.style.setProperty('--ts', ts);
-  ph.appendChild(b); if (how !== 'par') hov.card = card;
-}
-// 고른 요소의 부모 점선(51-3, Figma F11): 화면에 조상을 묻고(hd-up) 상자가 다른 첫 조상(blocks.parentPick — [상위] 와 같은 판정)
-function drawParent(card, h) {
-  askChain(lastFrame(card), h, function (chain) {
-    if (!selEl || selEl.card !== card || selEl.h !== h || !chain) return;   // 그 사이 다른 요소를 골랐다
-    var p = HD.blocks.parentPick(h, chain); if (p) drawElbox(card, p, 'par');
-  });
-}
-function lastFrame(card) { var fs = card ? $$('.phone iframe', card) : []; return fs[fs.length - 1] || null; }   // 교체 중이면 새 틀(48a)
-var upWait = {}, upSeq = 0;                          // 셸이 묻는 hd-up(tag 'cue…') — view-blocks 의 [상위] 는 제 tag 로 따로 묻는다
-function askChain(f, h, cb) {                        // cb(조상 hit 목록, 가까운 것부터 | null = 답 없음)
-  var w = f && f.contentWindow; if (!w || !h || !h.path) { cb(null); return; }
-  var tag = 'cue' + (++upSeq);
-  upWait[tag] = {win: w, cb: cb, t: setTimeout(function () { if (!upWait[tag]) return; delete upWait[tag]; console.warn('[hd] 조상을 묻지 못함(답 없음) — ' + h.path); cb(null); }, 1500)};
-  try { w.postMessage({type: 'hd-up', path: h.path, tag: tag}, '*'); } catch (e) { clearTimeout(upWait[tag].t); delete upWait[tag]; console.warn('[hd] 조상 묻기 실패 — ' + e); cb(null); }
-}
-addEventListener('message', function (e) {
-  var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-upchain' || !upWait[d.tag]) return;
-  var u = upWait[d.tag]; if (u.win !== e.source) return;
-  clearTimeout(u.t); delete upWait[d.tag]; u.cb(Array.isArray(d.chain) ? d.chain : []);
-});
-function hoverMode(card) {                            // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 이동(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
-  return HD.tools.hoverOf(tool, {only: SL.ids().length === 1 && SL.has(card.dataset.id), typing: card.classList.contains('hd-typing')});
-}
-function hoverAsk(card, x, y, deep) {                // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억 · deep = Alt(가장 안쪽 — 이동 도구의 Alt+클릭과 같게)
-  var mode = hoverMode(card); if (!mode) return;
-  if (hov.busy) { hov.next = [card, x, y, deep]; return; }
-  hov.busy = true;
-  askHit(card, x, y, true, function (h) {
-    hov.busy = false;
-    var mv = tool === 'move';
-    if (hov.live === card && hoverMode(card) && !(drag && drag.moved) && !pickT) {
-      if (mv && h && selEl && selEl.card === card && h.path === selEl.h.path) clearElbox();   // 고른 요소 위 = 이미 고른 상자
-      else drawElbox(card, h, mv ? 'hov' : undefined);
-    }
-    var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2], n[3]);
-  }, mode === 'leaf', tool === 'move' && !!deep);
-}
-function hoverOff() { hov.live = null; hov.next = null; if (hov.card) clearElbox(); }
-pane.addEventListener('mousemove', function (e) {
-  if ((drag && drag.moved) || pickT) { hoverOff(); return; }
-  var c = e.target.closest ? e.target.closest('.card:not(.draft)') : null, ph = c ? $('.phone', c) : null;
-  if (!ph || !ph.contains(e.target) || e.target.closest('.sock') || !hoverMode(c)) { hoverOff(); return; }
-  if (hov.card && hov.card !== c) clearElbox();
-  hov.live = c; hoverAsk(c, e.clientX, e.clientY, e.altKey);
-});
-pane.addEventListener('mouseleave', hoverOff);       // 판 밖으로 = 미리 표시 걷기(늦게 온 답도 그리지 않게 hov.live)
-
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 // 빈 레이아웃(modules/view-drafts.js · 메모 모양 HD.edits.layout) — 메모 하나 = 판 위 흰 카드, 놓기(새 화면 대화상자)·그리기·이름·목적 고치기
 var DR = HD.viewDrafts.mount({$: $, $$: $$, rowsEl: rowsEl, notes: NS, zoom: function () { return z; }, save: function () { saveNotes(); }, record: function (op) { record(op); },
@@ -1092,7 +999,7 @@ var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, pr
   if (VA) VA.render();
   if (PN && st.ids.length) PN.focus(null);          // 다른 카드를 고르면 막 메모를 단 카드의 핀 보이기는 끝
   if (AB) AB.closePop();                            // 고른 카드가 바뀌면 크기 팝오버는 닫는다(다른 카드에 잘못 적용하지 않게)
-  if (selEl && st.ids.indexOf(selEl.card.dataset.id) < 0) unselectEl();   // 고른 요소의 카드를 놓으면 요소 막대도(task 49a)
+  var se = EB.selected(); if (se && st.ids.indexOf(se.card.dataset.id) < 0) EB.unselect();   // 고른 요소의 카드를 놓으면 요소 막대도(task 49a)
   placeSelbar(); LC.schedule();                 // LOD: 고른 카드는 작게 봐도 싣고, 놓으면 다시 작은 카드로
   CT.fold();                                      // 고른 카드만 설명·정책을 펼친다(task 31)
   LN.focus(st.ids); VL.set(st.ids);                 // 강조 = 고른 카드 전부(E21) — 그 선은 같은 색·같은 길로 진하게(E20), 화면 안 버튼에 같은 색·번호
@@ -1128,7 +1035,7 @@ var CA = HD.viewCardActions.mount({$: $, notes: NS, save: function () { saveNote
   guard: function (ids) { return LF.guard(ids); }, locked: function (id) { return LF.isLocked(id); }, selected: function () { return SL.ids(); }, clear: function () { SL.dispatch({type: 'clear'}); },
   sync: function () { return VS; }, copy: function () { return CC; }, app: appCard, layoutNote: function (x, y) { return DR.note(x, y); }, sizeOf: sizeOf, artboard: function () { return AB; },
   tagScale: tagScale, modalOpen: function () { return !modal.hidden; }, tab: function () { return document.body.dataset.tab; }, typing: typing,
-  element: function () { return selEl; }, unselect: function () { unselectEl(); }, removeElement: function (id, h) { removeElement(id, h); },
+  element: function () { return EB.selected(); }, unselect: function () { EB.unselect(); }, removeElement: function (id, h) { removeElement(id, h); },
   changed: function () { drawArrows(); LC.schedule(); }});
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
   var items = HD.edits.preview(NS.list(), id);       // 글자 고치기·요소 지우기(edits.js)
@@ -1261,7 +1168,7 @@ var VS = HD.viewSync.mount({chip: $('#mode'), aiChip: $('#aichip'), agent: windo
     Object.keys(gone).forEach(function (id) { var g = gone[id]; if (!live[id]) return; g.box.insertBefore(g.el, g.at && g.at.parentNode === g.box ? g.at : null); delete gone[id]; });
     if (rs.added.length) { var nids = rs.added.map(function (c) { return c.dataset.id; }); rs.added.forEach(function (c) { c.classList.toggle('hid', LF.isHidden(c.dataset.id)); CP.place(c); }); if (AB) AB.paint(nids); }
     changed.forEach(function (id) { if (OP && OP.hold(id)) return; var c = live[id] && VL.cardEl(id), f = c && $('.phone iframe', c); if (f) swapCard(id, f, live[id].file + '?v=' + v); });   // hold = 같은 화면에 바로 반영 쓰기가 더 남음(중간 모습으로 깜빡이지 않게, 49c)
-    if (selEl && changed.indexOf(selEl.card.dataset.id) >= 0) unselectEl();   // 바뀐 카드의 고른 요소는 자리가 달라졌다(task 49a)
+    var se = EB.selected(); if (se && changed.indexOf(se.card.dataset.id) >= 0) EB.unselect();   // 바뀐 카드의 고른 요소는 자리가 달라졌다(task 49a)
     if (!modal.hidden && mscreen && live[mscreen] && changed.indexOf(mscreen) >= 0 && !(OP && (OP.hold(mscreen) || OP.typing('modal')))) {   // 크게 보기도 새 파일로
       var mu = live[mscreen].file + '?v=' + v, mgo = function () { if (BK) BK.hide('modal'); mframe.src = mu; };
       if (OP && OP.take(mscreen) && FT && FT.swap && FT.swap.same) {   // 방금 바로 반영한 화면 = 이미 보이는 내용이면 다시 싣지 않는다(두 번 깜빡임 없음, 49c)
@@ -1285,7 +1192,7 @@ OP = HD.viewOptimistic ? HD.viewOptimistic.mount({on: function () { return VS.on
   },
   picked: function (id, hit, where) {                // 바로 반영 뒤·그 자리 고치기를 마친 뒤 그 요소를 다시 고른다(Figma F14, 51-2 — 판에도)
     if (where === 'modal') { if (BK && !modal.hidden && id === mscreen) BK.show(modalSel(id, hit)); return; }
-    var c = VL.cardEl(id); if (c && BK) selectEl(c, hit);
+    var c = VL.cardEl(id); if (c && BK) EB.select(c, hit);
   }}) : null;
 // 바뀐 카드만 다시 싣기(교체 길) — 덮개 걷힘·AI 쓰기 알림·공용 ctx.reload 가 함께 쓴다. 셸 함수인 까닭: VL·swapCard·LC.schedule 를 잇기만 한다
 function reloadCards(ids) {
@@ -1382,7 +1289,7 @@ CC = FT.cardCopy ? FT.cardCopy.attach({on: function () { return VS.on; }, write:
   select: function (ids) { SL.dispatch(ids.length ? {type: 'set', ids: ids} : {type: 'clear'}); }}) : null;
 BK = FT.blocks || null; if (BK) { BK.onAct(blockAct); BK.onPick(function (p) {   // 상위·쓴 뒤 따라가기로 새로 고른 요소(task 49b) — 판 = 테두리·소켓·막대, 크게 보기 = 막대
   if (p.where === 'modal') { if (!modal.hidden && p.screen === mscreen) BK.show(modalSel(p.screen, p.h)); return; }
-  var c = VL.cardEl(p.screen); if (c) selectEl(c, p.h);
+  var c = VL.cardEl(p.screen); if (c) EB.select(c, p.h);
 }); }   // 요소 막대(modules/view-blocks.js, task 49a) — 단추는 셸의 편집 길로
 // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 상태(card-size)의 주인은 그 모듈, 셸은 크기가 바뀐 뒤 다시 그릴 것과 잠금만 넘긴다
 AB = FT.artboard ? FT.artboard.attach({
