@@ -19,7 +19,9 @@
    판 노트(R25): chips({…, notes: [{id, text, near}]}) — 고른 판 메모(board-notes)마다 [노트 "글" ×](key note:<id>, 빈 글 빼기, 화면·요소 칩 뒤). 노트는 범위를 정하지 않는다
      (scope 는 화면·요소 칩만 — 노트만이면 모든 화면). build 는 노트 칩 글을 요청 글 끝 '노트:' 줄로(noteText) — 글이 비어도 노트가 있으면 보낸다.
      noteText([{text, near}]) = '노트:\n- 글(줄바꿈은 두 칸 들여)( (가까운 화면: 이름))' · nearest(box, cards[{id,x,y,w,h}]) → 상자 사이 거리가 가장 짧은 카드 id | null(같은 좌표계).
-   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, stage, line, progress, record, parseLast} */
+   대화창이 고치는 글 상자를 가리지 않게(R25): clear(box, dock, pane, margin) → 판을 위로 올릴 px(≥0) — 떠 있는 대화창(dock, 없으면 null)과 가로로 겹치고
+     상자 아래 + margin 이 대화창 위를 넘을 때만, 상자 위 끝이 판(pane) 위 + margin 밑으로는 올라가지 않을 만큼. 모두 화면 px {top, bottom, left, right}.
+   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -150,6 +152,14 @@ function nearest(box, cards) {                          // 상자 사이 거리(
   });
   return best;
 }
+function clear(box, dock, pane, margin) {               // 대화창이 가리는 글 상자 → 판을 올릴 px(R25)
+  margin = margin || 0;
+  if (!box || !dock || box.right <= dock.left || box.left >= dock.right) return 0;
+  var need = box.bottom + margin - dock.top;
+  if (need <= 0) return 0;
+  var room = box.top - ((pane ? pane.top : 0) + margin);   // 위 끝이 판 위 여백 밑으로는 올리지 않는다
+  return Math.max(0, Math.min(need, room));
+}
 
 function lastReply(n) { var r = n && Array.isArray(n.replies) ? n.replies : []; return r.length ? r[r.length - 1] : null; }
 function stage(n, busy, inflight) {
@@ -243,5 +253,5 @@ function parseLast(raw) {
 }
 
 HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
-           scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, noteText: noteText, nearest: nearest, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
+           scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, noteText: noteText, nearest: nearest, clear: clear, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();

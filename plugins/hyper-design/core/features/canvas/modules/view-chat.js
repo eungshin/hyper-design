@@ -209,7 +209,7 @@ function mount(ctx) {
     agentB.title = ai.title || '';
     agentB.setAttribute('aria-label', '받는 곳: ' + label + ' — 바꾸기');
   }
-  function render() { renderChips(); renderLine(); place(); }
+  function render() { renderChips(); renderLine(); place(); clearEdit(document.activeElement); }   // 칩 줄이 생겨 이 창이 커져도 고치는 글 상자를 가리지 않게(R25)
   var tick = 0;
   function soon() { clearTimeout(tick); tick = setTimeout(render, 60); }
 
@@ -301,6 +301,18 @@ function mount(ctx) {
     var np = C.progress(prog.p, e.detail, prog.screens, prog.ids);
     if (np !== prog.p) { prog.p = np; renderLine(); }
   });
+  function clearEdit(t) {                                 // 판 안 글 상자를 고치는 동안 떠 있는 이 창이 가리면 판을 그만큼 위로(R25 — HD.chat.clear)
+    if (docked || !t || t.nodeType !== 1 || root.contains(t) || !root.getClientRects().length) return;
+    if (!(t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) return;
+    var pane = ctx.$('#screens'); if (!pane || !pane.contains(t)) return;
+    var box = (t.closest('.capbox, .bnote') || t).getBoundingClientRect();
+    var dy = C.clear(box, root.getBoundingClientRect(), pane.getBoundingClientRect(), 16);
+    if (!dy) return;
+    if (!ctx.view || typeof ctx.view.set !== 'function') { warnOnce('view', 'ctx.view 가 없어 고치는 글 상자를 대화창 위로 올리지 못해요'); return; }
+    var v = ctx.view.get(); ctx.view.set(v.z, v.tx, v.ty - dy);
+  }
+  document.addEventListener('focusin', function (e) { var t = e.target; setTimeout(function () { clearEdit(t); }, 0); });   // 그 기능이 배율·자리를 정한 뒤
+  document.addEventListener('input', function (e) { clearEdit(e.target); });   // 쓰다가 상자가 길어지면
   setInterval(render, 1000);                              // 메모 상태·덮개는 다른 길(2초 읽기·답)로 바뀐다 — 47-4 SSE 가 오면 이벤트로
   renderAgent(); render(); grow(); booted = true;               // 처음 그린 줄(새로고침 뒤)은 맥박 없이
   return {render: render, send: send, last: function () { return last; }};

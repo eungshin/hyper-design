@@ -106,3 +106,61 @@ def test_selected_board_note_becomes_chip_and_goes_into_the_request(served, ctx)
     finally:
         pg.close()
     assert not errors, errors
+
+
+@pytest.fixture()
+def plain(tmp_path):
+    """도우미 없이(file://) — 대화 패널이 없어 입력창이 판 아래에 떠 있다."""
+    import json, subprocess, sys
+    from test_canvas_v2 import SCRIPTS
+    from test_canvas_annotations import PAY, DONE
+    out = tmp_path / "out"
+    (out / "screens").mkdir(parents=True)
+    (out / "screens" / "pay.html").write_text(PAY.replace("{gap}", "").replace("{label}", "지금 결제하기"), encoding="utf-8")
+    (out / "screens" / "done.html").write_text(DONE, encoding="utf-8")
+    (out / "screens.json").write_text(json.dumps({"groups": ["결제"], "screens": [
+        {"id": "pay", "file": "screens/pay.html", "title": "결제", "group": "결제", "purpose": "결제한다\n둘째 줄\n셋째 줄", "policies": []},
+        {"id": "done", "file": "screens/done.html", "title": "완료", "group": "결제", "purpose": "끝", "policies": []}]}, ensure_ascii=False), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(SCRIPTS / "build_canvas.py"), str(out)], capture_output=True, text=True, encoding="utf-8",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    assert r.returncode == 0, r.stderr
+    return out
+
+
+@pytest.mark.area("chat", "tools")
+def test_caption_edit_box_is_moved_clear_of_the_floating_dock(plain, ctx):
+    pg = ctx.new_page()
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto((plain / "index.html").resolve().as_uri())
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_selector("#hdchat:not(.docked) .ch-box")
+        dock = pg.locator("#hdchat").bounding_box()
+        # 판을 끌어 카드 아래 이름이 떠 있는 입력창 아래에 오게(손 도구)
+        pg.keyboard.press("h")
+        t = pg.locator(".card[data-id='pay'] > .ftitle").bounding_box()
+        sx, sy = t["x"] + t["width"] / 2, t["y"] - 200
+        pg.mouse.move(sx, sy); pg.mouse.down()
+        pg.mouse.move(dock["x"] + dock["width"] / 2, dock["y"] + dock["height"] / 2 - 200, steps=10); pg.mouse.up()
+        t = pg.locator(".card[data-id='pay'] > .ftitle").bounding_box()
+        assert t["y"] + t["height"] > dock["y"], "준비: 카드 이름이 입력창 높이에 있다"
+        pg.keyboard.press("v")
+        pg.dblclick(".card[data-id='pay'] > .ftitle")
+        pg.wait_for_selector(".capbox [data-f='title']")
+        pg.wait_for_timeout(300)                         # 카드가 골라져 칩 줄이 생기면(입력창이 커짐) 그만큼 더
+        box, dock2 = pg.locator(".capbox").bounding_box(), pg.locator("#hdchat").bounding_box()
+        assert box["y"] + box["height"] <= dock2["y"] - 8, (box, dock2)
+        assert box["y"] >= pg.locator("#screens").bounding_box()["y"], "상자 위 끝은 판 안"
+        pg.click(".capbox [data-f='purpose']"); pg.keyboard.press("End")
+        for _ in range(4):
+            pg.keyboard.press("Enter"); pg.keyboard.type("더 쓴 줄")
+        pg.wait_for_timeout(100)
+        box, dock2 = pg.locator(".capbox").bounding_box(), pg.locator("#hdchat").bounding_box()
+        assert box["y"] + box["height"] <= dock2["y"] - 8, "쓰다가 길어져도 가리지 않게"
+        shot(pg, "r25-caption-edit-clear-of-dock.png")
+        pg.keyboard.press("Escape")
+    finally:
+        pg.close()
+    assert not errors, errors
