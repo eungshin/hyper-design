@@ -190,6 +190,15 @@ def test_pick_note_pin_persists(page):
 
 @pytest.mark.area("notes")
 def test_send_format(page):
+    # 보낼 메모를 스스로 심는다(test_clear_sent 와 같게) — 앞 테스트(메모 달기)에 기대면 혼자 돌릴 때 #notes 가 끝내 안 열렸다(10-26)
+    page.evaluate("""() => { const sid = document.querySelector('#rows .card').dataset.id,
+        h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(window.__hdKeyPath || location.pathname);
+        Object.keys(localStorage).filter(k => k.startsWith('hd-notes:') || k.startsWith('hd-note-seq:') || k.startsWith('hd-show-sent:')).forEach(k => localStorage.removeItem(k));
+        localStorage.setItem('hd-notes:' + h, JSON.stringify([{id: 'fmt1', no: 1, screen: sid, targets: [{path: 'body', text: ''}], path: 'body', text: '',
+            rect: null, note: '가격을 오른쪽 끝으로 붙이고 굵게', intent: 'change', replies: []}]));
+        localStorage.setItem('hd-note-seq:' + h, JSON.stringify({[sid]: 1})); }""")
+    reload(page)
+    page.click('#dock .dk-tab[data-p="notes"]')
     page.wait_for_selector("#notes:not([hidden])")
     page.click("#nsend")
     # 복사는 비동기(클립보드 약속) — 알림·'보냄' 표시는 복사가 끝난 뒤에 붙는다. 바로 읽으면 #nmsg 가 비어 있다(-n 4 에서 가끔)
