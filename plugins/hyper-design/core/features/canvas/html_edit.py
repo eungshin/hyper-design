@@ -137,7 +137,8 @@ def _set_attr(tag_src, name, value):                # 시작 태그 원문에서
 
 
 # 글자 고치기(task 30): 요소 안 내용 전부(글 + 인라인 자식)를 새 글로 — 이 태그들(글이 든 것, br·wbr)만 안에 있어도 된다.
-# 그 밖(블록·그림·입력·링크 a·글 없는 아이콘 자식)이 안에 있으면 거절 — 일부만 바꾸지 않는다. palette.js 미리보기(pending)와 같은 규칙.
+# 그 밖(블록·그림·입력·링크 a)이 안에 있으면 거절 — 일부만 바꾸지 않는다. palette.js 미리보기(pending)와 같은 규칙.
+# 예외(R15 아이콘 + 글): 바로 아래 글이 있고 자식 요소가 모두 글이 없으면(svg·img·빈 i/span) 글 조각만 바꾸고 아이콘은 원문 그대로(_icon_text).
 INLINE = {"b", "strong", "i", "em", "span", "small", "u", "s", "mark", "sub", "sup", "code", "abbr", "cite", "q", "kbd", "var", "time",
           "font", "del", "ins", "br", "wbr"}
 BLOCK_REASON = "안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요"
@@ -163,10 +164,44 @@ def _is_root(el):                                    # html·head·body · 화�
     return [c for c in p.children if c.tag not in ("script", "style", "link", "meta")] == [el]
 
 
+def _icon_text(n):                                   # R15 아이콘 + 글: 바로 아래 글이 있고 자식 요소는 모두 글이 없음(svg·img·빈 i/span — 아이콘)
+    return any(x[2].strip() for x in n.texts) and not any(_has_text(c) for c in n.children)
+
+
+def _text_runs(el):                                  # 바로 아래 이어진 글 조각 묶음 [(시작, 끝)] — 엔티티·br 로 갈린 글도 한 묶음(br 은 글의 줄바꿈)
+    runs, cur = [], None
+    for kind, x in el.order:
+        if kind == "tx":
+            cur = [x[0], x[0] + x[1]] if cur is None else [cur[0], x[0] + x[1]]
+        elif cur is not None and x.tag in ("br", "wbr"):
+            cur[1] = x.open_end
+        elif cur is not None:
+            runs.append(tuple(cur)); cur = None
+    if cur is not None:
+        runs.append(tuple(cur))
+    return runs
+
+
+def _icon_text_patch(src, el, value):                # 글 조각만: 첫 글 묶음 = 앞뒤 공백 + 새 글, 그 뒤 글 묶음은 비움, 아이콘(자식 요소)은 원문 그대로
+    full = [r for r in _text_runs(el) if src[r[0]:r[1]].strip()]
+    a, b = full[0][0], full[-1][1]
+    out, at = [], a
+    for i, (x, y) in enumerate(full):
+        out.append(src[at:x])                          # 사이 원문(아이콘·공백) 그대로
+        if i == 0:
+            raw = src[x:y]
+            lead, trail = raw[: len(raw) - len(raw.lstrip())], raw[len(raw.rstrip()):]
+            out.append(lead + html.escape(value, quote=False).replace("\n", "<br>") + trail)
+        at = y
+    return a, b, "".join(out)
+
+
 def _text_patch(src, el, value, path):
     if el.void or el.close is None:
         raise ValueError("글자를 넣을 수 없는 요소예요(닫는 태그 없음): " + path)
     if not _inline_only(el):
+        if _icon_text(el):
+            return _icon_text_patch(src, el, value)
         raise ValueError(BLOCK_REASON)
     a, b = el.open_end, el.close[0]
     inner = src[a:b]

@@ -16,6 +16,7 @@
    반영 대기 미리보기: {type:'hd-pending', items:[{path, text} | {path, remove:true}]} 를 받으면 그 요소 안 내용 전부(글 + 인라인 자식)를 잠시 새 글로(\n = 줄바꿈, '' = 비움)
    바꿔 점선으로, remove 는 그 요소를 숨겨 보여 준다(items:[] 이면 되돌린다). 글 바꾸기 규칙은 helper.py edit_html 과 같다: 안에 인라인(글 있는 b·span…, br) 아닌
    자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
+   예외 아이콘 + 글(R15): 바로 아래 글이 있고 자식 요소가 모두 글이 없으면(svg·img·빈 i/span) 글 조각만 바꾸고 아이콘은 그대로(textMode 'icon', helper.py _icon_text).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
@@ -361,13 +362,46 @@
   // 글자만 바꿔도 되는 요소 — 안의 자식이 모두 인라인(글이 든 b·span…, 또는 br·wbr)일 때. helper.py INLINE·_inline_only 와 같은 규칙
   var INLINE = /^(b|strong|i|em|span|small|u|s|mark|sub|sup|code|abbr|cite|q|kbd|var|time|font|del|ins|br|wbr)$/;
   var VOIDS = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/;
-  function textOk(el) {
+  function allText(el) {
     if (!el || el.nodeType !== 1 || VOIDS.test(el.tagName.toLowerCase())) return false;
     return Array.prototype.every.call(el.querySelectorAll('*'), function (c) {
       var t = c.tagName.toLowerCase();
       return INLINE.test(t) && (t === 'br' || t === 'wbr' || !!c.textContent.trim());
     });
   }
+  // R15 아이콘 + 글: 바로 아래 글이 있고 자식 요소는 모두 글이 없음(svg·img·빈 i/span) — 글 조각만 바꾸고 아이콘은 그대로(helper.py _icon_text 와 같은 규칙)
+  function iconText(el) {
+    if (!el || el.nodeType !== 1 || VOIDS.test(el.tagName.toLowerCase()) || !ownText(el)) return false;
+    return Array.prototype.every.call(el.children, function (c) { return /^(script|style)$/i.test(c.tagName) || !c.textContent.trim(); });
+  }
+  function textMode(el) { return allText(el) ? 'all' : iconText(el) ? 'icon' : ''; }   // 'all' = 안 내용 전부 · 'icon' = 글 조각만 · '' = 못 바꿈
+  function textOk(el) { return !!textMode(el); }
+  function textRuns(el) {                             // 바로 아래 이어진 글 마디 묶음(br·wbr = 글의 줄바꿈이라 이어짐) — 글이 있는 묶음만(helper.py _text_runs)
+    var runs = [], cur = null;
+    for (var c = el.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType === 3) (cur = cur || []).push(c);
+      else if (c.nodeType === 1 && cur && /^(br|wbr)$/i.test(c.tagName)) cur.push(c);
+      else if (c.nodeType === 1) { if (cur) runs.push(cur); cur = null; }
+    }
+    if (cur) runs.push(cur);
+    return runs.filter(function (r) { return r.some(function (n) { return n.nodeType === 3 && n.nodeValue.trim(); }); });
+  }
+  function setIconText(el, v) {                       // helper.py _icon_text_patch 와 같은 모양: 첫 글 묶음 = 앞뒤 공백 + 새 글(\n = br), 뒤 묶음은 지움, 아이콘 그대로
+    var runs = textRuns(el); if (!runs.length) return;
+    var first = runs[0], at = first[first.length - 1].nextSibling;
+    var raw = first.map(function (n) { return n.nodeType === 3 ? n.nodeValue : '\u0000'; }).join('');
+    var lead = raw.slice(0, raw.length - raw.replace(/^\s+/, '').length), trail = raw.slice(raw.replace(/\s+$/, '').length);
+    runs.forEach(function (r) { r.forEach(function (n) { el.removeChild(n); }); });
+    var frag = document.createDocumentFragment();
+    if (lead) frag.appendChild(document.createTextNode(lead));
+    String(v == null ? '' : v).split('\n').forEach(function (line, i) {
+      if (i) frag.appendChild(document.createElement('br'));
+      if (line) frag.appendChild(document.createTextNode(line));
+    });
+    if (trail) frag.appendChild(document.createTextNode(trail));
+    el.insertBefore(frag, at && at.parentNode === el ? at : null);
+  }
+  function putText(el, v) { if (textMode(el) === 'icon') setIconText(el, v); else setText(el, v); }
   /* ---------- 바로 반영(task 49c): 그 자리 글자 고치기 · 먼저 바꾸고 tag 로 되돌리기 · 형제 상자 · 고른 요소 끌기 ---------- */
   var inl = null, opts = {}, selEl = null, grab = null, grabbed = false;
   function plainOf(el) {                              // 요소 글 → 저장할 글: 글 마디의 공백은 하나로, br(·고치며 생긴 div/p 줄) = \n — helper.py 가 \n 을 br 로 쓴다
@@ -445,7 +479,7 @@
         return;
       } else if (it.text != null) {
         if (!textOk(el)) { ok = false; return; }
-        optRec(tag, {el: el, kids: keepKids(el)}); setText(el, it.text);
+        optRec(tag, {el: el, kids: keepKids(el)}); putText(el, it.text);
       } else return;
       if (!first) first = el;
     });
@@ -464,35 +498,49 @@
     e.preventDefault(); document.execCommand('insertText', false, t);
   }
   function inlineBlur() { if (inl) inlineEnd(true); }
+  function iconEditor(el) {                           // 첫 글 묶음(앞뒤 공백 뺀 글)을 span 하나로 감싸 돌려준다 — 끝나면 inlineEnd 가 원래 마디로 되돌린다
+    var first = textRuns(el)[0], raw = first.map(function (n) { return n.nodeType === 3 ? n.nodeValue : '\u0000'; }).join('');
+    var lead = raw.slice(0, raw.length - raw.replace(/^\s+/, '').length), trail = raw.slice(raw.replace(/\s+$/, '').length);
+    var sp = document.createElement('span'); sp.setAttribute('data-hd-txt', '');
+    el.insertBefore(sp, first[0]);
+    first.forEach(function (n) { sp.appendChild(n); });
+    var a = sp.firstChild, z = sp.lastChild;           // 앞뒤 공백은 칸 밖으로(고르기·자리는 글만)
+    if (lead && a && a.nodeType === 3) { a.nodeValue = a.nodeValue.slice(lead.length); el.insertBefore(document.createTextNode(lead), sp); }
+    if (trail && z && z.nodeType === 3) { z.nodeValue = z.nodeValue.slice(0, z.nodeValue.length - trail.length); el.insertBefore(document.createTextNode(trail), sp.nextSibling); }
+    return sp;
+  }
   function inlineStart(d) {
     if (inl) inlineEnd(true);
     var el = find(d.path), tag = d.tag || '';
     if (!el || !textOk(el)) { send({type: 'hd-inline-done', screen: screenId(), tag: tag, ok: false, why: el ? 'text' : 'missing', path: d.path || null}); return; }
-    inl = {el: el, tag: tag, kids: keepKids(el), was: plainOf(el), ce: el.getAttribute('contenteditable'), o: el.style.outline, oo: el.style.outlineOffset};
+    var kids0 = keepKids(el), ed = el;
+    if (textMode(el) === 'icon') ed = iconEditor(el);    // 아이콘 + 글(R15): 글 조각만 감싼 칸을 고친다 — 아이콘은 칸 밖이라 지워지지 않는다
+    inl = {el: el, ed: ed, tag: tag, kids: kids0, was: plainOf(ed), ce: ed.getAttribute('contenteditable'), o: el.style.outline, oo: el.style.outlineOffset};
     if (box) box.style.display = 'none';
-    el.setAttribute('contenteditable', 'true');
+    ed.setAttribute('contenteditable', 'true');
     el.style.outline = '2px solid #2563eb'; el.style.outlineOffset = '2px';
-    el.addEventListener('keydown', inlineKey, true); el.addEventListener('paste', inlinePaste); el.addEventListener('blur', inlineBlur);
-    el.focus({preventScroll: true});
-    try { var r = document.createRange(); r.selectNodeContents(el); var sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); } catch (e) { console.warn('[hd] 글 전체를 고르지 못함 — ' + e); }
+    ed.addEventListener('keydown', inlineKey, true); ed.addEventListener('paste', inlinePaste); ed.addEventListener('blur', inlineBlur);
+    ed.focus({preventScroll: true});
+    try { var r = document.createRange(); r.selectNodeContents(ed); var sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); } catch (e) { console.warn('[hd] 글 전체를 고르지 못함 — ' + e); }
     send({type: 'hd-inline-on', screen: screenId(), tag: tag, path: d.path});
   }
   function inlineEnd(save) {
     var q = inl; if (!q) return; inl = null;
-    var el = q.el;
-    el.removeEventListener('keydown', inlineKey, true); el.removeEventListener('paste', inlinePaste); el.removeEventListener('blur', inlineBlur);
-    if (q.ce === null) el.removeAttribute('contenteditable'); else el.setAttribute('contenteditable', q.ce);
+    var el = q.el, ed = q.ed || el;
+    ed.removeEventListener('keydown', inlineKey, true); ed.removeEventListener('paste', inlinePaste); ed.removeEventListener('blur', inlineBlur);
+    if (q.ce === null) ed.removeAttribute('contenteditable'); else ed.setAttribute('contenteditable', q.ce);
     el.style.outline = q.o; el.style.outlineOffset = q.oo;
     try { var sl = getSelection(); if (sl && sl.anchorNode && el.contains(sl.anchorNode)) sl.removeAllRanges(); } catch (e) { console.warn('[hd] 선택 풀기 실패 — ' + e); }
-    if (document.activeElement === el) el.blur();
+    if (document.activeElement === ed) ed.blur();
     try { if (window.parent && window.parent !== window) window.parent.focus(); } catch (e) { console.warn('[hd] 캔버스로 초점 돌리기 실패 — ' + e); }   // 다음 키(도구 키·Tab·Enter)가 이 틀이 아니라 캔버스로(답 메시지보다 먼저, 51-2)
-    var v = plainOf(el), path = pathOf(el);
+    var v = plainOf(ed), path = pathOf(el);
     if (!save || v === q.was) {                        // 취소·그대로 = 원래 마디로
       putKids(el, q.kids);
       send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: false, why: save ? 'same' : 'cancel', path: path, text: q.was, old: q.was});
       return;
     }
-    setText(el, v); optRec(q.tag, {el: el, kids: q.kids});
+    if (ed !== el) { putKids(el, q.kids); setIconText(el, v); } else setText(el, v);   // 아이콘 + 글: 원래 마디로 되돌린 뒤 글 조각만(도우미가 쓸 모양과 같게)
+    optRec(q.tag, {el: el, kids: q.kids});
     send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: true, path: path, text: v, old: q.was});
   }
   function kids(p) {                                 // 고를 수 있는 자식 요소(51-2) — 옮기기 sibsOf 와 같은 빼기
@@ -589,11 +637,10 @@
       }
       if (!textOk(el)) return;                         // 도우미도 거절할 요소 — 일부만 바꿔 보이지 않는다
       q.kids = Array.prototype.slice.call(el.childNodes);
+      var icon = textMode(el) === 'icon';                // 아이콘 + 글(R15): 떼어 둔 마디의 복사본을 다시 놓고 글 조각만 바꾼다
       q.kids.forEach(function (k) { el.removeChild(k); });
-      String(it.text == null ? '' : it.text).split('\n').forEach(function (line, i) {
-        if (i) el.appendChild(document.createElement('br'));
-        if (line) el.appendChild(document.createTextNode(line));
-      });
+      if (icon) { q.kids.forEach(function (k) { el.appendChild(k.cloneNode(true)); }); setIconText(el, it.text); }
+      else setText(el, it.text);
       el.style.outline = '2px dashed #f59e0b'; el.style.outlineOffset = '2px';
       pend.push(q);
     });

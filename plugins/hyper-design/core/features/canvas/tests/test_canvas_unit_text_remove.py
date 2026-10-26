@@ -44,11 +44,40 @@ def test_text_keeps_surrounding_whitespace_and_escapes():
 
 
 def test_text_refuses_when_a_block_child_is_inside():
-    for src in ('<main><div class="c">글 <p>안</p></div></main>', '<main><div class="c">글 <img src="a.png"></div></main>',
-                '<main><div class="c">가기 <a href="x.html">링크</a></div></main>', '<main><div class="c"><span class="icon"></span>저장</div></main>'):
+    for src in ('<main><div class="c">글 <p>안</p></div></main>', '<main><div class="c">가기 <a href="x.html">링크</a></div></main>',
+                '<main><div class="c"><svg></svg>글 <b>굵게</b></div></main>', '<main><div class="c"><svg></svg><span>안 글</span></div></main>'):
         with pytest.raises(ValueError) as e:
             edit(src, ("div.c", "text", "x"))
         assert BLOCK_REASON in str(e.value), src
+
+
+# ---------------------------------------------------------------- text: 아이콘 + 글(R15) — 글 조각만 바꾸고 아이콘(글 없는 자식)은 그대로
+def test_text_next_to_an_icon_replaces_only_the_text():
+    svg = '<svg viewBox="0 0 24 24"><path d="M19 12H5"/></svg>'
+    assert edit('<main><a class="b" href="x.html">%s 이전</a></main>' % svg, ("a.b", "text", "뒤로")) == '<main><a class="b" href="x.html">%s 뒤로</a></main>' % svg
+    assert edit('<main><div class="c">글 <img src="a.png"></div></main>', ("div.c", "text", "새")) == '<main><div class="c">새 <img src="a.png"></div></main>'
+    assert edit('<main><div class="c"><span class="icon"></span>저장</div></main>', ("div.c", "text", "<x>")) == '<main><div class="c"><span class="icon"></span>&lt;x&gt;</div></main>'
+    assert edit('<main><button><i class="fa"></i>\n  뜻 보기\n</button></main>', ("button", "text", "줄1\n줄2")) == '<main><button><i class="fa"></i>\n  줄1<br>줄2\n</button></main>'
+
+
+def test_text_between_icons_goes_to_the_first_text_and_drops_the_rest():
+    assert edit('<main><p><svg></svg>앞 &amp; 말<svg></svg>뒤</p></main>', ("p", "text", "하나")) == '<main><p><svg></svg>하나<svg></svg></p></main>'
+
+
+def test_icon_text_multi_line_edited_twice_leaves_only_the_latest():   # br 은 글의 줄바꿈 — 두 번째 고치기에 남는 줄·br 없음
+    s = edit('<main><button><svg></svg> 뜻 보기</button></main>', ("button", "text", "줄1\n줄2"))
+    assert s == '<main><button><svg></svg> 줄1<br>줄2</button></main>'
+    assert edit(s, ("button", "text", "끝")) == '<main><button><svg></svg> 끝</button></main>'
+
+
+def test_icon_text_cleared_keeps_the_icon():
+    assert edit('<main><button><svg></svg> 뜻 보기</button></main>', ("button", "text", "")) == '<main><button><svg></svg> </button></main>'
+
+
+def test_icon_only_element_without_text_still_refuses():
+    with pytest.raises(ValueError) as e:
+        edit('<main><button><svg></svg></button></main>', ("button", "text", "x"))
+    assert BLOCK_REASON in str(e.value)
 
 
 def test_empty_value_clears_the_text_and_keeps_the_element():
