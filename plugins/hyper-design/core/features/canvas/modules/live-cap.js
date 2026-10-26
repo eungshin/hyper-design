@@ -4,7 +4,8 @@
    unload({loaded, visible, small, lastSeen, selected, modal, now, K, idle}) → 내릴 카드 id 목록(작은 것 먼저, 그다음 오래 안 본 것부터)
      loaded = 지금 실린 카드 id · visible = 지금 보이는 id · small = 보이지만 읽히지 않는 크기인 id · lastSeen = {id: 마지막으로 보인 ms} · selected = 고른 id · modal = 크게 보기 화면 id|null
      고른·크게 보기 카드는 내리지 않는다. small 은 바로 내린다(상한·idle 무관). 나머지는 보이는 것은 두고, 화면 밖이 idle ms 넘은 것만, 실린 수가 K 이하가 될 때까지만.
-   HD.liveCap = {K, IDLE, MINW, readable, unload}  (K·IDLE·MINW 는 셸이 부를 때마다 읽는다 — 테스트가 바꿀 수 있다) */
+   near(r, view, m) → 카드 상자 r(화면 px, {left, top, right, bottom, width})가 판 칸 view 의 여유 m(기본 MARGIN = 80) 안에 걸치나 — 너비 0 = 아니오(셸 C10, view-live-cap)
+   HD.liveCap = {K, IDLE, MINW, MARGIN, readable, near, unload}  (K·IDLE·MINW 는 셸이 부를 때마다 읽는다 — 테스트가 바꿀 수 있다) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -32,5 +33,10 @@ function unload(o) {
     .slice(0, extra).map(function (x) { return x.id; }));
 }
 
-HD.liveCap = {K: 10, IDLE: 15000, MINW: 48, readable: readable, unload: unload};
+function near(r, view, m) {
+  m = m >= 0 ? m : HD.liveCap.MARGIN;
+  return !!r.width && r.right > view.left - m && r.left < view.right + m && r.bottom > view.top - m && r.top < view.bottom + m;
+}
+
+HD.liveCap = {K: 10, IDLE: 15000, MINW: 48, MARGIN: 80, readable: readable, near: near, unload: unload};
 })();

@@ -1,8 +1,9 @@
 /* View — 테마 패널(조각 5, H10·H12·H14). 상태 규칙은 modules/theme.js(Model), 여기는 그리기·누르기와 저장.
    목록: 색 점 + 이름, 기본 테마는 자물쇠(복제만), 내 테마는 마우스를 올리면 이름 바꾸기·복제·삭제(되돌리기 됨).
    '+ 새 테마' = 지금 테마 복제. 내 테마를 고르면 색 네 칸(주 색·글자·바탕·강조): 색 고르기 + HEX, 판의 화면에 바로, 글자 대비 4.5:1 미만 경고.
-   HD.viewTheme.mount(ctx) → {render()}
-   ctx = {$, esc, root, bases: [{slug, name, brand}], apply(slug, vars), readColors() → {brand, text, bg, accent}(지금 판 색),
+   팔레트 적용(셸 C10): 고른 테마 = #tokens 를 tokens-<slug>.css 로 + 모든 iframe 에 hd-palette·hd-theme-vars + 'hd-palette' 키 — 새로 실린 iframe 에는 send(frame)
+   HD.viewTheme.mount(ctx) → {render(), send(frame)(지금 팔레트·내 테마 색을 그 틀에 — 아직 고르지 않았으면 아무것도)}
+   ctx = {$, $$, esc, root, bases: [{slug, name, brand}], readColors() → {brand, text, bg, accent}(지금 판 색),
           record({label, undo, redo}), getItem, setItem} */
 (function () {
 'use strict';
@@ -17,7 +18,19 @@ var I = {
 
 function mount(ctx) {
   var T = HD.theme, $ = ctx.$, esc = ctx.esc, root = ctx.root, bases = ctx.bases || [];
-  var st = T.load(ctx.getItem);
+  var st = T.load(ctx.getItem), cur = null, curVars = {};
+  function send(f) {                                  // 바탕 토큰 파일 + 내 테마 색 덮어쓰기(없으면 지움)
+    if (!cur) return;
+    try { f.contentWindow.postMessage({type: 'hd-palette', slug: cur}, '*'); f.contentWindow.postMessage({type: 'hd-theme-vars', vars: curVars}, '*'); } catch (e) {}   // 아직 문서가 없는 틀 — 실리면 다시 보낸다
+  }
+  function setPalette(slug) {
+    cur = slug;
+    var l = $('#tokens'), b = l.getAttribute('data-base') || l.getAttribute('href');
+    l.setAttribute('data-base', b);
+    l.setAttribute('href', b.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));
+    ctx.$$('iframe').forEach(send);
+  }
+  function apply(slug, vars) { if (!slug) return; curVars = vars || {}; setPalette(slug); try { ctx.setItem('hd-palette', slug); } catch (e) {} }   // 저장 실패 = 다음에 기본 테마(이번 화면은 그대로)
   root.innerHTML = '<div id="thList" role="listbox" aria-label="테마"></div>' +
     '<button type="button" id="thNew" class="th-new">+ 새 테마</button>' +
     '<div id="thEdit" hidden>' + Object.keys(T.ROLES).map(function (r) {
@@ -32,7 +45,7 @@ function mount(ctx) {
   function curId() { return mineOf(st.cur) || bases.some(function (b) { return b.slug === st.cur; }) ? st.cur : (bases[0] || {}).slug; }
   function applyCur() {
     var t = mineOf(curId());
-    if (t) ctx.apply(base(t.base).slug, T.vars(t)); else ctx.apply(curId(), {});
+    if (t) apply(base(t.base).slug, T.vars(t)); else apply(curId(), {});
   }
   function commit(s, quiet) { st = s; T.save(st, ctx.setItem); render(); if (!quiet) applyCur(); }
   function dispatch(a, quiet) { var n = T.reduce(st, a); if (n !== st) commit(n, quiet); return n; }
@@ -101,7 +114,7 @@ function mount(ctx) {
   edit.addEventListener('input', function (e) {           // 색 고르기 판: 끄는 동안 판에 바로(저장·되돌리기는 change 에서)
     if (!e.target.classList.contains('th-col')) return;
     var t = mineOf(curId()), role = e.target.closest('[data-role]').dataset.role; if (!t) return;
-    var v = {}; v[T.ROLES[role]] = T.hex(e.target.value); ctx.apply(base(t.base).slug, Object.assign(T.vars(t), v));
+    var v = {}; v[T.ROLES[role]] = T.hex(e.target.value); apply(base(t.base).slug, Object.assign(T.vars(t), v));
   });
   edit.addEventListener('change', function (e) {
     var lab = e.target.closest('[data-role]'); if (lab) setColor(lab.dataset.role, e.target.value);
@@ -112,7 +125,7 @@ function mount(ctx) {
   });
 
   render(); applyCur();
-  return {render: render};
+  return {render: render, send: send};
 }
 
 HD.viewTheme = {mount: mount};
