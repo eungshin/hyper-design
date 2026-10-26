@@ -296,6 +296,7 @@ function fit() {
   var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
   var g = tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left + 8 - 16)) : 0;
   var ex = CP.extent(contentLeft), pw = pane.clientWidth - g, ph = pane.clientHeight;
+  if (BN) ex = BN.extent(ex);                      // 판 메모까지(R25) — 멀리 둔 메모도 전체 보기에 든다
   fitMin = Math.min(ZMIN, HD.viewport.fit(ex, pw, ph, 32).z);
   var c = HD.viewport.fit(ex, pw, ph, 32, clampZ);
   z = c.z; tx = c.tx + g;
@@ -651,8 +652,8 @@ VMN = HD.viewMenu.mount({$: $, esc: esc, icons: DOCK_ICON, typing: typing, modal
   view: {fit: fit, z100: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, 1); },
          zin: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z * 1.25); },
          zout: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, z / 1.25); },
-         canPick: function () { return SL.ids().length > 0; },
-         pick: function () { fitCards(SL.ids()); }}});
+         canPick: function () { return SL.ids().length > 0 || !!(BN && BN.selected()); },
+         pick: function () { if (SL.ids().length) fitCards(SL.ids()); else if (BN && BN.selected()) BN.reveal(BN.selected()); }}});   // 고른 판 메모에 맞추기(R25)
 function fitCards(ids, maxZ) {                     // 그 카드들 범위가 판에 꽉 차게(여백 32) — 보기 메뉴 '고른 화면에 맞추기' · 레이어 누르기 · maxZ = 이보다 크게는 안 함(대화 턴 누르기)
   var cs = ids.map(function (id) { return VL.cardEl(id); }).filter(function (c) { return c && !c.classList.contains('hid'); });
   if (!cs.length) return;
@@ -690,7 +691,8 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
     });
     var drafts = $$('.card.draft', rowsEl).map(function (c) { return {id: c.dataset.id, name: titleOf(c.dataset.id)}; });
     if (drafts.length) groups.push({id: '@drafts', name: '빈 레이아웃', screens: drafts});
-    return {groups: groups, texts: BT ? BT.layers() : HD.boardText.layers(HD.boardText.blocks(D, {dscard: !!$('#dscard')}), LF.hidden())};   // 판 글 = 묶음마다 줄(t51-9)
+    return {groups: groups, texts: BT ? BT.layers() : HD.boardText.layers(HD.boardText.blocks(D, {dscard: !!$('#dscard')}), LF.hidden()),   // 판 글 = 묶음마다 줄(t51-9)
+            notes: BN ? BN.layers() : [], notePicked: BN ? BN.layerSel() : null};   // 판 메모 = '판 메모' 묶음(R25)
   },
   state: function () { var memo = {}; HD.edits.split(NS.list()).memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; }); return {hidden: LF.hidden(), locked: LF.locked(), memo: memo}; },
   picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
@@ -1325,7 +1327,8 @@ BK = FT.blocks || null; if (BK) { BK.onAct(blockAct); BK.onPick(function (p) {  
 AB = FT.artboard ? FT.artboard.attach({
   changed: function () { drawArrows(); placeSelbar(); LC.schedule(); if (!modal.hidden) { sizeModal(); drawPins(); } if (VP) VP.refresh(); },
   guard: function (ids) { if (LF.guard(ids)) ids = ids.filter(function (id) { return !LF.isLocked(id); }); return ids; }}) : null;
-BN = FT.boardNotes ? FT.boardNotes.attach({tool: function () { return tool; }, setTool: setTool}) : null;   // 판 메모(R23): T 로 빈 판 누르기·V 두 번 누르기 = 만들기
+BN = FT.boardNotes ? FT.boardNotes.attach({tool: function () { return tool; }, setTool: setTool,
+  changed: function () { if (LY) LY.render(); }, clear: function () { SL.dispatch({type: 'clear'}); }}) : null;   // 판 메모(R23): T 로 빈 판 누르기·V 두 번 누르기 = 만들기
 // 빈 레이아웃 승격(modules/view-promote.js, #241 R2) — 카드 자리·폴더의 주인은 셸이라 읽기/쓰기만 넘긴다. 붙지 못했으면 승격 없이(빈 카드가 남음, [hd] 알림)
 var PR = FT.promote ? FT.promote.attach({group: function (id) { var c = VL.cardEl(id); return c ? CP.group(c) : ''; },
   pos: {get: CP.map, set: function (m) { CP.replace(m); drawArrows(); }},

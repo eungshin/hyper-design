@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 JS = r"""
 const fs = require('fs'), vm = require('vm');
-for (const f of ['board-notes.js', 'state-file.js', 'history.js', 'save-merge.js']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f});
+for (const f of ['board-notes.js', 'state-file.js', 'history.js', 'save-merge.js', 'layers.js']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f});
 const HD = globalThis.HD, B = HD.boardNotes, out = {};
 let seq = [0.1, 0.5, 0.9, 0.0];
 out.id = B.newId(1700000000000, () => seq.shift());
@@ -61,6 +61,21 @@ out.spot = {
   tools: B.spot([['svg'], ['button', '.tb'], ['#tools'], ['#screens']]),
   nothing: B.spot([])
 };
+const r0 = {a: {x: 0, y: 0, w: 280, text: '가', at: 1}};
+out.resize = {w: B.resize(r0, 'a', 500.6, undefined, 9).a, both: B.resize(r0, 'a', 300, 200.4, 9).a, small: B.resize(r0, 'a', 10, 3, 9).a,
+  big: B.resize(r0, 'a', 99999, 99999, 9).a, auto: B.resize({a: Object.assign({}, r0.a, {h: 300})}, 'a', 280, null, 9).a,
+  same: B.resize(r0, 'a', 280, undefined, 9) === r0, missing: B.resize(r0, 'zz', 300, 300, 9) === r0, keepsOld: r0.a.w};
+out.extent = {grow: B.extent({x0: 0, y0: 0, x1: 1000, y1: 800}, [{x: -300, y: 50, w: 280, h: 60}, {x: 4000, y: 3000, w: 280, h: 90}]),
+  none: B.extent({x0: 0, y0: 0, x1: 10, y1: 10}, []), only: B.extent(null, [{x: 5, y: 6, w: 7, h: 8}]), bad: B.extent({x0: 0, y0: 0, x1: 10, y1: 10}, [{x: NaN, y: 0, w: 1, h: 1}])};
+out.layerRows = B.layers({b: {x: 900, y: 10, w: 280, text: '\n  둘째 메모  \n아래', at: 1}, a: {x: 5, y: 10, w: 280, text: '첫 메모', at: 1},
+  c: {x: 0, y: 5000, w: 280, text: 'x'.repeat(60), at: 1}});
+out.layerEmpty = B.layers({});
+const LL = HD.layers, tree = LL.build([{id: 'g0', name: '줄', screens: [{id: 's1', name: '화면'}]}], [], {}, null, out.layerRows);
+out.tree = tree.map(x => [x.kind, x.id, x.row || null, x.count == null ? null : x.count]);
+out.treeNone = LL.build([], [], {}, null, []).length;
+out.treeQ = LL.filter(tree, {q: '둘째'}).map(x => x.id);
+out.treeFold = LL.filter(tree, {folded: {'@notes': 1}}).map(x => x.id);
+out.treeHover = LL.hoverIds(tree, out.layerRows[0].id);
 console.log(JSON.stringify(out));
 """
 
@@ -138,3 +153,39 @@ def test_room_refuses_a_card_and_stops_the_note_before_the_next_card(js):
     assert r["onCard"]["free"] is False, "카드 위 = 만들지 않음"
     assert r["belowBand"]["w"] == 280, "다른 높이의 카드는 폭을 줄이지 않는다"
     assert r["underCard"]["y"] == 804 and r["underCard"]["x"] == 586, "바로 위 카드 밑으로 내려 카드(이름 줄)를 덮지 않는다"
+
+
+def test_resize_clamps_and_height_is_auto_until_dragged(js):
+    r = js["resize"]
+    assert r["w"]["w"] == 501 and "h" not in r["w"], "폭만 끈 = 높이는 글 높이대로"
+    assert (r["both"]["w"], r["both"]["h"], r["both"]["at"]) == (300, 200, 9)
+    assert (r["small"]["w"], r["small"]["h"]) == (120, 52), "최소 폭·높이"
+    assert (r["big"]["w"], r["big"]["h"]) == (1600, 4000), "최대 폭·높이"
+    assert "h" not in r["auto"], "h=null = 글 높이로 돌아가기"
+    assert r["same"] and r["missing"], "그대로·없는 id = 같은 map(기록 없음)"
+    assert r["keepsOld"] == 280
+
+
+def test_extent_grows_to_include_far_notes(js):
+    e = js["extent"]
+    assert e["grow"] == {"x0": -300, "y0": 0, "x1": 4280, "y1": 3090}, "멀리 있는 메모까지 전체 보기에 든다"
+    assert e["none"] == {"x0": 0, "y0": 0, "x1": 10, "y1": 10}
+    assert e["only"] == {"x0": 5, "y0": 6, "x1": 12, "y1": 14}
+    assert e["bad"] == {"x0": 0, "y0": 0, "x1": 10, "y1": 10}, "숫자가 아닌 상자는 건너뜀"
+
+
+def test_layer_rows_follow_reading_order_with_first_line_names(js):
+    rows = js["layerRows"]
+    assert [r["id"] for r in rows] == ["note:a", "note:b", "note:c"], "위→아래, 왼→오른"
+    assert rows[0]["name"] == "첫 메모" and rows[1]["name"] == "둘째 메모", "첫 글 줄"
+    assert rows[2]["name"] == "x" * 40 + "…"
+    assert js["layerEmpty"] == []
+
+
+def test_layer_tree_has_a_notes_group(js):
+    t = js["tree"]
+    assert t[-4:] == [["row", "@notes", None, 3], ["note", "note:a", "@notes", None], ["note", "note:b", "@notes", None], ["note", "note:c", "@notes", None]]
+    assert js["treeNone"] == 0, "메모가 없으면 묶음도 없다"
+    assert js["treeQ"] == ["@notes", "note:b"], "이름 찾기에 메모 글도"
+    assert js["treeFold"] == ["g0", "s1", "@notes"], "접으면 메모 줄이 빠진다"
+    assert js["treeHover"] == [], "메모 줄 올리기는 카드 강조를 하지 않는다"

@@ -1,6 +1,7 @@
 /* Model — 레이어 나무(조각 4, H6·H7 · 폴더 H17). DOM·저장소를 쓰지 않는다.
    나무 = (사용자 폴더 아래 화면들) + 줄(묶음) 아래 화면들 + 판 글(소개·끝 글). 숨김·잠금·메모 수는 밖에서 받아 줄마다 붙인다.
-   build(groups, texts, st, folders?) → [{kind: 'folder'|'row'|'screen'|'text', id, name, row?, folder?, count?, hid, lock, memo}]
+   build(groups, texts, st, folders?, notes?) → [{kind: 'folder'|'row'|'screen'|'text'|'note', id, name, row?, folder?, count?, hid, lock, memo}]
+     notes = 판 메모 줄 [{id: 'note:<id>', name}](R25) — 있으면 맨 끝에 묶음 줄 {kind 'row', id NOTES '@notes', name '판 메모', count} + 메모 줄(kind 'note', row '@notes')
      groups = [{id, name, screens: [{id, name}]}] · texts = [{id: '@intro', name}] · st = {hidden, locked, memo}(id → 값)
      folders = 폴더 상태(modules/folders.js) {v, folders: [{id, name, ids, open}]} — 주면: 사용자 폴더가 맨 앞(폴더 줄 + 그 화면, 화면엔 folder: id),
        그 화면은 원래 줄에서 빠진다. 폴더·줄 줄에 count(그 아래 화면 수), hid = 모두 숨김, lock = 모두 잠금. 안 주면 예전 그대로.
@@ -11,14 +12,15 @@
    rowId(name) → 'row:' + 줄 이름 — 줄(묶음) 줄 id(51-4, 예전 'g'+차례). 줄이 빠지거나 끼어도 접힘이 다른 줄로 옮겨 가지 않는다
    renameRow(folded, from, to) → 새 접힘 표(이름을 바꾼 줄의 접힘이 새 id 로) — 저장하지 않는 상태라 옮길 저장값은 없다
    hoverIds(list, id) → 레이어 줄에 올리면 판에 강조할 id(51-3, Figma F10) — 화면 = 그 하나 · 줄·폴더 = 그 아래 보이는 화면 · 판 글 = 그 id · 숨긴 화면·모르는 id = []
-   HD.layers = {build, filter, rowId, renameRow, hoverIds} */
+   HD.layers = {NOTES, build, filter, rowId, renameRow, hoverIds} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
+var NOTES = '@notes';
 function all(xs, k) { return xs.length > 0 && xs.every(function (x) { return x[k]; }); }
 
-function build(groups, texts, st, folders) {
+function build(groups, texts, st, folders, notes) {
   st = st || {};
   var h = st.hidden || {}, l = st.locked || {}, m = st.memo || {}, out = [], withF = !!folders && typeof folders === 'object';
   var fs = withF && Array.isArray(folders.folders) ? folders.folders : [], inF = {}, scr = {};
@@ -44,6 +46,10 @@ function build(groups, texts, st, folders) {
     out = out.concat(kids);
   });
   (texts || []).forEach(function (t) { out.push({kind: 'text', id: t.id, name: t.name, hid: !!h[t.id], lock: false, memo: 0}); });
+  if (notes && notes.length) {
+    out.push({kind: 'row', id: NOTES, name: '판 메모', count: notes.length, hid: false, lock: false, memo: 0});
+    notes.forEach(function (n) { out.push({kind: 'note', id: n.id, name: n.name, row: NOTES, hid: false, lock: false, memo: 0}); });
+  }
   return out;
 }
 
@@ -80,10 +86,10 @@ function renameRow(folded, from, to) {
 
 function hoverIds(list, id) {
   var xs = Array.isArray(list) ? list : [], x = xs.filter(function (y) { return y && y.id === id; })[0];
-  if (!x || x.hid) return [];
+  if (!x || x.hid || x.kind === 'note' || x.id === NOTES) return [];
   if (x.kind === 'row' || x.kind === 'folder') return xs.filter(function (y) { return y.kind === 'screen' && !y.hid && (y.folder || y.row) === id; }).map(function (y) { return y.id; });
   return [x.id];
 }
 
-HD.layers = {build: build, filter: filter, rowId: rowId, renameRow: renameRow, hoverIds: hoverIds};
+HD.layers = {NOTES: NOTES, build: build, filter: filter, rowId: rowId, renameRow: renameRow, hoverIds: hoverIds};
 })();

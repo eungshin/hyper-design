@@ -11,7 +11,9 @@
    아래 막대: 폴더로 묶기 · 폴더로 옮기기(메뉴: 폴더 목록 · 폴더에서 빼기) · 빈 레이아웃 · 숨기기 · 잠그기 · 삭제(고른 화면).
    숨김·잠금·고르기·폴더 상태의 주인은 셸 — 여기는 의도만 보낸다.
    HD.viewLayers.mount(ctx) → {render(), only(f)} · HD.viewLayers.CSS = 셸에 붙일 폴더 모양(문자열)
-   ctx = {$, esc, root, tree() → {groups, texts}, state() → {hidden, locked, memo}, picked() → [id],
+   판 메모(R25): tree() 의 notes [{id: 'note:<id>', name}] = 맨 끝 '판 메모' 묶음(접기·이름 찾기). 메모 줄 누르기 = 의도 'hd-note-pick' {id}(view-board-notes 가 고르고 보이게),
+     notePicked = 고른 메모 줄 id(강조). 메모는 숨김·잠금·끌어 폴더에 넣기·늘어놓기가 없다(눈·자물쇠 없음).
+   ctx = {$, esc, root, tree() → {groups, texts, notes?, notePicked?}, state() → {hidden, locked, memo}, picked() → [id],
           hide(ids, on), lock(ids, on), reveal(id), addLayout(), del(ids),
           folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y'), hover(ids)} — 폴더 셋·hover 는 없으면 그 기능만 빠진다
    판 글 줄(kind text)을 누르면 의도 'hd-board-pick' {id}(판에서 그 글 고르기, t51-9).
@@ -60,8 +62,10 @@ function mount(ctx) {
 
   function fstate() { var s = FD && FD.state(); return s && Array.isArray(s.folders) ? s : EMPTY; }
   function isFolded(x) { return x.kind === 'folder' ? x.open === false : !!folded[x.id]; }
+  function notes(x) { return x.kind === 'note' || x.id === L.NOTES; }   // 판 메모 묶음·줄(R25) — 눈·자물쇠·늘어놓기 없음
   function hov(x) {
     var b = '';
+    if (notes(x)) return b;
     if (ctx.arrange) b += '<button type="button" class="ly-hov" data-arr="x" title="가로로 늘어놓기" aria-label="가로로 늘어놓기">' + svg(I.rowX) + '</button>' +
       '<button type="button" class="ly-hov" data-arr="y" title="세로로 늘어놓기" aria-label="세로로 늘어놓기">' + svg(I.rowY) + '</button>';
     if (x.kind === 'folder' && FD) b += '<button type="button" class="ly-hov" data-act="unfolder" title="폴더 풀기" aria-label="폴더 풀기">' + svg(I.fUn) + '</button>';
@@ -70,14 +74,15 @@ function mount(ctx) {
   }
   function rowHtml(x, picked) {
     var cls = 'ly-r ' + x.kind + (x.hid ? ' hid' : '') + (x.lock ? ' locked' : '') + (picked[x.id] ? ' on' : '') + (x.folder ? ' infolder' : '');
-    var eye = '<button type="button" class="ly-eye" aria-pressed="' + !x.hid + '" aria-label="' + (x.hid ? '보이기' : '숨기기') + '">' + svg(x.hid ? I.off : I.eye) + '</button>';
+    var eye = notes(x) ? '<span class="ly-eye" aria-hidden="true"></span>' :
+      '<button type="button" class="ly-eye" aria-pressed="' + !x.hid + '" aria-label="' + (x.hid ? '보이기' : '숨기기') + '">' + svg(x.hid ? I.off : I.eye) + '</button>';
     if (x.kind === 'row' || x.kind === 'folder') {
       var shut = isFolded(x);
       return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" data-id="' + esc(x.id) + '" role="treeitem" aria-expanded="' + !shut + '">' +
         '<button type="button" class="ly-fold" aria-label="' + (shut ? '펴기' : '접기') + '">' + (shut ? '▸' : '▾') + '</button>' + eye +
         '<span class="ly-ficon" aria-hidden="true">' + svg(shut ? I.fShut : I.fOpen) + '</span>' +
         '<span class="ly-name"' + (x.kind === 'folder' || section(x) ? ' title="두 번 눌러 이름 바꾸기"' : '') + '>' + esc(x.name) + '</span>' +
-        hov(x) + '<span class="ly-count" title="화면 ' + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
+        hov(x) + '<span class="ly-count" title="' + (notes(x) ? '메모 ' : '화면 ') + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
     }
     return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" role="treeitem"' + (x.kind === 'screen' ? ' draggable="true"' : '') + '>' + eye +
       '<span class="ly-name">' + esc(x.name) + '</span>' + (x.memo ? '<span class="ly-cnt" title="메모 ' + x.memo + '건">' + x.memo + '</span>' : '') +
@@ -93,7 +98,8 @@ function mount(ctx) {
     renaming = null;
     var t = ctx.tree(), picked = {}, ids = ctx.picked(), fs = fstate(), fold = {};
     ids.forEach(function (id) { picked[id] = 1; });
-    list = L.build(rows(t.groups), t.texts, ctx.state(), fs);
+    if (t.notePicked) picked[t.notePicked] = 1;
+    list = L.build(rows(t.groups), t.texts, ctx.state(), fs, t.notes);
     Object.keys(folded).forEach(function (k) { fold[k] = 1; });
     fs.folders.forEach(function (f) { if (f.open === false) fold[f.id] = 1; });
     var shown = L.filter(list, {q: q.value, only: only, folded: fold});
@@ -157,6 +163,7 @@ function mount(ctx) {
       else { if (folded[id]) delete folded[id]; else folded[id] = 1; render(); }
       return;
     }
+    if (notes(x)) { if (x.kind === 'note') emit('hd-note-pick', {id: id}); return; }   // 판 메모 줄 = 판에서 그 메모 고르고 보이게(R25, view-board-notes)
     if (e.target.closest('.ly-eye')) { ctx.hide(head ? kids(id) : [id], !x.hid); return; }
     if (e.target.closest('.ly-lock')) { ctx.lock([id], !x.lock); return; }
     var arr = e.target.closest('[data-arr]');
@@ -296,6 +303,8 @@ var CSS =
   '.ly-r.ly-drop{background:#E4E4E0;box-shadow:inset 0 0 0 1px #9a9a95}\n' +
   '.ly-rename{flex:1;min-width:0;height:22px;border:1px solid #9a9a95;border-radius:4px;padding:0 4px;font:inherit;font-weight:400}\n' +
   '#lyBar button:disabled{opacity:.35;cursor:default}\n' +
+  '.ly-r.note{padding-left:22px;cursor:pointer}.ly-r.note:hover{background:#F4F4F1}.ly-r.note.on{background:#E9E9E5}\n' +
+  '.ly-r span.ly-eye{width:26px;height:26px;flex:none}\n' +
   '.ly-menu{position:fixed;z-index:60;min-width:160px;max-height:50vh;overflow:auto;background:#fff;border:1px solid #d6d6d1;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:4px}\n' +
   '.ly-menu button{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px;border:0;border-radius:5px;background:none;font:13px system-ui,-apple-system,sans-serif;color:#2b2b29;cursor:pointer;text-align:left}\n' +
   '.ly-menu button:hover{background:#ecece8}.ly-menu svg{width:16px;height:16px;fill:none;stroke:#777;stroke-width:1.6;flex:none}\n' +

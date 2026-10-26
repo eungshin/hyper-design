@@ -6,15 +6,18 @@
    create(map, id, {x, y, w?}, now) → 새 map(글 빈 메모 — 셸은 쓰기 전까지 저장하지 않는다)
    finish(map, id, text, now) → {map, kind}: 'drop'(빈 글 = 메모를 뺌) | 'keep'(글이 바뀜) | 'same'(그대로 — 저장·기록 없음)
    move(map, id, x, y, now) · remove(map, id) → 새 map(없는 id = 같은 map)
+   resize(map, id, w, h, now) → 새 map(R25): 폭 MIN_W..MAX_W · h = undefined 그대로 | null 글 높이대로(h 뺌) | 수 MIN_H..MAX_H(최소 높이 — 글이 길면 더 커진다). 그대로·없는 id = 같은 map
+   extent(ext, boxes) → ext {x0, y0, x1, y1}(없으면 null)를 메모 상자 [{x, y, w, h}] 까지 넓힌 판 범위(전체 보기, R25) · 숫자가 아닌 상자는 건너뜀
+   layers(map) → [{id: 'note:<id>', name}] 레이어 패널 줄(R25) — 위→아래·왼→오른 차례, 이름 = 첫 글 줄 40자
    merge(base, local, server) → {ok, map} — 409 합치기: id 마다 한쪽만 바꿈 = 그쪽 · 둘이 같음 = 그대로 · 둘 다 다르게 바꿈 = 실패(ok:false)
    room(pt, boxes) → {free, x, y, w} — 새 메모 자리(판 좌표): 누른 점이 카드 상자(boxes [{x0, y0, x1, y1}]) 안이면 free:false.
      메모 왼쪽 위 = 누른 점 − (PAD_X, PAD_Y)(첫 줄 글자 자리, 바로 위 카드에 걸치면 그 아래로), 폭 = 오른쪽 가까운 카드 앞 GAP 까지(MIN_W..W) — 카드를 덮지 않게
    spot(chain) → 'note' | 'empty' | 'busy' — 누른 자리(맨 안쪽부터 바깥으로 요소 표시 목록, 각 '#id' · '.class' · 'tag' 글들)가 메모인가, 빈 판인가, 그 밖(카드·판 글·선·UI)인가
-   HD.boardNotes = {NAME, W, MAX, parse, newId, create, finish, move, remove, merge, spot, text, EMPTY, BUSY} */
+   HD.boardNotes = {NAME, W, MIN_W, MAX_W, MIN_H, MAX, LAYER, parse, newId, create, finish, move, resize, remove, merge, room, spot, extent, layers, text, EMPTY, BUSY} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var NAME = 'board-notes', W = 280, MIN_W = 120, MAX = 2000, PAD_X = 14, PAD_Y = 26, GAP = 12, BAND = 80;
+var NAME = 'board-notes', W = 280, MIN_W = 120, MAX_W = 1600, MIN_H = 52, MAX_H = 4000, LAYER = 'note:', MAX = 2000, PAD_X = 14, PAD_Y = 26, GAP = 12, BAND = 80;
 var EMPTY = ['#screens', '#stage', '#intro', '#rows', '#foot', '.flow', '.cards'];   // 이 요소 자체를 누름 = 빈 판(줄 사이·줄 안 카드 사이 빈칸)
 var BUSY = ['.card', '.bt', '#dscard', '.glabel', 'svg', '#tools', 'button', 'input', 'textarea'];   // 조상에 이것이 있으면 빈 판이 아님
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
@@ -68,6 +71,31 @@ function move(map, id, x, y, now) {
   var m = copy(map); m[id] = copy(map[id]); m[id].x = Math.round(x); m[id].y = Math.round(y); m[id].at = now;
   return m;
 }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, Math.round(v))); }
+function resize(map, id, w, h, now) {
+  if (!has(map, id)) return map;
+  var n = map[id], nw = num(w) ? clamp(w, MIN_W, MAX_W) : n.w, nh = h === null ? undefined : num(h) ? clamp(h, MIN_H, MAX_H) : n.h;
+  if (nw === n.w && nh === n.h) return map;
+  var m = copy(map); m[id] = copy(n); m[id].w = nw; m[id].at = now;
+  if (nh === undefined) delete m[id].h; else m[id].h = nh;
+  return m;
+}
+function extent(ext, boxes) {
+  var e = ext ? {x0: ext.x0, y0: ext.y0, x1: ext.x1, y1: ext.y1} : null;
+  (boxes || []).forEach(function (b) {
+    if (!b || !num(b.x) || !num(b.y) || !num(b.w) || !num(b.h)) return;
+    if (!e) { e = {x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h}; return; }
+    e.x0 = Math.min(e.x0, b.x); e.y0 = Math.min(e.y0, b.y); e.x1 = Math.max(e.x1, b.x + b.w); e.y1 = Math.max(e.y1, b.y + b.h);
+  });
+  return e;
+}
+function layers(map) {
+  var m = isObj(map) ? map : {};
+  return Object.keys(m).sort(function (a, b) { return (m[a].y - m[b].y) || (m[a].x - m[b].x) || (a < b ? -1 : a > b ? 1 : 0); }).map(function (id) {
+    var line = String(m[id].text || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean)[0] || '(빈 메모)';
+    return {id: LAYER + id, name: line.length > 40 ? line.slice(0, 40) + '…' : line};
+  });
+}
 function remove(map, id) {
   if (!has(map, id)) return map;
   var m = copy(map); delete m[id]; return m;
@@ -104,5 +132,5 @@ function spot(chain) {
   return chain.length && matches(chain[0], EMPTY) ? 'empty' : 'busy';
 }
 
-HD.boardNotes = {NAME: NAME, W: W, MIN_W: MIN_W, MAX: MAX, room: room, EMPTY: EMPTY, BUSY: BUSY, parse: parse, newId: newId, create: create, finish: finish, move: move, remove: remove, merge: merge, spot: spot, text: text};
+HD.boardNotes = {NAME: NAME, W: W, MIN_W: MIN_W, MAX_W: MAX_W, MIN_H: MIN_H, MAX: MAX, LAYER: LAYER, resize: resize, extent: extent, layers: layers, room: room, EMPTY: EMPTY, BUSY: BUSY, parse: parse, newId: newId, create: create, finish: finish, move: move, remove: remove, merge: merge, spot: spot, text: text};
 })();

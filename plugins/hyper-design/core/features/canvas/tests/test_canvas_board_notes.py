@@ -166,3 +166,72 @@ def test_shot_notes_beside_cards(ctx, out):
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+def _seed(o, notes):
+    f = o / ".hd-canvas.json"
+    old = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {"version": 1, "rev": 0, "state": {}}
+    st = dict(old.get("state") or {}, **{"board-notes": notes})
+    f.write_text(json.dumps({"version": 1, "rev": int(old.get("rev") or 0) + 1, "updated": "2026-10-26T00:00:00Z", "state": st}), encoding="utf-8")
+
+
+INSIDE = """(id) => { const n = document.querySelector('.bnote[data-id="' + id + '"]'), p = document.getElementById('screens');
+  if (!n) return null; const b = n.getBoundingClientRect(), r = p.getBoundingClientRect();
+  return b.width > 0 && b.left >= r.left - 1 && b.right <= r.right + 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1; }"""
+SIZE = """(id) => { const n = document.querySelector('.bnote[data-id="' + id + '"]'); return n ? {w: n.offsetWidth, h: n.offsetHeight} : null; }"""
+
+
+@pytest.mark.area("tools", "notes", "layers")
+def test_resize_survives_reload_layers_panel_picks_note_and_fit_all_includes_far_note(ctx, out):
+    _seed(out, {"far": {"x": 12000, "y": 9000, "w": 280, "text": "멀리 둔 메모", "at": 1}})
+    srv, pg, errors = _helper(ctx, out)               # 열 때 전체 보기(0)
+    try:
+        assert pg.evaluate(INSIDE, "far"), "전체 보기(0)에 멀리 둔 메모도 든다"
+        pg.wait_for_timeout(100)
+        p = pg.evaluate(EMPTY, 420)
+        assert p, "빈 판 자리를 못 찾음"
+        pg.keyboard.press("t")
+        pg.mouse.click(p["x"], p["y"])
+        pg.wait_for_selector(".bnote textarea", timeout=3000)
+        pg.keyboard.type("크기 바꿀 메모")
+        pg.keyboard.press("Escape")
+        nid = pg.evaluate("document.querySelector('.bnote.sel').dataset.id")
+        knob = pg.locator(f'.bnote[data-id="{nid}"] .bn-rs')
+        assert knob.is_visible(), "V 로 고른 메모에 크기 손잡이"
+        before = pg.evaluate(SIZE, nid)
+        z = pg.evaluate(BOX)["z"]
+        rows = _rows(pg)
+        k = knob.bounding_box()
+        kx, ky = k["x"] + k["width"] / 2, k["y"] + k["height"] / 2
+        pg.mouse.move(kx, ky); pg.mouse.down(); pg.mouse.move(kx + 60, ky + 40, steps=4); pg.mouse.move(kx + 120, ky + 90, steps=4); pg.mouse.up()
+        got = pg.evaluate(SIZE, nid)
+        assert abs(got["w"] - (before["w"] + 120 / z)) < 3, "오른쪽으로 끌면 폭"
+        assert abs(got["h"] - (before["h"] + 90 / z)) < 3, "아래로 끌면 높이"
+        assert _rows(pg) == rows + 1, "크기 = 기록 한 줄"
+        saved = _until(lambda: (_state(out).get("board-notes") or {}).get(nid, {}).get("h"))
+        assert saved and abs(saved - got["h"]) < 2, "상태 파일에 w·h"
+
+        reload(pg)
+        pg.evaluate("window.__hdStay = 1")
+        assert pg.evaluate(SIZE, nid) == got, "새로고침해도 같은 크기"
+
+        pg.click('#dock .dk-tab[data-p="layers"]')
+        ly = pg.evaluate("() => [...document.querySelectorAll('#lyTree [data-ly]')].map(r => [r.dataset.kind, r.dataset.ly])")
+        assert ["row", "@notes"] in ly and ["note", "note:far"] in ly and ["note", "note:" + nid] in ly, ly
+        assert pg.locator('#lyTree [data-ly="note:far"] .ly-eye button, #lyTree [data-ly="note:far"] button.ly-eye').count() == 0, "메모 줄엔 눈이 없다(숨김 미지원)"
+        pg.click('#lyTree [data-ly="note:far"] .ly-name')
+        pg.wait_for_timeout(150)
+        assert pg.evaluate("document.querySelector('.bnote.sel') && document.querySelector('.bnote.sel').dataset.id") == "far", "레이어 줄 누르기 = 판에서 그 메모 고르기"
+        assert pg.evaluate(INSIDE, "far"), "고른 메모가 보이게 카메라가 간다"
+        assert pg.locator('#lyTree [data-ly="note:far"].on').count() == 1, "패널에서도 고른 줄"
+        if SHOT:
+            pg.set_viewport_size({"width": 1440, "height": 1000})
+            pg.click('#lyTree [data-ly="note:' + nid + '"] .ly-name')
+            pg.keyboard.press("v")
+            pg.wait_for_timeout(300)
+            os.makedirs(os.path.dirname(SHOT), exist_ok=True)
+            pg.screenshot(path=SHOT)
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()

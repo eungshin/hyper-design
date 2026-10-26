@@ -3,9 +3,12 @@
    만들기: 글자 도구(T)로 빈 판 누르기 · 선택(V)으로 빈 판 두 번 누르기 → 그 자리에 빈 메모가 열리고 바로 쓴다. T 로 만들었으면 끝낸 뒤 V 로.
    쓰기: 판을 READ(0.6) 배율보다 작게 보고 있으면 그 메모 자리를 둔 채 0.6 으로 · Enter = 줄바꿈(한글 조합 중 Enter 는 그대로) · Esc · Ctrl+Enter · 밖 누르기 = 끝. 빈 채로 끝내면 버린다(기록 줄 없음). 만들기+쓰기 = 기록 한 줄.
    V: 누르기 = 고르기(파란 테두리) · 끌기 = 옮기기(기록 한 줄) · 두 번 누르기·Enter = 고치기 · Delete·Backspace = 지우기(되돌리면 돌아옴) · Esc = 풀기. T 로 메모 누르기 = 고치기.
+   크기(R25): V 로 고른 메모 오른쪽 아래 손잡이 끌기 = 폭(+ 4px 넘게 아래위로 끌었으면 최소 높이 h — 글이 길면 더 커진다), 기록 한 줄 · 손잡이 두 번 누르기 = 높이를 글 높이대로.
+   레이어 패널(R25): 의도 'hd-note-pick' {id: 'note:<id>'} 를 받으면 그 메모를 고르고 보이게(배율 1 이하로 맞춤). 그릴 때·고른 것이 바뀔 때 A.changed()(셸 = 레이어 다시 그리기).
    읽기만인 탭(html[data-hd-tab=reader])에서는 만들기·옮기기·고치기·지우기를 하지 않는다. 쓰기 = ctx.store(상태 파일 · file:// 이면 브라우저 저장소).
-   등록부 기능 'boardNotes'(needs $ · store · key · record · toast · warn · view · selected) → {attach(A), reload(), selected(), map()}
-     A(셸이 attach 로 건넴) = {tool() → 지금 도구, setTool(t)}. 셸은 adoptState 의 'board-notes' 에서 reload() 만 부른다 */
+   등록부 기능 'boardNotes'(needs $ · store · key · record · toast · warn · view · selected) → {attach(A), reload(), selected(), map(), layers(), layerSel(), extent(ext), reveal(id)}
+     A(셸이 attach 로 건넴) = {tool() → 지금 도구, setTool(t), changed()?(레이어 패널), clear()?(카드 고르기 풀기)}. 셸은 adoptState 의 'board-notes' 에서 reload() 만 부른다
+     layers() → 레이어 줄 [{id, name}] · layerSel() → 고른 메모의 레이어 id | null · extent(ext) → 메모까지 넓힌 판 범위(전체 보기) · reveal(id) → 고르고 보이게 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -15,12 +18,15 @@ var CSS = '#bnotes{position:absolute;left:0;top:0;width:0;height:0;z-index:4}' +
   'background:#fff7c2;border:1px solid #eadb85;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.10);white-space:pre-wrap;word-break:break-word;user-select:none;cursor:default}' +
   '#screens.t-move .bnote{cursor:move}#screens.t-text .bnote{cursor:text}' +
   '.bnote.sel{outline:3px solid #0f7ec2;outline-offset:2px}' +
+  '.bn-rs{display:none;position:absolute;right:calc(-9px * var(--bnk,1));bottom:calc(-9px * var(--bnk,1));width:calc(14px * var(--bnk,1));height:calc(14px * var(--bnk,1));' +
+  'box-sizing:border-box;background:#fff;border:calc(2px * var(--bnk,1)) solid #0f7ec2;border-radius:2px;cursor:nwse-resize;touch-action:none}' +
+  '#screens.t-move .bnote.sel:not(.editing) .bn-rs{display:block}html[data-hd-tab=reader] .bn-rs{display:none!important}' +
   '.bnote.editing{cursor:text;user-select:text}.bnote.editing .bn-text{display:none}' +
   '.bnote textarea{display:block;width:100%;min-height:1.45em;border:0;padding:0;margin:0;font:inherit;line-height:inherit;color:inherit;background:transparent;resize:none;outline:none;overflow:hidden;white-space:pre-wrap}';
 
 function mount(ctx) {
   var B = HD.boardNotes, KEY = ctx.key('hd-' + B.NAME), pane = ctx.view.pane, stage = ctx.$('#stage');
-  var A = null, map = {}, sel = null, editing = null, drag = null;
+  var A = null, map = {}, sel = null, editing = null, drag = null, rs = null;
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var layer = document.createElement('div'); layer.id = 'bnotes'; stage.appendChild(layer);
 
@@ -37,7 +43,7 @@ function mount(ctx) {
   }
   function place(el, n) {
     el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; el.style.width = n.w + 'px';
-    el.style.height = n.h ? n.h + 'px' : '';
+    el.style.minHeight = n.h ? n.h + 'px' : '';          // h = 최소 높이(글이 길면 더 커져 잘리지 않는다)
   }
   function render() {                                   // 바뀔 때만(만들기·고치기·옮기기 끝·지우기·다시 읽기) — 쉬는 동안 하는 일 없음
     var keep = editing ? elOf(editing.id) : null;
@@ -48,10 +54,14 @@ function mount(ctx) {
       el.className = 'bnote' + (id === sel ? ' sel' : ''); el.dataset.id = id;
       el.setAttribute('role', 'note'); el.setAttribute('aria-label', '판 메모');
       tx.className = 'bn-text'; tx.textContent = n.text; el.appendChild(tx);
+      var k = document.createElement('div'); k.className = 'bn-rs'; k.title = '크기 (두 번 누르면 높이 자동)'; k.setAttribute('aria-hidden', 'true'); el.appendChild(k);
       place(el, n); layer.appendChild(el);
     });
     if (sel && !map[sel]) sel = null;
+    tell();
   }
+  function tell() { if (A && A.changed) A.changed(); }   // 레이어 패널 줄·고른 줄(바뀔 때만)
+  function scaleKnob() { layer.style.setProperty('--bnk', (1 / (ctx.view.get().z || 1)).toFixed(3)); }   // 손잡이를 화면에서 같은 크기로(고를 때·올릴 때만 잰다)
   function write() {
     try { ctx.store.setItem(KEY, JSON.stringify(map)); }
     catch (e) { ctx.toast('판 메모를 저장하지 못했어요'); ctx.warn('[hd] 판 메모 저장 실패: ' + (e && e.message || e)); }
@@ -62,8 +72,23 @@ function mount(ctx) {
     ctx.record({label: label, undo: function () { put(before); }, redo: function () { put(after); }});
   }
   function select(id) {
-    sel = id;
+    var was = sel; sel = id;
+    if (id) scaleKnob();
     Array.prototype.forEach.call(layer.children, function (el) { el.classList.toggle('sel', el.dataset.id === id); });
+    if (was !== id) tell();
+  }
+  function boxes() {                                      // 메모 상자(판 좌표) — 높이는 그려진 상자(글 높이)에서. 전체 보기 때만 잰다
+    return Object.keys(map).map(function (id) { var el = elOf(id), n = map[id]; return {x: n.x, y: n.y, w: n.w, h: el ? el.offsetHeight : (n.h || 52)}; });
+  }
+  function reveal(id) {                                   // 고르고 보이게 — 메모가 판에 꽉 차되 배율 1 보다 크게는 안 함
+    if (!map[id] || !elOf(id)) { ctx.warn('[hd] 없는 판 메모: ' + id); return; }
+    if (editing) end();
+    if (A && A.clear) A.clear();
+    select(id);
+    var n = map[id], h = elOf(id).offsetHeight;
+    var c = HD.viewport.fit({x0: n.x, y0: n.y, x1: n.x + n.w, y1: n.y + h}, pane.clientWidth, pane.clientHeight, 160, function (z) { return Math.min(1, Math.max(0.1, z)); });
+    ctx.view.set(c.z, c.tx, c.ty);
+    scaleKnob();
   }
   function point(cx, cy) {                               // 화면 px → 판(#stage) 좌표
     var r = stage.getBoundingClientRect(), z = ctx.view.get().z || 1;
@@ -151,8 +176,16 @@ function mount(ctx) {
     if (s === 'note' && el) { e.preventDefault(); if (!reader()) edit(el.dataset.id); }
     else if (s === 'empty') { e.preventDefault(); start(e.clientX, e.clientY); }
   });
+  layer.addEventListener('pointerover', function (e) { if (sel && e.target.closest && e.target.closest('.bnote.sel')) scaleKnob(); });
   layer.addEventListener('pointerdown', function (e) {
     var el = e.target.closest('.bnote'); if (!el || !A) return;
+    if (e.target.closest('.bn-rs')) {                     // 크기 손잡이(R25) — V 로 고른 메모에만 보인다
+      e.stopPropagation(); e.preventDefault();
+      var rid = el.dataset.id; if (e.button !== 0 || reader() || !map[rid]) return;
+      rs = {id: rid, el: el, pid: e.pointerId, x0: e.clientX, y0: e.clientY, w0: map[rid].w, h0: el.offsetHeight, w: map[rid].w, h: undefined, moved: false};
+      try { e.target.setPointerCapture(e.pointerId); } catch (err) {}   // 잡지 못해도 창 밖으로 나가기 전까지는 끌린다
+      return;
+    }
     if (editing && editing.id === el.dataset.id) { e.stopPropagation(); return; }
     var t = A.tool();
     if (e.button !== 0 || (t !== 'move' && t !== 'text') || pane.classList.contains('space')) return;   // 손·다른 도구·Space = 판 끌기 그대로
@@ -163,6 +196,14 @@ function mount(ctx) {
     try { el.setPointerCapture(e.pointerId); } catch (err) {}   // 잡지 못해도 창 밖으로 나가기 전까지는 끌린다
   });
   layer.addEventListener('pointermove', function (e) {
+    if (rs && e.pointerId === rs.pid) {
+      var k = ctx.view.get().z || 1, rx = e.clientX - rs.x0, ry = e.clientY - rs.y0;
+      if (!rs.moved && Math.hypot(rx, ry) < 4) return;
+      rs.moved = true;
+      rs.w = Math.max(B.MIN_W, Math.min(B.MAX_W, Math.round(rs.w0 + rx / k))); rs.el.style.width = rs.w + 'px';
+      if (rs.h !== undefined || Math.abs(ry) >= 4) { rs.h = Math.max(B.MIN_H, Math.round(rs.h0 + ry / k)); rs.el.style.minHeight = rs.h + 'px'; }
+      return;
+    }
     if (!drag || e.pointerId !== drag.pid) return;
     var z = ctx.view.get().z || 1, dx = (e.clientX - drag.x0) / z, dy = (e.clientY - drag.y0) / z;
     if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) return;
@@ -170,6 +211,13 @@ function mount(ctx) {
     drag.el.style.left = Math.round(drag.ox + dx) + 'px'; drag.el.style.top = Math.round(drag.oy + dy) + 'px';
   });
   function dragEnd(e) {
+    if (rs && e.pointerId === rs.pid) {
+      var r = rs; rs = null;
+      if (!r.moved || !map[r.id]) return;
+      var was = map, after = B.resize(map, r.id, r.w, r.h, Date.now());
+      if (after !== map) commit(after, was, '판 메모 크기'); else place(r.el, map[r.id]);
+      select(r.id); return;
+    }
     if (!drag || e.pointerId !== drag.pid) return;
     var d = drag; drag = null;
     if (!d.moved || !map[d.id]) return;
@@ -178,7 +226,21 @@ function mount(ctx) {
     select(d.id);
   }
   layer.addEventListener('pointerup', dragEnd);
-  layer.addEventListener('pointercancel', function (e) { if (drag && e.pointerId === drag.pid) { place(drag.el, map[drag.id]); drag = null; } });
+  layer.addEventListener('pointercancel', function (e) {
+    if (rs && e.pointerId === rs.pid) { if (map[rs.id]) place(rs.el, map[rs.id]); rs = null; }
+    if (drag && e.pointerId === drag.pid) { place(drag.el, map[drag.id]); drag = null; }
+  });
+  layer.addEventListener('dblclick', function (e) {      // 손잡이 두 번 누르기 = 높이를 글 높이대로(고치기로 새지 않게)
+    var el = e.target.closest && e.target.closest('.bn-rs') && e.target.closest('.bnote'); if (!el) return;
+    e.stopPropagation(); e.preventDefault();
+    var id = el.dataset.id; if (reader() || !map[id]) return;
+    var was = map, after = B.resize(map, id, undefined, null, Date.now());
+    if (after !== map) { commit(after, was, '판 메모 높이 자동'); select(id); }
+  });
+  document.addEventListener('hd-note-pick', function (e) {   // 레이어 패널의 판 메모 줄 누르기(R25)
+    var lid = String(e.detail && e.detail.id || '');
+    if (lid.indexOf(B.LAYER) === 0) reveal(lid.slice(B.LAYER.length));
+  });
   layer.addEventListener('click', function (e) {
     var el = e.target.closest('.bnote'); if (!el || !A || editing) return;
     if (A.tool() === 'text' && !reader()) edit(el.dataset.id);
@@ -207,7 +269,11 @@ function mount(ctx) {
     attach: function (a) { A = a; return this; },
     reload: function () { if (editing) end(); load(); },   // 기록 줄 오가기·다른 곳에서 바뀐 상태 파일
     selected: function () { return sel; },
-    map: function () { return JSON.parse(JSON.stringify(map)); }
+    map: function () { return JSON.parse(JSON.stringify(map)); },
+    layers: function () { return B.layers(map); },
+    layerSel: function () { return sel ? B.LAYER + sel : null; },
+    extent: function (ext) { return B.extent(ext, boxes()); },
+    reveal: reveal
   };
 }
 
