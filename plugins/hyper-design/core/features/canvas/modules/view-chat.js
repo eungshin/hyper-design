@@ -2,7 +2,7 @@
    모양(S1c, tasks/52-composer '정한 모양'): 카드 한 장 = 칩 줄(고른 것이 있을 때만, 3개 넘으면 앞 2개 + 외 N개 — HD.chat.fold) · 입력칸(카드 폭 전체, 32→200px 뒤 얇은 스크롤)
      · 도구 줄 28px(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽). 범위는 칩이 아니라 입력 안내 글(HD.chat.placeholder). 숨김 ⌄ = 카드 오른쪽 위, 올리거나 포커스일 때만. 상태 = 펼침 여부(저장 안 함).
    상태 = 지운 칩 표시(저장하지 않음) · 마지막 요청 {text, ids, at}(ctx.local 키 hd-chat-last:<해시>, 주인 이 파일). 메모·보내기는 셸 것 — ctx.sendNotes(list) 하나로만 나간다
-   (위쪽 [보내기]와 같은 길: 도우미가 있으면 /api/forward, 없으면 복사). 고른 것은 ctx.selected()·ctx.picked() 로 읽기만, 덮개 상태(hd-busy)도 읽기만.
+   (위쪽 [보내기]와 같은 길: 도우미가 있으면 /api/forward, 없으면 복사). 고른 것은 ctx.selected()·ctx.pickedAll()(판에서 고른 요소 모두, R19 — 비면 ctx.picked() 하나) 로 읽기만, 덮개 상태(hd-busy)도 읽기만.
    Enter = 보내기 · Shift+Enter = 줄바꿈(한글 조합 중 Enter 는 무시) · Esc = 입력창에서 나가기. 크게 보기·다른 탭·읽기만 탭·Tab(bare)에서는 숨긴다.
    보이기 설정(S1b)의 주인은 dock.js(창 메뉴 '대화창', 키 hd-dock) — 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on:false} 만 보내고, 몸의 no-chat 표시로 숨는다.
    받는 곳 알약(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
@@ -95,7 +95,11 @@ function mount(ctx) {
     warnOnce('picked', 'ctx.picked 가 없어요 — 요소 칩 없이');
     return null;
   }
-  function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, el: picked()}); }
+  function pickedEls() {                                 // 고른 요소 모두(R19 — 판 Shift+누르기) · 칸이 없으면 요소 막대의 하나
+    if (typeof ctx.pickedAll === 'function') { var a = ctx.pickedAll() || []; if (a.length) return a; }
+    var p = picked(); return p ? [p] : [];
+  }
+  function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls()}); }
   function chipsNow() { var raw = rawChips(); dismissed = C.prune(dismissed, raw); return C.visible(raw, dismissed); }
 
   function renderChips() {                               // 칩 줄(S1c): 고른 것이 있을 때만 · 3개를 넘으면 앞 2개 + '외 N개'(누르면 펼침) · 범위는 입력 안내 글로

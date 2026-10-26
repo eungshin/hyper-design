@@ -20,7 +20,7 @@
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
    글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
-    hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸} 으로(없으면 그대로 hd-picked).
+    hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸, add?} 으로(Shift = add:true, 여러 요소 R19 · 없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'}.
     hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) · {path, to}(형제 사이 자리 — hd-opt 의 to 와 같은 뜻, 51-3) — 경로는 모두 바꾸기 전 문서에서 찾는다.
   블록 조립(task 49b): hd-hit 계열 답에 up(감싼 요소가 있나 — body·html 은 아님) · tag · attrs(허용 목록 ATTR_OK 의 지금 값).
@@ -265,7 +265,7 @@
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
-    if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
+    if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey, e.shiftKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
 
@@ -331,10 +331,13 @@
     if (t === 'input' || t === 'select' || t === 'textarea') return 'field';
     return ownText(el) ? 'text' : 'box';
   }
-  function sendHit(at, leaf, type, deep) {                 // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소 · deep = 그 자리 요소 그대로(51-2)
+  function sendHit(at, leaf, type, deep, add) {                 // 편집할 요소: 화면 링크 → 누를 수 있는 요소 → 그 요소(html·body 는 없음). leaf = 글자를 가진 그 요소 · deep = 그 자리 요소 그대로(51-2)
     var el = leaf ? leafOf(at) : deep ? at : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
-    if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) { send({type: type || 'hd-hit', screen: screenId(), path: null}); return; }
-    send(hitMsg(el, type || 'hd-hit'));
+    var m;
+    if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) m = {type: type || 'hd-hit', screen: screenId(), path: null};
+    else m = hitMsg(el, type || 'hd-hit');
+    if (add) m.add = true;                            // hd-sel 의 Shift = 더하기·빼기(여러 요소 R19)
+    send(m);
   }
   function hitMsg(el, type) {                         // hd-hit·hd-dbl·hd-sel·hd-ctx 답 칸(같은 것)
     return withSrc({type: type, screen: screenId(), path: pathOf(el), text: textOf(el).slice(0, 40), full: String(el.innerText || el.value || '').trim().slice(0, 500),

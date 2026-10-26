@@ -1,6 +1,6 @@
 /* Model — 하단 대화창 규칙: 고른 것 → 칩, 칩 + 글 → 메모 초안·범위, 마지막 요청 → 상태 한 줄. DOM·저장소·메시지를 쓰지 않는다(S1).
-   칩 = {key, kind:'screen'|'el', screen, label, h?, app?} — chips({ids, titleOf, el}) : 고른 카드마다 [화면 이름](겹침·빈 값 빼고 차례 그대로),
-     고른 요소 el = {screen, h:hd-hit, app} 가 있으면 그 화면 칩(없으면 앞에 더함) + [TAG "글"] 칩. visible(chips, dismissed) = 지운 칩(×) 빼기,
+   칩 = {key, kind:'screen'|'el', screen, label, h?, app?} — chips({ids, titleOf, els | el}) : 고른 카드마다 [화면 이름](겹침·빈 값 빼고 차례 그대로),
+     고른 요소 els = [{screen, h:hd-hit, app}](여러 요소 R19 — 예전 이름 el = 하나)마다 그 화면 칩(없으면 앞에 더함) + [TAG "글"] 칩(고른 차례, 같은 요소 한 번, path 없는 것 빼기). visible(chips, dismissed) = 지운 칩(×) 빼기,
      prune(dismissed, chips) = 지금 칩에 없는 지운 표시 버리기(다시 고르면 다시 보임).
    범위: scope(chips) = all(칩 없음) · screen · element(요소 칩 있음), scopeLabel = 칩 줄 앞 말.
    build(chips, text, {first, titleOf}, mkId) → {memos, why} — 메모 모양·요청문은 지금 메모와 같다(셸 commitPop · memo-batch.build 재사용):
@@ -66,10 +66,13 @@ function chips(sel) {
     id = String(id); if (seen[id]) return; seen[id] = 1;
     var t = titleOf(id); out.push({key: 'screen:' + id, kind: 'screen', screen: id, label: t == null || t === '' ? id : String(t)});
   };
-  var el = sel.el && sel.el.h && sel.el.h.path && sel.el.screen != null ? sel.el : null;
-  if (el && (sel.ids || []).map(String).indexOf(String(el.screen)) < 0) screen(el.screen);
+  var ok = function (e) { return e && e.h && e.h.path && e.screen != null; }, ids = (sel.ids || []).map(String), ek = {};
+  var els = (Array.isArray(sel.els) ? sel.els : sel.el ? [sel.el] : []).filter(function (e) {   // 여러 요소(R19) — 같은 요소 두 번은 하나
+    if (!ok(e)) return false; var k = 'el:' + e.screen + ':' + e.h.path; if (ek[k]) return false; ek[k] = 1; return true;
+  });
+  els.forEach(function (e) { if (ids.indexOf(String(e.screen)) < 0) screen(e.screen); });
   (sel.ids || []).forEach(function (id) { if (id != null && id !== '') screen(id); });
-  if (el) out.push({key: 'el:' + el.screen + ':' + el.h.path, kind: 'el', screen: String(el.screen), label: elLabel(el.h), h: el.h, app: !!el.app});
+  els.forEach(function (e) { out.push({key: 'el:' + e.screen + ':' + e.h.path, kind: 'el', screen: String(e.screen), label: elLabel(e.h), h: e.h, app: !!e.app}); });
   return out;
 }
 function visible(list, dismissed) { return (list || []).filter(function (c) { return !(dismissed && dismissed[c.key]); }); }

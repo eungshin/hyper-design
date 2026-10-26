@@ -1,6 +1,8 @@
 /* View — 판 위 요소 테두리: 마우스를 올린 카드 안 요소(도구마다 tools.hoverOf)를 화면에 물어 종류별 테두리, 고른 요소(테두리 고정 + 소켓 + 부모 점선 + 요소 막대).
    묻기 = ctx.ask·chain(view-frame-ask), 부모 고르기 = HD.blocks.parentPick, 색·꼬리표 = HD.blocks.tone · HD.tools.LABEL.
-   HD.viewElbox.mount(ctx) → {clear()(미리 그린 테두리 걷기), selected() → 고른 요소 {card, h}|null, select(card, h), unselect(), pickAt(card, x, y, deep?)}
+   여러 요소(R19): 고른 요소는 목록(규칙 HD.elPick) — 모두 테두리 고정, 소켓·부모 점선·요소 막대는 주인(마지막 것)만. Shift+누르기 = 더하기·빼기(셸이 add 로 부른다).
+   HD.viewElbox.mount(ctx) → {clear()(미리 그린 테두리 걷기), selected() → 주인 {card, h}|null, all() → 고른 요소 모두 [{card, h}](고른 차례),
+     select(card, h)(그 하나만), toggle(card, h)(더하기·빼기), unselect()(모두), keep(ok(cardId))(ok 인 카드의 것만 남김), pickAt(card, x, y, deep?, add?)}
    ctx = {$, $$, rowsEl, pane, wOf(card), tagScale(), zoom(), app(id) → 앱 카드인가, title(id), toast(msg), ask(card, x, y, quiet, cb, leaf, deep), chain(frame, h, cb),
           lastFrame(card), blocks() → 요소 막대(BK)|null, tool() → 지금 도구, only(id) → 그 카드만 골랐나, busy() → 끄는 중·도착 고르는 중} */
 (function () {
@@ -8,11 +10,14 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
-  var $ = ctx.$, $$ = ctx.$$, rowsEl = ctx.rowsEl, pane = ctx.pane, hov = {busy: false, next: null, card: null}, selEl = null;
+  var $ = ctx.$, $$ = ctx.$$, rowsEl = ctx.rowsEl, pane = ctx.pane, hov = {busy: false, next: null, card: null}, sels = [], P = HD.elPick;
 
   function rectOf(el) { var r = el.getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; }
   function clear() { $$('.elbox:not(.sel):not(.par)', rowsEl).forEach(function (b) { b.remove(); }); hov.card = null; }
-  function unselect() { $$('.elbox.sel, .elbox.par, .sock.selsock', rowsEl).forEach(function (n) { n.remove(); }); selEl = null; var BK = ctx.blocks(); if (BK) BK.hide('board'); }
+  function keyOf(s) { return s && s.card && s.h && s.h.path ? P.key(s.card.dataset.id, s.h.path) : ''; }
+  function primary() { return P.primary(sels); }
+  function wipe() { $$('.elbox.sel, .elbox.par, .sock.selsock', rowsEl).forEach(function (n) { n.remove(); }); }
+  function unselect() { wipe(); sels = []; var BK = ctx.blocks(); if (BK) BK.hide('board'); }
   function draw(card, h, how) {                      // how: 'hov' = 다음 클릭이 고를 요소(얇은 실선, 51-3) · 'par' = 고른 요소의 부모(점선) · 없음 = 요소 도구 테두리
     if (how !== 'par') clear();
     if (!h || h.none || !h.rect) return;
@@ -28,29 +33,48 @@ function mount(ctx) {
   // 고른 요소의 부모 점선(51-3, Figma F11): 화면에 조상을 묻고(hd-up) 상자가 다른 첫 조상(blocks.parentPick — [상위] 와 같은 판정)
   function drawParent(card, h) {
     ctx.chain(ctx.lastFrame(card), h, function (chain) {
-      if (!selEl || selEl.card !== card || selEl.h !== h || !chain) return;   // 그 사이 다른 요소를 골랐다
+      var pr = primary(); if (!pr || pr.card !== card || pr.h !== h || !chain) return;   // 그 사이 다른 요소를 골랐다
       var p = HD.blocks.parentPick(h, chain); if (p) draw(card, p, 'par');
     });
   }
-  function select(card, h) {
-    unselect(); clear(); draw(card, h);
-    var b = $('.elbox:not(.sel):not(.par)', card); if (!b) return;
-    b.classList.add('sel'); hov.card = null;
+  function outline(card, h, pri) {                   // 고른 테두리 하나(주인 = .pri + 소켓)
+    draw(card, h);
+    var b = $('.elbox:not(.sel):not(.par)', card); if (!b) return false;
+    b.classList.add('sel'); if (pri) b.classList.add('pri'); b.dataset.key = P.key(card.dataset.id, h.path); hov.card = null;
+    if (!pri) return true;
     var ph = $('.phone', card), sc = ph.offsetWidth / ctx.wOf(card), ts = ctx.tagScale(), q = h.rect, sk = document.createElement('span'), d = 16 * ts;
     sk.className = 'sock selsock'; sk.title = '끌어서 다른 화면에 놓으면 연결';
     sk.style.left = ((q.x + q.w) * sc) + 'px'; sk.style.top = ((q.y + q.h / 2) * sc) + 'px';
     sk.style.width = sk.style.height = d + 'px'; sk.style.margin = (-d / 2) + 'px 0 0 ' + (-d / 2) + 'px'; sk.style.borderWidth = (2 * ts) + 'px';
-    ph.appendChild(sk); selEl = {card: card, h: h}; drawParent(card, h);
-    var BK = ctx.blocks();
+    ph.appendChild(sk);
+    return true;
+  }
+  function paint() {                                 // 고른 목록 그대로 다시 그리기 — 모두 테두리, 주인만 소켓·부모 점선·요소 막대
+    wipe(); clear();
+    var BK = ctx.blocks(), pr = primary();
+    sels = sels.filter(function (s) { return s.card.isConnected; });
+    sels.forEach(function (s) { if (s !== pr) outline(s.card, s.h, false); });
+    pr = primary();
+    if (!pr) { if (BK) BK.hide('board'); return; }
+    if (!outline(pr.card, pr.h, true)) { if (BK) BK.hide('board'); return; }
+    var card = pr.card, h = pr.h;
+    drawParent(card, h);
     if (BK) BK.show({screen: card.dataset.id, h: h, app: ctx.app(card.dataset.id), where: 'board',   // 요소 막대(task 49a) — 고른 테두리 옆, 판이 움직이면 placeSelbar 가 다시 놓는다
                      frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
-                     anchor: function () { var bx = $('.elbox.sel', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
+                     anchor: function () { var bx = $('.elbox.sel.pri', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
   }
-  function pickAt(card, x, y, deep) {                // 선택(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2)
+  function select(card, h) { sels = P.only({card: card, h: h}); paint(); }
+  function toggle(card, h) { sels = P.toggle(sels, {card: card, h: h}, keyOf); paint(); }
+  function keep(ok) {
+    var n = P.keep(sels, function (s) { return ok(s.card.dataset.id); });
+    if (n.length === sels.length) return;
+    sels = n; paint();
+  }
+  function pickAt(card, x, y, deep, add) {           // 선택(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2) · add = Shift(더하기·빼기, R19)
     ctx.ask(card, x, y, false, function (h) {
       if (!h) return;
       if (h.none) { ctx.toast('여기에는 고를 요소가 없어요'); return; }
-      select(card, h);
+      if (add) toggle(card, h); else select(card, h);
     }, false, deep);
   }
   function hoverMode(card) {                          // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 선택(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
@@ -64,7 +88,7 @@ function mount(ctx) {
       hov.busy = false;
       var mv = ctx.tool() === 'move';
       if (hov.live === card && hoverMode(card) && !ctx.busy()) {
-        if (mv && h && selEl && selEl.card === card && h.path === selEl.h.path) clear();   // 고른 요소 위 = 이미 고른 상자
+        if (mv && h && h.path && P.has(sels, {card: card, h: h}, keyOf)) clear();   // 고른 요소 위 = 이미 고른 상자
         else draw(card, h, mv ? 'hov' : undefined);
       }
       var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2], n[3]);
@@ -81,7 +105,7 @@ function mount(ctx) {
   });
   pane.addEventListener('mouseleave', hoverOff);     // 판 밖으로 = 미리 표시 걷기(늦게 온 답도 그리지 않게 hov.live)
 
-  return {clear: clear, selected: function () { return selEl; }, select: select, unselect: unselect, pickAt: pickAt};
+  return {clear: clear, selected: primary, all: function () { return sels.slice(); }, select: select, toggle: toggle, unselect: unselect, keep: keep, pickAt: pickAt};
 }
 
 HD.viewElbox = {mount: mount};

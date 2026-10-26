@@ -1090,6 +1090,34 @@
         }
       ],
       "note": "막대·메뉴 단추를 글이 아니라 data-act 로 고르게 테스트를 바꿈(R56). 셸: openElemMenu 를 blocks.menu 묶음으로 · elemFire(상위·안쪽·속성·부품 = 고른 뒤 BK.fire) · BK.onMenu 한 줄 · blockAct 에 ai"
+    },
+    {
+      "slice": "R19 선택(V) Shift+클릭 여러 요소 고르기 + 대화창 요소 칩 여럿",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 8
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "새 test_canvas_unit_el_pick 5개 — 규칙을 하나씩 깨 모두 빨강 확인(toggle·primary·path 없음·shift·chips)"
+        },
+        {
+          "by": "browser",
+          "what": "같은 화면·같은 글 요소 메모 둘은 요청문 한 항목(no=1,2 + 다른 곳:) — 테스트 기대를 edits.request 형식에 맞춤"
+        }
+      ],
+      "waste": "",
+      "flaky": [],
+      "note": "Shift+클릭 규칙 = el-pick.shift(V · 고른 요소 있음 · 고른 카드 안 · 빈 레이아웃 아님 → 요소, 그 밖 = 카드 E15). 막대·메뉴는 주인(마지막) 하나"
     }
   ]
 }
