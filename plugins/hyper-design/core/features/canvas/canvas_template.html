@@ -442,7 +442,7 @@ pane.addEventListener('click', function (e) {
   if ((e.ctrlKey || e.metaKey) && VM && VM.ctrlClick(e)) { e.preventDefault(); e.stopPropagation(); return; }   // Ctrl+클릭: 어디로 가나(카메라)
   if (cl('#tools')) return;                        // 도구 막대 안 조작은 고르기를 풀지 않는다(연결 패널은 도크라 판 밖)
   if (cl('.busy')) return;                         // 덮개의 [걷기]는 그 버튼만(Q2b) — 도구가 카드를 열지 않게
-  if (tool === 'layout' && !cl('.card') && !cl('.alabel') && !e.shiftKey) { e.preventDefault(); newScreenAt(e.clientX, e.clientY); setTool('move'); return; }
+  if (tool === 'layout' && !cl('.card') && !cl('.alabel') && !e.shiftKey) { e.preventDefault(); DR.at(e.clientX, e.clientY); setTool('move'); return; }
   var mc = cl('.card');
   if (mc && e.altKey && !e.shiftKey && e.detail <= 1 && !mc.classList.contains('draft') && cl('.phone')) {   // Alt+클릭 = 가장 안쪽 요소 바로 고르기(Figma deep select, 51-2) — 카드를 아직 안 골랐어도
     e.preventDefault(); e.stopPropagation();
@@ -622,7 +622,7 @@ var LP = HD.viewLinkPanel.mount({$: $, esc: esc, circled: circled, title: functi
                                  cut: function (from, to) { ED.cutPairs([[from, to]], true); },
                                  rename: function (from, to, v) { names.set(from, to, v); drawArrows(); }});
 var VL = HD.viewLinks.mount({rowsEl: rowsEl, CARD: CARD, sizeOf: sizeOf, $: $, $$: $$, title: function (id) { return titleOf(id); }, pending: pendingFor, tagScale: tagScale, rows: LP.render,
-                             mark: LN.mark, isHidden: function (id) { return LF.isHidden(id) || !!deleted[id]; }});   // 고른 화면 안: 버튼 테두리·번호·소켓·연결 패널
+                             mark: LN.mark, isHidden: function (id) { return LF.isHidden(id) || (CA ? CA.isDeleted(id) : false); }});   // 고른 화면 안: 버튼 테두리·번호·소켓·연결 패널
 // 선 끝 손잡이 View(modules/view-line-ends.js · 기하 modules/line-ends.js, Q3) — 선 누르기 = 그 쌍 강조 + 도착 끝 손잡이, 끌어 놓기 = 도착 바꾸기(메뉴와 같은 편집)
 var LE = HD.viewLineEnds.mount({svg: $('#ar'), rowsEl: rowsEl,
   toStage: function (cx, cy) { var r = $('#ar').getBoundingClientRect(); return [(cx - r.left) / z, (cy - r.top) / z]; },
@@ -728,13 +728,13 @@ var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
   },
   state: function () { var memo = {}; HD.edits.split(NS.list()).memos.forEach(function (n) { memo[n.screen] = (memo[n.screen] || 0) + 1; }); return {hidden: LF.hidden(), locked: LF.locked(), memo: memo}; },
   picked: function () { return SL ? SL.ids() : []; },   // 고르기(SL)는 아래에서 붙는다
-  hide: LF.hide, lock: LF.lock, del: deleteCards,
+  hide: LF.hide, lock: LF.lock, del: function (ids) { CA.del(ids); },
   reveal: function (id) { SL.dispatch({type: 'only', id: id}); fitCards([id]); },
   hover: function (ids) {                        // 레이어 줄에 올림 = 판의 그 카드·판 글 강조(51-3, Figma F10) — 고르기는 바꾸지 않는다
     $$('.card.lyhov, .lyhov-t').forEach(function (n) { n.classList.remove('lyhov', 'lyhov-t'); });
     ids.forEach(function (id) { var el = id.charAt(0) === '@' ? $('#' + id.slice(1)) : VL.cardEl(id); if (el) el.classList.add(id.charAt(0) === '@' ? 'lyhov-t' : 'lyhov'); });
   },
-  addLayout: function () { var r = pane.getBoundingClientRect(); newScreenAt(r.left + r.width / 2, r.top + r.height / 2); }});
+  addLayout: function () { var r = pane.getBoundingClientRect(); DR.at(r.left + r.width / 2, r.top + r.height / 2); }});
 // 정렬 패널 View(modules/view-align.js · 계산 modules/align.js, H18) — 고른 카드(잠김·숨김 빼고) 맞추기·간격 같게·늘어놓기
 VA = HD.viewAlign.mount({root: $('#pAlign'), $: $, esc: esc, key: 'hd-align-gap',
   count: function () { return SL ? CP.boxes(SL.ids()).boxes.length : 0; },
@@ -780,17 +780,17 @@ pane.addEventListener('contextmenu', function (e) {
       {label: '이름', act: function () { var t = $('.ftitle', card); if (t) CT.open(t, {field: 'title'}); }},
       {label: '설명', act: function () { var d = $('.fdesc', card); if (d) CT.open(d, {field: 'purpose'}); else toast('설명 줄이 없는 화면이에요'); }},
       {label: '메모', act: function () { MP.card(id); }},
-      {label: '복제' + suf, key: 'Ctrl+D', act: function () { duplicateCards(ids); }},
-      {label: '들어오는 연결 끊기' + suf, act: function () { cutIncoming(ids); }},
+      {label: '복제' + suf, key: 'Ctrl+D', act: function () { CA.dup(ids); }},
+      {label: '들어오는 연결 끊기' + suf, act: function () { CA.cutIn(ids); }},
       '-',
       {label: '숨기기' + suf, act: function () { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }},
-      {label: '삭제' + suf, key: 'Del', act: function () { deleteCards(ids); }}]);
+      {label: '삭제' + suf, key: 'Del', act: function () { CA.del(ids); }}]);
     var tok = CM.open(x, y, titleOf(id), cardItems);   // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
     askHit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(LF.hidden()).length;
-  var items = [{label: '여기에 레이아웃', key: 'N', act: function () { newScreenAt(x, y); }}, {label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
+  var items = [{label: '여기에 레이아웃', key: 'N', act: function () { DR.at(x, y); }}, {label: '전체 보기', key: '0', act: fit}, {label: '100%', act: function () { zoomAt(px, py, 1); }}];
   if (n) items.push('-', {label: '숨긴 화면 ' + n + '개', act: openHidl});
   CM.open(x, y, '', items);
 });
@@ -931,7 +931,7 @@ function finishTrig(tr, moved, cx, cy) {
     if (to && to !== tr.from) { ED.linkTo(tr.from, hits, to); return; }
     if (to) return;                                  // 제 화면에 놓음 = 취소
     var items = [{label: '새 화면 만들고 잇기', act: function () {           // 빈 레이아웃 카드를 그 자리에 놓고, 끈 요소를 그 카드로 — 되돌리기 한 단계
-      var ln = layoutNote(cx, cy);
+      var ln = DR.note(cx, cy);
       ED.add('새 화면 잇기', [ln].concat(hits.map(function (h) {
         return ED.note(tr.from, h, HD.edits.say.linkNew(ln.value, ln.screen), 'link', ln.screen); })), '빈 레이아웃을 만들고 이었어요'); }}];
     if (hits.some(function (h) { return h.to; })) items.push({label: '연결 끊기', act: function () {
@@ -984,7 +984,7 @@ var tedit = $('#tedit');
 // 판의 카드 글(modules/view-caption.js cards): 원래 글(HD.caption.origOf)·제목·설명·정책 줄 그리기(반영 대기)·접기·카드 글 한 상자·두 번 누르기 — 바뀐 칸마다 ED.add 한 번
 var CT = HD.viewCaption.cards({$: $, $$: $$, rowsEl: rowsEl, pane: pane, notes: NS, polHtml: polHtml, space: function () { RW.space(); },
   selected: function () { return SL ? SL.ids() : null; }, typing: typing, guard: function (ids) { return LF.guard(ids); }, closeMenus: function () { CM.close(); },
-  toast: function (m) { toast(m); }, placed: function () { if (BT) BT.place(); }, layoutOf: function (id) { return layoutOf(id); }, editLayout: function (id, ch) { editLayout(id, ch); },
+  toast: function (m) { toast(m); }, placed: function () { if (BT) BT.place(); }, layoutOf: function (id) { return DR.of(id); }, editLayout: function (id, ch) { DR.edit(id, ch); },
   note: function (id, h, t) { return ED.note(id, h, t); }, add: function (l, list) { ED.add(l, list); }});
 CT.setOrig(D.rows);
 var tedCtx = null;
@@ -1121,57 +1121,11 @@ pane.addEventListener('mousemove', function (e) {
 pane.addEventListener('mouseleave', hoverOff);       // 판 밖으로 = 미리 표시 걷기(늦게 온 답도 그리지 않게 hov.live)
 
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
-function boardPt(cx, cy) { var r = rowsEl.getBoundingClientRect(); return {x: Math.round((cx - r.left) / z), y: Math.round((cy - r.top) / z)}; }
-function layoutText(n) { return HD.edits.say.layout(n.value, n.screen, n.purpose); }
-function layoutOf(id) { return NS.list().filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0] || null; }
-function layoutNote(cx, cy) {
-  var p = boardPt(cx, cy), id = 'new-' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
-  var n = ED.note(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
-  n.edit = 'new-screen'; n.value = '빈 레이아웃'; n.x = p.x; n.y = p.y; n.note = layoutText(n);
-  return n;
-}
-function addLayout(cx, cy, size, name) {            // size·name = 새 화면 대화상자에서 고른 크기·이름(task 46) — 크기는 그 카드 크기로(되돌리기는 카드와 함께: 빈 카드가 사라지면 크기는 쓰이지 않음)
-  var n = layoutNote(cx, cy);
-  if (name) { n.value = name; n.note = layoutText(n); }
-  ED.add('빈 레이아웃', [n], '빈 레이아웃을 놓았어요 — 메모를 남기고 보내면 채워져요');
-  if (size && AB) AB.seed(n.screen, size);
-}
-function newScreenAt(cx, cy) {                      // N 도구·여기에 레이아웃·레이어 [+] = 새 화면 대화상자(크기·이름) 뒤 그 자리에 빈 카드 — 대화상자가 붙지 못했으면 기본 크기로 바로
-  if (!AB) { addLayout(cx, cy); return; }
-  AB.openNew(function (size, name) { addLayout(cx, cy, size, name); });
-}
-function renderDrafts(ids) {                         // 메모의 빈 레이아웃 → 판 위 흰 카드(없어진 것은 지운다) · ids = 닿은 화면만 다시(없으면 전부)
-  var want = {};
-  NS.list().forEach(function (n) { if (n.edit === 'new-screen') want[n.screen] = n; });
-  $$('.card.draft', rowsEl).forEach(function (c) { if (!want[c.dataset.id]) c.remove(); });
-  Object.keys(want).forEach(function (id) {
-    var n = want[id], c = VL.cardEl(id);
-    if (c && ids && ids.indexOf(id) < 0) return;
-    if (!c) {
-      c = document.createElement('div'); c.className = 'card draft'; c.dataset.id = id;
-      c.innerHTML = '<div class="phone"><div class="blank">빈 레이아웃</div><button class="cover" data-file=""></button></div><div class="ftitle"></div><div class="fdesc"></div>';
-      rowsEl.appendChild(c);
-    }
-    c.dataset.x = n.x; c.dataset.y = n.y;
-    var cv = $('.cover', c); cv.dataset.title = n.value; cv.setAttribute('aria-label', n.value + ' — 빈 레이아웃(두 번 누르면 메모)');
-    $('.ftitle', c).textContent = n.value; $('.fdesc', c).textContent = n.purpose || '';   // 이름 · 목적(여러 줄)
-    if (AB) AB.paint([id]);                          // 그 빈 카드의 크기(다시 만든 카드에도)
-    CP.place(c);
-  });
-}
-function editLayout(id, changes) {                  // 빈 레이아웃 카드 글(#225): 이름·목적은 그 메모 안(n.value·n.purpose) — 보내면 목적이 AI 의 첫째 브리프 · 되돌리기 한 단계
-  if (!layoutOf(id)) { toast('그 빈 레이아웃이 없어요 — 이미 지워졌어요'); return; }
-  var n0 = layoutOf(id), before = {value: n0.value, purpose: n0.purpose || ''}, after = {value: before.value, purpose: before.purpose};
-  changes.forEach(function (ch) { if (ch.field === 'title') after.value = ch.value; else if (ch.field === 'purpose') after.purpose = ch.value; });
-  var set = function (v) {
-    var n = layoutOf(id); if (!n) return;
-    n.value = v.value; n.purpose = v.purpose; n.note = n.copyOf ? HD.edits.say.copy(v.value, n.screen, ED.scr(n.copyOf)) : layoutText(n); n.sent = false; saveNotes();
-  };
-  set(after);
-  record({label: '빈 레이아웃 글', undo: function () { set(before); }, redo: function () { set(after); }});
-}
+// 빈 레이아웃(modules/view-drafts.js · 메모 모양 HD.edits.layout) — 메모 하나 = 판 위 흰 카드, 놓기(새 화면 대화상자)·그리기·이름·목적 고치기
+var DR = HD.viewDrafts.mount({$: $, $$: $$, rowsEl: rowsEl, notes: NS, zoom: function () { return z; }, save: function () { saveNotes(); }, record: function (op) { record(op); },
+  toast: function (m) { toast(m); }, add: function (l, list, msg) { ED.add(l, list, msg); }, artboard: function () { return AB; }, place: function (c) { CP.place(c); },
+  cardEl: function (id) { return VL.cardEl(id); }, scr: function (id) { return ED.scr(id); }});
 /* ---------- 카드 고르기(한 번 누르기 · 이동 도구 Ctrl+클릭) · 선택 막대 · 삭제·복제·들어오는 연결 끊기 ---------- */
-var deleted = {};
 var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
   if (LY) LY.render();
   if (VA) VA.render();
@@ -1203,67 +1157,18 @@ $('#selbar').addEventListener('click', function (e) {
   if (b.dataset.act === 'size') { if (AB) AB.popover(ids, b); }   // 크기 팝오버(task 46) — 고른 카드 모두에
   else if (b.dataset.act === 'memo') MP.card(ids);
   else if (b.dataset.act === 'hide') { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }
-  else if (b.dataset.act === 'del') deleteCards(ids);
+  else if (b.dataset.act === 'del') CA.del(ids);
 });
 addEventListener('resize', placeSelbar);
-function paintDeleted(ids) {                         // 삭제 대기(메모 edit=delete) → 판에서 빼고, 그 화면으로 오는 선도 겹쳐 그리기에서 뺀다 · ids = 닿은 화면만
-  deleted = {}; NS.list().forEach(function (n) { if (n.edit === 'delete') deleted[n.screen] = 1; });
-  var changed = false;
-  CT.cardsOf(ids).forEach(function (c) {         // 사라지지 않고 흐리게 + '삭제 대기' — 보내고 반영되기 전까지 무엇이 지워질지 판에서 보인다
-    var d = !!deleted[c.dataset.id], chip = $('.delchip', c);
-    if (d && !chip) { chip = document.createElement('span'); chip.className = 'delchip'; chip.textContent = '× 삭제 대기'; $('.phone', c).appendChild(chip); }
-    if (!d && chip) chip.remove();
-    if (c.classList.contains('del') !== d) { c.classList.toggle('del', d); changed = true; }
-  });
-  if (changed) { drawArrows(); scheduleVisible(); }
-}
-function deleteCards(ids) {                          // 진짜 화면 = 삭제 요청 메모 · 빈 레이아웃 = 그 메모(와 그리로 가는 잇기)를 지움 — 되돌리기 됨
-  if (LF.guard(ids)) { ids = ids.filter(function (id) { return !LF.isLocked(id); }); if (!ids.length) return; }
-  var drafts = ids.filter(function (id) { var c = VL.cardEl(id); return c && c.classList.contains('draft'); });
-  var real = ids.filter(function (id) { return drafts.indexOf(id) < 0; });
-  SL.dispatch({type: 'clear'});
-  var pend = function () { if (real.length) ED.add('화면 삭제', real.map(function (id) {
-    var n = ED.note(id, {path: '(화면 전체)', text: titleOf(id), rect: null}, HD.edits.say.removeScreen(ED.scr(id))); n.edit = 'delete'; return n;
-  }), real.length + '개 화면을 지웠어요 — 반영 대기'); };
-  if (real.length && VS && VS.on) VS.del(real).catch(pend); else pend();   // 파일에 바로 지우고 오는 연결도 끊음(E1·E10)
-  if (drafts.length) {
-    var gone = NS.list().filter(function (n) { return drafts.indexOf(n.screen) >= 0 || (n.op === 'link' && drafts.indexOf(n.to) >= 0); });
-    var drop = function () { NS.remove(function (n) { return gone.indexOf(n) >= 0; }); saveNotes(); };
-    drop();
-    record({label: '빈 레이아웃 지우기', undo: function () { gone.forEach(function (n) { NS.add(n); }); saveNotes(); }, redo: drop});
-    toast('빈 레이아웃을 지웠어요', true);
-  }
-}
-function duplicateCards(ids) {                       // Ctrl+D·메뉴 [복제](51-6, Figma F19): 도우미 = 파일째 바로 복제(CC — 오른쪽 옆, 복사본이 골라짐) · 없으면 예전 흰 복제 카드 · 앱 카드 = 거절
-  var app = ids.filter(appCard), rest = ids.filter(function (id) { return !appCard(id); });
-  if (app.length) toast('앱 카드는 복제할 수 없어요 — 요청(메모)으로만 바꿀 수 있어요');
-  var real = rest.filter(function (id) { var c = VL.cardEl(id); return c && !c.classList.contains('draft'); });
-  if (real.length && CC && CC.copy(real)) rest = rest.filter(function (id) { return real.indexOf(id) < 0; });
-  rest.forEach(duplicateCard);
-}
-function duplicateCard(id) {                         // 도우미 없음·빈 레이아웃: 오른쪽 옆에 흰 복제 카드(빈 레이아웃과 같은 메모, 보내면 AI 가 복제)
-  var c = VL.cardEl(id); if (!c) return;
-  var r = $('.phone', c).getBoundingClientRect(), n = layoutNote(r.right + 40 * tagScale(), r.top);
-  n.value = titleOf(id) + ' 복사'; n.copyOf = id; n.note = HD.edits.say.copy(n.value, n.screen, ED.scr(id));
-  ED.add('복제', [n], '복제했어요 — 반영 대기');
-  if (AB && sizeOf(id).custom) AB.seed(n.screen, sizeOf(id));   // 복제 카드는 원본 크기 그대로
-}
-addEventListener('keydown', function (e) {           // Ctrl/Cmd+D = 고른 카드 복제(51-6) — 고른 요소가 있으면 요소 복제(view-blocks 가 먼저 받는다)
-  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key || '').toLowerCase() !== 'd' || e.defaultPrevented || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens' || selEl) return;
-  var ids = SL.ids(); if (!ids.length) return;
-  e.preventDefault(); duplicateCards(ids);
-});
-function cutIncoming(ids) {
-  ED.add('들어오는 연결 끊기', ids.map(function (id) {
-    var n = ED.note(id, {path: '(이 화면으로 오는 연결)', text: titleOf(id), rect: null}, HD.edits.say.cutIn(ED.scr(id))); n.edit = 'cut-in'; return n;
-  }), '이 화면으로 오는 연결을 끊었어요');
-}
-addEventListener('keydown', function (e) {           // Del · Backspace = 고른 카드 삭제(입력 중·크게 보기 아닐 때)
-  if ((e.key !== 'Delete' && e.key !== 'Backspace') || typing(e) || !modal.hidden || document.body.dataset.tab !== 'screens') return;
-  if (selEl) { var se = selEl; e.preventDefault(); unselectEl(); removeElement(se.card.dataset.id, se.h); return; }   // 고른 요소 = 요소 지우기(task 30) — Backspace 도(Figma · 카드 전체로 떨어지지 않게)
-  var ids = SL.ids(); if (!ids.length) return;
-  e.preventDefault(); deleteCards(ids);
-});
+// 카드 동작(modules/view-card-actions.js): 삭제·삭제 대기 표시·복제(Ctrl+D)·들어오는 연결 끊기·Del — 단축키 듣기 차례 그대로 이 자리에서 붙인다
+var CA = HD.viewCardActions.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u) { toast(m, u); },
+  add: function (l, list, msg) { ED.add(l, list, msg); }, note: function (id, h, t) { return ED.note(id, h, t); }, scr: function (id) { return ED.scr(id); },
+  title: function (id) { return titleOf(id); }, cardEl: function (id) { return VL.cardEl(id); }, cardsOf: function (ids) { return CT.cardsOf(ids); },
+  guard: function (ids) { return LF.guard(ids); }, locked: function (id) { return LF.isLocked(id); }, selected: function () { return SL.ids(); }, clear: function () { SL.dispatch({type: 'clear'}); },
+  sync: function () { return VS; }, copy: function () { return CC; }, app: appCard, layoutNote: function (x, y) { return DR.note(x, y); }, sizeOf: sizeOf, artboard: function () { return AB; },
+  tagScale: tagScale, modalOpen: function () { return !modal.hidden; }, tab: function () { return document.body.dataset.tab; }, typing: typing,
+  element: function () { return selEl; }, unselect: function () { unselectEl(); }, removeElement: function (id, h) { removeElement(id, h); },
+  changed: function () { drawArrows(); scheduleVisible(); }});
 function sendPending(f, id) {                        // 반영 대기 글을 그 화면에 미리 보이기(palette.js hd-pending)
   var items = HD.edits.preview(NS.list(), id);       // 글자 고치기·요소 지우기(edits.js)
   try { if (f && f.contentWindow) f.contentWindow.postMessage({type: 'hd-pending', items: items}, '*'); } catch (e) {}
@@ -1367,7 +1272,7 @@ PN.zoom(z);
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   VN.render(NS.list(), ids);
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)
-  if (CT) { renderDrafts(ids); paintDeleted(ids); CT.paint(ids); sendAllPending(ids); }   // 카드 글(CT) 전(시작 중)에는 아직 그릴 카드 글이 없다
+  if (CA) { DR.render(ids); CA.paint(ids); CT.paint(ids); sendAllPending(ids); }   // 카드 동작(CA, 셋 중 마지막으로 붙음) 전(시작 중)에는 아직 그릴 카드 글이 없다
   if (BT) BT.paint();                              // 판 글 반영 대기(t51-9)
   if (VL && VL.refresh) VL.refresh();
   if (PN) PN.render(ids);

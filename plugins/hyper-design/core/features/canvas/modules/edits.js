@@ -4,6 +4,8 @@
      edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a · op to + to = 형제 사이 자리, 51-5) · attr(op = 속성 이름, value = 새 값) · insert·replace(value = 부품 key, task 49b) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy · board(판 글, screen '@board' · op set|delete · to = 칸·묶음 키 — t51-9, board-text.js)
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
    request(notes, out, sizes?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46)
+   빈 레이아웃(셸 C9): layoutId(now, rnd) → 'new-…' id · layout(id, {x, y}, name?) → 빈 레이아웃 메모(edit 'new-screen', 이름 기본 '빈 레이아웃') ·
+     layoutText(n) → 그 메모의 요청 글(say.layout) · layoutOf(list, id) → 그 화면의 빈 레이아웃 메모|null
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
 (function () {
 'use strict';
@@ -199,5 +201,14 @@ var say = {
   emptyLayout: '빈 레이아웃에 목적이나 메모가 없어요 — AI가 채울 내용을 모를 수 있어요'
 };
 
-HD.edits = {note: note, newId: newId, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, preview: preview, split: split, tally: tally, request: request, items: items, emptyLayouts: emptyLayouts, say: say, FIELD: FIELD};
+function layoutId(now, rnd) { return 'new-' + now.toString(36).slice(-5) + rnd.toString(36).slice(2, 4); }
+function layoutText(n) { return say.layout(n.value, n.screen, n.purpose); }
+function layout(id, p, name) {
+  var n = note(id, {path: '(새 화면)', text: '빈 레이아웃', rect: null}, '', 'new');
+  n.edit = 'new-screen'; n.value = name || '빈 레이아웃'; n.x = p.x; n.y = p.y; n.note = layoutText(n);
+  return n;
+}
+function layoutOf(list, id) { return (list || []).filter(function (x) { return x.edit === 'new-screen' && x.screen === id; })[0] || null; }
+
+HD.edits = {note: note, newId: newId, layoutId: layoutId, layout: layout, layoutText: layoutText, layoutOf: layoutOf, pendingFor: pendingFor, overviewPending: overviewPending, pendingLink: pendingLink, directOf: directOf, instantOf: instantOf, preview: preview, split: split, tally: tally, request: request, items: items, emptyLayouts: emptyLayouts, say: say, FIELD: FIELD};
 })();
