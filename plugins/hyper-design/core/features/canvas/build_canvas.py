@@ -15,7 +15,7 @@ python3 build_canvas.py <out_dir>
 - 한 줄 = 한 흐름(group). 상태 변형(id에 --)은 원래 화면 바로 뒤에, 같은 줄에.
 - 화살표는 분기(branches)에만, 둥근 직각선(꺾임 ≤ 3, 줄 위 통로). Shift+클릭한 화면은 화면 안 링크(palette.js 가 알려 줌)를
   색별 칩·화살표로(같은 카드 Shift+클릭 = 색 하나씩 → 전체), 긴 화면은 겹쳐서 펼친다.
-- 화면 아래: 목적 1줄 + 정책(policies) 최대 3줄, 넘치면 접기. 첫 배율 0.72.
+- 화면 아래: 제목, 고르면 본문(purpose + 옛 policies 줄 '- ', R21 — caption.body). 첫 배율 0.72.
 
 screens.json:
 {"groups": [...], "story": {...}, "badges": {"뜻": "is-brand", ...},

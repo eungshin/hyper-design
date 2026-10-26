@@ -1,7 +1,8 @@
-"""카드 글 상자의 정책 = 자유 메모 하나(task 31, K1) · 판의 카드 아래 글은 제목만, 고르면 설명·정책 — 브라우저.
+"""카드 글 상자 = 제목 + 본문 한 칸(R21, K1) · 판의 카드 아래 글은 제목만, 고르면 본문 — 브라우저.
 
-사용자 보고: "정책 줄을 지우거나 더하거나 자유롭게 고칠 수 없다". 상자의 정책은 여러 줄 글 한 칸(Enter = 새 줄),
-저장하면 줄마다 한 줄 정책 목록 하나(빈 줄 버림) → 카드에 그 목록 · 도우미가 screens.json 에 그 목록 · 되돌리기 한 번 = 원래 목록.
+사용자 요청(R21): 제목 아래 설명·정책으로 나뉜 칸 대신 자유 글 한 칸(줄바꿈·빈 줄·다 지우기 가능).
+옛 데이터의 정책 줄은 본문 끝 '- ' 줄로 보이고, 본문을 고쳐 저장하면 purpose 로 접혀 들어가며 policies 는 빈 목록 →
+도우미가 screens.json 에 쓰고, 다시 열어도 같은 글. 다 지우면 빈 본문.
 """
 import json, os, shutil, subprocess, sys, tempfile, threading
 from pathlib import Path
@@ -45,8 +46,8 @@ def _open(ctx, url):
     return pg, errors
 
 
-def _policies_in_file(o):
-    return next(s for s in json.loads((o / "screens.json").read_text(encoding="utf-8"))["screens"] if s["id"] == "job")["policies"]
+def _job_in_file(o):
+    return next(s for s in json.loads((o / "screens.json").read_text(encoding="utf-8"))["screens"] if s["id"] == "job")
 
 
 def _select(pg, sid="job"):
@@ -54,8 +55,9 @@ def _select(pg, sid="job"):
     pg.wait_for_function("(id) => document.querySelector('.card[data-id=\"' + id + '\"]').classList.contains('picked')", arg=sid, timeout=3000)
 
 
-def _card_lines(pg):
-    return [t.strip() for t in pg.locator(CARD + " .pol li").all_text_contents()]
+def _body_on_card(pg):
+    el = pg.locator(CARD + " > .cbody > .fdesc")
+    return el.first.inner_text() if el.count() else None
 
 
 def _empty(pg):
@@ -63,53 +65,67 @@ def _empty(pg):
     return empty_point(pg)
 
 
+def _reload_shows(pg, want):
+    """새로고침 → 카드 본문. 도우미는 쓴 뒤 확인(뒤 빌드) 중이면 있던 페이지를 준다(contract '로컬 도우미') — 새 페이지가 나올 때까지 몇 번."""
+    got = None
+    for _ in range(20):
+        reload(pg)
+        zoom_to(pg, "job", 200)
+        _select(pg)
+        got = _body_on_card(pg)
+        if got == want:
+            break
+        pg.wait_for_timeout(500)
+    return got
+
+
+def _save_and_send(pg, notes):
+    e = _empty(pg)
+    pg.mouse.click(e["x"], e["y"])                    # 밖을 누르면 저장
+    wait_notes(pg, notes)
+    pg.evaluate("window.__hdLastHelper = null")
+    pg.click("#nsend")
+    pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
+
+
 @pytest.mark.area("helper", "tools", "notes")
-def test_policy_note_add_delete_insert_saves_one_list(ctx, out):
-    old = _policies_in_file(out)
-    assert len(old) == 3, old
+def test_card_text_is_title_plus_one_free_body(ctx, out):
+    job = _job_in_file(out)
+    assert job["purpose"] and len(job["policies"]) == 3, job
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     pg, errors = _open(ctx, srv.url)
     try:
         zoom_to(pg, "job", 200)
         _select(pg)
+        merged = job["purpose"] + "\n" + "\n".join("- " + p for p in job["policies"])
+        assert _body_on_card(pg) == merged, "옛 정책 줄은 본문 끝 '- ' 줄로 보인다"
         pg.dblclick(CARD + " .ftitle")
         box = pg.locator(CARD + " .capbox")
-        note = box.locator('[data-f="policies"]')
-        assert note.is_visible() and note.get_attribute("contenteditable") == "true", "정책 = 한 칸의 글"
-        assert box.locator('[data-f="policies"] li').count() == 0, "고치는 동안 글머리표 없음"
-        assert [ln.strip() for ln in note.inner_text().split("\n") if ln.strip()] == old
-        note.click()
-        pg.keyboard.press("Control+a")                # 첫 줄 지우기 · 가운데 넣기 · 끝에 더하기 — 그냥 글 고치듯
-        pg.keyboard.type(old[1])
-        pg.keyboard.press("Enter")
-        pg.keyboard.type("가운데 새 줄")
-        pg.keyboard.press("Enter")
-        pg.keyboard.press("Enter")                    # 빈 줄은 버린다
-        pg.keyboard.type(old[2])
-        pg.keyboard.press("Enter")
-        pg.keyboard.type("끝에 더한 줄")
-        want = [old[1], "가운데 새 줄", old[2], "끝에 더한 줄"]
-        e = _empty(pg)
-        pg.mouse.click(e["x"], e["y"])                # 밖을 누르면 저장
-        wait_notes(pg, 1)
-        n = notes_of(pg)[0]
-        assert n["edit"] == "policies" and n["value"] == want, n
-        assert "정책 줄 바꾸기: ①" in n["note"], n["note"]
-        _select(pg)
-        assert _card_lines(pg) == want, "카드에 새 목록이 바로 보인다(반영 대기)"
-        pg.keyboard.press("Control+z")                # 되돌리기 한 번 = 원래 목록
-        wait_notes(pg, 0)
-        _select(pg)
-        assert _card_lines(pg) == old
-        pg.keyboard.press("Control+y")
-        wait_notes(pg, 1)
-        pg.click("#nsend")
-        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.apply", timeout=20000)
-        assert _policies_in_file(out) == want, "도우미가 screens.json 에 그 목록 그대로"
-        pg.wait_for_timeout(300)
-        _select(pg)
-        assert _card_lines(pg) == want
+        body = box.locator('[data-f="purpose"]')
+        assert box.locator("[contenteditable=true]").count() == 2, "제목 + 본문, 두 칸뿐"
+        assert box.locator('[data-f="policies"], .capfoot').count() == 0, "정책 칸·긴 안내 줄 없음"
+        assert body.inner_text() == merged
+        body.click()
+        pg.keyboard.press("Control+a")
+        pg.keyboard.type("첫 줄")
+        pg.keyboard.press("Enter")                    # Enter = 줄바꿈
+        pg.keyboard.press("Enter")                    # 빈 줄도 남는다
+        pg.keyboard.type("- 셋째 줄")
+        pg.keyboard.press("Shift+Enter")
+        pg.keyboard.type("끝")
+        want = "첫 줄\n\n- 셋째 줄\n끝"
+        _save_and_send(pg, 2)
+        f = _job_in_file(out)
+        assert f["purpose"] == want and f["policies"] == [], f
+        assert _reload_shows(pg, want) == want, "다시 열어도 같은 글"
+        pg.dblclick(CARD + " .fdesc")                 # 다 지우기 → 빈 본문
+        pg.keyboard.press("Control+a")
+        pg.keyboard.press("Delete")
+        assert body.inner_text().strip() == "" and body.get_attribute("data-ph") == "설명", "빈 본문엔 안내 글 하나"
+        _save_and_send(pg, 1)
+        assert _job_in_file(out)["purpose"] == ""
+        assert _reload_shows(pg, None) is None, "빈 본문 = 카드 아래 글 없음"
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors
@@ -120,20 +136,20 @@ def test_policy_note_add_delete_insert_saves_one_list(ctx, out):
 def test_board_shows_title_only_until_card_is_selected(ctx, out):
     pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
     zoom_to(pg, "job", 200)
-    vis = lambda: {k: pg.locator(CARD + " " + s).first.is_visible() for k, s in (("title", ".ftitle"), ("desc", ".fdesc"), ("pol", "ul.pol"))}
-    assert vis() == {"title": True, "desc": False, "pol": False}, "고르지 않은 카드 = 제목만"
+    vis = lambda: {k: pg.locator(CARD + " " + s).first.is_visible() for k, s in (("title", ".ftitle"), ("desc", ".fdesc"))}
+    assert vis() == {"title": True, "desc": False}, "고르지 않은 카드 = 제목만"
     assert not pg.locator(CARD + " .capmark").is_visible()
     _select(pg)
-    assert vis() == {"title": True, "desc": True, "pol": True}, "고르면 설명·정책"
+    assert vis() == {"title": True, "desc": True}, "고르면 본문"
     pg.keyboard.press("Escape")
     pg.wait_for_function("!document.querySelector('.card[data-id=\"job\"]').classList.contains('picked')", timeout=3000)
-    assert vis() == {"title": True, "desc": False, "pol": False}, "고르기를 풀면 다시 제목만"
+    assert vis() == {"title": True, "desc": False}, "고르기를 풀면 다시 제목만"
     _select(pg)                                       # 설명을 고치면 접힌 카드에도 작은 표시
     pg.dblclick(CARD + " .fdesc")
     pg.keyboard.press("Control+a")
     pg.keyboard.type("새 설명")
     pg.keyboard.press("Control+Enter")
-    wait_notes(pg, 1)
+    wait_notes(pg, 2)                                 # 본문 + 옛 정책 줄 접기(policies [])
     pg.keyboard.press("Escape")
     pg.wait_for_function("!document.querySelector('.card[data-id=\"job\"]').classList.contains('picked')", timeout=3000)
     assert not pg.locator(CARD + " .fdesc").is_visible() and pg.locator(CARD + " .capmark").is_visible(), "반영 대기가 접혀서 안 보이면 안 된다"

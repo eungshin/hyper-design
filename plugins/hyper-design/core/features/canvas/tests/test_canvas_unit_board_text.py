@@ -125,8 +125,8 @@ out.del = ['story', 'people', 'decisions', 'market'].map(k => { const x = B.appl
 out.pending = B.pending([{edit: 'board', op: 'delete', to: 'people', id: 'n1'}, {edit: 'title', screen: 'a'}, {edit: 'board', op: 'set', to: 'story.summary', value: 'v', id: 'n2'}]);
 out.check = [B.check('story.summary', ' a \n  b '), B.check('people.0.name', '  '), B.check('foo', 'x'), B.check('story.headline', 'a\nb')];
 out.em = [B.keepEm('한 줄 <em>강조</em> 제목', '두 줄 강조 제목'), B.keepEm('한 줄 <em>강조</em> 제목', '아예 다름'), B.keepEm('그냥', '바뀜'), B.plain('a <em>b</em>')];
-out.cap = [B.captionDelete('title', {title: 'T'}), B.captionDelete('purpose', {purpose: 'P'}), B.captionDelete('purpose', {purpose: ''}),
-           B.captionDelete('policies', {policies: ['x', 'y']}), B.captionDelete('policies', {policies: []}), B.captionDelete('zz', {})];
+out.cap = [B.captionDelete('title', {title: 'T'}), B.captionDelete('purpose', {purpose: 'P'}), B.captionDelete('purpose', {purpose: '', policies: []}),
+           B.captionDelete('purpose', {purpose: 'P', policies: ['x', ' ', 'y']}), B.captionDelete('purpose', {purpose: '', policies: ['x']}), B.captionDelete('policies', {policies: ['x']})];
 out.layers = B.layers(B.blocks(D, {}), {'@intro': 1}).map(l => l.id);
 out.say = [B.say({op: 'delete', to: 'ideas'}), B.say({op: 'set', to: 'decisions.items.0.why', value: 'v'})];
 out.blockOf = [B.blockOf('story.ideas.0.title'), B.blockOf('decisions.market.0.name'), B.blockOf('x')];
@@ -180,10 +180,12 @@ def test_js_check_em_caption_layers(js):
     ok, empty, bad, line = js["check"]
     assert ok == {"value": "a\nb"} and "error" in empty and "error" in bad and line == {"value": "a b"}
     assert js["em"] == ["두 줄 <em>강조</em> 제목", "아예 다름", "바뀜", "a b"]
-    t, p, p0, pol, pol0, zz = js["cap"]
+    t, p, p0, both, polOnly, gone = js["cap"]
     assert "제목은 비울 수 없어요" in t["error"]
-    assert p == {"changes": [{"field": "purpose", "value": "", "old": "P"}]} and "error" in p0
-    assert pol == {"changes": [{"field": "policies", "value": [], "old": ["x", "y"]}]} and "error" in pol0 and "error" in zz
+    assert p == {"changes": [{"field": "purpose", "value": "", "old": "P"}]} and "error" in p0, "본문 Delete = 비우기, 이미 비었으면 거절"
+    assert both == {"changes": [{"field": "purpose", "value": "", "old": "P"}, {"field": "policies", "value": [], "old": ["x", " ", "y"]}]},         "R21: 본문에 합쳐 보이던 옛 정책 줄도 함께 비운다"
+    assert polOnly == {"changes": [{"field": "policies", "value": [], "old": ["x"]}]}
+    assert "error" in gone, "R21: 따로 고르는 정책 칸은 없다"
     assert js["layers"] == ["@intro-hint", "@intro-story", "@intro-ideas", "@intro-people", "@intro-decisions", "@intro-market",
                             "@foot-palettes", "@foot-credits", "@intro"], "숨겨 둔 옛 '@intro' 는 다시 보이게 할 수 있게 남긴다"
     d, s = js["say"]

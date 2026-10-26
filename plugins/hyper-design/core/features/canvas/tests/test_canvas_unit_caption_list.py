@@ -1,7 +1,7 @@
-"""정책 = 한 덩어리 글(task 31) — 카드 글 상자의 정책은 자유 메모 하나, 저장하면 줄마다 한 줄 정책 목록 하나로 바뀐다.
+"""옛 정책 목록(task 31) — R21 부터 카드 글 상자는 제목 + 본문 한 칸이고, 정책 줄은 본문에 합쳐 보인다(test_canvas_unit_caption.py).
+남은 것: 사용자 상태 파일의 옛 반영 대기 메모(policy[i]·policies)를 읽는 규칙과, 본문에 접을 때 쓰는 policies [] 편집.
 
-Model(node): caption.lines(글) → 줄 목록(앞뒤 빈칸 정리·빈 줄 버림) · caption.diff → 정책 목록이 다르면 {field:'policies', value:[…], old:[…]} 하나
-(가운데 넣기·가운데 지우기·순서 바꾸기·그대로면 편집 없음) · caption.pending(메모, id, 원래) → 반영 대기 목록(옛 줄 편집 위에 새 목록이 이김)
+Model(node): caption.pending(메모, id, 원래) → 반영 대기 목록(옛 줄 편집 위에 새 목록이 이김)
 · caption.shown → 판의 카드 아래 글에 무엇을 보일지(고르지 않은 카드 = 제목만 + 고친 표시) · edits.say.field('policies') · edits.directOf.
 도우미(apply_edits 직접, 브라우저·빌드 없음): policies 연산 = 목록 통째로 바꿈 · 검사(글 목록·50줄·500자) 거절 · 옛 policy 연산도 그대로.
 """
@@ -19,16 +19,6 @@ JS = r"""
 const fs = require('fs'), vm = require('vm');
 for (const n of ['caption', 'edits']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + n + '.js', 'utf8'), {filename: n + '.js'});
 const C = globalThis.HD.caption, E = globalThis.HD.edits, out = {};
-const b = {title: '홈', purpose: '설명', policies: ['하나', '둘', '셋']};
-const w = p => ({title: '홈', purpose: '설명', policies: p});
-out.lines = C.lines('  하나 \n\n   둘   셋 \r\n \n넷');
-out.same = C.diff(b, w([' 하나', '둘  ', '셋', '']));
-out.insert = C.diff(b, w(['하나', '가운데', '둘', '셋']));
-out.del = C.diff(b, w(['하나', '셋']));
-out.reorder = C.diff(b, w(['셋', '하나', '둘']));
-out.empties = C.diff(b, w(['', '하나', '  ', '셋', '']));
-out.all = C.diff(b, w(['', ' ']));
-out.withTitle = C.diff(b, {title: '새 홈', purpose: '설명', policies: ['하나', '둘', '셋', '넷']});
 const P = [{screen: 's', edit: 'policy', index: 1, value: '바뀐 둘'}, {screen: 's', edit: 'policy', index: 0, op: 'delete', value: ''},
            {screen: 't', edit: 'policies', value: ['남의 것']}];
 out.pendOld = C.pending(P, 's', ['하나', '둘', '셋']);
@@ -67,24 +57,6 @@ def js():
 OLD = ["하나", "둘", "셋"]
 
 
-def test_lines_split_trim_and_drop_empty(js):
-    assert js["lines"] == ["하나", "둘 셋", "넷"]
-
-
-def test_unchanged_list_is_no_edit(js):
-    assert js["same"] == [], "빈칸·빈 줄만 다른 것은 바뀐 게 아니다"
-
-
-def test_list_change_is_one_whole_list_edit(js):
-    assert js["insert"] == [{"field": "policies", "value": ["하나", "가운데", "둘", "셋"], "old": OLD}]
-    assert js["del"] == [{"field": "policies", "value": ["하나", "셋"], "old": OLD}]
-    assert js["reorder"] == [{"field": "policies", "value": ["셋", "하나", "둘"], "old": OLD}]
-    assert js["empties"] == [{"field": "policies", "value": ["하나", "셋"], "old": OLD}], "빈 줄은 버린다"
-    assert js["all"] == [{"field": "policies", "value": [], "old": OLD}], "다 비우면 빈 목록"
-    assert js["withTitle"] == [{"field": "title", "value": "새 홈", "old": "홈"},
-                               {"field": "policies", "value": ["하나", "둘", "셋", "넷"], "old": OLD}]
-
-
 def test_pending_list_newest_list_wins_over_old_line_edits(js):
     assert js["pendOld"] == ["바뀐 둘", "셋"], "옛 줄 편집(바꾸기·지우기)은 원래 번호로"
     assert js["pendNone"] is None, "반영 대기가 없으면 null"
@@ -95,7 +67,7 @@ def test_pending_list_newest_list_wins_over_old_line_edits(js):
 def test_shown_rule(js):
     hid, full = {"purpose": False, "policies": False}, {"purpose": True, "policies": True}
     assert js["shown"][0] == dict(hid, mark=False), "고르지 않은 카드 = 제목만"
-    assert js["shown"][1] == dict(full, mark=False), "고르면 설명·정책이 보인다"
+    assert js["shown"][1] == dict(full, mark=False), "고르면 본문이 보인다"
     assert js["shown"][2] == dict(hid, mark=True) and js["shown"][3] == dict(hid, mark=True), "접힌 카드에도 고친 표시"
     assert js["shown"][4] == dict(full, mark=False), "빈 레이아웃은 늘 이름·목적"
     assert js["shown"][5] == dict(full, mark=False), "펼치면 표시는 칸 자체(pend)"

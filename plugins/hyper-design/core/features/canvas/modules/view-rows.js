@@ -1,9 +1,9 @@
 /* View — 판의 화면 줄(섹션): 그리기·새 데이터에 맞추기(51-1)와 줄 제목으로 고르기·이름 바꾸기·지우기·줄만 걷기(51-4).
-   HD.viewRows.mount(ctx) → {html(rows) → 줄 전체 HTML, polHtml(pol, cls) → 카드 아래 정책 줄 HTML,
+   HD.viewRows.mount(ctx) → {html(rows) → 줄 전체 HTML(카드 아래 본문 = HD.caption.body — 설명 + 옛 정책 줄 '- ', R21),
                              sync(rows, has(id)) → {removed: [이름], added: [새로 만든 카드 요소]}, space()}
    space(): 줄 사이 띄우기(t51-8) — 카드 아래 설명(.cbody)은 고를 때만 펼쳐져 판 배치를 밀지 않으므로(task 31), 줄마다 펼친 설명이 들어갈 자리를 늘 비워 둔다
      (고르기로 아래 줄이 움직이지 않게). 접힌 카드도 잠깐 펼쳐 재고(그리기 전 같은 틱에서 되돌림) 계획은 HD.rows.space(Model), 그 값을 .flow 아래 여백으로.
-     옮긴 카드(card-pos)는 제 자리(slot) 기준. 셸이 카드 글이 바뀐 뒤·줄 높이가 바뀐 뒤 부른다 · '정책 N개 더' 열고 닫기는 여기서 듣는다
+     옮긴 카드(card-pos)는 제 자리(slot) 기준. 셸이 카드 글이 바뀐 뒤·줄 높이가 바뀐 뒤 부른다
    ctx = {rowsEl, $, $$, esc, warn(msg)}
    sync: 계획은 HD.rows.plan(Model). 걷은 줄은 이름별로 떼어 두었다가 같은 이름이 돌아오면(되살리기) 그 요소를 다시 끼운다 — 셸이 떼어 둔 카드(gone)가 제 상자로
    돌아가게. 처음 보는 줄은 rows 의 화면 중 has(id) 가 아닌 것(판에도·떼어 둔 곳에도 없음)으로 카드를 만든다. 붙이기(iframe 싣기·자리·크기)는 셸.
@@ -19,19 +19,14 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
   var esc = ctx.esc, $ = ctx.$, $$ = ctx.$$, parked = {};
-  function polHtml(pol, cls) {                        // 카드 아래 정책 줄: 앞 셋은 목록, 나머지는 '정책 N개 더' 접기 · cls(i) = 줄마다 덧붙일 클래스(반영 대기)
-    var li = function (p, i) { var c = cls ? cls(i) : ''; return '<li' + (c ? ' class="' + c + '"' : '') + '>' + esc(p) + '</li>'; };
-    var shown = pol.slice(0, 3).map(li).join('');
-    return (shown ? '<ul class="pol">' + shown + '</ul>' : '') + (pol.length > 3 ? '<details class="more"><summary>정책 ' + (pol.length - 3) + '개 더</summary><ul class="pol">' +
-      pol.slice(3).map(function (p, i) { return li(p, i + 3); }).join('') + '</ul></details>' : '');
-  }
   function cardHtml(s) {
+    var body = HD.caption.body(s.purpose, s.policies);
     return '<div class="card" data-id="' + esc(s.id) + '"><div class="phone"><iframe scrolling="no" tabindex="-1" title="' + esc(s.title) +
       '" data-src="' + esc(s.file) + '"></iframe><button class="cover" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
       '" aria-label="' + esc(s.title) + ' 크게 보기"></button></div><button class="pres" data-file="' + esc(s.file) + '" data-title="' + esc(s.title) +
       '" title="실제로 눌러 보기(두 번 눌러도 같아요)" aria-label="' + esc(s.title) + ' 크게 보기">보기</button>' +
       '<div class="ftitle">' + (s.state ? '<span class="state">상태</span>' : '') + esc(s.title) + '</div>' +
-      '<div class="cbody">' + (s.purpose ? '<div class="fdesc">' + esc(s.purpose) + '</div>' : '') + polHtml(s.policies || []) + '</div></div>';
+      '<div class="cbody">' + (body ? '<div class="fdesc">' + esc(body) + '</div>' : '') + '</div></div>';
   }
   function rowHtml(row, screens) {
     return '<div class="flow"><div class="glabel">' + esc(row.group) + '</div><div class="cards">' + screens.map(cardHtml).join('') + '</div></div>';
@@ -63,7 +58,7 @@ function mount(ctx) {
     });
     return {removed: p.remove, added: added};
   }
-  var FOLD = ['capfold-d', 'capfold-p'];
+  var FOLD = ['capfold-d'];
   function space() {
     var fs = flows().filter(function (f) { return f.parentNode === ctx.rowsEl; });
     if (!fs.length) return;
@@ -90,8 +85,7 @@ function mount(ctx) {
       if (fs[i].style.paddingBottom !== v) fs[i].style.paddingBottom = v;
     });
   }
-  ctx.rowsEl.addEventListener('toggle', function (e) { if (e.target && e.target.matches && e.target.matches('details.more')) space(); }, true);
-  return {html: html, polHtml: polHtml, sync: sync, space: space};
+  return {html: html, sync: sync, space: space};
 }
 
 HD.viewRows = {mount: mount};

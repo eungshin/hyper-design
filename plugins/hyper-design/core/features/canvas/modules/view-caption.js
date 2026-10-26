@@ -1,29 +1,27 @@
-/* View — 카드 아래 글 한 상자(H16)와 판의 카드 아래 글 접기(task 31). 비교·보일 칸 규칙은 modules/caption.js(Model), 여기는 그리기·글쇠·저장/취소.
-   상자 = <div class="capbox" role="group" aria-label="카드 글 고치기">: 첫 줄 = 상태 칩(고칠 수 없음) + 제목 [data-f="title"],
-   그다음 설명 [data-f="purpose"], 정책 메모 [data-f="policies"](여러 줄 글 한 칸 — 글머리표 없음, 한 줄 = 정책 하나), 아래 안내 .capfoot. 상자는 카드의 .phone 바로 뒤에 들어간다.
-   글쇠: 제목에서 Enter·Shift+Enter = 설명으로(제목은 한 줄) · 설명에서 Shift+Enter = 줄바꿈(Enter = 정책 메모로) · 정책 메모에서 Enter·Shift+Enter = 새 줄(그 밖은 보통 글 고치기)
+/* View — 카드 아래 글 한 상자(H16 · R21)와 판의 카드 아래 글 접기(task 31). 비교·보일 칸 규칙은 modules/caption.js(Model), 여기는 그리기·글쇠·저장/취소.
+   상자 = <div class="capbox" role="group" aria-label="카드 글 고치기">: 첫 줄 = 상태 칩(고칠 수 없음) + 제목 [data-f="title"](한 줄),
+   그다음 본문 [data-f="purpose"](여러 줄 자유 글 한 칸 — 옛 정책 줄은 caption.body 로 '- ' 줄이 되어 함께 들어온다). 상자는 카드의 .phone 바로 뒤에 들어간다.
+   글쇠: 제목에서 Enter·Shift+Enter = 본문으로 · 본문에서 Enter·Shift+Enter = 줄바꿈
          ↑/↓ = 칸의 첫/마지막 줄이면 앞/뒤 칸으로 · Esc = 취소 · Ctrl+Enter = 저장
-   밖을 누르면 저장, 다른 카드 상자를 열면 열린 상자를 먼저 저장. 붙여넣기는 글만(제목은 한 줄로, 설명·정책 메모는 줄바꿈 그대로).
-   저장: 정책 메모 = caption.lines(줄마다 정리, 빈 줄 버림) → caption.diff 가 목록이 다르면 policies 편집 하나
-   HD.viewCaption.mount(ctx) → {open(cardEl, focus), close(save), isOpen(), fold(cardEl, show)}  focus = {field: 'title'|'purpose'|'policy', index?}
-     fold(cardEl, {purpose, policies, mark}) = 판의 카드 아래 글 접기(caption.shown 의 답을 그리기만 — 클래스 capfold-d·capfold-p + 작은 표시 .capmark)
+   밖을 누르면 저장, 다른 카드 상자를 열면 열린 상자를 먼저 저장. 붙여넣기는 글만(제목은 한 줄로, 본문은 줄바꿈 그대로).
+   저장: caption.diff(지금 값, {title, body}) — 본문이 바뀌면 purpose 하나 + 옛 정책 줄이 있었으면 policies [] (접기)
+   HD.viewCaption.mount(ctx) → {open(cardEl, focus), close(save), isOpen(), fold(cardEl, show)}  focus = {field: 'title'|'purpose'}
+     fold(cardEl, {purpose, mark}) = 판의 카드 아래 글 접기(caption.shown 의 답을 그리기만 — 클래스 capfold-d + 작은 표시 .capmark)
    ctx = {values(id) → {title, purpose, policies}(반영 대기 포함 지금 값), badge(cardEl) → 칩 Node|null, commit(id, changes), onClose(),
-          hasPolicies(id) → 정책 메모를 둘지(선택, 기본 예 — 빈 레이아웃은 아니오),
           hint(id) → {title?, purpose?} 빈 칸 안내 글(선택 — 빈 레이아웃은 목적·메모의 몫을 여기서 말한다),
           toast(msg)(선택 — 제목을 비우고 닫으면 알림, 없으면 말없이 원래 제목)}
-   지우기(#243): 비운 설명 = '' 편집 · 비운 제목 = 편집 없음(원래 이름) · 정책 메모를 다 비우면 빈 목록
+   지우기(#243): 본문을 다 비우면 '' · 비운 제목 = 편집 없음(원래 이름)
    판의 카드 글(셸 C8): HD.viewCaption.cards(ctx) → {setOrig(rows), orig(id), put(id, o), cardsOf(ids?), paint(ids?), fold(ids?), open(el, focus), values(id), commit(id, changes)}
-     원래 글(ORIG = HD.caption.origOf, 처음·쓴 뒤 데이터를 합쳐 쌓음)의 주인 · 카드 제목·설명·정책 줄 그리기(반영 대기 = .pend) · 접기 · 위 상자(mount)를 그 값으로 열기 ·
+     원래 글(ORIG = HD.caption.origOf, 처음·쓴 뒤 데이터를 합쳐 쌓음)의 주인 · 카드 제목·본문 그리기(반영 대기 = .pend) · 접기 · 위 상자(mount)를 그 값으로 열기 ·
      카드 글 두 번 누르기. 바뀐 칸마다 편집 메모 하나 → ctx.add 한 번(되돌리기 한 번) · 빈 레이아웃 = ctx.editLayout
-     ctx = {$, $$, rowsEl, pane, notes(NS), polHtml(pol, cls), space(), selected() → 고른 id|null(고르기가 붙기 전), typing(e), guard(ids), closeMenus(), toast(msg),
+     ctx = {$, $$, rowsEl, pane, notes(NS), space(), selected() → 고른 id|null(고르기가 붙기 전), typing(e), guard(ids), closeMenus(), toast(msg),
             placed()(닫은 뒤 판 글 다시 놓기), layoutOf(id), editLayout(id, changes), note(id, h, text), add(label, list)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var STOP = ['pointerdown', 'mousedown', 'click', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress'];
 var TITLE_KEEP = '제목은 비울 수 없어요 — 원래 이름으로 둘게요';
-var FOOT = '제목 · 설명 · 정책 한 상자 · 정책은 한 줄에 하나(Enter 새 줄, 빈 줄은 버림) · 설명은 Shift+Enter 줄바꿈 · Esc 취소 · Ctrl+Enter 저장 · 밖을 누르면 저장';
-var MARK = '설명·정책 고침';
+var MARK = '설명 고침';
 
 function readText(el) {                             // 칸의 글: 글 마디 그대로, <br>·블록 = 줄바꿈(화면 배치와 무관)
   var s = '';
@@ -68,11 +66,9 @@ function atEdge(el, up) {                           // 글자 자리가 칸의 �
 }
 
 function mount(ctx) {
-  var C = HD.caption, cur = null;                   // cur = {card, id, box, title, purpose, note}
+  var C = HD.caption, cur = null;                   // cur = {card, id, box, title, purpose}
 
-  function fields() {                               // 위에서 아래 순서의 고칠 칸들
-    return cur.note ? [cur.title, cur.purpose, cur.note] : [cur.title, cur.purpose];
-  }
+  function fields() { return [cur.title, cur.purpose]; }   // 위에서 아래 순서의 고칠 칸들
   function move(el, by, atEnd) {
     var fs = fields(), i = fs.indexOf(el), t = fs[i + by];
     if (t) caretTo(t, atEnd); return !!t;
@@ -89,8 +85,8 @@ function mount(ctx) {
     var f = el.dataset.f;
     if (k === 'Enter') {
       e.preventDefault();
-      if (f === 'policies' || (f === 'purpose' && e.shiftKey)) { document.execCommand('insertLineBreak'); return; }   // 정책 메모 = 늘 새 줄 · 설명 = Shift+Enter
-      move(el, 1, false);                           // 제목(Shift+Enter 도)·설명 Enter = 다음 칸
+      if (f === 'purpose') { document.execCommand('insertLineBreak'); return; }   // 본문 = 늘 줄바꿈(R21)
+      move(el, 1, false);                           // 제목 Enter(Shift+Enter 도) = 본문으로
       return;
     }
     if (k === 'ArrowUp' || k === 'ArrowDown') {
@@ -100,10 +96,10 @@ function mount(ctx) {
       return;
     }
   }
-  function onPaste(e) {                             // 붙여넣기는 글만(제목은 한 줄로, 설명·정책 메모는 줄바꿈 그대로)
+  function onPaste(e) {                             // 붙여넣기는 글만(제목은 한 줄로, 본문은 줄바꿈 그대로)
     e.preventDefault();
     var t = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
-    var el = e.target.closest ? e.target.closest('[data-f="purpose"], [data-f="policies"]') : null;
+    var el = e.target.closest ? e.target.closest('[data-f="purpose"]') : null;
     t = el ? t.replace(/\r\n?/g, '\n') : t.replace(/\s+/g, ' ');
     if (el && /\n/.test(t)) {
       t.split('\n').forEach(function (ln, i) { if (i) document.execCommand('insertLineBreak'); if (ln) document.execCommand('insertText', false, ln); });
@@ -125,24 +121,16 @@ function mount(ctx) {
     if (hint.title) title.dataset.ph = hint.title;
     var purpose = document.createElement('div');
     purpose.dataset.f = 'purpose'; purpose.className = 'capd'; purpose.setAttribute('contenteditable', 'true'); purpose.setAttribute('aria-label', '설명');
-    setText(purpose, v.purpose);
-    purpose.dataset.ph = hint.purpose || '설명 · Shift+Enter 줄바꿈';
-    var note = null;
-    if (!ctx.hasPolicies || ctx.hasPolicies(cardEl.dataset.id)) {
-      note = document.createElement('div'); note.dataset.f = 'policies'; note.className = 'capp';
-      note.setAttribute('contenteditable', 'true'); note.setAttribute('aria-label', '정책 — 한 줄에 하나');
-      setText(note, (v.policies || []).join('\n'));
-      note.dataset.ph = '정책 — 한 줄에 하나 · Enter 새 줄';
-    }
-    var foot = document.createElement('div'); foot.className = 'capfoot'; foot.textContent = FOOT;
-    box.appendChild(head); box.appendChild(purpose); if (note) box.appendChild(note); box.appendChild(foot);
+    setText(purpose, C.body(v.purpose, v.policies));   // 본문 한 칸 = 설명 + 옛 정책 줄(R21)
+    purpose.dataset.ph = hint.purpose || '설명';
+    box.appendChild(head); box.appendChild(purpose);
     STOP.forEach(function (n) { box.addEventListener(n, function (e) { e.stopPropagation(); }); });
     box.addEventListener('keydown', onKey);
     box.addEventListener('paste', onPaste);
     box.addEventListener('drop', function (e) { e.preventDefault(); });
     var ph = cardEl.querySelector('.phone');
     if (ph && ph.parentNode) ph.parentNode.insertBefore(box, ph.nextSibling); else cardEl.appendChild(box);
-    return {card: cardEl, box: box, title: title, purpose: purpose, note: note};
+    return {card: cardEl, box: box, title: title, purpose: purpose};
   }
 
   function open(cardEl, focus) {
@@ -154,28 +142,16 @@ function mount(ctx) {
     place(focus);
   }
   function place(focus) {
-    var f = focus || {field: 'title'}, el = cur.title;
-    if (f.field === 'purpose') el = cur.purpose;
-    else if (f.field === 'policy' && cur.note) { lineEnd(cur.note, f.index || 0); return; }
-    caretTo(el, true);
-  }
-  function lineEnd(el, i) {                         // 정책 메모의 i 번째 줄 끝에 글자 자리
-    var br = el.querySelectorAll('br')[i];
-    if (!br) { caretTo(el, true); return; }
-    el.focus();
-    var sel = window.getSelection(); if (!sel) return;
-    var r = document.createRange(); r.setStartBefore(br); r.collapse(true);
-    sel.removeAllRanges(); sel.addRange(r);
+    var f = focus || {field: 'title'};
+    caretTo(f.field === 'title' ? cur.title : cur.purpose, true);
   }
   function close(save) {
     if (!cur) return;
     var c = cur; cur = null;                        // 다시 들어와도 한 번만
     document.removeEventListener('pointerdown', onOutside, true);
     if (save) {
-      var edited = {title: readText(c.title), purpose: readText(c.purpose),
-                    policies: c.note ? C.lines(readText(c.note)) : null};
+      var edited = {title: readText(c.title), body: readText(c.purpose)};
       var before = ctx.values(c.id) || {};
-      if (!c.note) edited.policies = before.policies;
       var changes = C.diff(before, edited);
       if (!C.normalise('title', edited.title) && C.normalise('title', before.title) && ctx.toast) ctx.toast(TITLE_KEEP);
       if (changes.length) ctx.commit(c.id, changes);
@@ -187,10 +163,9 @@ function mount(ctx) {
   function fold(cardEl, show) {                     // 판의 카드 아래 글 접기 — 무엇을 보일지는 caption.shown(Model)
     if (!cardEl) return;
     cardEl.classList.toggle('capfold-d', !show.purpose);
-    cardEl.classList.toggle('capfold-p', !show.policies);
     var m = cardEl.querySelector(':scope > .capmark');
     if (show.mark && !m) {
-      m = document.createElement('span'); m.className = 'capmark'; m.textContent = MARK; m.title = '설명이나 정책에 반영 대기 편집이 있어요 — 카드를 고르면 보여요';
+      m = document.createElement('span'); m.className = 'capmark'; m.textContent = MARK; m.title = '설명에 반영 대기 편집이 있어요 — 카드를 고르면 보여요';
       var t = cardEl.querySelector(':scope > .ftitle');
       if (t) t.parentNode.insertBefore(m, t.nextSibling); else cardEl.appendChild(m);
     } else if (!show.mark && m) m.remove();
@@ -214,17 +189,17 @@ function cards(ctx) {
     var t = pendingOf(id, 'title'), d = pendingOf(id, 'purpose');
     return {title: t != null ? t : o.title, purpose: d != null ? d : o.purpose, policies: polPending(id) || o.policies.slice()};
   }
-  function commit(id, changes) {                     // 바뀐 칸마다 편집 메모 하나(title·purpose·policies = 정책 목록 통째로, task 31) → 한 번의 add = 되돌리기 한 번
+  function commit(id, changes) {                     // 바뀐 칸마다 편집 메모 하나(title·purpose · policies [] = 옛 정책 줄을 본문에 접음, R21) → 한 번의 add = 되돌리기 한 번
     if (!ORIG[id]) { ctx.editLayout(id, changes); return; }
     var list = changes.map(function (ch) {
       var path = 'screens.json > screens[id=' + id + '] > ' + ch.field, old = Array.isArray(ch.old) ? ch.old.join(' · ') : ch.old;
       var n = ctx.note(id, {path: path, text: old, rect: null}, HD.edits.say.field(ch.field, ch.value, null, ch.old));
-      n.edit = ch.field; n.value = ch.value;           // policies = 줄 목록 통째로
+      n.edit = ch.field; n.value = ch.value;
       return n;
     });
     ctx.add('카드 글', list);
   }
-  function fold(ids) {                               // 판의 카드 아래 글 접기(task 31): 고르지 않은 카드 = 제목만(+ 반영 대기 표시) · 고른 카드·빈 레이아웃 = 다
+  function fold(ids) {                               // 판의 카드 아래 글 접기(task 31): 고르지 않은 카드 = 제목만(+ 반영 대기 표시) · 고른 카드·빈 레이아웃 = 본문까지
     var sel = ctx.selected(); if (!sel) return;       // 셸이 다 붙기 전(처음 그리기) — 고르기를 붙인 뒤 한 번 부른다
     var on = {}; sel.forEach(function (x) { on[x] = 1; });
     cardsOf(ids).forEach(function (c) {
@@ -235,46 +210,42 @@ function cards(ctx) {
   function paint(ids) {
     cardsOf(ids).forEach(function (c) {
       var id = c.dataset.id, o = ORIG[id]; if (!o) return;
-      [['title', '.ftitle'], ['purpose', '.fdesc']].forEach(function (fs) {
-        var el = $(fs[1], c); if (!el || $('input, textarea', el)) return;
-        var v = pendingOf(id, fs[0]), keep = $('.state', el);
-        el.textContent = v != null ? v : o[fs[0]]; if (keep) el.insertBefore(keep, el.firstChild);
+      var el = $(':scope > .ftitle', c), v = pendingOf(id, 'title');
+      if (el && !$('input, textarea', el)) {
+        var keep = $('.state', el);
+        el.textContent = v != null ? v : o.title; if (keep) el.insertBefore(keep, el.firstChild);
         el.classList.toggle('pend', v != null);
-        if (v != null) el.title = '반영 대기 · 원래: ' + o[fs[0]]; else el.removeAttribute('title');
-      });
-      var pp = polPending(id), pol = pp || o.policies;   // 정책 = 반영 대기 목록 하나(task 31) 또는 원래 목록
-      var cls = pp ? function (i) { return pol[i] === o.policies[i] ? '' : 'pend'; } : null;
-      var key = JSON.stringify([pol, pp ? pol.map(function (x, i) { return cls(i); }) : 0]);
-      if (c.dataset.polKey !== key) {                  // 바뀐 때만 다시(다른 칸 그리기가 정책 줄을 건드리지 않게)
-        var open = !!$('details.more[open]', c);
-        var body = $(':scope > .cbody', c), d = body && $(':scope > .fdesc', body);
-        if (body) { $$(':scope > .pol, :scope > .more', body).forEach(function (x) { x.remove(); }); body.insertAdjacentHTML(d ? 'beforeend' : 'afterbegin', ctx.polHtml(pol, cls)); }
-        if (open && $('details.more', c)) $('details.more', c).open = true;
-        c.dataset.polKey = key;
+        if (v != null) el.title = '반영 대기 · 원래: ' + o.title; else el.removeAttribute('title');
       }
+      var cb = $(':scope > .cbody', c); if (!cb) return;   // 본문 한 칸(R21) = 설명 + 옛 정책 줄 — 반영 대기가 이긴다
+      var d = pendingOf(id, 'purpose'), pp = polPending(id), pend = d != null || pp != null;
+      var text = HD.caption.body(d != null ? d : o.purpose, pp || o.policies), was = HD.caption.body(o.purpose, o.policies);
+      var fd = $(':scope > .fdesc', cb);
+      if (!text) { if (fd) fd.remove(); return; }
+      if (!fd) { fd = document.createElement('div'); fd.className = 'fdesc'; cb.insertBefore(fd, cb.firstChild); }
+      fd.textContent = text;
+      fd.classList.toggle('pend', pend);
+      if (pend) fd.title = '반영 대기 · 원래: ' + (was || '(비어 있음)'); else fd.removeAttribute('title');
     });
     fold(ids);
     ctx.space();                                      // 카드 글이 바뀌면 줄 사이도(펼친 설명 자리, t51-8)
   }
   var CAP = mount({values: values, badge: function (c) { return $('.ftitle .state', c); }, commit: commit,
-    hasPolicies: function (id) { return !!ORIG[id]; },   // 빈 레이아웃은 이름·목적만(#225)
     toast: function (m) { ctx.toast(m); },
-    hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로) · Shift+Enter 줄바꿈'}; },
+    hint: function (id) { return ORIG[id] ? null : {title: '새 화면 이름', purpose: '이 화면의 목적 — 무엇을 하는 화면인지 (자세한 지시는 메모로)'}; },
     onClose: function (c) { if (c) c.classList.remove('capopen'); paint(c ? [c.dataset.id] : null); ctx.placed(); }});   // 닫은 뒤에도 그 카드 글이 골라진 채(F14, t51-9)
-  function open(el, focus) {                         // el = 카드 안 아무 글(.ftitle·.fdesc·.pol li) · focus = 글자 자리를 둘 칸
+  function open(el, focus) {                         // el = 카드 안 아무 글(.ftitle·.fdesc) · focus = 글자 자리를 둘 칸
     ctx.closeMenus();
     var c = el && el.closest('.card'); if (!c) return;
     var id = c.dataset.id;
     if (ctx.guard([id])) return;
-    if (focus.field === 'policy') focus = {field: 'policy', index: $$('.pol li', c).indexOf(el)};
     c.classList.add('capopen');
     CAP.open(c, focus);
   }
-  ctx.pane.addEventListener('dblclick', function (e) {   // 카드 이름·설명·정책 줄 두 번 누르기 = 그 칸에서 상자 열기
+  ctx.pane.addEventListener('dblclick', function (e) {   // 카드 이름·본문 두 번 누르기 = 그 칸에서 상자 열기
     var t = e.target, cl = function (q) { return t && t.closest ? t.closest(q) : null; };
     if (cl('#tools') || cl('.alabel') || ctx.typing(e)) return;
-    var ft = cl('.ftitle'), fd = cl('.fdesc'), fp = cl('.pol li');
-    if (fp) { e.preventDefault(); open(fp, {field: 'policy'}); return; }
+    var ft = cl('.ftitle'), fd = cl('.fdesc');
     if (ft) { e.preventDefault(); open(ft, {field: 'title'}); return; }
     if (fd) { e.preventDefault(); open(fd, {field: 'purpose'}); return; }
   });

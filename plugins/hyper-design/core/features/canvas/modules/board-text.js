@@ -6,7 +6,7 @@
    pending(notes) → 메모 중 edit 'board' 를 차례대로 [{id, op, to, value}]
    check(key, text) → {value}(정리한 글) | {error} — 한 줄 칸(제목·이름) = 빈칸 한 칸, 이름은 비울 수 없음, 2000자
    keepEm(raw, text) → 원래 제목의 <em>강조</em> 글이 새 글에도 있으면 다시 감싼다 · plain(raw) = 태그 뺀 글
-   captionDelete(field, values) → {changes:[{field, value, old}]} | {error} — 카드 아래 글 Delete: 제목 = 거절, 설명 = '', 정책 = []
+   captionDelete(field, values) → {changes:[{field, value, old}]} | {error} — 카드 아래 글 Delete: 제목 = 거절, 본문(purpose) = '' + 합쳐 보이던 옛 정책 줄 [](R21)
    layers(blocks, hidden) → [{id, name}] 레이어 패널 줄(+ 예전에 숨겨 둔 '@intro'·'@foot' 은 다시 보이게 할 수 있게)
    say(op) → {path, text, note} 요청문 글(도우미 없이 보낼 때) · blockOf(key) → 묶음 키 | null
    HD.boardText = {IDS, NAMES, CAPTION, blocks, apply, pending, check, keepEm, plain, captionDelete, layers, say, blockOf} */
@@ -16,7 +16,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var NAMES = {hint: '소개 · 안내 줄', story: '소개 · 제목·요약', ideas: '소개 · 아이디어', people: '소개 · 사람', decisions: '정한 것 · 뺀 것',
              market: '시장 관례', palettes: '끝 글 · 색 출처', credits: '끝 글 · 사진 출처', dscard: '디자인 시스템'};
-var CAPTION = {title: '카드 제목', purpose: '카드 설명', policies: '카드 정책'};
+var CAPTION = {title: '카드 제목', purpose: '카드 설명'};
 var LAYER = {hint: '@intro-hint', story: '@intro-story', ideas: '@intro-ideas', people: '@intro-people', decisions: '@intro-decisions',
              market: '@intro-market', palettes: '@foot-palettes', credits: '@foot-credits', dscard: '@dscard'};
 var SRC = {story: 'screens.json > story > headline·summary', ideas: 'screens.json > story > ideas', people: 'screens.json > people',
@@ -121,8 +121,12 @@ function keepEm(raw, text) {
 function captionDelete(field, v) {
   v = v || {};
   if (field === 'title') return {error: '제목은 비울 수 없어요 — 카드를 지우려면 카드를 고르고 Delete'};
-  if (field === 'purpose') return str(v.purpose) ? {changes: [{field: 'purpose', value: '', old: str(v.purpose)}]} : {error: '설명이 이미 비어 있어요'};
-  if (field === 'policies') return arr(v.policies).length ? {changes: [{field: 'policies', value: [], old: arr(v.policies).slice()}]} : {error: '정책이 이미 비어 있어요'};
+  if (field === 'purpose') {                        // 본문 한 칸(R21) = purpose + 옛 정책 줄 — 둘 다 비운다
+    var ch = [];
+    if (str(v.purpose)) ch.push({field: 'purpose', value: '', old: str(v.purpose)});
+    if (arr(v.policies).some(function (p) { return str(p).trim(); })) ch.push({field: 'policies', value: [], old: arr(v.policies).slice()});
+    return ch.length ? {changes: ch} : {error: '설명이 이미 비어 있어요'};
+  }
   return {error: '모르는 카드 글 칸이에요: ' + field};
 }
 

@@ -8,7 +8,7 @@
        caption: {values(id), commit(id, changes), open(el, focus)}, reload()(판 글 다시 불러오기 — 뒤 빌드 실패로 되돌린 뒤), changed()(판 높이·레이어가 바뀜)}
    상태 = 고른 판 글 하나 {kind: 'block', key} | {kind: 'cap', id, field}(저장 안 함) · 바로 반영 중인 편집(id → op) · 받은 데이터(base).
    고르기 = 파란 상자 #btsel(이름표 data-label) · 올리기 = 얇은 테두리 #bthov(둘 다 #stage 안, --ts 배율 = 줄과 같은 화면 크기).
-   글쇠(window capture — 셸의 카드 지우기·Esc 보다 먼저): Delete·Backspace = 지우기(파일 묶음 = 파일에서 빼기 · 만든 글 = 숨기기 · 카드 제목 = 거절 · 설명·정책 = 비우기),
+   글쇠(window capture — 셸의 카드 지우기·Esc 보다 먼저): Delete·Backspace = 지우기(파일 묶음 = 파일에서 빼기 · 만든 글 = 숨기기 · 카드 제목 = 거절 · 본문(설명) = 비우기),
      Enter = 고치기(소개 칸 = 그 자리 · 카드 글 = 카드 글 상자 · DS 카드 = Foundation 탭), Esc = 풀기(카드 글이면 카드는 골라진 채 — Figma 부모 고르기).
    그 자리 고치기: Enter 저장 · Shift+Enter 줄바꿈(여러 줄 칸) · Esc 취소 · 밖 누르기 저장. 고친 뒤에도 골라진 채(F14).
    의도 받음: 'hd-board-pick' {id: 레이어 id}(레이어 패널 줄 누르기) */
@@ -77,7 +77,7 @@ var CSS =
   '#btsel::before{content:attr(data-label);position:absolute;left:calc(-2px * var(--ts,1));bottom:100%;margin-bottom:calc(2px * var(--ts,1));background:' + BLUE +
     ';font:600 11px/1.5 system-ui,sans-serif;color:#fff;padding:0 6px;border-radius:4px;white-space:nowrap;transform:scale(var(--ts,1));transform-origin:0 100%}\n' +
   '#bthov{border:calc(1px * var(--ts,1)) solid ' + BLUE + '}\n' +
-  '#screens.t-move .bt,#screens.t-move #dscard,#screens.t-move .card>.ftitle,#screens.t-move .cbody>.fdesc,#screens.t-move .cbody>.pol{cursor:default}\n' +
+  '#screens.t-move .bt,#screens.t-move #dscard,#screens.t-move .card>.ftitle,#screens.t-move .cbody>.fdesc{cursor:default}\n' +
   '#stage [data-bk][contenteditable]{cursor:text;outline:calc(2px * var(--ts,1)) solid ' + BLUE + ';outline-offset:calc(3px * var(--ts,1));border-radius:2px;white-space:pre-wrap}\n';
 
 function mount(ctx) {
@@ -100,8 +100,7 @@ function mount(ctx) {
   function capEls(id, field) {
     var c = ctx.cardEl ? ctx.cardEl(id) : $('.card[data-id="' + id + '"]'); if (!c) return [];
     if (field === 'title') return $$(':scope > .ftitle', c);
-    if (field === 'purpose') return $$(':scope > .cbody > .fdesc', c);
-    return $$(':scope > .cbody > .pol, :scope > .cbody > .more', c);
+    return field === 'purpose' ? $$(':scope > .cbody > .fdesc', c) : [];
   }
   function curEls() {
     if (!cur) return [];
@@ -195,7 +194,7 @@ function mount(ctx) {
   }
   function edit(fieldEl) {
     if (!cur) return;
-    if (cur.kind === 'cap') { var c = capEls(cur.id, cur.field)[0]; if (c && !A.guard([cur.id])) { sel.hidden = true; A.caption.open(c.matches('.pol, .more') ? c.querySelector('li') || c : c, {field: cur.field === 'policies' ? 'policy' : cur.field}); } return; }
+    if (cur.kind === 'cap') { var c = capEls(cur.id, cur.field)[0]; if (c && !A.guard([cur.id])) { sel.hidden = true; A.caption.open(c, {field: cur.field}); } return; }
     if (cur.key === 'dscard') { var t = document.querySelector('.tab[data-tab="foundation"]'); if (t) t.click(); return; }
     var b = blockByKey(cur.key), el = elOf(b);
     if (!b || !el) return;
@@ -247,8 +246,8 @@ function mount(ctx) {
     if (b && (intro.contains(b) || foot.contains(b))) return {s: {kind: 'block', key: b.dataset.bt}, el: b, field: t.closest('[data-bk]')};
     var d = t.closest('#dscard'); if (d) return {s: {kind: 'block', key: 'dscard'}, el: d};
     var c = t.closest('.card'); if (!c || c.classList.contains('draft')) return null;
-    var cap = t.closest('.card > .ftitle') ? 'title' : t.closest('.cbody > .fdesc') ? 'purpose' : t.closest('.cbody > .pol, .cbody > .more') ? 'policies' : null;
-    return cap ? {s: {kind: 'cap', id: c.dataset.id, field: cap}, el: t.closest('.ftitle, .fdesc, .pol, .more')} : null;
+    var cap = t.closest('.card > .ftitle') ? 'title' : t.closest('.cbody > .fdesc') ? 'purpose' : null;
+    return cap ? {s: {kind: 'cap', id: c.dataset.id, field: cap}, el: t.closest('.ftitle, .fdesc')} : null;
   }
   function isCur(s) { return !!cur && s.kind === cur.kind && s.key === cur.key && s.id === cur.id && s.field === cur.field; }
   pane.addEventListener('click', function (e) {

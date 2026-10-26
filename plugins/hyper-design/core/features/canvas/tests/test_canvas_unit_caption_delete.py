@@ -1,7 +1,7 @@
-"""카드 글 상자에서 지우기(#243, task 15) — caption.diff 의 지우기 편집 · say 글귀 · helper 가 정책 줄을 지우고 설명을 비운다.
+"""카드 글 상자에서 지우기(#243, task 15 · R21) — caption.diff 의 지우기 편집 · say 글귀 · helper 가 정책 줄을 지우고 설명을 비운다.
 
-Model(node): 비운 정책 줄 = 목록에서 빠짐(task 31 — {field:'policies'} 목록 하나), 비운 설명 = '' 편집, 비운 제목 = 편집 없음,
-빈 새 줄 = 버림. say 의 옛 정책 줄(policy) 글귀는 옛 반영 대기 메모 때문에 그대로. 도우미(브라우저·HTTP·빌드 없음, apply_edits 직접): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
+Model(node): 본문 한 칸(R21)에서 옛 정책 줄('- ' 줄)을 지우면 purpose 는 그대로 + policies [] · 본문을 다 비우면 purpose '' + policies [],
+비운 제목 = 편집 없음, 원래 빈 칸이 그대로면 편집 없음. say 의 옛 정책 줄(policy) 글귀는 옛 반영 대기 메모 때문에 그대로. 도우미(브라우저·HTTP·빌드 없음, apply_edits 직접): 한 번 적용에 정책 줄 여럿 지우기(큰 번호부터) · 설명 '' · 없는 번호 = 실패 한 줄만.
 """
 import json, shutil, subprocess, sys, tempfile, types
 from pathlib import Path
@@ -18,12 +18,11 @@ const fs = require('fs'), vm = require('vm');
 for (const n of ['caption', 'edits']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + n + '.js', 'utf8'), {filename: n + '.js'});
 const C = globalThis.HD.caption, S = globalThis.HD.edits.say, out = {};
 const b = {title: '홈', purpose: '설명 글', policies: ['하나', '둘', '셋']};
-out.twoPol = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['', '둘', '  \n ']});
-out.purpose = C.diff(b, {title: '홈', purpose: ' \n ', policies: ['하나', '둘', '셋']});
-out.title = C.diff(b, {title: '  ', purpose: '설명 글', policies: ['하나', '둘', '셋']});
-out.newEmpty = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['하나', '둘', '셋', ' ']});
-out.emptyStays = C.diff({title: '홈', purpose: '', policies: ['']}, {title: '홈', purpose: '', policies: ['']});
-out.mixed = C.diff(b, {title: '홈', purpose: '설명 글', policies: ['새 하나', '', '셋']});
+out.twoPol = C.diff(b, {title: '홈', body: '설명 글\n- 둘'});
+out.purpose = C.diff(b, {title: '홈', body: ' \n '});
+out.title = C.diff(b, {title: '  ', body: C.body(b.purpose, b.policies)});
+out.newEmpty = C.diff(b, {title: '홈', body: C.body(b.purpose, b.policies) + '\n  '});
+out.emptyStays = C.diff({title: '홈', purpose: '', policies: ['']}, {title: '홈', body: ''});
 out.sayDel = S.field('policy', '', 1, '둘');
 out.sayDelNoOld = S.field('policy', '', 1);
 out.sayPurpose = S.field('purpose', '');
@@ -46,19 +45,22 @@ def js():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_cleared_policy_lines_drop_out_of_the_one_list(js):
-    old = ["하나", "둘", "셋"]
-    assert js["twoPol"] == [{"field": "policies", "value": ["둘"], "old": old}], js["twoPol"]
-    assert js["mixed"] == [{"field": "policies", "value": ["새 하나", "셋"], "old": old}], js["mixed"]
+OLD = ["하나", "둘", "셋"]
 
 
-def test_cleared_purpose_is_an_empty_edit(js):
-    assert js["purpose"] == [{"field": "purpose", "value": "", "old": "설명 글"}], js["purpose"]
+def test_deleting_old_policy_lines_in_the_body_folds_the_rest(js):
+    assert js["twoPol"] == [{"field": "purpose", "value": "설명 글\n- 둘", "old": "설명 글"},
+                            {"field": "policies", "value": [], "old": OLD}], "남은 줄은 본문에, 정책 목록은 비움"
 
 
-def test_cleared_title_and_empty_new_line_are_not_edits(js):
+def test_cleared_body_empties_purpose_and_policies(js):
+    assert js["purpose"] == [{"field": "purpose", "value": "", "old": "설명 글"},
+                             {"field": "policies", "value": [], "old": OLD}], js["purpose"]
+
+
+def test_cleared_title_and_trailing_blank_are_not_edits(js):
     assert js["title"] == [], "제목은 비울 수 없다"
-    assert js["newEmpty"] == [], "빈 새 줄은 버린다"
+    assert js["newEmpty"] == [], "끝 빈칸만 더한 것은 바뀐 게 아니다"
     assert js["emptyStays"] == [], "원래 빈 칸이 그대로면 편집이 아니다"
 
 

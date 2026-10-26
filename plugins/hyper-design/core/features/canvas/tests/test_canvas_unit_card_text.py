@@ -20,7 +20,7 @@ out.bad = HD.caption.origOf(null);
 out.policiesCopied = out.orig.a.policies !== rows[0].screens[0].policies;
 // View cards: 원래 글은 합쳐 쌓고(새 데이터에 없는 화면도 남음), 값 = 반영 대기가 이김, 고친 칸마다 편집 메모 하나
 const NS = HD.notes.store([]), added = [];
-const CT = HD.viewCaption.cards({$: () => null, $$: () => [], rowsEl: {}, pane: {addEventListener() {}}, notes: NS, polHtml: () => '', space: () => {},
+const CT = HD.viewCaption.cards({$: () => null, $$: () => [], rowsEl: {}, pane: {addEventListener() {}}, notes: NS, space: () => {},
   selected: () => null, typing: () => false, guard: () => false, closeMenus: () => {}, toast: () => {}, placed: () => {},
   layoutOf: () => null, editLayout: () => {}, note: (id, h, text) => HD.edits.note(id, h, text), add: (label, list) => added.push([label, list])});
 CT.setOrig(rows);

@@ -1,9 +1,9 @@
 """판 글 = 고를 수 있는 글 레이어(t51-9, Figma F1·F9·F10·F12·F14·F15 · FINDINGS 틈 #22) — 브라우저.
 
 사용자 보고: "HTML 을 처음 만들 때 생긴 판 위 글은 고르거나 지울 수 없다". 판 글 = 카드 iframe 밖 글 전부:
-위 소개(안내 줄 · 제목·요약 · 아이디어 · 사람 · 정한 것 · 시장 관례), 아래 끝 글, 카드 아래 글(제목·설명·정책), DS 카드, 줄 제목.
+위 소개(안내 줄 · 제목·요약 · 아이디어 · 사람 · 정한 것 · 시장 관례), 아래 끝 글, 카드 아래 글(제목·본문 — R21), DS 카드, 줄 제목.
 이동 도구(V)로 누르면 고르기(파란 상자 + 이름표), 올리면 얇은 테두리, Esc·빈 곳 = 풀기, Enter·두 번 = 그 자리 고치기(고른 채 남음),
-Delete·Backspace = 파일에서 빼기(되돌리기 한 줄). 카드 제목은 비울 수 없음(토스트) · 설명·정책 = 그 칸 비우기.
+Delete·Backspace = 파일에서 빼기(되돌리기 한 줄). 카드 제목은 비울 수 없음(토스트) · 본문 = 비우기(합쳐 보이던 옛 정책 줄까지).
 """
 import json, os, shutil, subprocess, sys, tempfile, threading
 from pathlib import Path
@@ -176,9 +176,10 @@ def test_caption_description_delete_clears_and_title_delete_is_refused(ctx, out)
         assert pg.evaluate(SEL) == "카드 설명"
         pg.keyboard.press("Backspace")
         pg.wait_for_function("() => { const n = JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.startsWith('hd-notes:'))) || '[]');"
-                             " return n.some(x => x.screen === 'job' && x.edit === 'purpose' && x.value === ''); }", timeout=3000)
+                             " return n.some(x => x.screen === 'job' && x.edit === 'purpose' && x.value === '')"
+                             " && n.some(x => x.screen === 'job' && x.edit === 'policies' && x.value.length === 0); }", timeout=3000)
         assert pg.locator('.card[data-id="job"]').count() == 1
-        assert pg.locator('.card[data-id="job"] .fdesc').text_content().strip() == "", "설명 = 비우기(반영 대기)"
+        pg.wait_for_function("!document.querySelector('.card[data-id=\"job\"] .fdesc')", timeout=3000)   # 본문 = 비우기(반영 대기) — 빈 본문은 그리지 않는다
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors

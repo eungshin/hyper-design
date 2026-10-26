@@ -13,9 +13,9 @@
 ## 규칙
 
 - 묶음 하나 = 요소 하나 = 레이어 하나: id `intro-hint|story|ideas|people|decisions|market` · `foot-palettes|credits` · `dscard`, 레이어 id = `'@' + id`(셸 `setHidden` 이 그대로 숨김). 예전에 숨겨 둔 `@intro`·`@foot` 은 레이어 패널에 남아 다시 보이게 할 수 있다
-- 이동 도구(V) 누르기 = 고르기(파란 실선 상자 `#btsel` + 이름표) · 올리기 = 얇은 실선 `#bthov` · Esc·빈 곳 = 풀기. 판 글을 고르면 카드 고르기는 풀리고, 카드 아래 글(제목·설명·정책)을 고르면 그 카드 하나가 골라진 채(설명·정책이 보이는 자리 — task 31). 줄 제목은 `rowHeads`(51-4) 그대로
+- 이동 도구(V) 누르기 = 고르기(파란 실선 상자 `#btsel` + 이름표) · 올리기 = 얇은 실선 `#bthov` · Esc·빈 곳 = 풀기. 판 글을 고르면 카드 고르기는 풀리고, 카드 아래 글(제목·본문 — R21)을 고르면 그 카드 하나가 골라진 채(본문이 보이는 자리 — task 31). 줄 제목은 `rowHeads`(51-4) 그대로
 - Enter·두 번 누르기 = 고치기: 소개 칸은 그 자리(Enter 저장 · 여러 줄 칸 Shift+Enter 줄바꿈 · Esc 취소 · 밖 누르기 저장), 카드 아래 글은 카드 글 상자(caption.md), DS 카드는 Foundation 탭. 글자 도구(T) 누르기 = 바로 그 자리 고치기. 고친 뒤 골라진 채(F14). 제목의 `<em>` 강조 글이 새 글에 그대로 있으면 다시 감싼다(`keepEm`)
-- Delete·Backspace(F15): 파일 묶음(story·ideas·people → screens.json, decisions·market → decisions.json — 판에 나오는 그 종류 항목 전부) = 파일에서 빼기 · 만든 글(안내 줄)·출처(색·사진 — 지우면 출처 표시 의무가 사라짐)·DS 카드(tokens.css 는 화면이 씀) = 판에서 숨기기(되돌리기 한 줄, 토스트가 까닭). 카드 제목 = 거절 토스트 · 설명 = '' · 정책 = 빈 목록(카드 글 상자와 같은 편집, 반영 대기)
+- Delete·Backspace(F15): 파일 묶음(story·ideas·people → screens.json, decisions·market → decisions.json — 판에 나오는 그 종류 항목 전부) = 파일에서 빼기 · 만든 글(안내 줄)·출처(색·사진 — 지우면 출처 표시 의무가 사라짐)·DS 카드(tokens.css 는 화면이 씀) = 판에서 숨기기(되돌리기 한 줄, 토스트가 까닭). 카드 제목 = 거절 토스트 · 본문 = purpose '' + 합쳐 보이던 옛 정책 줄 빈 목록(카드 글 상자와 같은 편집, 반영 대기)
 - 쓰기: 도우미로 열면 판을 먼저 바꾸고(바로 반영) `/api/apply` 한 번(`view-sync write` — 기록 한 줄·되돌리기 = 되살리기), 거절이면 판을 되돌리고 까닭 토스트, 뒤 빌드가 깨지면(`build.failed`) 판 글을 파일대로 다시 불러온다. 도우미 없이 = 반영 대기 메모(`edit:'board'`, 보내기 요청문에 실림)로 판에 미리 보임
 - 칸 키 = 판 차례(`decisions.items.N` = build_canvas 가 거른 정한 것 N 번째 → 서버가 같은 거르기로 decisions.json 번호를 찾는다). 이름 칸은 비울 수 없고 2000자까지
 
