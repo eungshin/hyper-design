@@ -31,7 +31,9 @@ function mount(ctx) {
     b.title = '이미지 첨부 — 붙여넣기(Ctrl+V)·끌어 놓기도 돼요'; b.setAttribute('aria-label', '이미지 첨부');
     b.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="display:block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">' +
       '<path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg>';
-    if (cancel && cancel.parentNode) cancel.parentNode.insertBefore(b, cancel);
+    var scope = $('#pscope');                          // 범위 줄 끝 — 아래 단추 줄(의도·취소·추가)에 넣으면 창 밖으로 넘친다(10-26 스크린샷)
+    if (scope && scope.parentNode) { b.style.marginLeft = 'auto'; scope.parentNode.appendChild(b); }
+    else if (cancel && cancel.parentNode) cancel.parentNode.insertBefore(b, cancel);
   })();
 
   function popItem(dr, last) {
