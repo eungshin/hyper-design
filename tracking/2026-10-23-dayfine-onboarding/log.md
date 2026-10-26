@@ -29,6 +29,7 @@
 | F19 | 사람·세션이 들고 있던 캔버스 주소의 토큰이 지금 도는 helper 토큰과 다르다(다른 폴더 `time-out/.hd-helper.json`이 같은 포트 12279를 적어 둠). 주소는 열리지만 저장(POST)은 403이라 메모가 상태 파일에 남지 않는다 | round 9 v2 메모 5건이 `.hd-canvas.json`(rev 147, 14:37 뒤 멈춤)에 없음 — 채팅으로만 도착 |
 | F20 | 실제 부품 카드가 떠 있는 Vite twin(5199)에 기대어, 서버가 꺼지면 '연결 거부'만 보이고 이유·대체 표시가 없다 | round 10 tabs — 사람이 '왜 연결 거부했냐'고 물음(twin-loading.md 5번이 실제로 터짐) |
 | F21 | `hd` 하위 명령마다 캔버스 고르는 방식이 다르다: `claim`은 경로를 위치 인자로 받는데 `reply`는 위치 인자를 거부하고 `--project`만 받는다. 캔버스가 여럿이면 `reply`가 매번 실패 | round 10 답장 6건이 두 번 실패한 뒤에야 나감 |
+| F22 | 앱 목업 컴파일(`ui_host/popup/scripts/mockup.mjs`)이 결과를 git 추적 파일 `ui_host/dist-mockup/mockup.html`에 덮어써, 캔버스용 빌드 한 번이 앱 저장소를 더럽힌다. spec도 임시 폴더에만 남는다 | round 10 new-gf05czx — 작업자가 덮어씀, 메인이 HEAD로 되돌림 |
 
 ## 왕복 기록
 
