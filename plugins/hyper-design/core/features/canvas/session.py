@@ -61,6 +61,7 @@ class ProjectSession:
     def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None, config=None, code=None):
         self.out = pathlib.Path(out).resolve()
         self.code = code                             # () → 지금 코드 도장 | None — 있으면 페이지를 줄 때 옛 도장 index.html 을 다시 빌드(CLI 도우미·허브가 넘김)
+        self.hub_stale = None                        # R34 허브 안 세션만: () → {sha, since} | None(허브가 옛 코드인가 — registry.stale_info)
         self._gave_up = None                         # 다시 빌드해도 그 도장이 안 나온 도장 — 같은 도장으로 매번 빌드하지 않게
         self._data_gave_up = None                    # 데이터 도장도 같은 규칙(그 빌드가 도장을 못 적는 옛 코드 · 실패)
         self.token = token or secrets.token_urlsafe(18)
@@ -183,5 +184,8 @@ class ProjectSession:
         snap = self.store.inject()
         inject = '<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;' % (
             json.dumps(True), json.dumps(keypath(self.out)), json.dumps(self.out.as_posix()))
-        inject += "window.__hdAgent=%s;</script>" % json.dumps(self.queue.agent)
+        inject += "window.__hdAgent=%s;" % json.dumps(self.queue.agent)
+        if self.hub_stale is not None:                # R34 — 처음 그릴 때부터 '허브 옛 코드' 칩(그 뒤는 GET /api/state 의 hubStale)
+            inject += "window.__hdHubStale=%s;" % json.dumps(self.hub_stale())
+        inject += "</script>"
         return (self.out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject + snap, 1).encode("utf-8")

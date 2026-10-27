@@ -6,6 +6,8 @@ SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나
 이벤트 흐름(task 47-4a) GET /events · /api/events = 세션 EventBus 를 SSE 로(_events) — 계약 tests/protocol/events.json.
 접속·보내기(task 47-5a) /hello · /beat · /bye · /progress · GET /agents · /agents/spawn(+ 옛 뿌리 /api/… 별칭, GET /api/presence) = 세션 AgentPresence ·
 /api/forward {text, to?, notes?} = Queue.send(이벤트 또는 어댑터) — 계약 tests/protocol/presence.json.
+허브 옛 코드(R34): 허브 안 세션(session.hub_stale 이 있음)이면 GET /api/state 답에 hubStale {sha, since} | null 을 싣는다(도우미는 싣지 않음 = 모름) ·
+POST /api/hub/restart = 서버가 넘긴 on_restart(허브의 [다시 켜기] — 없으면 모르는 주소).
 """
 import json, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
@@ -39,7 +41,9 @@ def get_state(s, q, body):
         since = helper_model.parse_since(q.get("since", [None])[0])
     except ValueError as e:
         return 400, {"error": str(e)}
-    return 200, s.store.get(since)
+    res = s.store.get(since)
+    hub = getattr(s, "hub_stale", None)               # R34 — 허브 안 세션만(2초 읽기에 실어 프로젝트 화면이 '허브 옛 코드' 칩을 띄운다)
+    return 200, (dict(res, hubStale=hub()) if hub else res)
 
 
 def get_ai_writes(s, q, body):
@@ -130,14 +134,16 @@ BODY_MAX = {"/api/image": AR.BODY_MAX}              # 본문 한도가 STATE_MAX
 class Router:
     """세션 주소 표(ROUTES) + 서버 주소(on_stop · home_ctx) → 담당. home_ctx 가 없으면 프로젝트·탭 주소는 모르는 주소."""
 
-    def __init__(self, home_ctx=None, on_stop=None):
-        self.home_ctx, self.on_stop = home_ctx, on_stop
+    def __init__(self, home_ctx=None, on_stop=None, on_restart=None):
+        self.home_ctx, self.on_stop, self.on_restart = home_ctx, on_stop, on_restart
 
     def knows(self, method, path):
         if path in ROUTES.get(method, {}):
             return True
         if method == "POST" and path == "/api/stop":
             return self.on_stop is not None
+        if method == "POST" and path == "/api/hub/restart":
+            return self.on_restart is not None
         home = {"GET": home_api.GET_PATHS, "POST": home_api.POST_PATHS, "PUT": home_api.PUT_PATHS}.get(method, ())
         return self.home_ctx is not None and path in home
 
@@ -147,6 +153,12 @@ class Router:
             return fn(session, query or {}, body)
         if method == "POST" and path == "/api/stop" and self.on_stop:
             return 200, {"stopping": True}, self.on_stop
+        if method == "POST" and path == "/api/hub/restart" and self.on_restart:   # R34 프로젝트 화면의 [다시 켜기] — 홈 화면과 같은 restart
+            try:
+                self.on_restart()
+            except OSError as e:
+                return 500, {"error": "허브를 다시 켜지 못했어요: %s" % e}
+            return 200, {"restarting": True}
         if self.home_ctx is not None:
             return home_api.route(method, path, body, self.home_ctx)   # /api/projects · open · new · project · forget · reveal · tabs · home
         return None

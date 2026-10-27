@@ -12,6 +12,8 @@
 - 코드 도장(canvas/code_stamp.py): 허브가 옛 코드로 떠 있으면 홈 화면에 window.__hdStale(띠 '새 버전이 있어요' + [다시 켜기]) · hd home 이 한 줄.
   스스로 끄지 않는다. POST /api/hub/stop(허브 토큰) = 정상 종료 · POST /api/hub/restart = `hd home --restart --port <지금 포트>` 를 떼어 띄움
   (그것이 이 허브를 /api/hub/stop 으로 끄고 같은 포트로 뜬다 — 옛 허브라 그 주소가 없으면 python pid 만 강제 종료)
+  프로젝트 화면(R34)에도 같은 판단: 세션의 GET /api/state 답 hubStale {sha, since} · 페이지 window.__hdHubStale(registry.stale_info), 그 [다시 켜기] =
+  세션 토큰 POST /api/hub/restart(canvas/router.py on_restart → 같은 restart)
 - 주소 = http://127.0.0.1:<port>/?hd=<token>
 """
 import atexit, json, os, pathlib, re, secrets, signal, subprocess, sys, threading, time, urllib.parse, webbrowser
@@ -112,7 +114,8 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
     thumbs = T.Thumbs(H.home() / "thumbs", renderer)
     picker = picker or H.pick_folder
     hub_port = lambda: srv.server_address[1]
-    reg = RG.ProjectRegistry(hub_port, lambda: srv.url, picker=picker, paseo=paseo or os.environ.get("HD_PASEO_CMD"), build=build)
+    restart = lambda: (restarter or spawn_restart)(srv.server_address[1])   # 홈 화면 · 프로젝트 화면(R34)의 [다시 켜기] — 같은 하나
+    reg = RG.ProjectRegistry(hub_port, lambda: srv.url, picker=picker, paseo=paseo or os.environ.get("HD_PASEO_CMD"), build=build, restarter=restart)
     ctx = A.Ctx(hub=True, port=hub_port, after_rows=thumbs.schedule, picker=picker, opener=reg.open, closer=reg.close)
 
     class Handler(R.SessionHandler):
@@ -245,7 +248,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
                 return None
             if method == "POST" and path == "/api/hub/restart":  # 홈 화면 [다시 켜기] — 새 허브가 이 허브를 끄고 같은 포트로
                 try:
-                    (restarter or spawn_restart)(srv.server_address[1])
+                    restart()
                 except OSError as e:
                     return self._json(500, {"error": "허브를 다시 켜지 못했어요: %s" % e})
                 return self._json(200, {"restarting": True})

@@ -17,6 +17,7 @@ import write_record  # noqa: E402
 
 pytestmark = pytest.mark.area("helper")
 
+RESTARTS = []                                         # 허브 [다시 켜기](R34) — 진짜 hd home --restart 를 띄우지 않고 부른 포트만 적는다
 SCREEN = "<!doctype html><html><head><meta charset='utf-8'></head><body><main><h1>{title}</h1><button>다음</button></main></body></html>"
 
 
@@ -43,7 +44,8 @@ def hub():
     outs = {n: make_out(tmp, n, t) for n, t in (("alpha", "알파"), ("beta", "베타"))}
     for o in outs.values():
         C.register(C.abs_out(o))
-    srv = home_server.make_hub(0, renderer=lambda *a: None, picker=lambda: None, build=lambda o: write_record.run_build(o))
+    srv = home_server.make_hub(0, renderer=lambda *a: None, picker=lambda: None, build=lambda o: write_record.run_build(o),
+                                 restarter=RESTARTS.append)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     urls = {n: _post(srv, "/api/open", {"name": n})["url"] for n in outs}
     try:
@@ -92,6 +94,40 @@ def test_tabs_and_home_stay_on_one_origin(hub, ctx):
         with pg.expect_navigation(url=lambda u: u.startswith(origin + "/?hd=")):
             pg.click("#hhome")
         assert pg.evaluate("window.__hdHub") is True, "홈도 같은 주소"
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
+def test_old_hub_shows_one_restart_chip_on_the_project_page(hub, ctx, monkeypatch):
+    """R34: 허브가 옛 코드로 떠 있으면 프로젝트 화면 위쪽 상태 자리에 '허브 옛 코드 · 다시 켜기' 한 줄 — 새것이면 없음.
+    병합 뒤 창에 돌아오면(focus → GET /api/state 의 hubStale) 뜨고, 누르면 홈 화면과 같은 다시 켜기(허브 restarter)를 부른다."""
+    srv, outs, urls = hub
+    if C.code_stamp() is None:
+        pytest.skip("지금 코드 도장을 재지 못함(git 없음) — 판단하지 않는 것이 규칙")
+    pg, errors = _open(ctx, urls["alpha"])
+    try:
+        chip = pg.locator("#hubstale")
+        assert chip.count() == 1 and chip.is_hidden(), "새 코드 허브 = 칩 없음"
+        assert pg.evaluate("window.__hdHubStale") is None
+        monkeypatch.setattr(srv.registry, "code", "g:3f9c2ab000000000")   # 병합 뒤: 허브 프로세스는 옛 지문 그대로
+        pg.evaluate("dispatchEvent(new Event('focus'))")
+        pg.wait_for_selector("#hubstale:not([hidden])", timeout=8000)
+        assert chip.inner_text() == "허브 옛 코드 · 다시 켜기"
+        assert "3f9c2ab" in chip.get_attribute("title") and "hd home --restart" in chip.get_attribute("title")
+        box, bar = chip.bounding_box(), pg.locator("header.hd").bounding_box()
+        assert box["y"] >= bar["y"] and box["y"] + box["height"] <= bar["y"] + bar["height"] and box["height"] <= 26, "위쪽 줄 안 한 줄(모달 아님)"
+        placed = pg.evaluate("""() => { const c = document.querySelector('#hubstale');
+            return !!(document.querySelector('#aichip').compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && c.nextElementSibling.classList.contains('sep'); }""")
+        assert placed, "상태 칩 자리(R27 F11) — 받는 곳 칩 묶음 끝, 되돌리기 앞 구분선 앞"
+        RESTARTS.clear()
+        chip.click()
+        pg.wait_for_function("document.querySelector('#hubstale').getAttribute('aria-busy') === 'true'")
+        for _ in range(50):
+            if RESTARTS:
+                break
+            pg.wait_for_timeout(100)
+        assert RESTARTS == [srv.server_address[1]], "홈 화면과 같은 허브 다시 켜기(같은 포트)"
     finally:
         pg.close()
     assert not errors, errors

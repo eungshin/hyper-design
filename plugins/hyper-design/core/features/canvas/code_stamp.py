@@ -52,6 +52,14 @@ def stale(have, current):
     return bool(current) and have != current
 
 
+def hub_stale(have, current, since=None):
+    """프로젝트 화면 칩(R34)에 실을 허브 판단 → {sha, since} | None(새것 · 지금 도장을 모름 — stale 과 같은 판단, 새 지문 없음).
+    have = 허브가 뜰 때 도장 · sha = 그 도장의 짧은 모양(앞 'g:'·'w:' 를 뺀 7자, 도장이 없던 옛 허브면 '?') · since = 허브가 뜬 시각(받은 그대로)."""
+    if not stale(have, current):
+        return None
+    return {"sha": (have or "").split(":", 1)[-1][:7] or "?", "since": since}
+
+
 def reuse_verdict(page, proc, current, busy=False, movable=True):
     """떠 있는 서버를 다시 쓰기 전 → 'fresh' | 'rebuild'(페이지만 다시 빌드) | 'restart'(옛 프로세스를 끄고 새로 — 새 프로세스 앞에서 빌드)
     | 'busy'(옛 프로세스지만 AI 작업 중 — 프로세스는 그대로·한 번 알림, 페이지는 옛것이면 다시 빌드: page_after).
