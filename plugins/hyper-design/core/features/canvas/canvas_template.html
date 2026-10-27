@@ -106,7 +106,7 @@
 </div>
 <div id="ttip" hidden></div>
 <div id="toast" role="status" hidden></div>
-<div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="size" class="ab-size" aria-haspopup="dialog" aria-expanded="false" title="카드 크기" aria-label="카드 크기" hidden></button><button type="button" data-act="memo" aria-label="메모" title="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button><button type="button" data-act="hide" aria-label="숨기기" title="숨기기"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg></button><button type="button" data-act="del" aria-label="삭제" title="삭제 (Del)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>
+<div id="selbar" role="toolbar" aria-label="고른 화면" hidden><button type="button" data-act="play" aria-label="보기" title="실제로 눌러 보기 (두 번 누르기)"><svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg></button><button type="button" data-act="memo" aria-label="메모" title="메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button><button type="button" data-act="hide" aria-label="숨기기" title="숨기기"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg></button><button type="button" data-act="del" aria-label="삭제" title="삭제 (Del)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button><span class="sb-sep" aria-hidden="true" hidden></span><button type="button" data-act="size" class="ab-size" aria-haspopup="dialog" aria-expanded="false" title="카드 크기" aria-label="카드 크기" hidden></button></div>
 <div id="tedit" role="dialog" aria-label="화면 글자 고치기" hidden><textarea aria-label="새 글자"></textarea><div class="th">Enter 저장 · Shift+Enter 줄바꿈 · 다 지우고 Enter = 글 비우기 · Esc 취소 <button type="button" id="tedel">요소 지우기</button></div></div>
 <div id="cmenu" class="cm t-dropdown" data-origin="top-left" role="menu" hidden></div>
 <div id="cmsub" class="cm" role="menu" aria-label="고르기" hidden></div>
@@ -753,8 +753,10 @@ pane.addEventListener('contextmenu', function (e) {
       '-',
       {id: 'card-hide', label: '숨기기' + suf, act: function () { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }},
       {id: 'card-del', label: '삭제' + suf, key: 'Del', act: function () { CA.del(ids); }}]);
-    var tok = CM.open(x, y, titleOf(id), cardItems);   // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
-    FA.hit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
+    var tok = CM.open(x, y, titleOf(id), cardItems);   // 범위(R27 F05, HD.elPick.menuScope): 그 카드 안 요소를 골라 둔 때만 그 자리 요소(hd-hit-at)의 요소 메뉴로 바꾼다 — 카드 항목은 덧붙이지 않음
+    var es = EB.selected();
+    if (HD.elPick.menuScope({card: id, elCard: es && es.card ? es.card.dataset.id : null}) === 'element')
+      FA.hit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y); });
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(LF.hidden()).length;
@@ -787,7 +789,7 @@ function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 
 }
 // 카드 화면에 묻기(modules/view-frame-ask.js): 그 자리 요소(hd-hit-at → hd-hit) · 조상(hd-up → hd-upchain) — 메시지 모양은 그대로
 var FA = HD.viewFrameAsk.mount({$: $, $$: $$, toast: function (m) { toast(m); }, wOf: wOf, load: function (f) { LC.load(f); }});
-function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시안 A): 고르기 · 고치기 · 연결 · 요청 묶음 + 실제로 듣는 단축키(HD.blocks.menu) — 오른쪽 클릭과 막대 [⋯] 가 같은 것. 크게 보기 = 판에서 도착을 고르는 항목 빼고
+function openElemMenu(from, h, x, y, tail, inModal) {   // tail(카드 항목 덧붙이기)은 R27 F05 부터 쓰지 않는다 — 요소 메뉴 = 요소 범위만   // 요소 메뉴(R17 시안 A): 고르기 · 고치기 · 연결 · 요청 묶음 + 실제로 듣는 단축키(HD.blocks.menu) — 오른쪽 클릭과 막대 [⋯] 가 같은 것. 크게 보기 = 판에서 도착을 고르는 항목 빼고
   var app = appCard(from), where = inModal ? 'modal' : 'board', sel = {screen: from, h: h, app: app, where: where, at: {x: x, y: y}};
   var links = app ? [] : h.to ? [{id: 'retarget', label: '도착 바꾸기', pick: 1, act: function () { startPick(from, [h], x, y); }},
                     {id: 'untrigger', label: '트리거 해제', act: function () { ED.add('트리거 해제', [ED.note(from, h, HD.edits.say.untrigger(ED.scr(h.to)), 'untrigger', h.to)]); }}]
@@ -795,7 +797,7 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시
                     {id: 'link', label: '잇기', key: 'L 끌기', pick: 1, act: function () { startPick(from, [h], x, y); }}];
   if (inModal) links = links.filter(function (it) { return !it.pick; });
   var list = [];
-  var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push({head: head}); list.push.apply(list, items); };
+  var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push.apply(list, items); };   // 묶음 사이 = 구분선(R27 F05 — 회색 소제목 없음)
   HD.blocks.menu(h, {app: app, where: where}).forEach(function (g) {
     if (g.head === '요청') group('연결', links);
     group(g.head, g.items.map(function (it) {
@@ -806,7 +808,6 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시
       return o;
     }));
   });
-  if (tail && tail.length) { list.push('-', {head: '카드'}); list.push.apply(list, tail); }
   CM.open(x, y, titleOf(from), list);
 }
 var VIA_BAR = {parent: 1, inner: 1, attr: 1, swap: 1, insert: 1};
@@ -1037,18 +1038,28 @@ function placeSelbar() {                             // 고른 카드들 위 가
   var bar = $('#selbar'); if (BK) setTimeout(BK.place, 0);   // 요소 막대는 카드 막대가 놓인 뒤 그것을 비켜서(task 49a)
   if (!bar || !SL) return;
   var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
-  if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden) { bar.hidden = true; return; }
-  var x0 = 1e9, x1 = -1e9, y0 = 1e9;
-  ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
+  var eb = $('#elbar');                              // 요소 막대가 떠 있으면 카드 막대는 숨김(R27 F06 — 막대 하나만). 요소 막대가 뜨고 질 때 다시 놓는다
+  if (eb && !eb.__hdSel) { var ebWas = eb.hidden; eb.__hdSel = 1; new MutationObserver(function () { if (eb.hidden === ebWas) return; ebWas = eb.hidden; placeSelbar(); }).observe(eb, {attributes: true, attributeFilter: ['hidden']}); }   // 같은 값 다시 쓰기는 무시(BK.place ↔ placeSelbar 되풀이 막기)
+  if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden || (eb && !eb.hidden)) { bar.hidden = true; return; }
+  var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); y1 = Math.max(y1, r.bottom); });
   $('[data-act="memo"]', bar).hidden = false;
   var sz = $('[data-act="size"]', bar); sz.hidden = !AB; if (AB) { sz.textContent = AB.label(ids) + ' ▾'; sz.setAttribute('aria-label', '카드 크기 ' + AB.label(ids)); }
-  bar.hidden = false; bar.style.left = ((x0 + x1) / 2) + 'px';
-  bar.style.top = Math.max(60, y0 - bar.offsetHeight - 10 - 5 * Math.min(1, z) - 3) + 'px';   // 카드(고른 테두리 바깥) 바로 위 — 화면 좌표라 배율과 상관없이
+  $('.sb-sep', bar).hidden = !AB;
+  $('[data-act="play"]', bar).hidden = ids.length !== 1 || VL.cardEl(ids[0]).classList.contains('draft');   // 보기(▶) = 화면 하나 — 빈 레이아웃은 볼 것이 없다
+  bar.hidden = false;
+  var pr = pane.getBoundingClientRect();              // 판 칸 안에만(R27 F07 — 옆 대화 도크를 덮지 않게, 카드가 판 밖이면 숨김) — 규칙은 HD.barPlace.card
+  var at = HD.barPlace.card({cards: {x: x0, y: y0, w: x1 - x0, h: y1 - y0}, size: {w: bar.offsetWidth, h: bar.offsetHeight},
+    view: {x: pr.left, y: pr.top, w: pr.width, h: pr.height}, lift: 10 + 5 * Math.min(1, z) + 3,
+    bars: $$('#tools').filter(function (t) { return t.offsetWidth; }).map(function (t) { var r = t.getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; })});   // 카드(고른 테두리 바깥) 바로 위 — 화면 좌표라 배율과 상관없이
+  if (at.hidden) { bar.hidden = true; return; }
+  bar.style.left = at.cx + 'px'; bar.style.top = at.y + 'px';
 }
 $('#selbar').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;
   var ids = SL.ids();
   if (b.dataset.act === 'size') { if (AB) AB.popover(ids, b); }   // 크기 팝오버(task 46) — 고른 카드 모두에
+  else if (b.dataset.act === 'play') { var cv = ids.length === 1 && $('.cover', VL.cardEl(ids[0])); if (cv) openModal(cv.dataset.file, cv.dataset.title); }   // 보기 = 실제로 눌러 보기(R27 F06 — 예전 카드 위 [▶ 보기])
   else if (b.dataset.act === 'memo') MP.card(ids);
   else if (b.dataset.act === 'hide') { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }
   else if (b.dataset.act === 'del') CA.del(ids);

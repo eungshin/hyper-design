@@ -136,7 +136,7 @@ def test_shift_click_focus(page):
         if cid in linked:
             assert hl and op == 1, (cid, hl, op)
         else:
-            assert not hl and op < 0.5, (cid, hl, op)
+            assert not hl and 0.75 <= op < 0.95, (cid, hl, op)   # R27 F18: 나머지는 살짝만 흐리게(읽히게)
     on = page.evaluate("[...document.querySelectorAll('#rows path.ln')].map(p => [p.classList.contains('on'), +getComputedStyle(p).strokeOpacity])")
     assert all((op == 1) if o else (op < 0.5) for o, op in on), on     # 그 화면의 선(나가고 들어오는)은 같은 선이 진하게, 나머지는 흐리게(E20)
     SHOTS.mkdir(parents=True, exist_ok=True)
