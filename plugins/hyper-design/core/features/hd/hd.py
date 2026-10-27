@@ -30,8 +30,9 @@
                                           홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server, 옛 코드면 한 줄 알림)
                                           --restart = 떠 있는 허브를 끄고 지금 코드로 같은 포트에 다시 띄움
   hd home --shortcut [--desktop DIR]      바탕 화면에 'Hyper Design' 바로 가기(→ pythonw hd.py home)를 쓰고 끝
-  hd parts [--check [<file>]] [<name|path>]
+  hd parts [--check [<file>] | --rebuild [<file>]] [<name|path>]
                                           앱 부품(out/parts.json): 파일 · 낡음|최신|모름 · 미커밋 변경 포함 · 빌드 시각 — 읽기만(git 나무 도장 비교)
+                                          --rebuild = build argv(cwd = 앱 저장소) → post 단계 → 파일에 원자적으로 → 기록(자물쇠, 미커밋이면 경고 + dirty)
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -236,10 +237,17 @@ def _parts_args(a):
 
 
 def cmd_parts(a):
-    """앱 부품 보기(기본 · --check) — parts.json 은 읽기만. 대상 고르기는 hd screens 와 같음(떠 있지 않아도 out 경로·저장한 이름)."""
+    """앱 부품 보기(기본 · --check — parts.json 은 읽기만) · 다시 빌드(--rebuild — parts.json 을 쓰는 유일한 길).
+    대상 고르기는 hd screens 와 같음(떠 있지 않아도 out 경로·저장한 이름)."""
     import hd_parts
     sel, target = _parts_args(a)
     p = _hub().target(target)
+    if a.rebuild is not None:
+        with S.client_errors():
+            done = hd_parts.rebuild(p.out, sel)
+        lines = ["%s · %s 다시 빌드함 · %s%s" % (p.name, r["file"], r["stamp"] or "도장 없음", " · " + hd_parts.PS.DIRTY_LABEL if r["dirty"] else "")
+                 for r in done]
+        return {"project": p.name, "out": str(p.out), "rebuilt": done}, "\n".join(lines)
     with S.client_errors():
         rows = hd_parts.check(p.out, sel)
     stale = sum(1 for r in rows if r["stale"])
@@ -351,8 +359,10 @@ def parser():
     pa = sub.add_parser("parts", parents=[common], help="앱 부품(out/parts.json) 보기 — 낡음 · 미커밋 변경 포함")
     pk = pa.add_mutually_exclusive_group()
     pk.add_argument("--check", nargs="?", const="*", default=None, metavar="FILE", help="보기만(기본) — FILE = 부품 파일·이름")
+    pk.add_argument("--rebuild", nargs="?", const="*", default=None, metavar="FILE",
+                    help="다시 빌드(build argv → post → 파일에 원자적으로 → 기록) — FILE 없으면 전부")
     pa.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
-    pa.set_defaults(fn=cmd_parts, rebuild=None)
+    pa.set_defaults(fn=cmd_parts)
     hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")
