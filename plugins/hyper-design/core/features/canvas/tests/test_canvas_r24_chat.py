@@ -173,3 +173,50 @@ def test_caption_edit_box_is_moved_clear_of_the_floating_dock(plain, ctx):
     finally:
         pg.close()
     assert not errors, errors
+
+
+# 옛 기록 보충 — 기록의 답 줄엔 요약만(42f8c85 전 · 옛 도우미), 메모엔 긴 detail. 규칙 = test_canvas_unit_chat_detail.py(unit)
+DETAIL30 = "\n".join("설명 %d번째 줄 — 메모에만 있는 상세" % i for i in range(1, 31))
+
+
+@pytest.mark.area("chat", "dock")
+def test_old_reply_record_shows_memo_detail_folded_then_whole(served, ctx):
+    import json
+    out, srv = served
+    now = int(time.time() * 1000)
+    memo = {"id": "m1", "no": 1, "screen": "pay", "targets": [], "path": "button.pay", "text": "지금 결제하기", "rect": None,
+            "note": "토큰 더 필요해?", "intent": "question", "sent": True,
+            "replies": [{"kind": "답변", "text": "요약용 추가 토큰은 없습니다(상세 참고).", "detail": DETAIL30, "by": "ag-1", "at": now - 50000}]}
+    (out / ".hd-canvas.json").write_text(json.dumps({"version": 1, "rev": 1, "updated": "2026-10-27T00:00:00Z",
+                                                     "state": {"notes": [memo], "note-seq": {"pay": 1}}}, ensure_ascii=False), encoding="utf-8")
+    recs = [{"seq": 1, "at": now - 60000, "turn": 1, "kind": "sent", "notes": ["m1"], "to": "클로드", "via": "event", "text": "토큰 더 필요해?"},
+            {"seq": 2, "at": now - 50000, "turn": 1, "kind": "reply", "note": "m1", "rkind": "답변", "status": "done", "screen": "pay",
+             "text": "요약용 추가 토큰은 없습니다(상세 참고)."}]
+    (out / ".hd-chat.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs), encoding="utf-8")
+    pg, errors = open_page(ctx, srv)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    try:
+        pg.wait_for_selector("#pTalk .tk-l[data-kind='reply']", timeout=15000)
+        pg.wait_for_timeout(600)
+        shot(pg, os.environ.get("HD_DETAIL_SHOT", "chat-detail-folded.png"))
+        pg.wait_for_selector("#pTalk .tk-detail .tk-more", timeout=8000)
+        rt = pg.inner_text("#pTalk .tk-l[data-kind='reply']")
+        assert rt.startswith("요약용 추가 토큰은 없습니다(상세 참고).") and "설명 1번째 줄" in rt and "설명 12번째 줄" in rt, "답 줄 아래 메모 설명 앞부분"
+        assert "설명 13번째 줄" not in rt and "설명 30번째 줄" not in rt, "12줄 넘으면 접힘"
+        assert rt.count("요약용 추가 토큰은 없습니다") == 1
+        more = pg.locator("#pTalk .tk-more")
+        assert more.inner_text().startswith("전체 보기") and more.get_attribute("aria-expanded") == "false"
+        more.click()
+        pg.wait_for_function("document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').innerText.includes('설명 30번째 줄')", timeout=5000)
+        rt = pg.inner_text("#pTalk .tk-l[data-kind='reply']")
+        assert "설명 13번째 줄" in rt and "\n설명 2번째 줄" in rt, "펼치면 전체 · 줄바꿈 그대로"
+        b = pg.locator("#pTalk .tk-more")
+        assert b.inner_text() == "접기" and b.get_attribute("aria-expanded") == "true"
+        assert pg.evaluate("document.activeElement && document.activeElement.classList.contains('tk-more')"), "다시 그려도 단추에 초점(키보드)"
+        pg.evaluate("document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').scrollIntoView({block: 'start'})")
+        shot(pg, "chat-detail-expanded.png")
+        pg.keyboard.press("Enter")                       # 키보드로 다시 접기
+        pg.wait_for_function("!document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').innerText.includes('설명 30번째 줄')", timeout=5000)
+        assert not errors, errors
+    finally:
+        pg.close()
