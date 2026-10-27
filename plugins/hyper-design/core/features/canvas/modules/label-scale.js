@@ -3,17 +3,19 @@
    HD.labelScale = {inv(z) → 1/z | null(z 가 0 보다 큰 수가 아님), fmt(v) → 소수 4자리 글, put(old, next, exact) → 새 값을 쓸지, STEP}
      put: exact(확대·이동이 멈춘 뒤) = 글이 다르면 · 아니면(확대 중, 한 프레임에 한 번) old 와 STEP(3%) 넘게 다를 때만 — #rows 아래 전체 스타일 다시 계산을 줄인다.
      old 가 없거나 수가 아니면 늘 쓴다
+   far(z) → bool — 판 배율이 FAR(0.35) 보다 작다 = 펼친 카드 설명은 읽히지 않으니 숨긴다(자리는 그대로 — 화면 px 제목이 그 위를 덮지 않게)
    stack(rects, gap) → [dy] (R27 F08) — 화면 px 상자 [{l, t, r, b}] 가 서로 겹치지 않게 아래로 밀 거리(입력 차례대로). 위·왼쪽 것부터 자리를 잡고,
      뒤 것은 앞 것과 가로가 겹치는 동안 그 아래 + gap 으로 내려간다. 깨진 상자는 0(움직이지 않음) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var STEP = 0.03;
+var STEP = 0.03, FAR = 0.35;   // FAR: 판 배율이 이보다 작으면 판 글(펼친 설명 18px → 6px 아래)은 읽히지 않는다
 
 function inv(z) {
   var n = typeof z === 'string' ? parseFloat(z) : z;
   return typeof n === 'number' && isFinite(n) && n > 0 ? 1 / n : null;
 }
+function far(z) { var n = typeof z === 'string' ? parseFloat(z) : z; return typeof n === 'number' && isFinite(n) && n > 0 && n < FAR; }
 function fmt(v) { return (+v).toFixed(4); }
 function put(old, next, exact) {
   var o = typeof old === 'string' ? parseFloat(old) : old;
@@ -43,5 +45,5 @@ function stack(rects, gap) {
   return out;
 }
 
-HD.labelScale = {inv: inv, fmt: fmt, put: put, STEP: STEP, stack: stack};
+HD.labelScale = {inv: inv, fmt: fmt, put: put, STEP: STEP, stack: stack, far: far, FAR: FAR};
 })();

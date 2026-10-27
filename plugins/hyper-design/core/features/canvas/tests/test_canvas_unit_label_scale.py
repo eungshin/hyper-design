@@ -21,6 +21,7 @@ out.pair = L.stack([R(10, 4, 60, 16), R(0, 0, 80, 16)], 3);                     
 out.three = L.stack([R(0, 0, 60, 16), R(20, 2, 60, 16), R(40, 5, 60, 16)], 2);   // 줄줄이
 out.bad = L.stack([null, R(0, 0, 10, 10), {l: 'a'}, R(0, 0, 10, 10)], 2);
 out.none = L.stack('x');
+out.far = [L.far(0.12), L.far(0.34), L.far(0.35), L.far(1), L.far(0), L.far('x')];
 console.log(JSON.stringify(out));
 """
 
@@ -56,3 +57,7 @@ def test_visible_link_tags_never_overlap(out):
     assert out["three"] == [0, 16, 31], "앞 것들 아래로 줄줄이(2px 틈)"
     assert out["bad"] == [0, 0, 0, 12], "깨진 상자는 움직이지 않고, 성한 것끼리만 비킨다"
     assert out["none"] == []
+
+
+def test_far_zoom_hides_unreadable_descriptions(out):
+    assert out["far"] == [True, True, False, False, False, False], "배율 0.35 아래만 — 깨진 값은 숨기지 않음"

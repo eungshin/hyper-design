@@ -1,4 +1,5 @@
 /* View — 판 위 이름표를 화면에서 같은 크기로(R27 F01): #stage 의 data-zoom 이 바뀌면 #rows 에 CSS 변수 --lz(= 1/z, 규칙 HD.labelScale)를 쓴다.
+   배율이 HD.labelScale.FAR 보다 작으면 #rows[data-lz-far] — 펼친 카드 설명(.cbody)을 visibility 로 숨긴다(크기는 그대로라 줄 사이 계산은 배율과 상관없음).
    확대 중엔 한 프레임에 한 번 3% 넘게 바뀔 때만, 멈춘 뒤 150ms 에 정확한 값 — 그때 document 'hd-label-scale' {lz} 를 보낸다(선 태그 겹침 다시 재기 등).
    이름표 CSS 는 각 주인(shell.css 의 R27 F01 블록 · view-busy · view-rows)이 calc(… * var(--lz,1)) 또는 scale: var(--lz,1) 로 쓴다 — 여기는 값만.
    가진 상태: 마지막으로 쓴 값(DOM 의 --lz) · 저장 없음. HD.feature('labelScale', {needs: ['rowsEl', 'warn'], mount(ctx) → {now() → 지금 --lz 수}}) */
@@ -8,7 +9,12 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
   var L = HD.labelScale, rowsEl = ctx.rowsEl, stage = rowsEl.parentNode, raf = 0, timer = 0, warned = false;
-  function zoom() { return stage && stage.dataset ? stage.dataset.zoom : null; }
+  function zoom() {                                   // data-zoom(셸 apply) — 첫 apply 전이면 transform 의 scale(…) 을 읽는다
+    if (!stage) return null;
+    if (stage.dataset && stage.dataset.zoom) return stage.dataset.zoom;
+    var m = /scale\(([-\d.e]+)\)/.exec(stage.style.transform || '');
+    return m ? m[1] : '1';
+  }
   function write(exact) {
     var v = L.inv(zoom());
     if (v == null) {
@@ -17,6 +23,8 @@ function mount(ctx) {
     }
     var old = rowsEl.style.getPropertyValue('--lz');
     if (L.put(old, v, exact)) rowsEl.style.setProperty('--lz', L.fmt(v));
+    var far = L.far(1 / v);
+    if (far !== rowsEl.hasAttribute('data-lz-far')) rowsEl.toggleAttribute('data-lz-far', far);   // 작게 볼 때 펼친 설명 숨김(shell.css R27 F01)
     if (exact) document.dispatchEvent(new CustomEvent('hd-label-scale', {detail: {lz: v}}));
   }
   var last = zoom();
