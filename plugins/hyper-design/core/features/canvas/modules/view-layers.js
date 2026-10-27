@@ -5,7 +5,10 @@
    줄(묶음) = 판의 섹션(51-4): id = HD.layers.rowId(줄 이름)(셸 tree() 의 'g'+차례를 여기서 바꾼다), 이름 두 번 누르기 = 줄 이름 바꾸기,
      올리면 [줄만 걷기], 오른쪽 메뉴 = 이름 바꾸기 · 줄만 걷기 · 줄 화면 모두 삭제. 쓰기는 view-rows 'rowHeads' 가 맡는다 — 의도 'hd-row-rename' {from, to} ·
      'hd-row-dissolve' {name} 를 보내고, 'hd-row-pick' {ids}(→ ctx.pick) · 'hd-row-delete' {ids}(→ ctx.del) · 'hd-rows-changed'(→ 다시 그리기, 이름이 바뀐 줄의 접힘을 옮김)를 받는다.
-   화면 줄을 끌어 사용자 폴더(머리 줄이든 그 안 화면 줄이든)에 놓으면 그 폴더로, 줄(묶음)에 놓으면 폴더에서 빼기 — 끈 줄이 고른 화면이면 고른 것 모두.
+   화면 줄을 끌어 사용자 폴더(머리 줄이든 그 안 화면 줄이든)에 놓으면 그 폴더로, 줄(묶음)에 놓으면 폴더에서 빼기 + 다른 판 폴더 화면은 그 폴더로 옮기기(R31,
+     의도 'hd-row-assign' {ids, to} → view-rows 가 /api/group-move) — 규칙 HD.rowOps.drop. 끈 줄이 고른 화면이면 고른 것 모두.
+   R31: 폴더 이름 누르기(고르기)는 두 번 누르기 틈(260ms)만큼 미룬다 — 고르기가 도크를 다시 놓아 줄이 움직여도 두 번 누르기 = 이름 바꾸기.
+     폴더 줄 이름에 올리면 이름 전체(title) · 올림 단추는 올렸을 때만 자리를 차지(이름이 덜 잘림) · 메뉴 글 = HD.rowOps.WORDS(판 제목 메뉴와 같음).
    끄는 중 나무 위·아래 끝에 가면 저절로 스크롤. 폴더는 패널에서만 묶는다(판 카드는 안 움직임).
    위: 이름 찾기 + 거르기 아이콘(숨긴 것만 · 잠긴 것만 · 메모 있는 것),
    아래 막대: 폴더로 묶기 · 폴더로 옮기기(메뉴: 폴더 목록 · 폴더에서 빼기) · 빈 레이아웃 · 숨기기 · 잠그기 · 삭제(고른 화면).
@@ -72,8 +75,8 @@ function mount(ctx) {
     if (notes(x)) return b;
     if (ctx.arrange) b += '<button type="button" class="ly-hov" data-arr="x" title="가로로 늘어놓기" aria-label="가로로 늘어놓기">' + svg(I.rowX) + '</button>' +
       '<button type="button" class="ly-hov" data-arr="y" title="세로로 늘어놓기" aria-label="세로로 늘어놓기">' + svg(I.rowY) + '</button>';
-    if (x.kind === 'folder' && FD) b += '<button type="button" class="ly-hov" data-act="unfolder" title="폴더 풀기" aria-label="폴더 풀기">' + svg(I.fUn) + '</button>';
-    if (section(x)) b += '<button type="button" class="ly-hov" data-act="ungroup" title="줄만 걷기 (Ctrl+Backspace) — 화면은 위 줄로" aria-label="줄만 걷기">' + svg(I.ungroup) + '</button>';
+    if (x.kind === 'folder' && FD) b += '<button type="button" class="ly-hov" data-act="unfolder" title="폴더 풀기 — 화면은 그대로" aria-label="폴더 풀기">' + svg(I.fUn) + '</button>';
+    if (section(x)) b += '<button type="button" class="ly-hov" data-act="ungroup" title="' + esc(W().ungroup) + ' (' + W().ungroupKey + ') — 화면은 위 폴더로" aria-label="폴더만 풀기">' + svg(I.ungroup) + '</button>';
     return b;
   }
   function rowHtml(x, picked) {
@@ -84,7 +87,7 @@ function mount(ctx) {
       return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" data-id="' + esc(x.id) + '" role="treeitem" aria-expanded="' + !shut + '">' +
         '<button type="button" class="ly-fold" aria-label="' + (shut ? '펴기' : '접기') + '">' + (shut ? '▸' : '▾') + '</button>' + eye +
         '<span class="ly-ficon" aria-hidden="true">' + svg(shut ? I.fShut : I.fOpen) + '</span>' +
-        '<span class="ly-name"' + (x.kind === 'folder' || section(x) ? ' title="두 번 눌러 이름 바꾸기"' : '') + '>' + esc(x.name) + '</span>' +
+        '<span class="ly-name" title="' + esc(x.name) + (x.kind === 'folder' || section(x) ? ' — 두 번 눌러 이름 바꾸기' : '') + '">' + esc(x.name) + '</span>' +
         hov(x) + '<span class="ly-count" title="' + (notes(x) ? '메모 ' : '화면 ') + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
     }
     return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" role="treeitem"' + (x.kind === 'screen' ? ' draggable="true"' : '') + '>' + eye +
@@ -92,7 +95,8 @@ function mount(ctx) {
       (x.kind === 'screen' || x.kind === 'note' ? '<button type="button" class="ly-lock" aria-pressed="' + x.lock + '" aria-label="' + (x.lock ? '잠금 풀기' : '잠그기') + '">' + svg(x.lock ? I.lock : I.open) + '</button>' : '') +
       '</div>';
   }
-  function section(x) { return x.kind === 'row' && String(x.id).indexOf('row:') === 0; }   // 판의 줄(빈 레이아웃 묶음 '@drafts' 는 아님)
+  function section(x) { return x.kind === 'row' && String(x.id).indexOf('row:') === 0; }
+  function W() { return HD.rowOps.WORDS; }           // 판 제목 메뉴와 같은 글(R31)   // 판의 줄(빈 레이아웃 묶음 '@drafts' 는 아님)
   function rows(groups) {                            // 줄 id = 줄 이름(51-4) — 셸 tree() 는 차례('g'+i)를 준다
     return (groups || []).map(function (g) { return !g || String(g.id).charAt(0) === '@' ? g : {id: L.rowId(g.name), name: g.name, screens: g.screens}; });
   }
@@ -178,23 +182,34 @@ function mount(ctx) {
     if (arr) { if (ctx.arrange && head) ctx.arrange(seen(id), arr.dataset.arr); return; }
     if (e.target.closest('[data-act="unfolder"]')) { if (x.kind === 'folder') send({type: 'remove', id: id}); return; }
     if (e.target.closest('[data-act="ungroup"]')) { if (section(x)) emit('hd-row-dissolve', {name: x.name}); return; }
-    if (head) { if (ctx.pick && e.target.closest('.ly-name')) ctx.pick(seen(id), 'only'); return; }
+    if (head) {                                      // 폴더 이름 누르기 = 그 화면 모두 고르기 — 두 번 누르기 틈만큼 미룬다: 고르기가 도크를 다시 놓아(연결·정렬 패널) 줄이 움직이면
+      if (!ctx.pick || !e.target.closest('.ly-name')) return;   // 두 번째 누르기가 다른 곳에 떨어져 이름 바꾸기가 열리지 않았다(R31 진단)
+      clearTimeout(pickT);
+      if (e.detail < 2) pickT = setTimeout(function () { ctx.pick(seen(id), 'only'); }, DBL);
+      return;
+    }
     if (x.kind === 'text') { if (!x.hid) emit('hd-board-pick', {id: id}); return; }   // 판 글 줄 = 판에서 그 글 고르기(t51-9, view-board-text)
     if (x.kind !== 'screen' || x.hid) return;
     if ((e.shiftKey || e.ctrlKey || e.metaKey) && ctx.pick) { ctx.pick([id], 'toggle'); return; }
     ctx.reveal(id);
   });
+  var pickT = 0, DBL = 260;
   tree.addEventListener('dblclick', function (e) {
     var n = e.target.closest('.ly-name'), r = n && n.closest('[data-kind="folder"],[data-kind="row"]');
-    if (r) { e.preventDefault(); rename(r.dataset.ly); }
+    if (r) { clearTimeout(pickT); e.preventDefault(); rename(r.dataset.ly); }
   });
-  tree.addEventListener('contextmenu', function (e) {   // 줄 오른쪽 메뉴(51-4): 이름 바꾸기 · 줄만 걷기 · 줄 화면 모두 삭제
-    var r = e.target.closest('[data-kind="row"]'), x = r && item(r.dataset.ly);
-    if (!x || !section(x) || e.target.closest('.ly-rename')) return;
+  tree.addEventListener('contextmenu', function (e) {   // 폴더 줄 오른쪽 메뉴(51-4 · R31 글): 이름 바꾸기 · 폴더만 풀기(화면 남김) · 폴더 지우기(화면도) — 판 제목 메뉴와 같은 글
+    var r = e.target.closest('[data-kind="row"],[data-kind="folder"]'), x = r && item(r.dataset.ly);
+    if (!x || (!section(x) && !(x.kind === 'folder' && FD)) || e.target.closest('.ly-rename')) return;
     e.preventDefault(); e.stopPropagation();
-    openMenu(null, [{icon: I.layout, label: '이름 바꾸기', act: function () { rename(x.id); }},
-                    {icon: I.ungroup, label: '줄만 걷기 — 화면은 위 줄로', act: function () { emit('hd-row-dissolve', {name: x.name}); }},
-                    {icon: I.del, label: '줄 화면 모두 삭제', act: function () { var ids = kids(x.id); if (ids.length) ctx.del(ids); }}], e.clientX, e.clientY);
+    if (x.kind === 'folder') {                       // 사용자 폴더(패널에서만 묶음) — 판 카드는 그대로
+      openMenu(null, [{icon: I.layout, label: W().rename, act: function () { rename(x.id); }},
+                      {icon: I.fUn, label: '폴더 풀기 — 화면은 그대로', act: function () { send({type: 'remove', id: x.id}); }}], e.clientX, e.clientY);
+      return;
+    }
+    openMenu(null, [{icon: I.layout, label: W().rename, act: function () { rename(x.id); }},
+                    {icon: I.ungroup, label: W().ungroup, act: function () { emit('hd-row-dissolve', {name: x.name}); }},
+                    {icon: I.del, label: W().del(kids(x.id).length), act: function () { var ids = kids(x.id); if (ids.length) ctx.del(ids); }}], e.clientX, e.clientY);
   });
 
   // 끌어 옮기기(HTML5) — 화면 줄 → 사용자 폴더(넣기) · 줄(묶음)(빼기). 놓는 곳은 머리 줄이든 그 안 화면 줄이든 같은 묶음
@@ -205,12 +220,23 @@ function mount(ctx) {
     for (var i = 0; i < heads.length; i++) if (heads[i].dataset.ly === id) return heads[i];
     return null;
   }
-  function target(e) {                               // → 그 묶음의 머리 줄(폴더·줄)
-    if (!FD || !dragId) return null;
+  function target(e) {                               // → 그 묶음의 머리 줄(사용자 폴더·판 폴더) — 빈 레이아웃·판 메모 묶음은 아님
+    if (!dragId) return null;
     var r = e.target.closest && e.target.closest('[data-ly]'); if (!r) return null;
-    if (r.dataset.kind === 'folder' || r.dataset.kind === 'row') return r;
-    var x = item(r.dataset.ly); if (!x || x.kind !== 'screen') return null;
-    var h = x.folder || x.row; return h ? headEl(h) : null;
+    if (r.dataset.kind !== 'folder' && r.dataset.kind !== 'row') {
+      var x = item(r.dataset.ly); if (!x || x.kind !== 'screen') return null;
+      var h = x.folder || x.row; r = h ? headEl(h) : null; if (!r) return null;
+    }
+    var hx = item(r.dataset.ly);
+    return hx && ((hx.kind === 'folder' && FD) || section(hx)) ? r : null;
+  }
+  function dropOn(r, ids) {                          // 끌어 놓기 계획 = HD.rowOps.drop — 사용자 폴더에 넣기·빼기는 셸 폴더 상태, 판 폴더 옮기기는 의도(view-rows 가 파일에 쓴다)
+    var hx = item(r.dataset.ly); if (!hx) return;
+    var items = ids.map(item).filter(function (x) { return x && x.kind === 'screen'; }).map(function (x) { return {id: x.id, row: x.row, folder: x.folder}; });
+    var p = HD.rowOps.drop(items, {kind: hx.kind, id: hx.id, name: hx.name});
+    if (p.add && FD) send({type: 'add', id: p.add.id, ids: p.add.ids});
+    if (p.take && FD) send({type: 'take', ids: p.take});
+    if (p.assign) emit('hd-row-assign', p.assign);
   }
   function moveTo(head, ids) {                        // head = 폴더 id(넣기) · 줄 id 또는 ''(빼기)
     var f = fstate().folders.filter(function (g) { return g.id === head; })[0];
@@ -224,7 +250,6 @@ function mount(ctx) {
   tree.addEventListener('dragstart', function (e) {
     var r = e.target.closest && e.target.closest('[data-kind="screen"]');
     if (!r) return;
-    if (!FD) { e.preventDefault(); return; }   // 폴더가 없으면 끌 곳도 없다
     dragId = r.dataset.ly;
     var pk = ctx.picked(); dragIds = pk.indexOf(dragId) >= 0 ? pk.slice() : [dragId];   // 고른 줄을 끌면 고른 것 모두
     try { e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
@@ -243,7 +268,7 @@ function mount(ctx) {
     var r = target(e), ids = dragIds || []; clearDrop(); dragId = null; dragIds = null;
     if (!r) return;
     e.preventDefault();
-    moveTo(r.dataset.kind === 'folder' ? r.dataset.ly : '', ids);
+    dropOn(r, ids);
   });
   tree.addEventListener('dragend', function () { clearDrop(); dragId = null; dragIds = null; });
 
@@ -309,6 +334,7 @@ var CSS =
   '.ly-ficon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}\n' +
   '.ly-count{font-size:11px;font-weight:400;color:#777;min-width:18px;text-align:right;padding-right:4px;flex:none}\n' +
   '.ly-r .ly-hov{opacity:0}.ly-r:hover .ly-hov,.ly-r .ly-hov:focus-visible{opacity:1}\n' +
+  '.ly-r:not(:hover):not(:focus-within) .ly-hov{position:absolute;pointer-events:none}\n' +   /* R31: 안 올렸을 때는 자리를 차지하지 않는다 — 폴더 이름이 덜 잘린다 */
   '.ly-r.screen[draggable="true"]{cursor:grab}\n' +
   '.ly-r.ly-drop{background:#E4E4E0;box-shadow:inset 0 0 0 1px #9a9a95}\n' +
   '.ly-rename{flex:1;min-width:0;height:22px;border:1px solid #9a9a95;border-radius:4px;padding:0 4px;font:inherit;font-weight:400}\n' +

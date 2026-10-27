@@ -1311,6 +1311,7 @@ addEventListener('keydown', function (e) {
 // 칸이 모자라거나 mount 가 던지면 그 기능만 빠지고 [hd] 오류 + 토스트(나머지는 붙음). 칸 뜻은 features.js 머리 주석
 var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast(m, u, ms); }, warn: function (m) { console.warn(m); },
   rowsEl: rowsEl, CARD: CARD, title: function (id) { return titleOf(id); }, cardEl: function (id) { return VL.cardEl(id); },
+  cardPos: CP, locked: function (id) { return LF.isLocked(id); }, lines: function () { scheduleArrows(true); },   // 카드 옮긴 자리(view-card-pos api) · 잠금 · 선 다시(끄는 중) — R31 폴더째 옮기기
   frameLoaded: frameLoaded,
   selected: function () { return SL.ids(); },
   focus: function (ids) { fitCards(ids, z); },     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)

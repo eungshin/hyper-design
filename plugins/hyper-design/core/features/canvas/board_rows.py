@@ -1,7 +1,7 @@
-"""Edge + Model — 판의 줄(group, 51-4): 차례 · 이름 바꾸기 · 줄만 걷기(계획은 순수, 쓰기는 screens.json 한 번 = 되돌리기 한 번) · 지우기로 빈 줄 빼기.
+"""Edge + Model — 판의 줄(group, 51-4): 차례 · 이름 바꾸기 · 줄만 걷기 · 다른 줄로 옮기기(R31)(계획은 순수, 쓰기는 screens.json 한 번 = 되돌리기 한 번) · 지우기로 빈 줄 빼기.
 
 상태 없음(screens.json 의 groups · 화면마다 group). 줄 이름 차례는 board_data.index_data 와 같다.
-부르는 곳: history.History(group_rename · group_dissolve) · screen_edits.delete_screens(emptied_groups) · 테스트(plan_* 를 바로).
+부르는 곳: history.History(group_rename · group_dissolve · group_move) · screen_edits.delete_screens(emptied_groups) · 테스트(plan_* 를 바로).
 오류 탐지: 받을 수 없는 요청은 GroupError(한국어 + reason 'invalid' 400 · 'missing' 404) → {error, reason} · 빌드가 깨지면 되돌림(write_record).
 """
 import json, pathlib
@@ -106,6 +106,39 @@ def plan_group_dissolve(data, name):
 
 
 
+def plan_group_move(data, ids, to):
+    """다른 줄(폴더)로 옮기기 계획(R31, 레이어 패널 끌어 놓기) — 순수. ids 화면을 줄 to 로: 화면마다 group = to, 차례는 to 줄 화면 뒤
+    (옮긴 화면끼리는 원래 차례 — 빌드가 같은 차례로 그린다). 그래서 비게 된 줄 이름은 groups 에서 뺀다(emptied_groups).
+    → {data, screens(옮긴 id), to, emptied, same?}. 이미 모두 to 줄이면 same(쓰지 않음). 캔버스 규칙 HD.rowOps.assign 과 같다."""
+    rows = group_rows(data)
+    if not isinstance(to, str) or to not in rows:
+        raise GroupError("없는 폴더예요: %s" % (to,), "missing")
+    if not isinstance(ids, list) or not ids or not all(isinstance(i, str) for i in ids):
+        raise GroupError("옮길 화면이 없어요")
+    new = json.loads(json.dumps(data))
+    screens = new.get("screens") or []
+    have = {s.get("id") for s in screens}
+    unknown = [i for i in ids if i not in have]
+    if unknown:
+        raise GroupError("없는 화면이에요: %s" % ", ".join(unknown), "missing")
+    want = set(ids)
+    moved = [s for s in screens if s.get("id") in want and _gname(s) != to]
+    if not moved:
+        return {"data": new, "screens": [], "to": to, "emptied": [], "same": True}
+    rest = [s for s in screens if not (s.get("id") in want and _gname(s) != to)]
+    before = [dict(s) for s in screens]                # 옮기기 전 group(아래에서 같은 객체를 고친다)
+    for s in moved:
+        s["group"] = to
+    at = [k for k, s in enumerate(rest) if _gname(s) == to]
+    k = at[-1] + 1
+    new["screens"] = rest[:k] + moved + rest[k:]
+    gone = [g for g in rows if g not in {_gname(s) for s in new["screens"]}]
+    if isinstance(new.get("groups"), list):
+        new["groups"] = emptied_groups(new["groups"], before, new["screens"])
+    return {"data": new, "screens": [s["id"] for s in moved], "to": to, "emptied": gone}
+
+
+
 def _group_write(out, plan, stamp=None, build=None):
     """줄 계획 하나 → screens.json 쓰기 한 번(원본 + manifest = 되돌리기 한 번). 바뀐 화면 파일은 없다(changed = [])."""
     out = pathlib.Path(out).resolve()
@@ -117,7 +150,7 @@ def _group_write(out, plan, stamp=None, build=None):
         return {"error": str(e), "reason": e.reason}
     res = {k: v for k, v in p.items() if k not in ("data", "same", "to")}
     if p.get("same"):
-        return dict(res, group=p["to"], stamp=None, changed=[])
+        return dict(res, group=p["to"], stamp=None, changed=[])   # same = 쓰지 않음
     w = _Writes(out, stamp, build)
     w.keep(sj); _write_json(sj, p["data"], raw)
     err = w.commit([])
@@ -141,3 +174,9 @@ def group_dissolve(out, name, stamp=None, build=None):
     if "stamp" in r:
         r["group"] = name
     return r
+
+
+
+def group_move(out, ids, to, stamp=None, build=None):
+    """POST /api/group-move {ids, to} → {group(= to), screens(옮긴 id), emptied, stamp|null(이미 그 줄 = 쓰지 않음), changed:[]} | {error, reason}."""
+    return _group_write(out, lambda d: plan_group_move(d, ids, to), stamp, build)
