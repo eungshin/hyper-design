@@ -81,6 +81,16 @@ def check_reply(reply, intent, agent=True, known_screens=None):
     return errs
 
 
+def reply_warns(reply):
+    """막지 않는 경고 목록(R35) — 답변이 물음표로 끝나면 되묻는 답: 질문이면 질문 kind 와 선택지를 쓰게(한 왕복 줄이기)."""
+    if not isinstance(reply, dict) or reply.get("kind") != "답변":
+        return []
+    ends = [(reply.get(k) or "").rstrip() for k in ("text", "detail")]
+    if any(e.endswith(("?", "？")) for e in ends):
+        return ["답변이 물음표로 끝나요 — 반영할 수 있으면 먼저 반영하고, 정말 물어야 하면 --kind 질문 --question … --choice A --choice B 로"]
+    return []
+
+
 def stamp(reply, at, by=None):
     """보낼 답 → 저장할 답(새 객체): by(없으면 'agent')·at 을 찍는다."""
     r = dict(reply)

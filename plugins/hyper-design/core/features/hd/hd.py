@@ -109,8 +109,11 @@ def read_detail(a):
 
 def cmd_reply(a):
     read_detail(a)
+    reply = build_reply(a)
+    for w in S.reply_warns(reply):            # 막지 않음 — 되묻는 답변에 한 줄(R35)
+        print("[hd] " + w, file=sys.stderr, flush=True)
     p = _hub().project(a.project, a.out, need_helper=True)
-    res = p.reply(a.note, build_reply(a))
+    res = p.reply(a.note, reply)
     r = S.parse_ref(a.note)
     label = "%s#%s" % (r["screen"], r["no"]) if isinstance(r, dict) else a.note
     return res, "%s → %s (rev %s)" % (label, res.get("status"), res.get("rev"))

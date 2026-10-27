@@ -46,6 +46,13 @@ def test_known_screens_checked():
     assert M.check_reply(r, "change") == []
 
 
+def test_answer_ending_in_question_mark_warns_to_use_question_kind():
+    assert M.reply_warns({"kind": "답변", "text": "회색으로 바꿀까요?"}) != []
+    assert M.reply_warns({"kind": "답변", "text": "네, 토큰입니다", "detail": "더 바꿀까요？ "}) != []
+    assert M.reply_warns({"kind": "답변", "text": "네, --ui-muted 토큰입니다"}) == []
+    assert M.reply_warns({"kind": "질문", "question": "어느 쪽?", "choices": ["A", "B"]}) == []
+
+
 def test_stamp_defaults_by_agent_and_sets_at():
     r = {"kind": "대체됨", "where": "x"}
     s = M.stamp(r, "2026-10-23T10:00:00+09:00")
