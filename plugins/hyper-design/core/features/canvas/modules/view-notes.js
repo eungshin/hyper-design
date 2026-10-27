@@ -4,7 +4,7 @@
    결정 필요 메모가 있는 카드 배지에 .decide(강조색 — 수는 그대로 열린 메모 수). 거르기 상태 = 켜짐 하나(저장하지 않음, 결정 필요가 0 이 되면 꺼짐).
    보낸 메모 숨기기(task 29): 목록·카드 배지 수는 HD.annotation.visible(n, 켜짐)인 메모만 — 보낸 뒤 AI 차례·완료한 메모는 숨김. 이 View 가 메모 막대(.ntool, task 32 — 한 줄 아이콘:
      #ncnt '메모 N' · #nsent · #ndec · #nclear) 안에 눈 아이콘 #nsent '보낸 메모 보기 (N)'(title·aria-label, 수 배지 .ncb[data-n] — N = 숨김이 될 메모 수, 0 이면 꺼진 단추로 자리 유지)를 그린다.
-     줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(올리거나 포커스일 때 보임, 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 ctx.key('hd-show-sent')('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
+     줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(늘 흐리게 보이고 올리거나 포커스면 진하게 — 카드 메모 묶음과 같이, R26 · 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 ctx.key('hd-show-sent')('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
      바뀌면 ctx.sentChanged(켜짐)(의도 — 셸이 핀·묶음을 다시 그리게 잇는다, #263). 다른 View 는 셸이 건네는 showSent() 로 읽는다.
    요소를 찾을 수 없음(#285): 화면이 다시 찾지 못한 대상(ctx.lost(n))이 있는 열린 메모 줄에 회색 말 .nlost(title = 까닭). 답이 오면 relost() — 바뀐 것이 있을 때만 목록을 다시.
    HD.viewNotes.mount(ctx) → {render(notes, ids?) → {memos, pending, decide}, filter(on), showSent(on?) → 켜짐, relost()}   ids = 메모가 바뀐 화면 — 카드 배지는 그 카드만(없으면 전부)

@@ -178,9 +178,9 @@ function mount(ctx) {
   box.addEventListener('pointerover', function (e) { var b = e.target.closest ? e.target.closest('button[data-tip]') : null; if (b) showTip(b); else hideTip(); });
   box.addEventListener('focusin', function (e) {     // 키보드 포커스일 때만(열 때 첫 단추로 옮기는 초점은 꼬리말 없이)
     var b = e.target.closest ? e.target.closest('button[data-tip]') : null;
-    if (b && b.matches(':focus-visible')) showTip(b); else hideTip();
+    if (b && b.matches(':focus-visible')) showTip(b);
   });
-  box.addEventListener('focusout', hideTip);
+  box.addEventListener('focusout', function () { if (!box.matches(':hover')) hideTip(); });
   ['pointerdown', 'wheel', 'keydown', 'contextmenu'].forEach(function (n) { box.addEventListener(n, function (e) { if (n !== 'keydown' || e.key !== 'Escape') e.stopPropagation(); }); });
 
   return {open: open, close: close, refresh: refresh, isOpen: function () { return !!cur; }};

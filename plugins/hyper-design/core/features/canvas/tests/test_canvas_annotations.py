@@ -263,3 +263,43 @@ def test_broken_show_sent_value_warns_and_defaults_off(apage):
     reload(pg)
     assert pg.get_attribute("#nsent", "aria-pressed") == "false"
     assert any(w.startswith("[hd] hd-show-sent:") for w in warns), warns
+
+
+@pytest.mark.area("notes")
+def test_thread_row_actions_are_quiet_icons_with_tooltips(apage):
+    """R26: 묶음 줄 동작 = 메타 줄 끝 작은 아이콘(글 단추 아님) · 올리면 #thtip 꼬리말이 이름을 말한다 · 메모 글이 메타보다 크고 진하다 ·
+    머리 줄 + = 메모 추가 · 고치기(메모 창)·완료(사람 답 '확인')·지우기 그대로."""
+    pg = apage
+    pg.evaluate(SEED_JS)
+    reload(pg)
+    fit_view(pg)
+    pg.click(BADGE)
+    pg.wait_for_selector("#thread:not([hidden])")
+    row = '#thread li[data-id="m1"]'
+    acts = pg.eval_on_selector_all(row + " .thl button", "bs => bs.map(b => [b.dataset.act, b.getAttribute('aria-label'), b.textContent.trim(), !!b.querySelector('svg')])")
+    assert acts == [["edit", "고치기", "", True], ["del", "지우기", "", True], ["done", "완료", "", True]], ("메타 줄 안 아이콘(글 없음)", acts)
+    hb, mb = pg.locator(row + ' button[data-act="del"]').bounding_box(), pg.locator(row + " .thn").bounding_box()
+    assert hb["width"] <= 28 and hb["height"] <= 28 and abs((hb["y"] + hb["height"] / 2) - (mb["y"] + mb["height"] / 2)) < 6, ("작은 아이콘이 메타와 같은 줄", hb, mb)
+    assert pg.locator('#thread button[data-act="add"]').text_content().strip() == "" and pg.get_attribute('#thread button[data-act="add"]', "aria-label") == "메모 추가"
+    css = lambda sel, p: pg.eval_on_selector(sel, f"e => getComputedStyle(e).{p}")
+    assert float(css(row + " .tht", "fontSize")[:-2]) > float(css(row + " .the", "fontSize")[:-2]), "메모 글이 메타보다 크다"
+    assert css(row + " .tht", "fontWeight") == "400" and css(row + " .tht", "color") == "rgb(28, 28, 28)"
+    pg.mouse.move(5, 995)
+    quiet = css('#thread li[data-id="q1"] button[data-act="del"]', "color")
+    pg.hover(row + ' button[data-act="del"]')
+    pg.wait_for_selector("#thtip:not([hidden])")
+    assert pg.text_content("#thtip") == "지우기"
+    assert css(row + ' button[data-act="del"]', "color") != quiet, "올리면 진하게(평소 흐림)"
+    pg.hover(row + ' button[data-act="done"]')
+    assert pg.text_content("#thtip") == "완료"
+    pg.click(row + ' button[data-act="edit"]')        # 고치기 = 그 메모의 메모 창
+    pg.wait_for_selector("#pop:not([hidden])")
+    assert pg.input_value("#pnote") == "버튼을 더 크게" and pg.is_hidden("#thread") and pg.is_hidden("#thtip")
+    pg.keyboard.press("Escape")
+    pg.click(BADGE)
+    pg.wait_for_selector("#thread:not([hidden])")
+    pg.click(row + ' button[data-act="done"]')
+    pg.wait_for_function("(() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); const m = JSON.parse(localStorage.getItem(k)).find(n => n.id === 'm1'); return m && (m.replies || []).some(r => r.kind === '확인'); })()", timeout=4000)
+    pg.click('#thread li[data-id="q1"] button[data-act="del"]')
+    pg.wait_for_function("(() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); return !JSON.parse(localStorage.getItem(k)).some(n => n.id === 'q1'); })()", timeout=4000)
+    pg.keyboard.press("Escape")

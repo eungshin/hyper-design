@@ -162,11 +162,12 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 .nbadge:hover,.nbadge:focus-visible,.nbadge[aria-expanded="true"]{outline:3px solid var(--ui-mark);outline-offset:2px}
 #thread{position:fixed;z-index:39;width:320px;max-height:min(60vh,520px);display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.28);font-size:13.5px}
 #thread[hidden]{display:none}
-#thread .thh{padding:10px 12px 6px;font-weight:700;font-size:14px;border-bottom:1px solid #eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#thread .thh{display:flex;align-items:center;gap:6px;padding:8px 8px 6px 12px;font-weight:700;font-size:14px;border-bottom:1px solid #eee}
+#thread .thhn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #thread .thbody{overflow:auto;flex:1 1 auto}
 #thread .thlist{list-style:none;margin:0;padding:4px 0}
 #thread .thlist li.focus{background:#f4f4f1}
-#thread .thn{flex:none;font-weight:700;color:#1c1c1c}
+#thread .thn{flex:none;font-weight:600;color:#666}
 #thread .ths{flex:none;color:#888}
 #thread .ths[data-st="decide"]{color:var(--ui-accent);font-weight:700}
 #thread .thlost{margin-top:3px;font-size:12px;color:#777}
@@ -179,13 +180,21 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 #thread .thdone .thlist li{padding:8px 0;opacity:.75}
 #thread .thlist li{padding:8px 12px;border-bottom:1px solid #f1f1ee}
 #thread .thlist li.sent{opacity:.6}
-#thread .thl{display:flex;gap:8px;justify-content:space-between;color:#777;font-size:12px}
-#thread .the{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#thread .thi{flex:none;font-weight:600}
+#thread .thl{display:flex;align-items:center;gap:8px;min-height:24px;color:#888;font-size:11.5px;line-height:16px}
+#thread .the{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#thread .thi{flex:none}
 #thread .thsc{flex:none;color:#555}
-#thread .tht{margin-top:3px;white-space:pre-wrap;word-break:break-word;color:#1c1c1c}
-#thread .tha{display:flex;gap:6px;margin-top:6px}
-#thread .thf{padding:8px 12px;border-top:1px solid #eee;display:flex;justify-content:flex-end}
+#thread .tht{margin-top:2px;white-space:pre-wrap;word-break:break-word;color:#1c1c1c;font-size:13.5px;line-height:20px;font-weight:400}
+/* R26 줄 동작 = 메타 줄 끝 작은 아이콘(메모 패널 .nib 와 같은 모양) — 평소 흐림, 줄에 올리거나 포커스면 진하게 · 꼬리말 #thtip = 요소 막대 #eltip 과 같은 모양 */
+#thread .tha{flex:none;display:flex;gap:0;margin:-4px -4px -4px 0}
+#thread .thib{width:24px;height:24px;padding:0;border:0;border-radius:6px;background:none;color:#b4b4ae;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:color .12s}
+#thread .thib svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}
+#thread li:hover .thib,#thread li:has(.thib:focus-visible) .thib,#thread .thh .thib{color:#5f5f5a}
+#thread .thib:hover{background:#f0f0ec;color:#1c1c1c}
+#thread .thib:focus-visible{outline:2px solid var(--ui-mark);outline-offset:1px;color:#1c1c1c}
+@media (hover:none){#thread .thib{color:#5f5f5a}}
+#thtip{position:fixed;z-index:41;background:#1c1c1c;color:#fff;border-radius:7px;padding:5px 9px;font:600 12px/16px system-ui,sans-serif;pointer-events:none;white-space:nowrap}
+#thtip[hidden]{display:none}
 /* 연결 패널(고른 화면의 연결): 도착마다 한 줄 — 점 = 선 색 + 번호 */
 #legend[hidden]{display:none}
 #legend .lgt{margin:0 0 8px;font-size:13px;font-weight:700;color:#1c1c1c}
@@ -512,9 +521,11 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 #notes .ns{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:#777}
 #notes .nt{color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #notes .nnote{margin:2px 0}
-#notes .nact{position:absolute;top:4px;right:4px;display:flex;gap:2px;opacity:0;transition:opacity .12s}
-#notes li:hover .nact,#notes li:focus-within .nact{opacity:1}
-@media (hover:none){#notes .nact{opacity:1}}
+#notes .nact{position:absolute;top:4px;right:4px;display:flex;gap:2px}
+#notes .nact .nib{color:#b4b4ae;transition:color .12s}          /* R26: 카드 메모 묶음(#thread .thib)과 같이 — 평소 흐림, 줄에 올리거나 포커스면 진하게 */
+#notes li:hover .nact .nib,#notes li:focus-within .nact .nib{color:#5f5f5a}
+#notes .nact .nib:hover{color:#1c1c1c}
+@media (hover:none){#notes .nact .nib{color:#5f5f5a}}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff;margin-top:auto}
 #notes .nfoot:has(.nmsg:empty){display:none}
 #notes .nmsg{flex-basis:100%;color:var(--ui-ok);font-size:13px}
