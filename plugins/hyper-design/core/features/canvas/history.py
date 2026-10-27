@@ -9,7 +9,7 @@ index.html 은 쓰기 때 굽지 않는다 — 페이지를 줄 때 데이터 �
 import sys
 
 import events as EV  # 바뀐 것 알림(screen.written · build.failed)
-from board_rows import group_dissolve, group_rename
+from board_rows import group_dissolve, group_move, group_rename
 from screen_edits import apply_edits, delete_screens
 from write_record import BUILD_FAIL, NO_BUILD, prune, restore, tombstone
 
@@ -94,6 +94,9 @@ class History:
 
     def group_dissolve(self, name):                  # 줄만 걷기(51-4) — 그 줄 화면은 위 줄(첫 줄이면 아래 줄)로
         return self._write(lambda: group_dissolve(self.out, name, build=self.builder.check))
+
+    def group_move(self, ids, to):                   # 다른 줄(폴더)로 옮기기(R31) — 레이어 패널 끌어 놓기, 되돌리기 = restore
+        return self._write(lambda: group_move(self.out, ids, to, build=self.builder.check))
 
     def restore(self, stamp, keep=False, notify=False):
         """notify = 되살린 화면 파일을 지켜보기가 '바뀜'으로 알리게(그 카드를 캔버스가 다시 싣는다 — 48c 기록 패널의 AI 줄 되돌리기)."""

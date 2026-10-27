@@ -235,6 +235,16 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/group-move", "callers": ["modules/view-rows.js (R31: layers panel — drag a screen row onto another folder)"],
+      "request": "{ids:[id], to}", "response": "{group(= to), screens:[moved id], emptied:[row name], stamp|null (already in that row = no write), changed:[]} | {error, reason:'invalid'|'missing'} 400/404 (Korean reason)",
+      "cases": [
+        {"name": "unknown row", "request": {"method": "POST", "path": "/api/group-move", "body": {"ids": ["x"], "to": "zz"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}},
+        {"name": "unknown screen", "request": {"method": "POST", "path": "/api/group-move", "body": {"ids": ["zz-none"], "to": "메인"}}, "expect": {"status": 404, "json": {"error": "str", "reason": {"$eq": "missing"}}}},
+        {"name": "no ids", "request": {"method": "POST", "path": "/api/group-move", "body": {"ids": [], "to": "메인"}}, "expect": {"status": 400, "json": {"error": "str", "reason": {"$eq": "invalid"}}}},
+        {"name": "JSON array body is a clean 400", "request": {"method": "POST", "path": "/api/group-move", "raw": "[]"}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/forward", "callers": ["modules/view-sync.js (Send: non-direct notes)"],
       "request": "{text}", "response": "{via:'queue', path} | {via:'paseo', agent, path} (always writes <out>/.hd-queue/<stamp>.txt)",
       "cases": [
