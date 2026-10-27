@@ -87,7 +87,7 @@ def test_modal_bar_uses_the_free_room_above_without_covering_the_lead(ctx, out):
     """넓은 창(빈 자리가 있음): 막대는 위 안내 글(글자)도 덮지 않는다(t51-7a 원래 약속)."""
     bar, tiles, lead, mbar, _tools, errors = _modal_bar(ctx, out, 1800, "modal-tile-picked-wide.png")
     assert not _overlap(bar, tiles[0]) and not [t for t in tiles[1:] if _overlap(bar, t)], (bar, tiles[:4])
-    assert not _overlap(bar, lead), ("막대가 위 안내 글(글자)을 덮는다", bar, lead)
+    assert not _overlap(bar, lead, -1), ("막대가 위 안내 글(글자)을 덮는다", bar, lead)   # 1px 아래 겹침은 글자를 덮지 않음(테스트 글꼴 차단 R33 뒤 대체 글꼴에서 0.125px 맞닿음)
     assert not _overlap(bar, mbar), "창 제목 막대를 덮지 않는다"
     assert not errors, errors
 

@@ -418,6 +418,13 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/hub/restart", "callers": ["modules/view-hub-stale.js (R34 허브 옛 코드 · 다시 켜기 — the hub passes on_restart)"],
+      "request": "{}", "response": "{restarting:true} inside the hub | JSON 404 on a standalone helper (no hub to restart)",
+      "cases": [
+        {"name": "standalone helper has no hub = JSON 404", "request": {"method": "POST", "path": "/api/hub/restart", "body": {}}, "expect": {"status": 404, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/stop", "callers": ["hd_client.py (hd stop)"],
       "request": "{}", "response": "{stopping:true}, then the server shuts down (must stay last)",
       "cases": [
