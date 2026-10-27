@@ -1038,12 +1038,17 @@ function placeSelbar() {                             // 고른 카드들 위 가
   if (!bar || !SL) return;
   var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
   if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden) { bar.hidden = true; return; }
-  var x0 = 1e9, x1 = -1e9, y0 = 1e9;
-  ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); });
+  var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); y1 = Math.max(y1, r.bottom); });
   $('[data-act="memo"]', bar).hidden = false;
   var sz = $('[data-act="size"]', bar); sz.hidden = !AB; if (AB) { sz.textContent = AB.label(ids) + ' ▾'; sz.setAttribute('aria-label', '카드 크기 ' + AB.label(ids)); }
-  bar.hidden = false; bar.style.left = ((x0 + x1) / 2) + 'px';
-  bar.style.top = Math.max(60, y0 - bar.offsetHeight - 10 - 5 * Math.min(1, z) - 3) + 'px';   // 카드(고른 테두리 바깥) 바로 위 — 화면 좌표라 배율과 상관없이
+  bar.hidden = false;
+  var pr = pane.getBoundingClientRect();              // 판 칸 안에만(R27 F07 — 옆 대화 도크를 덮지 않게, 카드가 판 밖이면 숨김) — 규칙은 HD.barPlace.card
+  var at = HD.barPlace.card({cards: {x: x0, y: y0, w: x1 - x0, h: y1 - y0}, size: {w: bar.offsetWidth, h: bar.offsetHeight},
+    view: {x: pr.left, y: pr.top, w: pr.width, h: pr.height}, lift: 10 + 5 * Math.min(1, z) + 3,
+    bars: $$('#tools').filter(function (t) { return t.offsetWidth; }).map(function (t) { var r = t.getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; })});   // 카드(고른 테두리 바깥) 바로 위 — 화면 좌표라 배율과 상관없이
+  if (at.hidden) { bar.hidden = true; return; }
+  bar.style.left = at.cx + 'px'; bar.style.top = at.y + 'px';
 }
 $('#selbar').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-act]'); if (!b) return;

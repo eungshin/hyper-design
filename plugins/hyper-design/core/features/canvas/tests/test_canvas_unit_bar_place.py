@@ -47,6 +47,15 @@ out.never = anchors.map(a => {
   const lb = R(a.x, a.y - 14, 30, 13), p = P.place({anchor: a, label: lb, size: S, view: V, bars: bars, content: texts}), r = R(p.x, p.y, S.w, S.h);
   return p.side === 'over' || (!hit(r, a) && !hit(r, lb) && !bars.some(b => hit(r, b)) && r.x >= 0 && r.y >= 0 && r.x + r.w <= 1000 && r.y + r.h <= 800);
 });
+// 카드 선택 막대(R27 F07): 판 칸 = 대화 도크(0..340) 오른쪽 340..1140
+const BV = R(340, 32, 800, 968), BS = {w: 226, h: 38};
+out.cardFree = P.card({cards: R(500, 400, 400, 300), size: BS, view: BV, lift: 18});
+out.cardUnderDock = P.card({cards: R(-49, 387, 498, 314), size: BS, view: BV, lift: 18});   // 카드 대부분이 도크 밑
+out.cardOff = P.card({cards: R(-3157, 387, 498, 314), size: BS, view: BV, lift: 18});      // 판 칸 밖 전부
+out.cardRightEdge = P.card({cards: R(1100, 400, 400, 300), size: BS, view: BV, lift: 18});
+out.cardAboveTop = P.card({cards: R(500, -200, 400, 600), size: BS, view: BV, lift: 18});
+out.cardTools = P.card({cards: R(-49, 387, 498, 314), size: BS, view: BV, lift: 18, bars: [R(352, 350, 48, 335)]});   // 판 왼쪽 도구 막대를 비킴
+out.cardBad = P.card({cards: null, size: BS, view: BV});
 console.log(JSON.stringify(out));
 """
 
@@ -122,3 +131,19 @@ def test_heading_scene_clears_the_line_above_and_the_label(js):
 
 def test_bar_never_covers_the_pick_label_or_other_bars(js):
     assert all(js["never"]), js["never"]
+
+
+def test_card_bar_stays_inside_the_board_and_off_the_side_dock(js):
+    f = js["cardFree"]
+    assert not f["hidden"] and f["cx"] == 700 and f["y"] == 400 - 38 - 18, f
+    d = js["cardUnderDock"]
+    assert not d["hidden"] and d["cx"] - 226 / 2 >= 340 + 8, ("도크 밑으로 나간 카드 — 막대 왼쪽 끝은 판 칸 안", d)
+    r = js["cardRightEdge"]
+    assert r["cx"] + 226 / 2 <= 1140 - 8, r
+    t = js["cardTools"]
+    assert t["cx"] - 226 / 2 >= 352 + 48, ("판 위 도구 막대와 겹치지 않음", t)
+    assert js["cardAboveTop"]["y"] == 32 + 8, ("카드 위가 판 칸 밖 — 막대는 판 칸 맨 위", js["cardAboveTop"])
+
+
+def test_card_bar_hides_when_the_card_is_off_the_board(js):
+    assert js["cardOff"]["hidden"] and js["cardBad"]["hidden"], (js["cardOff"], js["cardBad"])
