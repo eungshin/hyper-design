@@ -12,8 +12,10 @@
    답 전체(R24): 답 줄·터미널 답은 다 그린다 — 줄바꿈 그대로, ``` 덩이 = 고정폭 <pre>(가로 스크롤), `인라인` = <code>(나누기는 HD.chatLog.blocks/spans).
      글은 골라 복사할 수 있고(도크의 user-select:none 을 목록만 풀어 줌 · 글을 고르는 중이면 턴 누르기를 하지 않음), 답마다 [복사](올리면 보임). 도구 줄은 한 줄 요약 · 누르면 펼침.
      다시 그리기는 줄마다(턴·터미널 줄 key) 바뀐 것만 새로 만들고 나머지 요소는 그대로 둔다 — 긴 기록에서도 이벤트마다 목록 전체를 다시 만들지 않는다.
+   메모의 답 설명: 답 기록에 detail 이 없고 메모(note)를 이름 대면 그 메모의 같은 답 detail 을 답 줄 아래에 그린다(ctx.notes.find — 읽기만, 고르는 규칙 HD.chatLog.memoDetail).
+     HD.chatLog.FOLD 줄을 넘으면 앞부분만 + [전체 보기](제자리에서 펼침, 다시 누르면 [접기] — 단추라 키보드로도). 펼친 답(저장 안 함)은 이 파일 상태.
    움직임(FINDINGS §8): 새 줄 맥박 600ms · 패널 나타남 spring-fade 400ms · 진행 회전 1s — 움직임 줄이기면 모두 끔.
-   HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl']}) → {refresh(), records(), shown()} */
+   HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl', 'notes']}) → {refresh(), records(), shown()} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -68,6 +70,9 @@ var CSS =
   '#pTalk .tk-md pre.tk-code code{background:none;padding:0;font:inherit}' +
   '#pTalk .tk-copy{display:block;margin:4px 0 0 auto;padding:1px 7px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#6b6b66;font:500 11px system-ui,sans-serif;cursor:pointer;opacity:0;transition:opacity .12s;-webkit-user-select:none;user-select:none}' +
   '#pTalk .tk-copy:focus-visible,#pTalk .tk-term:hover .tk-copy,#pTalk .tk-l:hover .tk-copy{opacity:1}#pTalk .tk-copy:hover{background:#F2F2EF;color:#2b2b29}' +
+  '#pTalk .tk-detail{margin-top:6px}' +
+  '#pTalk .tk-more{display:inline-block;margin-top:4px;padding:1px 8px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#3a3a37;font:500 11.5px system-ui,sans-serif;cursor:pointer;-webkit-user-select:none;user-select:none}' +
+  '#pTalk .tk-more:hover{background:#F2F2EF}#pTalk .tk-more:focus-visible{outline:2px solid var(--ui-primary,#2b2b29);outline-offset:1px}' +
   '#pTalk .tk-quiet{font-size:11.5px;color:var(--ui-muted,#8a8a85);text-align:center}' +
   '#pTalk .tk-new{animation:tkPulse .6s ease-out;transform-origin:left center}' +
   '@keyframes tkPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}' +
@@ -82,7 +87,8 @@ function mount(ctx) {
   var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot');
   var on = !!(ctx.api && ctx.api.on), records = [], seq = null, seen = null, sig = null, warned = {};
   var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, openTools = {}, undoing = {};
-  var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {};
+  var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {}, opened = {};   // opened = 펼친 메모 설명(답 seq)
+  function noteOf(id) { var n = ctx.notes.find(id); return n || null; }
 
   function warnOnce(k, m) { if (warned[k]) return; warned[k] = 1; console.warn('[hd] 대화 패널: ' + m); }
   function shown() { return host.getClientRects().length > 0; }
@@ -94,7 +100,7 @@ function mount(ctx) {
     var ask = a ? '<div class="tk-ask' + (a.fromRequest ? ' req' : '') + (fresh(t.recs[0].seq) ? ' tk-new' : '') + '">' + ctx.esc(a.text) +
       (a.chips.length ? '<div class="tk-chips">' + a.chips.map(chipHtml).join('') + '</div>' : '') + '</div>' : '';
     var lines = t.lines.length ? '<ol class="tk-lines">' + t.lines.map(function (l) {
-      var body = l.kind === 'reply' ? rich(l.text, 'r' + l.seq) : ctx.esc(l.text);   // 답 = 전체(R24)
+      var body = l.kind === 'reply' ? (l.detail ? withDetail(l) : rich(l.text, 'r' + l.seq)) : ctx.esc(l.text);   // 답 = 전체(R24) · 메모 설명 붙임
       return '<li class="tk-l' + (l.kind === 'reply' ? ' tk-md' : '') + (fresh(l.seq) ? ' tk-new' : '') + '" data-kind="' + l.kind + '" data-tone="' + (l.tone || '') + '">' + body + '</li>';
     }).join('') + '</ol>' : '';
     var ic = t.state === 'done' ? '✓' : '';
@@ -103,13 +109,22 @@ function mount(ctx) {
     return '<li class="tk-turn" data-turn="' + t.id + '" data-state="' + t.state + '" tabindex="0" title="누르면 이 요청이 닿은 화면으로">' + ask + lines +
       '<div class="tk-st"><span class="tk-ic" aria-hidden="true">' + ic + '</span><span class="tk-say">' + ctx.esc(say) + '</span>' + undo + '</div></li>';
   }
+  function withDetail(l) {                               // 답 줄 + 메모의 설명(detail) — 길면 앞 FOLD 줄 + [전체 보기]/[접기]
+    var f = L.fold(l.detail), open = !!opened[l.seq], key = 'r' + l.seq;
+    copies[key] = l.text + '\n\n' + l.detail;
+    return md(l.text) + '<div class="tk-detail' + (f.fold && !open ? ' folded' : '') + '" data-detail="' + l.seq + '">' + md(f.fold && !open ? f.head : l.detail) +
+      (f.fold ? '<button type="button" class="tk-more" data-more="' + l.seq + '" aria-expanded="' + open + '">' + (open ? '접기' : '전체 보기 (' + f.lines + '줄)') + '</button>' : '') +
+      '</div><button type="button" class="tk-copy" data-copy="' + key + '" title="이 답을 복사">복사</button>';
+  }
   function rich(text, key) {                             // 답 글 → html(R24): 글 덩이 = 줄바꿈 그대로 · ``` = <pre> · `인라인` = <code> · [복사]
     copies[key] = text;
-    var html = L.blocks(text).map(function (b) {
+    return md(text) + '<button type="button" class="tk-copy" data-copy="' + ctx.esc(key) + '" title="이 답을 복사">복사</button>';
+  }
+  function md(text) {
+    return L.blocks(text).map(function (b) {
       if (b.type === 'code') return '<pre class="tk-code"' + (b.lang ? ' data-lang="' + ctx.esc(b.lang) + '"' : '') + '><code>' + ctx.esc(b.text) + '</code></pre>';
       return '<div class="tk-p">' + L.spans(b.text).map(function (x) { return x.code ? '<code>' + ctx.esc(x.text) + '</code>' : ctx.esc(x.text); }).join('') + '</div>';
     }).join('');
-    return html + '<button type="button" class="tk-copy" data-copy="' + ctx.esc(key) + '" title="이 답을 복사">복사</button>';
   }
   function termHtml(e, fresh) {
     var v = L.entryView(e), nw = fresh ? ' tk-new' : '';
@@ -119,8 +134,9 @@ function mount(ctx) {
       (v.role === 'assistant' ? '<div class="tk-tx tk-md">' + rich(v.text, 'e' + e.id) + '</div></li>' : '<div class="tk-tx">' + ctx.esc(v.text) + '</div></li>');
   }
   function render(force) {
-    var ts = L.turns(records, Date.now()), ents = L.echo(term.entries, ts);
-    var s = JSON.stringify([records.length && records[records.length - 1].seq, ts.map(function (t) { return t.state + (undoing[t.id] ? 'u' : ''); }), ents.map(function (e) { return e.id; }), term.failed, term.source, on]);
+    var ts = L.turns(records, Date.now(), {note: noteOf}), ents = L.echo(term.entries, ts);
+    var s = JSON.stringify([records.length && records[records.length - 1].seq, ts.map(function (t) { return t.state + (undoing[t.id] ? 'u' : '') +
+      t.lines.map(function (l) { return l.detail ? '|' + l.seq + ':' + l.detail.length + (opened[l.seq] ? 'o' : '') : ''; }).join(''); }), ents.map(function (e) { return e.id; }), term.failed, term.source, on]);
     if (s === sig && !force) return;
     sig = s;
     var bottom = L.stick(list.scrollTop, list.scrollHeight, list.clientHeight);
@@ -229,6 +245,14 @@ function mount(ctx) {
   list.addEventListener('click', function (e) {
     var cp = e.target.closest('.tk-copy');
     if (cp) { e.stopPropagation(); var tx = copies[cp.dataset.copy]; if (typeof tx === 'string') copy(tx); return; }
+    var mo = e.target.closest('.tk-more');
+    if (mo) {                                             // 메모 설명 펼치기·접기 — 제자리, 다시 그린 뒤 같은 단추에 초점(키보드)
+      e.stopPropagation(); var q = mo.dataset.more;
+      if (opened[q]) delete opened[q]; else opened[q] = 1;
+      render(true);
+      var nb = list.querySelector('.tk-more[data-more="' + q + '"]'); if (nb) nb.focus();
+      return;
+    }
     var sl = window.getSelection && window.getSelection();
     if (sl && !sl.isCollapsed && String(sl).trim() && list.contains(sl.anchorNode)) return;   // 글을 골라 복사하는 중 = 턴 누르기 아님
     var d = e.target.closest('details.tk-tool');
@@ -286,5 +310,5 @@ function mount(ctx) {
   return {refresh: function () { return fetchLog(); }, records: function () { return records.slice(); }, shown: shown};
 }
 
-HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl'], mount: mount});
+HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl', 'notes'], mount: mount});
 })();
