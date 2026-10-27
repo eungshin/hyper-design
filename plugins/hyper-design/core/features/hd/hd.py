@@ -30,6 +30,8 @@
                                           홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server, 옛 코드면 한 줄 알림)
                                           --restart = 떠 있는 허브를 끄고 지금 코드로 같은 포트에 다시 띄움
   hd home --shortcut [--desktop DIR]      바탕 화면에 'Hyper Design' 바로 가기(→ pythonw hd.py home)를 쓰고 끝
+  hd parts [--check [<file>]] [<name|path>]
+                                          앱 부품(out/parts.json): 파일 · 낡음|최신|모름 · 미커밋 변경 포함 · 빌드 시각 — 읽기만(git 나무 도장 비교)
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -214,6 +216,29 @@ def cmd_add(a):
                                                " · 새 줄" if r["group_added"] else "", "".join(" · " + b for b in bits), live)
 
 
+def _parts_args(a):
+    """--check/--rebuild 뒤 값 하나만 있으면 out 경로·저장한 이름일 때 그것이 대상(hd parts --rebuild <out>), 아니면 부품 고르기."""
+    sel = a.rebuild if a.rebuild is not None else a.check
+    sel = None if sel == "*" else sel
+    if sel and a.target is None:
+        import hd_client, hd_projects
+        if hd_client.is_out(sel) or ("/" not in sel and "\\" not in sel and "." not in sel and hd_projects.find(hd_client.load_projects(), sel)):
+            return None, sel
+    return sel, a.target
+
+
+def cmd_parts(a):
+    """앱 부품 보기(기본 · --check) — parts.json 은 읽기만. 대상 고르기는 hd screens 와 같음(떠 있지 않아도 out 경로·저장한 이름)."""
+    import hd_parts
+    sel, target = _parts_args(a)
+    p = _hub().target(target)
+    with S.client_errors():
+        rows = hd_parts.check(p.out, sel)
+    stale = sum(1 for r in rows if r["stale"])
+    head = "%s · 앱 부품 %d개 · 낡음 %d개%s" % (p.name, len(rows), stale, " — 다시 빌드: hd parts --rebuild %s" % p.name if stale else "")
+    return {"project": p.name, "out": str(p.out), "parts": rows}, head + "\n" + hd_parts.format_rows(rows)
+
+
 def cmd_home(a):
     """홈 서버 띄우기 · 바로 가기 — 서버를 띄우는 일이라 SDK(서버에 말 걸기) 밖: home_server · shortcut 을 부를 뿐."""
     sys.path.insert(0, str(HOME_DIR))
@@ -315,6 +340,11 @@ def parser():
     ad.add_argument("--asset", action="append", help="같이 복사할 파일(여러 번) — 화면 폴더 안이면 그 상대 경로로, 아니면 이름만")
     ad.add_argument("--replace", action="store_true", help="같은 id 화면·같은 이름 파일을 바꿈")
     ad.set_defaults(fn=cmd_add)
+    pa = sub.add_parser("parts", parents=[common], help="앱 부품(out/parts.json) 보기 — 낡음 · 미커밋 변경 포함")
+    pk = pa.add_mutually_exclusive_group()
+    pk.add_argument("--check", nargs="?", const="*", default=None, metavar="FILE", help="보기만(기본) — FILE = 부품 파일·이름")
+    pa.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    pa.set_defaults(fn=cmd_parts, rebuild=None)
     hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")

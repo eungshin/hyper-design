@@ -17,6 +17,11 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 코드 도장(47-7): `index.html` 의 `<head>` 바로 뒤 `<meta name="hd-code" content="…">` — env `HD_CODE_STAMP`(`build_ref.py` 가 넘김 = `g:<ref 의 core 나무 sha 앞 16>`), 없으면 빌드 입력(템플릿·모듈·shell.css·motion.css·build_canvas.py·code_stamp.py·links.py·board_data.py·code_probe.py·palette.js) 내용 해시 `w:…`(`code_probe.work_stamp`). 지금 도장 재기(git 나무 · 저장소가 아니면 내용 해시)는 Edge `code_probe.current`. 규칙은 순수 `code_stamp.py`(`tree_stamp` `content_stamp` `stamp_page` `page_stamp` `stale` `reuse_verdict` `page_after`) — 지금 도장을 모르면(git 실패) 옛것이라 하지 않는다
 - `out/foundation.html` · `out/components.html` · `out/palette.js`
 
+## 앱 부품 (`<out>/parts.json`, 선택 — R30)
+- 다른 저장소(앱) 소스로 빌드해 화면이 iframe 으로 끌어 쓰는 out 안 HTML 의 목록. 데이터만: `{version: 1, parts: [{file, repo, watch, build, env?, post?, stamp, dirty, built_at}]}` — `file` = out 상대 경로 · `repo` = 앱 저장소 절대 경로 · `watch` = 저장소 상대 경로 목록 · `build` = argv(cwd = repo) · `env` = 더할 환경 변수 `{이름: 글}` · `build`·`env` 어딘가에 `{out}`(빌드 결과를 쓸 임시 경로로 바뀜, 없으면 그 항목은 틀림) · `post` = 단계 목록(지금: `{inject_before_body: "<글>"}` — 마지막 `</body>` 앞, 이미 있으면 그대로) · `stamp` = 빌드 때 도장 · `dirty` = 빌드 때 watch 에 커밋하지 않은 변경이 있었음("미커밋 변경 포함") · `built_at` = 시각 글
+- 도장 = watch 의 **커밋된** git 나무(`HEAD:<경로>` — HEAD 가 아니라서 상관없는 커밋은 낡게 하지 않는다), 한 경로면 나무 sha 앞 16 `g:…`, 여럿이면 섞은 해시. 낡음 = 적힌 stamp ≠ 지금 도장, 지금 도장을 모르면(저장소 아님 · git 실패) `unknown` = 판단하지 않음. 규칙은 순수 `part_stamp.py`(`tree_of` `state` `parse` `row` `select` `apply_post` `record` `stale_screens` `warn_line`), 재기는 Edge `code_probe.tree_shas`·`dirty`, 읽기·캐시는 Edge `parts_file.py`(`read` `check` `screen_deps` `PartsWatch`)
+- 쓰는 곳은 `hd parts --rebuild` 하나(hd/contract.md '앱 부품'). 도우미·캔버스는 읽기만 하고 빌드하지 않는다. 틀린 항목은 건너뛰고 `[hd] parts.json …` 한 줄, 깨진 파일은 한 줄 뒤 부품 없음(projects.json 과 같은 규칙)
+
 ## 구조
 - `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 기능별 규칙은 `contract/<기능>.md`(파일 하나 = 기능 하나 — 구조 규칙과 '고치면 돌릴 것' 줄). 목록은 그 폴더 자체다(여기에 줄을 더하지 않는다). 모듈 머리 주석이 아니라 파일로 둔 까닭: 규칙이 Model·View·셸에 걸치고, 머리 주석은 한 줄 책임 + API 만 말한다
@@ -105,6 +110,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `helper.py` | `helper`(+ `-m slow -k helper_upkeep`, hd 테스트) |
 | `build_canvas.py` | `unit or flow or links` |
 | `code_stamp.py` · `build_ref.py` 의 `code_stamp` · `session.refresh`(코드 도장, 47-7) | `-m unit -k code_stamp`(test_canvas_unit_code_stamp.py) + `-m slow` + `hd/tests -k code_fresh` |
+| `part_stamp.py` · `parts_file.py` · `code_probe.tree_shas`·`dirty`(앱 부품, R30) | `-m unit -k part_stamp` + `-m slow -k parts_file` + `hd/tests -k parts` |
 | `modules/presence.js` · `spawn.js` · `undo-answer.js` · `view-presence.js` · `view-spawn.js`(받는 곳·에이전트 상태·새 터미널, 47-5b) | `contract/receivers.md` 의 줄 |
 | `modules/bar-place.js`(요소 막대 자리, 51-7a) | `contract/blocks.md` 의 줄 |
 | `modules/rows.js` `space` · `view-rows.js` `space()`(줄 사이 여백, 51-8) | `contract/rows.md` 의 줄 |
