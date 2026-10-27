@@ -331,7 +331,7 @@ def test_helper_canvas_busy_chip_never_hides_screen(ctx, out):   # Q2b · task 3
         assert pg.get_attribute('.card[data-id="job"] .phone', "data-busy") is None, "대기열은 테두리도 없다"
         cb = pg.locator(busy).bounding_box()
         assert cb["height"] <= 22 and cb["width"] < ph["width"] / 2, "작은 칩"
-        assert cb["y"] - ph["y"] < ph["height"] * 0.1 and (ph["x"] + ph["width"]) - (cb["x"] + cb["width"]) < ph["width"] * 0.15, "카드 오른쪽 위"
+        assert cb["y"] >= ph["y"] + ph["height"] - 1 and (ph["x"] + ph["width"]) - (cb["x"] + cb["width"]) < ph["width"] * 0.15, "화면 밖 카드 제목 줄 오른쪽 끝(R27)"
 
         assert _post(srv.url.split("/index.html")[0] + "/api/claim", {"screen": "language", "by": "agent-3", "note": "색 맞춤"}, srv.token)[0] == 200
         pg.wait_for_selector(work + '[data-kind="working"]', timeout=8000)

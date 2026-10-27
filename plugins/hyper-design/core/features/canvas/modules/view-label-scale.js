@@ -2,6 +2,7 @@
    배율이 HD.labelScale.FAR 보다 작으면 #rows[data-lz-far] — 펼친 카드 설명(.cbody)을 visibility 로 숨긴다(크기는 그대로라 줄 사이 계산은 배율과 상관없음).
    확대 중엔 한 프레임에 한 번 3% 넘게 바뀔 때만, 멈춘 뒤 150ms 에 정확한 값 — 그때 document 'hd-label-scale' {lz} 를 보낸다(선 태그 겹침 다시 재기 등).
    이름표 CSS 는 각 주인(shell.css 의 R27 F01 블록 · view-busy · view-rows)이 calc(… * var(--lz,1)) 또는 scale: var(--lz,1) 로 쓴다 — 여기는 값만.
+   메모 배지(.nbadge)는 .phone 안에서 카드 제목 줄(카드 바로 아래 자식)로 옮긴다 — 자리 CSS 는 shell.css R27 F01 블록.
    가진 상태: 마지막으로 쓴 값(DOM 의 --lz) · 저장 없음. HD.feature('labelScale', {needs: ['rowsEl', 'warn'], mount(ctx) → {now() → 지금 --lz 수}}) */
 (function () {
 'use strict';
@@ -34,6 +35,20 @@ function mount(ctx) {
     if (!raf) raf = requestAnimationFrame(function () { raf = 0; write(false); });
     clearTimeout(timer); timer = setTimeout(function () { write(true); }, 150);
   }
+  // 메모 배지는 화면 밖 제목 줄로(R27, main 결정): view-notes 가 .phone 안에 만든 .nbadge 를 카드 바로 아래(화면 다음)로 옮긴다 — .phone 은 overflow:hidden 이라
+  // 밖에 그릴 수 없다. view-notes 는 카드 안에서 .nbadge 를 찾아 고치고 지우므로(옮긴 뒤에도 같은 요소) 주인은 그대로 view-notes.
+  function hoist(root) {
+    Array.prototype.forEach.call((root || rowsEl).querySelectorAll('.card > .phone > .nbadge'), function (b) {
+      var ph = b.parentNode, card = ph.parentNode; card.insertBefore(b, ph.nextSibling);
+    });
+  }
+  hoist();
+  new MutationObserver(function (ms) {
+    for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) {
+      var n = ms[i].addedNodes[j];
+      if (n.nodeType === 1 && (n.classList.contains('nbadge') || n.querySelector('.phone > .nbadge'))) { hoist(); return; }
+    }
+  }).observe(rowsEl, {childList: true, subtree: true});
   write(true);
   if (stage) new MutationObserver(changed).observe(stage, {attributes: true, attributeFilter: ['data-zoom']});
   return {now: function () { return parseFloat(rowsEl.style.getPropertyValue('--lz')) || 1; }};

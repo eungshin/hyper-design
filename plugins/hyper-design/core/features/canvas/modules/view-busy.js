@@ -1,5 +1,5 @@
 /* View — 화면 파일 보기: "AI 수정 중" 상태 칩 그리기(Q2b, D14 · #254 · task 37)와 도우미가 알린 바뀐 화면 카드만 다시 싣기. 규칙은 modules/busy.js(Model).
-   화면을 가리지 않는다: 칩 = 카드 .phone 오른쪽 위 <div class="busy bchip" data-via data-kind="working|queued" role="status" title=전체 글>
+   화면을 가리지 않는다: 칩 = 카드 제목 줄 오른쪽 끝(.card 바로 아래, 화면 밖 — R27) — 예전엔 카드 .phone 오른쪽 위 <div class="busy bchip" data-via data-kind="working|queued" role="status" title=전체 글>
    (도는 표시 또는 점 + HD.busy.look 의 짧은 글 + [×](data-act=lift, 걷기)) · working 이면 .phone[data-busy=working] 에 강조 테두리, queued 는 칩만.
    크게 보기가 그 화면이면 같은 칩을 #modal .mbar 에(덮개 없음). 칩 모양 CSS 는 여기서 <style id="hd-busy-css"> 로 넣는다(템플릿 .busy 덮개 규칙을 덮어씀).
    화면 파일이 바뀌면 걷고 그 카드만 다시 부른다. 칩이 하나라도 있는 동안만 ctx.watch 를 2000ms 마다 부른다. 상태는 ctx.key 로 저장해 새로 고쳐도 남는다.
@@ -52,7 +52,14 @@ var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--lz,1));
   // R27 F01·F12: 칩은 화면에서 늘 같은 크기(--lz = 1/판 배율, view-label-scale) · 고른 카드·이어진 카드(focusing 그림자)에서도 강조 테두리가 보이게 · 메모 배지(오른쪽 위)와 겹치지 않게
   '#rows.focusing .card.focus .phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--lz,1)) var(--ui-accent,#c2590a),0 0 0 calc(10px + 2px * var(--lz,1)) #1c1c1c,0 3px 14px rgba(0,0,0,.10)}' +
   '#rows.focusing .card.hl:not(.focus) .phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--lz,1)) var(--ui-accent,#c2590a),0 0 0 calc(6px + 2px * var(--lz,1)) #8a8d86,0 3px 14px rgba(0,0,0,.10)}' +
-  '#rows .phone:has(> .nbadge) > .busy.bchip{right:calc(38px * var(--lz,1))}' +
+  // R27(main 결정): 칩은 화면 밖 — 카드 제목 줄 오른쪽 끝(제목 왼쪽 · 메모 배지가 있으면 그 왼쪽), 화면에서 18px 고정. 판 칩 크기 규칙은 위 .busy.bchip 을 덮어쓴다
+  '#rows .card > .busy.bchip{top:calc(100% - 46px);right:0;height:18px;gap:4px;max-width:calc(70% / var(--lz,1));padding:0 1px 0 6px;font:600 11px/1 system-ui,sans-serif;' +
+  'transform-origin:100% 0;transform:translateY(calc(3px * var(--lz,1))) scale(var(--lz,1));box-shadow:0 1px 2px rgba(0,0,0,.10)}' +
+  '#rows .card > .busy.bchip .bspin{width:10px;height:10px;border-width:1.5px}#rows .card > .busy.bchip .bdot{width:6px;height:6px}' +
+  '#rows .card > .busy.bchip [data-act=lift]{width:14px;height:14px;font-size:12px}#rows .card > .busy.bchip .bcmp{height:14px;padding:0 5px;font-size:10px}' +
+  // 펼친 긴 화면(.card.xp — 제목 줄은 화면 밑에 가려 숨김): 칩·배지는 카드 위 오른쪽 줄로 올려 계속 보인다
+  '#rows .card.xp > .busy.bchip,#rows .card.xp > .nbadge{visibility:visible;top:0;transform:translateY(calc(-22px * var(--lz,1))) scale(var(--lz,1))}' +
+  '#rows .card:has(> .nbadge) > .busy.bchip{right:calc(24px * var(--lz,1));max-width:calc(70% / var(--lz,1) - 24px)}' +
   '.card .cerr{margin-top:calc(8px * var(--ts,1));font:500 calc(12px * var(--ts,1))/1.35 system-ui,sans-serif;color:var(--ui-danger,#b42318);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}';
 
 function style() {
@@ -89,17 +96,18 @@ function mount(ctx) {
   function same(el, host, it, id) {
     return !!el && el.parentNode === host && el.getAttribute('data-id') === String(id) && el.getAttribute('data-via') === it.via && el.getAttribute('data-label') === B.label(it, names);
   }
-  function unmark(el) { var h = el && el.parentNode; if (h && h.removeAttribute) h.removeAttribute('data-busy'); }
+  function phoneOf(el) { var h = el && el.parentNode; return h && h.querySelector ? (h.querySelector(':scope > .phone') || h) : null; }
+  function unmark(el) { var h = phoneOf(el); if (h && h.removeAttribute) h.removeAttribute('data-busy'); }
 
   function draw(id, it) {                             // 카드 하나에 칩(이미 맞게 있으면 그대로) — 화면은 가리지 않는다
-    var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card), el = els[id];
+    var card = ctx.cardEl(id), host = card, ph = card && (card.querySelector(':scope > .phone') || card), el = els[id];   // 칩 = 카드 제목 줄 오른쪽 끝(R27, 화면 밖) · 테두리 = 화면(.phone)
     if (!host) { if (el) { unmark(el); el.remove(); delete els[id]; } return; }
     if (!same(el, host, it, id)) {
       if (el) { unmark(el); el.remove(); }
       undone(id);
       el = chip(id, it); host.appendChild(el); els[id] = el;
     }
-    if (B.look(it, names).kind === 'working') host.setAttribute('data-busy', 'working'); else host.removeAttribute('data-busy');
+    if (B.look(it, names).kind === 'working') ph.setAttribute('data-busy', 'working'); else ph.removeAttribute('data-busy');
   }
   function drawModal() {                              // 크게 보기 제목 막대에 같은 칩(그 화면이 바쁠 때만, 덮개 없음)
     if (typeof document === 'undefined') return;
@@ -129,7 +137,7 @@ function mount(ctx) {
   function compareTo(id, on) { document.dispatchEvent(new CustomEvent('hd-swap-compare', {detail: {id: id, on: on}})); }   // view-swap 이 옛 화면을 겹친다·걷는다
   function undone(id) { var d = dones[id]; if (d) { clearTimeout(d.t); d.el.remove(); delete dones[id]; if (d.on) compareTo(id, false); } }
   function showDone(id, canCompare) {                 // "방금 반영됨 ✓" — DONE_MS(전/후 보기가 있으면 COMPARE_MS) 뒤 사라짐(덮개가 다시 씌면 그 칩이 대신)
-    var card = ctx.cardEl(id), host = card && (card.querySelector('.phone') || card);
+    var card = ctx.cardEl(id), host = card;            // 같은 제목 줄 자리(R27)
     if (!host || has(st.items, id)) return;
     undone(id);
     var lk = B.lookDone(), el = document.createElement('div');
