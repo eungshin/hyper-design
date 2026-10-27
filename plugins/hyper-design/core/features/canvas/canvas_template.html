@@ -287,14 +287,26 @@ function zoomAt(px, py, nz) {
   var c = HD.viewport.zoomAt({z: z, tx: tx, ty: ty}, px, py, clampZ(nz));
   z = c.z; tx = c.tx; ty = c.ty; apply();
 }
-function home() {
-  z = Z0;
-  tx = pane.clientWidth < 600 ? 12 - LEFT * z : 24 - contentLeft * z;   // 폰: 화면 줄이 바로 보이게 통로는 화면 밖으로
-  ty = 0; apply();
+function toolEdge() {                             // 떠 있는 도구 막대의 오른쪽 끝(판 기준 px, 없거나 숨김 = 0) — 카메라가 내용을 그 오른쪽에 두게(S3 · R27 F17)
+  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;
+  return tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left)) : 0;
 }
+function firstRowTop() {                          // 첫 화면 줄(.flow)의 판 좌표 위 — 없으면 null
+  var f = rowsEl.querySelector('.flow'); if (!f) return null;
+  var sr = stage.getBoundingClientRect(), k = stage.offsetHeight ? sr.height / stage.offsetHeight : 1;
+  return (f.getBoundingClientRect().top - sr.top) / (k || 1);
+}
+function home() {                                  // 첫 카메라(R27 F03): 첫 화면 줄이 위에 — 소개 글·DS 카드는 위로 굴려 보는 곁 내용, 열자마자 보이는 것은 화면들
+  z = Z0;
+  var narrow = pane.clientWidth < 600, top = firstRowTop();
+  tx = narrow ? 12 - LEFT * z : Math.max(24, toolEdge() + 16) - contentLeft * z;   // 폰: 화면 줄이 바로 보이게 통로는 화면 밖으로 · 넓으면 도구 막대 오른쪽부터(F17)
+  ty = top == null ? 0 : Math.min(0, 20 - top * z); apply();
+  homeCam = {z: z, tx: tx, ty: ty};
+}
+var homeCam = null;
+function rehome() { if (homeCam && z === homeCam.z && tx === homeCam.tx && ty === homeCam.ty) home(); }   // 글꼴·줄 높이가 늦게 바뀌어 첫 줄이 움직였으면 — 아직 아무도 판을 옮기지 않았을 때만 다시
 function fit() {
-  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
-  var g = tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left + 8 - 16)) : 0;
+  var e = toolEdge(), g = e ? Math.max(0, e + 8 - 16) : 0;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
   var ex = CP.extent(contentLeft), pw = pane.clientWidth - g, ph = pane.clientHeight;
   if (BN) ex = BN.extent(ex);                      // 판 메모까지(R25) — 멀리 둔 메모도 전체 보기에 든다
   fitMin = Math.min(ZMIN, HD.viewport.fit(ex, pw, ph, 32).z);
@@ -659,9 +671,10 @@ function fitCards(ids, maxZ) {                     // 그 카드들 범위가 �
   if (!cs.length) return;
   var p = pane.getBoundingClientRect(), o = {left: p.left + tx, top: p.top + ty}, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   cs.forEach(function (c) { var b = CP.boxOf(c, o); x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); });
-  var pw = pane.clientWidth, ph = pane.clientHeight;
+  var e = toolEdge(), g = e ? e + 8 - 32 : 0, pw = pane.clientWidth - Math.max(0, g), ph = pane.clientHeight;   // 도구 막대 오른쪽만 쓴다(R27 F17 — 막대가 고른 화면을 가리지 않게)
+  g = Math.max(0, g);
   z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0), maxZ || Infinity));
-  tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
+  tx = g + (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
 }
 // 테마 패널 View(modules/view-theme.js · 규칙 modules/theme.js, 조각 5) — 위쪽 팔레트 대신(H10), 기본은 닫힘(창 메뉴로)
 var VT = HD.viewTheme.mount({$: $, $$: $$, esc: esc, root: $('#pTheme'), bases: (P && P.options) || [], record: record,
@@ -1355,13 +1368,13 @@ home();
 LC.visible();
 var hashTab = (location.hash || '').slice(1);
 if (hashTab === 'foundation' || hashTab === 'components') showTab(hashTab);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); rehome(); });
 if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 와서 줄 높이가 바뀌면 화살표를 다시
   var roRaf = 0, roH = 0;
   new ResizeObserver(function () {
     if (rowsEl.offsetHeight === roH) return;
     RW.space(); roH = rowsEl.offsetHeight;          // 줄 높이가 바뀌면(카드 크기·글꼴) 줄 사이도 다시(t51-8)
-    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
+    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(function () { drawArrows(); rehome(); });
   }).observe(rowsEl);
 }
 window.__hdReady = performance.now();
