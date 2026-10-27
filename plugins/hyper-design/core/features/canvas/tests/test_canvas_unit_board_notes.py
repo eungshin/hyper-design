@@ -76,6 +76,19 @@ out.treeNone = LL.build([], [], {}, null, []).length;
 out.treeQ = LL.filter(tree, {q: '둘째'}).map(x => x.id);
 out.treeFold = LL.filter(tree, {folded: {'@notes': 1}}).map(x => x.id);
 out.treeHover = LL.hoverIds(tree, out.layerRows[0].id);
+// R26 숨김·잠금 — 메모의 칸 hidden·locked(true 만), 되돌리기는 View 의 기록 한 줄
+const f0 = {a: {x: 0, y: 0, w: 280, text: '가', at: 1}, b: {x: 0, y: 90, w: 280, text: '나', at: 1}};
+const fh = B.flag(f0, ['a'], 'hidden', true, 9);
+out.flag = {hid: fh.a, other: fh.b === f0.b, keepsOld: !('hidden' in f0.a), shown: B.flag(fh, ['a'], 'hidden', false, 10).a,
+  same: B.flag(f0, ['a'], 'hidden', false, 9) === f0, missing: B.flag(f0, ['zz'], 'locked', true, 9) === f0, badKey: B.flag(f0, ['a'], 'color', true, 9) === f0,
+  lockBoth: (() => { const m = B.flag(f0, ['a', 'b'], 'locked', true, 9); return [m.a.locked, m.b.locked]; })(),
+  is: [B.isHidden(fh.a), B.isHidden(f0.a), B.isLocked({locked: true}), B.isLocked({locked: 'yes'}), B.isHidden(null)]};
+out.parseFlags = B.parse(JSON.stringify({a: {x: 1, y: 2, text: '가', hidden: true, locked: 'yes'}, b: {x: 1, y: 2, text: '나', locked: true, hidden: 0}}));
+out.layerFlags = B.layers({a: {x: 0, y: 0, w: 280, text: '숨김', hidden: true, at: 1}, b: {x: 0, y: 90, w: 280, text: '잠금', locked: true, at: 1}});
+const ft = LL.build([], [], {}, null, out.layerFlags);
+out.flagTree = ft.map(x => [x.id, x.hid, x.lock]);
+out.flagOnly = [LL.filter(ft, {only: 'hidden'}).map(x => x.id), LL.filter(ft, {only: 'locked'}).map(x => x.id)];
+out.flagAll = LL.build([], [], {}, null, [{id: 'note:a', name: 'a', hid: true, lock: true}]).map(x => [x.id, x.hid, x.lock]);
 console.log(JSON.stringify(out));
 """
 
@@ -189,3 +202,24 @@ def test_layer_tree_has_a_notes_group(js):
     assert js["treeQ"] == ["@notes", "note:b"], "이름 찾기에 메모 글도"
     assert js["treeFold"] == ["g0", "s1", "@notes"], "접으면 메모 줄이 빠진다"
     assert js["treeHover"] == [], "메모 줄 올리기는 카드 강조를 하지 않는다"
+
+
+def test_flag_hides_and_locks_notes_as_fields_and_keeps_old_data_valid(js):
+    """R26 — 숨김·잠금 = 메모의 칸 hidden·locked(true 만 · 끄면 칸을 뺌 → 옛 메모와 같은 모양), 새 map, 바뀐 것 없으면 같은 map."""
+    f = js["flag"]
+    assert f["hid"]["hidden"] is True and f["hid"]["at"] == 9 and f["other"] and f["keepsOld"]
+    assert "hidden" not in f["shown"], "보이기 = 칸을 뺀다(옛 데이터 모양)"
+    assert f["same"] and f["missing"] and f["badKey"], "그대로·없는 id·모르는 칸 = 같은 map"
+    assert f["lockBoth"] == [True, True]
+    assert f["is"] == [True, False, True, False, False], "true 만 숨김·잠금"
+    m = js["parseFlags"]["map"]
+    assert m["a"]["hidden"] is True and "locked" not in m["a"], "깨진 칸 값은 빼고 메모는 남긴다"
+    assert m["b"]["locked"] is True and "hidden" not in m["b"]
+
+
+def test_layer_rows_carry_hide_and_lock(js):
+    rows = js["layerFlags"]
+    assert [(r["id"], r["hid"], r["lock"]) for r in rows] == [("note:a", True, False), ("note:b", False, True)]
+    assert js["flagTree"] == [["@notes", False, False], ["note:a", True, False], ["note:b", False, True]], "묶음 줄 = 모두 숨김·모두 잠금일 때만"
+    assert js["flagOnly"] == [["@notes", "note:a"], ["@notes", "note:b"]], "숨긴 것만·잠긴 것만 거르기에 메모도"
+    assert js["flagAll"][0] == ["@notes", True, True]

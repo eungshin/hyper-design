@@ -1,7 +1,7 @@
 /* Model — 레이어 나무(조각 4, H6·H7 · 폴더 H17). DOM·저장소를 쓰지 않는다.
    나무 = (사용자 폴더 아래 화면들) + 줄(묶음) 아래 화면들 + 판 글(소개·끝 글). 숨김·잠금·메모 수는 밖에서 받아 줄마다 붙인다.
    build(groups, texts, st, folders?, notes?) → [{kind: 'folder'|'row'|'screen'|'text'|'note', id, name, row?, folder?, count?, hid, lock, memo}]
-     notes = 판 메모 줄 [{id: 'note:<id>', name}](R25) — 있으면 맨 끝에 묶음 줄 {kind 'row', id NOTES '@notes', name '판 메모', count} + 메모 줄(kind 'note', row '@notes')
+     notes = 판 메모 줄 [{id: 'note:<id>', name, hid?, lock?}](R25·R26) — 있으면 맨 끝에 묶음 줄 {kind 'row', id NOTES '@notes', name '판 메모', count, hid·lock = 모두일 때} + 메모 줄(kind 'note', row '@notes')
      groups = [{id, name, screens: [{id, name}]}] · texts = [{id: '@intro', name}] · st = {hidden, locked, memo}(id → 값)
      folders = 폴더 상태(modules/folders.js) {v, folders: [{id, name, ids, open}]} — 주면: 사용자 폴더가 맨 앞(폴더 줄 + 그 화면, 화면엔 folder: id),
        그 화면은 원래 줄에서 빠진다. 폴더·줄 줄에 count(그 아래 화면 수), hid = 모두 숨김, lock = 모두 잠금. 안 주면 예전 그대로.
@@ -47,8 +47,9 @@ function build(groups, texts, st, folders, notes) {
   });
   (texts || []).forEach(function (t) { out.push({kind: 'text', id: t.id, name: t.name, hid: !!h[t.id], lock: false, memo: 0}); });
   if (notes && notes.length) {
-    out.push({kind: 'row', id: NOTES, name: '판 메모', count: notes.length, hid: false, lock: false, memo: 0});
-    notes.forEach(function (n) { out.push({kind: 'note', id: n.id, name: n.name, row: NOTES, hid: false, lock: false, memo: 0}); });
+    var nk = notes.map(function (n) { return {kind: 'note', id: n.id, name: n.name, row: NOTES, hid: !!n.hid, lock: !!n.lock, memo: 0}; });
+    out.push({kind: 'row', id: NOTES, name: '판 메모', count: notes.length, hid: all(nk, 'hid'), lock: all(nk, 'lock'), memo: 0});
+    out = out.concat(nk);
   }
   return out;
 }

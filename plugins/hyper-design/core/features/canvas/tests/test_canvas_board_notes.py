@@ -218,7 +218,7 @@ def test_resize_survives_reload_layers_panel_picks_note_and_fit_all_includes_far
         pg.click('#dock .dk-tab[data-p="layers"]')
         ly = pg.evaluate("() => [...document.querySelectorAll('#lyTree [data-ly]')].map(r => [r.dataset.kind, r.dataset.ly])")
         assert ["row", "@notes"] in ly and ["note", "note:far"] in ly and ["note", "note:" + nid] in ly, ly
-        assert pg.locator('#lyTree [data-ly="note:far"] .ly-eye button, #lyTree [data-ly="note:far"] button.ly-eye').count() == 0, "메모 줄엔 눈이 없다(숨김 미지원)"
+        assert pg.locator('#lyTree [data-ly="note:far"] button.ly-eye').count() == 1, "메모 줄에 눈(R26 숨김)"
         pg.click('#lyTree [data-ly="note:far"] .ly-name')
         pg.wait_for_timeout(150)
         assert pg.evaluate("document.querySelector('.bnote.sel') && document.querySelector('.bnote.sel').dataset.id") == "far", "레이어 줄 누르기 = 판에서 그 메모 고르기"
@@ -231,6 +231,71 @@ def test_resize_survives_reload_layers_panel_picks_note_and_fit_all_includes_far
             pg.wait_for_timeout(300)
             os.makedirs(os.path.dirname(SHOT), exist_ok=True)
             pg.screenshot(path=SHOT)
+    finally:
+        srv.shutdown(); srv.server_close()
+    assert not errors, errors
+    pg.close()
+
+
+R26_SHOT = os.environ.get("HD_R26_SHOT")             # 눈으로 볼 때만: 레이어 패널(숨긴 메모·잠긴 메모) 스크린숏 파일
+NOTE_BOX = """(id) => { const n = document.querySelector('.bnote[data-id="' + id + '"]'); if (!n) return null; const b = n.getBoundingClientRect();
+  return {x: b.left, y: b.top, w: b.width, h: b.height}; }"""
+
+
+@pytest.mark.area("tools", "notes", "layers")
+def test_hide_note_from_layers_survives_reload_and_locked_note_does_not_drag(ctx, out):
+    """R26 — 레이어 패널 눈 = 판에서 사라지고(새로고침해도) 상태 파일에 hidden · 자물쇠 = 끌어도 그대로(토스트), 되돌리기 한 줄씩."""
+    _seed(out, {"ha": {"x": -700, "y": 40, "w": 280, "text": "숨길 메모", "at": 1}, "lk": {"x": -700, "y": 260, "w": 280, "text": "잠글 메모", "at": 1}})
+    srv, pg, errors = _helper(ctx, out)
+    try:
+        pg.set_viewport_size({"width": 1440, "height": 1000})
+        pg.click('#dock .dk-tab[data-p="layers"]')
+        pg.wait_for_selector('#lyTree [data-ly="note:ha"] button.ly-eye')
+        assert pg.locator('.bnote[data-id="ha"]').count() == 1
+        rows = _rows(pg)
+        pg.click('#lyTree [data-ly="note:ha"] button.ly-eye')
+        assert pg.locator('.bnote[data-id="ha"]').count() == 0, "숨기면 판에서 사라진다"
+        assert pg.locator('#lyTree [data-ly="note:ha"].hid').count() == 1, "줄은 남고 숨김 표시"
+        assert _rows(pg) == rows + 1, "숨기기 = 기록 한 줄"
+        assert _until(lambda: (_state(out).get("board-notes") or {}).get("ha", {}).get("hidden") is True), "상태 파일에 hidden"
+
+        reload(pg)
+        pg.evaluate("window.__hdStay = 1")
+        pg.wait_for_selector('.bnote[data-id="lk"]')
+        assert pg.locator('.bnote[data-id="ha"]').count() == 0, "새로고침해도 숨김"
+        pg.click('#dock .dk-tab[data-p="layers"]')
+        pg.wait_for_selector('#lyTree [data-ly="note:ha"].hid')
+
+        pg.click('#lyTree [data-ly="note:lk"] button.ly-lock')
+        assert pg.locator('#lyTree [data-ly="note:lk"].locked').count() == 1 and pg.locator('.bnote.lock[data-id="lk"]').count() == 1
+        assert _until(lambda: (_state(out).get("board-notes") or {}).get("lk", {}).get("locked") is True), "상태 파일에 locked"
+        if R26_SHOT:
+            os.makedirs(os.path.dirname(R26_SHOT), exist_ok=True)
+            pg.screenshot(path=R26_SHOT)
+        pg.click('#lyTree [data-ly="note:lk"] .ly-name')   # 판에서 그 메모를 보이게(왼쪽 도크에 가리지 않게)
+        pg.keyboard.press("v")
+        pg.wait_for_timeout(150)
+        b0 = pg.evaluate(NOTE_BOX, "lk")
+        sx, sy = b0["x"] + b0["w"] / 2, b0["y"] + b0["h"] / 2
+        pg.mouse.move(sx, sy); pg.mouse.down(); pg.mouse.move(sx + 60, sy + 30, steps=4); pg.mouse.move(sx + 120, sy + 60, steps=4); pg.mouse.up()
+        assert pg.evaluate(NOTE_BOX, "lk") == b0, "잠긴 메모는 끌어도 그대로"
+        assert "잠긴 판 메모" in (pg.text_content("#toast") or ""), "잠겼다고 알린다"
+        assert pg.locator('.bnote.sel[data-id="lk"]').count() == 1, "고르기는 된다"
+        pg.keyboard.press("Delete")
+        assert pg.locator('.bnote[data-id="lk"]').count() == 1, "잠긴 메모는 지워지지 않는다"
+
+        pg.keyboard.press("Control+z")                # 잠그기 되돌리기 → 끌면 옮겨진다
+        assert pg.locator('#lyTree [data-ly="note:lk"].locked').count() == 0 and pg.locator('.bnote.lock').count() == 0, "되돌리면 잠금 풀림"
+        pg.mouse.move(sx, sy); pg.mouse.down(); pg.mouse.move(sx + 60, sy + 30, steps=4); pg.mouse.move(sx + 120, sy + 60, steps=4); pg.mouse.up()
+        assert abs(pg.evaluate(NOTE_BOX, "lk")["x"] - b0["x"] - 120) < 2, "풀린 메모는 옮겨진다"
+
+        pg.click('#lyTree [data-ly="note:lk"] .ly-name')  # 메모 줄을 고른 채 아래 막대 숨기기 = 그 메모
+        pg.click('#lyBar [data-act="hide"]')
+        assert pg.locator('.bnote[data-id="lk"]').count() == 0, "아래 막대 숨기기도 메모에"
+        pg.click('#lyTree [data-ly="note:ha"] button.ly-eye')
+        assert pg.locator('.bnote[data-id="ha"]').count() == 1, "눈을 다시 누르면 보인다"
+        assert _until(lambda: "hidden" not in (_state(out).get("board-notes") or {}).get("ha", {"hidden": 1})), "보이기 = 칸을 뺀다"
+        assert pg.evaluate("window.__hdStay") == 1
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors

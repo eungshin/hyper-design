@@ -5,6 +5,8 @@
    V: 누르기 = 고르기(파란 테두리) · 끌기 = 옮기기(기록 한 줄) · 두 번 누르기·Enter = 고치기 · Delete·Backspace = 지우기(되돌리면 돌아옴) · Esc = 풀기. T 로 메모 누르기 = 고치기.
    크기(R25): V 로 고른 메모 오른쪽 아래 손잡이 끌기 = 폭(+ 4px 넘게 아래위로 끌었으면 최소 높이 h — 글이 길면 더 커진다), 기록 한 줄 · 손잡이 두 번 누르기 = 높이를 글 높이대로.
    레이어 패널(R25): 의도 'hd-note-pick' {id: 'note:<id>'} 를 받으면 그 메모를 고르고 보이게(배율 1 이하로 맞춤). 그릴 때·고른 것이 바뀔 때 A.changed()(셸 = 레이어 다시 그리기).
+   숨김·잠금(R26): 의도 'hd-note-flag' {ids: ['note:<id>'], key: 'hidden'|'locked', on} (레이어 패널 눈·자물쇠·아래 막대) → 메모의 칸(B.flag) + 기록 한 줄.
+     숨긴 메모 = 그리지 않음(고르기 풀림) · 전체 보기 범위에서 뺌. 잠긴 메모(.lock) = 고르기만 — 끌기·크기 손잡이·고치기·지우기는 토스트로 알리고 하지 않음.
    읽기만인 탭(html[data-hd-tab=reader])에서는 만들기·옮기기·고치기·지우기를 하지 않는다. 쓰기 = ctx.store(상태 파일 · file:// 이면 브라우저 저장소).
    등록부 기능 'boardNotes'(needs $ · store · key · record · toast · warn · view · selected) → {attach(A), reload(), selected(), map(), layers(), layerSel(), extent(ext), reveal(id)}
      A(셸이 attach 로 건넴) = {tool() → 지금 도구, setTool(t), changed()?(레이어 패널), clear()?(카드 고르기 풀기)}. 셸은 adoptState 의 'board-notes' 에서 reload() 만 부른다
@@ -17,10 +19,10 @@ var CSS = '#bnotes{position:absolute;left:0;top:0;width:0;height:0;z-index:4}' +
   '.bnote{position:absolute;box-sizing:border-box;min-height:52px;padding:10px 14px;font:22px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#2b2a26;' +
   'background:#fff7c2;border:1px solid #eadb85;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.10);white-space:pre-wrap;word-break:break-word;user-select:none;cursor:default}' +
   '#screens.t-move .bnote{cursor:move}#screens.t-text .bnote{cursor:text}' +
-  '.bnote.sel{outline:3px solid #0f7ec2;outline-offset:2px}' +
+  '.bnote.sel{outline:3px solid #0f7ec2;outline-offset:2px}#screens.t-move .bnote.lock{cursor:default}' +
   '.bn-rs{display:none;position:absolute;right:calc(-9px * var(--bnk,1));bottom:calc(-9px * var(--bnk,1));width:calc(14px * var(--bnk,1));height:calc(14px * var(--bnk,1));' +
   'box-sizing:border-box;background:#fff;border:calc(2px * var(--bnk,1)) solid #0f7ec2;border-radius:2px;cursor:nwse-resize;touch-action:none}' +
-  '#screens.t-move .bnote.sel:not(.editing) .bn-rs{display:block}html[data-hd-tab=reader] .bn-rs{display:none!important}' +
+  '#screens.t-move .bnote.sel:not(.editing) .bn-rs{display:block}html[data-hd-tab=reader] .bn-rs,.bnote.lock .bn-rs{display:none!important}' +
   '.bnote.editing{cursor:text;user-select:text}.bnote.editing .bn-text{display:none}' +
   '.bnote textarea{display:block;width:100%;min-height:1.45em;border:0;padding:0;margin:0;font:inherit;line-height:inherit;color:inherit;background:transparent;resize:none;outline:none;overflow:hidden;white-space:pre-wrap}';
 
@@ -31,6 +33,8 @@ function mount(ctx) {
   var layer = document.createElement('div'); layer.id = 'bnotes'; stage.appendChild(layer);
 
   function reader() { return document.documentElement.dataset.hdTab === 'reader'; }
+  var LOCKED = '잠긴 판 메모예요 — 레이어 패널에서 풀어요';
+  function locked(id) { if (!B.isLocked(map[id])) return false; ctx.toast(LOCKED); return true; }   // 잠긴 메모면 알리고 true(R26)
   function elOf(id) { return layer.querySelector('.bnote[data-id="' + String(id).replace(/["\\]/g, '') + '"]'); }
   function load() {
     var t = null;
@@ -48,16 +52,17 @@ function mount(ctx) {
   function render() {                                   // 바뀔 때만(만들기·고치기·옮기기 끝·지우기·다시 읽기) — 쉬는 동안 하는 일 없음
     var keep = editing ? elOf(editing.id) : null;
     Array.prototype.slice.call(layer.children).forEach(function (el) { if (el !== keep) el.remove(); });
+    if (sel && (!map[sel] || B.isHidden(map[sel]))) sel = null;   // 숨긴 메모는 고르기에서 빠진다(R26)
     Object.keys(map).forEach(function (id) {
       if (keep && id === editing.id) { place(keep, map[id]); return; }
+      if (B.isHidden(map[id])) return;                    // 숨긴 메모 = 그리지 않음(R26)
       var n = map[id], el = document.createElement('div'), tx = document.createElement('div');
-      el.className = 'bnote' + (id === sel ? ' sel' : ''); el.dataset.id = id;
+      el.className = 'bnote' + (id === sel ? ' sel' : '') + (B.isLocked(n) ? ' lock' : ''); el.dataset.id = id;
       el.setAttribute('role', 'note'); el.setAttribute('aria-label', '판 메모');
       tx.className = 'bn-text'; tx.textContent = n.text; el.appendChild(tx);
       var k = document.createElement('div'); k.className = 'bn-rs'; k.title = '크기 (두 번 누르면 높이 자동)'; k.setAttribute('aria-hidden', 'true'); el.appendChild(k);
       place(el, n); layer.appendChild(el);
     });
-    if (sel && !map[sel]) sel = null;
     tell();
   }
   function tell() { if (A && A.changed) A.changed(); }   // 레이어 패널 줄·고른 줄(바뀔 때만)
@@ -78,9 +83,10 @@ function mount(ctx) {
     if (was !== id) tell();
   }
   function boxes() {                                      // 메모 상자(판 좌표) — 높이는 그려진 상자(글 높이)에서. 전체 보기 때만 잰다
-    return Object.keys(map).map(function (id) { var el = elOf(id), n = map[id]; return {x: n.x, y: n.y, w: n.w, h: el ? el.offsetHeight : (n.h || 52)}; });
+    return Object.keys(map).filter(function (id) { return !B.isHidden(map[id]); }).map(function (id) { var el = elOf(id), n = map[id]; return {x: n.x, y: n.y, w: n.w, h: el ? el.offsetHeight : (n.h || 52)}; });
   }
   function reveal(id) {                                   // 고르고 보이게 — 메모가 판에 꽉 차되 배율 1 보다 크게는 안 함
+    if (map[id] && B.isHidden(map[id])) return;          // 숨긴 메모는 보이지 않는다(레이어 줄 누르기도 그대로)
     if (!map[id] || !elOf(id)) { ctx.warn('[hd] 없는 판 메모: ' + id); return; }
     if (editing) end();
     if (A && A.clear) A.clear();
@@ -115,6 +121,7 @@ function mount(ctx) {
   function edit(id, isNew, before) {
     if (editing) end();
     var el = elOf(id); if (!el || !map[id]) return;
+    if (!isNew && locked(id)) { select(id); return; }
     select(id); readable(map[id]);
     var ta = document.createElement('textarea');
     ta.value = map[id].text; ta.rows = 1; ta.setAttribute('aria-label', '판 메모 쓰기'); ta.spellcheck = false;
@@ -181,7 +188,7 @@ function mount(ctx) {
     var el = e.target.closest('.bnote'); if (!el || !A) return;
     if (e.target.closest('.bn-rs')) {                     // 크기 손잡이(R25) — V 로 고른 메모에만 보인다
       e.stopPropagation(); e.preventDefault();
-      var rid = el.dataset.id; if (e.button !== 0 || reader() || !map[rid]) return;
+      var rid = el.dataset.id; if (e.button !== 0 || reader() || !map[rid] || locked(rid)) return;
       rs = {id: rid, el: el, pid: e.pointerId, x0: e.clientX, y0: e.clientY, w0: map[rid].w, h0: el.offsetHeight, w: map[rid].w, h: undefined, moved: false};
       try { e.target.setPointerCapture(e.pointerId); } catch (err) {}   // 잡지 못해도 창 밖으로 나가기 전까지는 끌린다
       return;
@@ -192,7 +199,7 @@ function mount(ctx) {
     e.stopPropagation();
     var id = el.dataset.id; select(id);
     if (t !== 'move' || reader() || !map[id]) return;
-    drag = {id: id, el: el, pid: e.pointerId, x0: e.clientX, y0: e.clientY, ox: map[id].x, oy: map[id].y, moved: false};
+    drag = {id: id, el: el, pid: e.pointerId, x0: e.clientX, y0: e.clientY, ox: map[id].x, oy: map[id].y, moved: false, lock: B.isLocked(map[id])};
     try { el.setPointerCapture(e.pointerId); } catch (err) {}   // 잡지 못해도 창 밖으로 나가기 전까지는 끌린다
   });
   layer.addEventListener('pointermove', function (e) {
@@ -207,6 +214,7 @@ function mount(ctx) {
     if (!drag || e.pointerId !== drag.pid) return;
     var z = ctx.view.get().z || 1, dx = (e.clientX - drag.x0) / z, dy = (e.clientY - drag.y0) / z;
     if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) return;
+    if (drag.lock) { ctx.toast(LOCKED); drag = null; return; }   // 잠긴 메모 = 옮기지 않음(한 번 알림, R26)
     drag.moved = true;
     drag.el.style.left = Math.round(drag.ox + dx) + 'px'; drag.el.style.top = Math.round(drag.oy + dy) + 'px';
   });
@@ -233,13 +241,24 @@ function mount(ctx) {
   layer.addEventListener('dblclick', function (e) {      // 손잡이 두 번 누르기 = 높이를 글 높이대로(고치기로 새지 않게)
     var el = e.target.closest && e.target.closest('.bn-rs') && e.target.closest('.bnote'); if (!el) return;
     e.stopPropagation(); e.preventDefault();
-    var id = el.dataset.id; if (reader() || !map[id]) return;
+    var id = el.dataset.id; if (reader() || !map[id] || locked(id)) return;
     var was = map, after = B.resize(map, id, undefined, null, Date.now());
     if (after !== map) { commit(after, was, '판 메모 높이 자동'); select(id); }
   });
   document.addEventListener('hd-note-pick', function (e) {   // 레이어 패널의 판 메모 줄 누르기(R25)
     var lid = String(e.detail && e.detail.id || '');
     if (lid.indexOf(B.LAYER) === 0) reveal(lid.slice(B.LAYER.length));
+  });
+  var FLAG_SAY = {hidden: ['판 메모 숨기기', '숨긴 판 메모 보이기'], locked: ['판 메모 잠그기', '판 메모 잠금 풀기']};
+  document.addEventListener('hd-note-flag', function (e) {   // 레이어 패널 눈·자물쇠·아래 막대(R26) — 메모의 칸 + 기록 한 줄(화면 숨김·잠금처럼)
+    var d = e.detail || {}, say = FLAG_SAY[d.key];
+    if (!say || !Array.isArray(d.ids)) { ctx.warn('[hd] 판 메모 숨김·잠금: 모르는 의도'); return; }
+    if (reader()) return;
+    var ids = d.ids.map(String).filter(function (l) { return l.indexOf(B.LAYER) === 0; }).map(function (l) { return l.slice(B.LAYER.length); });
+    var bad = ids.filter(function (id) { return !map[id]; }); if (bad.length) ctx.warn('[hd] 없는 판 메모: ' + bad.join(', '));
+    if (editing && ids.indexOf(editing.id) >= 0) end();
+    var before = map, after = B.flag(map, ids, d.key, !!d.on, Date.now());
+    if (after !== before) commit(after, before, say[d.on ? 0 : 1]);
   });
   layer.addEventListener('click', function (e) {
     var el = e.target.closest('.bnote'); if (!el || !A || editing) return;
@@ -257,6 +276,7 @@ function mount(ctx) {
     if ((k === 'Delete' || k === 'Backspace') && plain) {
       if (reader()) return;                              // 읽기만 = view-read-only 가 막고 알린다
       e.preventDefault(); e.stopImmediatePropagation();
+      if (locked(sel)) return;
       var before = map; commit(B.remove(map, sel), before, '판 메모 지우기');
     } else if (k === 'Enter' && plain) {
       if (reader()) return;
