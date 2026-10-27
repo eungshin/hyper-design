@@ -150,8 +150,11 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 /* ---------- 강조: 고른 카드 전부(E21) — 그 선·태그·이어진 카드 또렷, 나머지 흐리게 ---------- */
 .vbtn[aria-pressed="false"]{color:#999;text-decoration:line-through}
 #rows.nolines path.ln,#rows.nolines .alabel{display:none}
-#rows.focusing .card{opacity:.22}
+/* R27 F18 (bars): 카드 하나를 골라도 나머지 흐름이 읽히게 — 다른 카드는 살짝만(.85, 예전 .22). 강조 테두리·선이 고른 쪽을 알린다 */
+#rows.focusing .card{opacity:.85}
 #rows.focusing .card.hl{opacity:1}
+#rows.focusing .card.del{opacity:.35}
+/* /R27 F18 */
 #rows.focusing .card.hl .phone{box-shadow:0 0 0 6px #8a8d86,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing .card.focus .phone{box-shadow:0 0 0 10px #1c1c1c,0 3px 14px rgba(0,0,0,.10)}
 #rows.focusing path.ln{stroke-opacity:.18}

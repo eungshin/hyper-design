@@ -45,3 +45,17 @@ def test_card_bar_stays_on_the_board_when_the_card_slides_under_the_side_panel(a
     _pan_until(pg, "home", gone)
     assert _box(pg, "#selbar") is None, "카드가 판 칸 밖이면 막대도 숨김"
     pg.keyboard.press("Escape")
+
+
+@pytest.mark.area("tools", "links")
+def test_picking_one_card_keeps_the_rest_of_the_flow_readable(abpage):
+    """F18: 카드 하나를 고르면 이어진 카드는 또렷, 나머지는 살짝만 흐리다(예전 .22 → 읽히는 .85 쯤) — 흐름을 계속 읽을 수 있다."""
+    pg = abpage
+    fresh(pg)
+    _pick(pg, "home")
+    pg.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=3000)
+    pg.wait_for_timeout(500)                          # 흐려지는 움직임이 끝난 뒤
+    op = pg.evaluate("(ids) => ids.map(id => +getComputedStyle(document.querySelector('.card[data-id=\"' + id + '\"]')).opacity)", ["home", "pay", "done"])
+    assert op[0] > 0.95 and op[1] > 0.95, ("고른 카드·이어진 카드는 또렷", op)
+    assert 0.75 <= op[2] < 0.95, ("이어지지 않은 카드도 읽힌다 — 살짝만 흐림", op)
+    pg.keyboard.press("Escape"); pg.keyboard.press("Escape")
