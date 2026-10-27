@@ -162,6 +162,13 @@ def test_caption_description_delete_clears_and_title_delete_is_refused(ctx, out)
     try:
         pg.keyboard.press("v")
         _show(pg, '.card[data-id="job"]')
+        for _ in range(40):                               # R27 F01: 작게 볼 때(배율 < 0.35)는 펼친 설명을 숨긴다 — 읽히는 배율(≥ 0.4)로 그 카드에서 키운다
+            if pg.evaluate("+document.getElementById('stage').dataset.zoom") >= 0.4:
+                break
+            b = pg.locator('.card[data-id="job"] .phone').bounding_box()
+            pg.mouse.move(b["x"] + 30, b["y"] + 30)
+            pg.keyboard.down("Control"); pg.mouse.wheel(0, -200); pg.keyboard.up("Control"); pg.wait_for_timeout(60)
+        pg.wait_for_timeout(400)
         _click(pg, '.card[data-id="job"] .cover')
         pg.wait_for_selector('.card[data-id="job"].picked')
         assert pg.locator('.card[data-id="job"] .fdesc').is_visible()

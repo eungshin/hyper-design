@@ -9,9 +9,10 @@
      lift{id}                               하나 걷기
      here{id, kind, at, first?}             그 카드 화면이 새로 실림·바뀜 — shouldLift 이면 걷기(#272 앱 카드)
    load(getItem, key, warn?) → 상태(깨졌거나 판이 다르면 initial(), warn 이 있으면 '[hd] …' 한 줄) · save(state, setItem, key) 던지지 않음 · files(state) → 겹치지 않는 파일 목록
-   label(item) → 상태 글 전체(cli: by·note 가 있으면 그것까지)
-   look(item) → {kind: 'working'|'queued', text, title} — 상태 칩 모양(화면을 가리지 않는 작은 칩, task 37).
-     paseo·cli = working(도는 표시 + 짧은 글, cli 는 label 을 MAX 자로 줄임) · queue = queued("대기열", 아무도 읽지 않음) · title = label 전체 + 걷히는 때
+   label(item, names?) → 상태 글 전체(cli: "<이름> 수정 중 · <note>") — names = {에이전트 id: 이름}(판이 아는 것, R27 F12).
+     이름 = names[by] > 사람이 쓴 by > 없음("AI 수정 중"). agent-9·ag-fake·uuid 같은 날 id 는 칩 글에 쓰지 않는다(title 끝에 괄호로만)
+   look(item, names?) → {kind: 'working'|'queued', text, title} — 상태 칩 모양(화면을 가리지 않는 작은 칩, task 37).
+     paseo·cli = working(도는 표시 + 짧은 글, cli 는 label 을 MAX 자로 줄임) · queue = queued("대기열", 아무도 읽지 않음) · title = label 전체(+ 날 id) + 걷히는 때
    refresh(changed, opt) → {cards:[id], modal: bool} — 도우미가 알린 바뀐 화면 중 다시 실을 것.
      opt = {known: [id](판에 있는 카드), busy: 상태(덮개가 있는 카드는 걷는 길이 다시 싣는다), skip: {id: 그때까지 ms}(방금 판이 스스로 쓴·다시 실은 것), now: ms, modal: 크게 보기 화면 id|null}
    isApp(file) → 앱 카드인가(file 이 http(s) 개발 서버 주소 — mtime 이 없어 파일 규칙으로는 걷히지 않는다)
@@ -130,23 +131,30 @@ function files(s) {
   for (k in (s && s.items) || {}) if (out.indexOf(s.items[k].file) < 0) out.push(s.items[k].file);
   return out;
 }
-function label(it) {
+var RAW_ID = /^(?:[A-Za-z]{1,8}[-_][A-Za-z0-9_-]+|[0-9a-f]{8,}(?:-[0-9a-f]{4,})*)$/i;   // agent-9 · ag-fake · uuid — 사람이 읽는 이름이 아님
+function who(by, names) {                            // 칩에 쓸 에이전트 이름(R27 F12): 아는 이름 > 사람이 쓴 by > 없음(날 id 는 칩에 쓰지 않는다)
+  if (typeof by !== 'string' || !by.trim()) return '';
+  var n = names && has(names, by) && typeof names[by] === 'string' ? names[by].replace(/\s+/g, ' ').trim() : '';
+  if (n) return n;
+  return RAW_ID.test(by.trim()) ? '' : by.trim();
+}
+function label(it, names) {
   if (!it) return '';
   if (it.via === 'queue') return '대기열에 있음';
   if (it.via === 'cli') {
-    var who = it.by ? it.by + ' 수정 중' : 'AI 수정 중';
-    return it.note ? who + ' · ' + it.note : who;
+    var w = who(it.by, names), head = (w || 'AI') + ' 수정 중';
+    return it.note ? head + ' · ' + it.note : head;
   }
   return 'AI 수정 중';
 }
 
-function look(it) {
+function look(it, names) {
   if (!it) return null;
-  var full = label(it);
+  var full = label(it, names), raw = it.via === 'cli' && typeof it.by === 'string' && it.by && !who(it.by, names) ? ' (' + it.by + ')' : '';
   if (it.via === 'queue') return {kind: 'queued', text: '대기열', title: full + ' — AI 터미널이 받지 않아 대기열 파일에만 있어요(× = 지우기)'};
   var t = full.replace(/\s+/g, ' ').trim(), cut = Array.from(t);
   if (cut.length > MAX) t = cut.slice(0, MAX - 1).join('').trim() + '…';
-  return {kind: 'working', text: t, title: full + ' — 화면 파일이 바뀌면 사라져요(× = 지우기)'};
+  return {kind: 'working', text: t, title: full + raw + ' — 화면 파일이 바뀌면 사라져요(× = 지우기)'};
 }
 
 var DONE_MS = 2000, LANDED_WAIT = 10 * 60 * 1000;    // 미룬 교체(알약)는 사용자가 손을 뗄 때까지 — 넉넉히

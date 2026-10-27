@@ -605,3 +605,25 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 #notes .nnote{margin:2px 0 0;font-size:13.5px;line-height:20px;color:#1c1c1c;white-space:pre-wrap;word-break:break-word}
 #notes .nact{position:static;flex:none;display:flex;gap:0;margin:-4px -4px -4px 0}
 /* ── R27 F10 끝 ── */
+
+/* ---------- R27 F01 (labels 조각): 판 이름표는 화면에서 늘 같은 크기 — Figma 프레임 이름·FigJam 메모 핀처럼 ----------
+   --lz = 1 / 판 배율(#rows 에 view-label-scale 이 씀). 판 배치(카드·줄 높이)는 그대로 — 글자는 transform/scale 로만 키우고 줄이며 자리 상자는 판 px 그대로.
+   카드 제목: 11px 한 줄 #6b6b66, 카드 폭에서 말줄임, 화면 아래 4px · z-index 없음(펼친 설명·교체 알약이 위) · 자리 = 예전과 같은 46px(16 + 아래 30) — 펼친 설명(.cbody)은 그대로 그 아래 */
+#rows .card>.ftitle{position:relative;box-sizing:border-box;height:16px;margin:0 0 30px;font:500 11px/14px system-ui,-apple-system,sans-serif;color:#6b6b66;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:calc(100% / var(--lz,1));transform-origin:0 0;transform:translateY(calc(4px * var(--lz,1))) scale(var(--lz,1))}
+#rows .card>.ftitle .state{font-size:10px;font-weight:600;padding:0 4px;border-radius:4px;margin-right:4px;vertical-align:1px}
+#rows .card>.ftitle.pend{white-space:nowrap}
+/* 메모 배지: 화면 밖 — 카드 제목 줄 오른쪽 끝의 16px 핀(숫자 11px, view-label-scale 이 .phone 밖으로 옮김) · AI 수정 중 칩은 그 왼쪽(view-busy). 제목은 그 앞에서 말줄임 */
+#rows .card>.nbadge{top:calc(100% - 46px);right:0;min-width:16px;height:16px;padding:0 5px;box-sizing:border-box;border-radius:8px;font:600 11px/16px system-ui,-apple-system,sans-serif;z-index:5;
+  box-shadow:none;transform-origin:100% 0;transform:translateY(calc(4px * var(--lz,1))) scale(var(--lz,1))}
+#rows .card>.nbadge:hover,#rows .card>.nbadge:focus-visible,#rows .card>.nbadge[aria-expanded="true"]{outline:2px solid var(--ui-mark);outline-offset:1px}
+#rows .card:has(>.nbadge)>.ftitle{width:calc(100% / var(--lz,1) - 26px)}
+#rows .card:has(>.busy)>.ftitle{width:calc(30% / var(--lz,1) - 4px)}   /* 칩(살아 있는 상태)이 제목보다 먼저 자리를 갖는다 */
+/* 화면 안 메모 핀: 20px(숫자 12px) */
+#rows .npin{min-width:calc(20px * var(--lz,1));height:calc(20px * var(--lz,1));padding:0 calc(4px * var(--lz,1));font:600 calc(12px * var(--lz,1))/1 system-ui,-apple-system,sans-serif}
+/* 선 태그(F01 + F08): 11px 조용한 글, 1px 선 색 테두리 · 겹치면 view-lines 가 화면 px 로 아래로 민다(--dy) */
+#rows .alabel{font:500 11px/16px system-ui,-apple-system,sans-serif;color:#6b6b66;border-width:1px;padding:0 6px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.08);
+  transform-origin:0 0;scale:var(--lz,1);translate:0 calc(var(--dy,0px) * var(--lz,1))}
+#rows .alabel .ltag-in{font:inherit;color:#1c1c1c}
+/* 작게 볼 때(판 배율 < 0.35, #rows[data-lz-far]) 펼친 설명은 읽히지 않는다 — 숨겨서 화면 px 제목과 겹치지 않게. visibility 라 크기는 남아 줄 사이 계산(view-rows space)은 배율과 상관없다 */
+#rows[data-lz-far] .card>.cbody{visibility:hidden}
