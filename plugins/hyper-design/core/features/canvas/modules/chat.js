@@ -1,6 +1,6 @@
 /* Model — 하단 대화창 규칙: 고른 것 → 칩, 칩 + 글 → 메모 초안·범위, 마지막 요청 → 상태 한 줄. DOM·저장소·메시지를 쓰지 않는다(S1).
    칩 = {key, kind:'screen'|'el', screen, label, h?, app?} — chips({ids, titleOf, els | el}) : 고른 카드마다 [화면 이름](겹침·빈 값 빼고 차례 그대로),
-     고른 요소 els = [{screen, h:hd-hit, app}](여러 요소 R19 — 예전 이름 el = 하나)마다 그 화면 칩(없으면 앞에 더함) + [TAG "글"] 칩(고른 차례, 같은 요소 한 번, path 없는 것 빼기). visible(chips, dismissed) = 지운 칩(×) 빼기,
+     고른 요소 els = [{screen, h:hd-hit, app}](여러 요소 R19 — 예전 이름 el = 하나)마다 그 화면 칩(없으면 앞에 더함) + [종류 · 글] 칩(R27 F13 — 예: '영역 · 대학원생…', type = 아이콘 종류; 고른 차례, 같은 요소 한 번, path 없는 것 빼기). visible(chips, dismissed) = 지운 칩(×) 빼기,
      prune(dismissed, chips) = 지금 칩에 없는 지운 표시 버리기(다시 고르면 다시 보임).
    범위: scope(chips) = all(칩 없음) · screen · element(요소 칩 있음), scopeLabel = 칩 줄 앞 말.
    build(chips, text, {first, titleOf}, mkId) → {memos, why} — 메모 모양·요청문은 지금 메모와 같다(셸 commitPop · memo-batch.build 재사용):
@@ -21,7 +21,7 @@
      noteText([{text, near}]) = '노트:\n- 글(줄바꿈은 두 칸 들여)( (가까운 화면: 이름))' · nearest(box, cards[{id,x,y,w,h}]) → 상자 사이 거리가 가장 짧은 카드 id | null(같은 좌표계).
    대화창이 고치는 글 상자를 가리지 않게(R25): clear(box, dock, pane, margin) → 판을 위로 올릴 px(≥0) — 떠 있는 대화창(dock, 없으면 null)과 가로로 겹치고
      상자 아래 + margin 이 대화창 위를 넘을 때만, 상자 위 끝이 판(pane) 위 + margin 밑으로는 올라가지 않을 만큼. 모두 화면 px {top, bottom, left, right}.
-   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
+   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elType, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -57,11 +57,21 @@ function tagOf(path) {
   var segs = String(path).split('>'), m = /^\s*([a-z][a-z0-9-]*)/i.exec(segs[segs.length - 1]);
   return m ? m[1].toUpperCase() : '';
 }
+// 요소 칩 이름(R27 F13): HTML 태그 대신 사람 말 — 종류(hd-hit kind, tools.js LABEL 과 같은 말) · 없으면 태그로 짐작 · 그래도 없으면 '요소'
+var KIND = {text: '글자', button: '버튼', link: '링크', field: '입력칸', box: '영역', image: '그림'};
+var TAGKIND = {A: 'link', BUTTON: 'button', INPUT: 'field', TEXTAREA: 'field', SELECT: 'field', IMG: 'image', SVG: 'image', PICTURE: 'image', VIDEO: 'image', CANVAS: 'image',
+  P: 'text', SPAN: 'text', LABEL: 'text', H1: 'text', H2: 'text', H3: 'text', H4: 'text', H5: 'text', H6: 'text', LI: 'text', STRONG: 'text', EM: 'text', B: 'text', SMALL: 'text'};
+function elType(h) {
+  var k = flat(h && h.kind).toLowerCase(), tk = TAGKIND[tagOf(h && h.path)];
+  if (k === 'box' && tk === 'image') return 'image';    // hd-hit 은 그림도 box — 태그로 그림을 가린다
+  if (KIND[k]) return k;
+  return tk || (tagOf(h && h.path) ? 'box' : '');
+}
 function elLabel(h) {
-  var tag = tagOf(h && h.path) || flat(h && h.kind).toUpperCase() || '요소';
+  var k = elType(h), name = KIND[k] || '요소';
   var t = flat(h && h.quote && h.quote.exact) || flat(h && h.text);
-  if (!t) return tag;
-  return tag + ' "' + (t.length > CUT ? t.slice(0, CUT) + '…' : t) + '"';
+  if (!t) return name;
+  return name + ' · ' + (t.length > CUT ? t.slice(0, CUT) + '…' : t);
 }
 
 function chips(sel) {
@@ -77,7 +87,7 @@ function chips(sel) {
   });
   els.forEach(function (e) { if (ids.indexOf(String(e.screen)) < 0) screen(e.screen); });
   (sel.ids || []).forEach(function (id) { if (id != null && id !== '') screen(id); });
-  els.forEach(function (e) { out.push({key: 'el:' + e.screen + ':' + e.h.path, kind: 'el', screen: String(e.screen), label: elLabel(e.h), h: e.h, app: !!e.app}); });
+  els.forEach(function (e) { out.push({key: 'el:' + e.screen + ':' + e.h.path, kind: 'el', screen: String(e.screen), label: elLabel(e.h), type: elType(e.h) || 'box', h: e.h, app: !!e.app}); });
   var nk = {};
   (Array.isArray(sel.notes) ? sel.notes : []).forEach(function (n) {   // 판 노트(R25) — 고른 판 메모마다, 빈 글·같은 메모 두 번은 빼고
     var t = n && typeof n.text === 'string' ? n.text.replace(/\r\n?/g, '\n').trim() : '';
@@ -252,6 +262,6 @@ function parseLast(raw) {
   return {last: {text: v.text, ids: v.ids.slice(), at: +v.at || 0}, bad: false};
 }
 
-HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
+HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elType: elType, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
            scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, noteText: noteText, nearest: nearest, clear: clear, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();

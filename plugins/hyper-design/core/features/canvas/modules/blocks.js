@@ -142,7 +142,9 @@ function tone(h, o) { return (o && o.app) || (h && h.src && h.src.file) ? 'app' 
 var MENU = {parent: '상위 고르기', inner: '안쪽 고르기', chain: '레이어 고르기',
             text: '글자 고치기', attr: '속성 고치기…', dup: '복제', remove: '지우기', up: '위로 옮기기', down: '아래로 옮기기',
             insert: '아래에 넣기…', swap: '다른 부품으로 바꾸기…', memo: '메모 달기', ai: 'AI에게 바꿔 달라기'};
-var GROUPS = [['고르기', ['parent', 'inner', 'chain']], ['고치기', ['text', 'attr', 'dup', 'remove', 'up', 'down', 'insert', 'swap']], ['요청', ['memo', 'ai']]];
+// R27 F05: 요소 메뉴는 10개 이하 · 겹침 없이 — 상위(Shift+Enter · [)·안쪽(Enter)·위/아래로 옮기기(Alt+↑/↓ · 막대 손잡이)는 키로, AI에게 바꿔 달라기는 막대 AI 아이콘·메모 창 '바꾸기'로.
+//   레이어 고르기 ▸ 목록이 그 요소 + 조상(상위 고르기와 같은 길)을 준다
+var GROUPS = [['고르기', ['chain']], ['고치기', ['text', 'attr', 'dup', 'remove', 'insert', 'swap']], ['요청', ['memo']]];
 var PICK_ONLY = {inner: 1, chain: 1, ai: 1};          // bar 에 없는 항목 — 고르기·요청이라 늘 켜짐(앱 카드도 그대로)
 var KEY = {parent: 'Shift+Enter', dup: 'Ctrl+D', remove: 'Del', up: 'Alt+↑', down: 'Alt+↓'};   // keyAct 와 같은 키
 function keyOf(act, h, where) {

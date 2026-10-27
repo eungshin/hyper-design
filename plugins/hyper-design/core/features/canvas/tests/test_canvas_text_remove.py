@@ -87,6 +87,16 @@ def inline_type(pg, fr, sel, value):
     pg.keyboard.press("Enter")
 
 
+def _pick_el(pg, xy):
+    """이동(V): 카드 고르기 → 잠시 뒤 한 번 더 = 그 자리 요소(R27 F05: 요소 메뉴는 요소를 고른 카드 안에서만)."""
+    pg.keyboard.press("v")
+    pg.mouse.click(*xy)
+    pg.wait_for_selector("#selbar:not([hidden]), #elbar:not([hidden])", timeout=8000)
+    pg.wait_for_timeout(600)
+    pg.mouse.click(*xy)
+    pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
+
+
 def _h1_in_file(o):
     s = (o / "screens" / "job.html").read_text(encoding="utf-8")
     i = s.find('<h1 class="title">')
@@ -159,7 +169,7 @@ def test_element_menu_removes_element_from_card_and_undo_brings_it_back(ctx, out
     pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
     xy = _h1_xy(pg)
     fr = _frame(pg)
-    pg.keyboard.press("v")
+    _pick_el(pg, xy)                                     # R27 F05: 요소 메뉴 = 요소를 고른 카드 안에서
     pg.mouse.click(*xy, button="right")
     pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="remove"]', timeout=3000)
     pg.click('#cmenu button[data-act="remove"]')
@@ -183,7 +193,7 @@ def test_remove_with_helper_writes_the_file_and_undo_restores_it(ctx, out):
     pg, errors = _open(ctx, srv.url)
     try:
         xy = _h1_xy(pg)
-        pg.keyboard.press("v")
+        _pick_el(pg, xy)
         pg.mouse.click(*xy, button="right")
         pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="remove"]', timeout=3000)
         pg.click('#cmenu button[data-act="remove"]')

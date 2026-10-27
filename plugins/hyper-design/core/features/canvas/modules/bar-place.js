@@ -6,7 +6,11 @@
      차례 = 위(왼쪽 맞춤 → 오른쪽 맞춤 — 왼쪽 맞춤이 칸을 넘으면 오른쪽 맞춤 먼저, 간격 GAP → 좁게 TIGHT) → 아래(같은 차례) → 위로 비켜 올림 → 아래로 비켜 내림(둘 다 막대 높이 + 2·GAP 까지).
      내용을 덮지 않는 첫 자리 — 모두 덮으면 덮는 넓이가 가장 작은 자리(같으면 차례). 위·아래 어디에도 놓을 수 없을 때만(보이는 칸·다른 막대) 오른쪽 옆 → 왼쪽 옆
      (옆은 형제 밖 — 화면 글을 못 읽는 판에서는 보이지 않는 내용을 덮기 쉽다). 그것도 없으면 'over'(보이는 칸 맨 위, 요소를 덮을 수 있음).
-     내용 중 고른 요소 안의 것과 고른 요소를 감싼 것(조상·배경)은 셈하지 않는다. 깨진 사각형은 건너뛴다. */
+     내용 중 고른 요소 안의 것과 고른 요소를 감싼 것(조상·배경)은 셈하지 않는다. 깨진 사각형은 건너뛴다.
+   HD.barPlace.card(o) → {hidden, cx, y} — 카드 선택 막대(#selbar, R27 F07): 판 칸(#screens) 밖으로 나가 옆 패널(대화 도크)을 덮지 않는다.
+     o = {cards: 고른 카드들을 합친 사각형, size: {w, h} 막대, view: 판 칸 사각형, lift: 카드 위 띄움} — 화면 좌표.
+     카드가 판 칸에 하나도 안 보이면 숨김. 가운데 = 카드의 보이는 부분 가운데, 막대가 판 칸 안(여백 M)에 들도록 당긴다.
+     위 = 카드 위 lift 만큼, 판 칸 위를 넘으면 판 칸 맨 위. o.bars(판 위 떠 있는 도구 막대 등)와 겹치면 그 오른쪽 → 왼쪽으로 비킨다(판 칸 안일 때만). 깨진 사각형 → 숨김. */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -81,5 +85,22 @@ function place(o) {
   return {x: xl, y: vy + M, side: 'over', cover: cover(xl, vy + M)};
 }
 
-HD.barPlace = {GAP: GAP, place: place};
+function card(o) {
+  o = o || {};
+  var c = o.cards, v = o.view, size = o.size || {w: 0, h: 0}, w = size.w || 0, h = size.h || 0, lift = o.lift || 0;
+  if (!box(c) || !box(v)) return {hidden: true, cx: 0, y: 0};
+  var l = Math.max(c.x, v.x), r = Math.min(c.x + c.w, v.x + v.w), t = Math.max(c.y, v.y), b = Math.min(c.y + c.h, v.y + v.h);
+  if (r <= l || b <= t) return {hidden: true, cx: 0, y: 0};          // 카드가 판 칸 밖 — 막대도 숨김
+  var lo = v.x + M + w / 2, hi = v.x + v.w - M - w / 2, cx = (l + r) / 2;
+  cx = lo > hi ? v.x + v.w / 2 : Math.max(lo, Math.min(hi, cx));
+  var y = Math.max(v.y + M, c.y - h - lift);
+  (Array.isArray(o.bars) ? o.bars : []).filter(box).forEach(function (b) {
+    if (!hits({x: cx - w / 2, y: y, w: w, h: h}, b)) return;
+    var right = b.x + b.w + GAP + w / 2, left = b.x - GAP - w / 2;
+    if (right <= hi) cx = right; else if (left >= lo) cx = left;
+  });
+  return {hidden: false, cx: cx, y: y};
+}
+
+HD.barPlace = {GAP: GAP, place: place, card: card};
 })();

@@ -31,6 +31,7 @@ out.has = [P.has([A, B], {screen: 'pay', path: 'p.b'}, k), P.has([A], X, k)];
 out.keep = ks(P.keep([A, X, B], s => s.screen === 'pay'));
 const sh = o => P.shift(Object.assign({tool: 'move', els: 1, picked: true, draft: false}, o));
 out.shift = [sh({}), sh({els: 0}), sh({picked: false}), sh({tool: 'annotate'}), sh({draft: true}), P.shift(null)];
+out.scope = [P.menuScope({card: 'pay', elCard: 'pay'}), P.menuScope({card: 'pay', elCard: null}), P.menuScope({card: 'pay', elCard: 'done'}), P.menuScope(null)];
 // 대화창 칩 · 보내기
 const title = id => ({pay: '결제', done: '완료'})[id] || id;
 const h = (path, text) => ({path: path, text: text, kind: 'button', rect: {x: 1, y: 2, w: 3, h: 4}});
@@ -88,3 +89,8 @@ def test_chat_chips_one_per_picked_element_and_one_memo_each(js):
     assert js["oldEl"] == ["screen:pay", "el:pay:button.a"], "예전 이름 el(하나)도 그대로"
     assert js["memos"] == [["pay", "button.a", "여백 줄이기"], ["pay", "p.b", "여백 줄이기"], ["done", "button.a", "여백 줄이기"]], "요소마다 요소 메모, 같은 글"
     assert js["dropOne"] == ["button.a", "button.a"], "칩 하나를 빼면 그 요소만 빠진다"
+
+
+def test_right_click_menu_scope_is_element_only_inside_a_picked_element_card(js):
+    """R27 F05: 카드를 오른쪽 클릭 = 카드 메뉴. 그 카드 안 요소를 이미 골랐을 때만 요소 메뉴(카드 항목은 덧붙이지 않음)."""
+    assert js["scope"] == ["element", "card", "card", "card"], js["scope"]
