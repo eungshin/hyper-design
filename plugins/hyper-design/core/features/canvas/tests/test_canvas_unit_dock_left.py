@@ -60,11 +60,11 @@ def out():
 
 
 def test_talk_starts_on_the_left(out):
-    assert out["def"] == ["talk:talk", 340, "links:links | show+align:show | notes+pending+history+layers:notes"]
+    assert out["def"] == ["talk:talk", 280, "links:links | align:align | notes+pending+history+layers:notes"], "대화 기본 280px(R27 F02) · 표시는 도크 패널이 아니다"
 
 
 def test_old_saved_layout_keeps_right_and_adds_talk_left(out):
-    assert out["old"] == ["talk:talk", "links+notes+show+align+pending+history+layers:notes", 410], "예전 오른쪽 배치·너비 그대로, 대화만 왼쪽에"
+    assert out["old"] == ["talk:talk", "links+notes+align+pending+history+layers:notes", 410], "예전 오른쪽 배치·너비 그대로, 대화만 왼쪽에"
 
 
 def test_drag_between_sides(out):
@@ -81,11 +81,11 @@ def test_close_and_reopen_on_home_side(out):
 
 
 def test_widths_per_side(out):
-    assert out["lw"] == [560, 300, 340], "왼쪽 너비는 왼쪽만, 최대 560"
+    assert out["lw"] == [560, 300, 280], "왼쪽 너비는 왼쪽만, 최대 560"
     assert out["bare"] == 0, "Tab(패널 모두 숨기기)이면 왼쪽도 0"
-    assert out["collapse"] == [340, ["talk"]], "오른쪽 접기는 왼쪽에 닿지 않는다"
+    assert out["collapse"] == [280, ["talk"]], "오른쪽 접기는 왼쪽에 닿지 않는다"
 
 
 def test_save_round_trip_and_junk(out):
     assert out["round"] == ["", True, 300]
-    assert out["junk"] == [340, "talk:talk"], "깨진 값 = 기본, 모르는·겹친 패널은 버림"
+    assert out["junk"] == [280, "talk:talk"], "깨진 값 = 기본, 모르는·겹친 패널은 버림"

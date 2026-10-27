@@ -101,19 +101,19 @@ def visible_paths(pg):
 
 @pytest.mark.area("flow")
 def test_arrow_toggle_persists(page):
-    """E7: 판에 늘 그리는 선 — 표시 패널의 보이기 버튼으로 끄고 켜며, 새로고침 뒤에도 그대로. [주요 흐름] 버튼·A 키는 없다(D9)."""
+    """E7: 판에 늘 그리는 선 — 표시 팝오버의 보이기 버튼으로 끄고 켜며, 새로고침 뒤에도 그대로. [주요 흐름] 버튼·A 키는 없다(D9)."""
     total = page.locator("#rows path.ln").count()
     assert total > 0
     assert visible_paths(page) == total
     assert page.locator("#arrows").count() == 0
-    page.click("#lnShow")
+    page.click("#showbtn"); page.click("#lnShow")   # 표시 = 위쪽 줄 팝오버(R27 F02)
     assert visible_paths(page) == 0
     reload(page)
     assert visible_paths(page) == 0
     assert page.get_attribute("#lnShow", "aria-pressed") == "false"
     page.keyboard.press("a")                       # A 는 비워 둔다
     assert visible_paths(page) == 0
-    page.click("#lnShow")
+    page.click("#showbtn"); page.click("#lnShow")   # 표시 = 위쪽 줄 팝오버(R27 F02)
     assert visible_paths(page) == total
     reload(page)
     assert visible_paths(page) == total
@@ -838,11 +838,11 @@ def test_v3_reduced_motion_jumps(gpage):
 
 @pytest.mark.area("motion", "dock")
 def test_v3_reduce_motion(gpage):
-    """G4: 전환 메뉴는 없앰 — '움직임 줄이기'는 표시 패널 체크 하나(#mvOff), 새로고침 뒤에도, 카메라는 바로."""
+    """G4: 전환 메뉴는 없앰 — '움직임 줄이기'는 표시 팝오버 체크 하나(#mvOff, R27 F02), 새로고침 뒤에도, 카메라는 바로."""
     errs = []
     gpage.on("pageerror", lambda e: errs.append(str(e)))
     gpage.keyboard.press("Escape")
-    gpage.click('#dock .dk-tab[data-p="show"]')
+    gpage.click("#showbtn")                              # 표시 = 위쪽 줄 팝오버(R27 F02)
     gpage.check("#mvOff")
     assert gpage.evaluate("document.body.classList.contains('nomotion')")
     reload(gpage)
@@ -852,7 +852,7 @@ def test_v3_reduce_motion(gpage):
     gpage.wait_for_function("window.__hdCam && window.__hdCam.to === 'renew'", timeout=3000)
     assert gpage.evaluate("window.__hdCam.keys.length") == 1 and centred(gpage, "renew")
     gpage.keyboard.press("Escape")
-    gpage.click('#dock .dk-tab[data-p="show"]')
+    gpage.click("#showbtn")
     assert gpage.is_checked("#mvOff")
     gpage.uncheck("#mvOff")
     assert not gpage.evaluate("document.body.classList.contains('nomotion')")
@@ -874,6 +874,7 @@ def test_v3_line_style(gpage):
     gpage.keyboard.press("Escape")
     deep = [c.lower() for c in gpage.evaluate("HDCanvas.style.PRESETS.deep.c")]
     w0 = {k: w for k, _, _, w in gpage.evaluate(STROKES_JS)}
+    gpage.click("#showbtn")                              # 표시 = 위쪽 줄 팝오버(R27 F02) — 밖 클릭이면 팝오버도 닫힌다
     gpage.click("#lgDdb")
     gpage.wait_for_selector("#lgDd:not([hidden])")
     gpage.wait_for_timeout(300)
@@ -890,17 +891,20 @@ def test_v3_line_style(gpage):
     st = gpage.evaluate(STROKES_JS)
     assert all(w > w0[k] for k, _, _, w in st), (w0, st)
     gpage.screenshot(path=str(V3SHOTS / "p3-b-deep-width5.png"))
+    gpage.keyboard.press("Escape")
     reload(gpage)
     st2 = gpage.evaluate(STROKES_JS)
     assert [(k, s) for k, s, _, _ in st2] == [(k, s) for k, s, _, _ in st], "새로고침 뒤에도 같은 색"
     assert gpage.evaluate("document.getElementById('lgW').value") == "5", "굵기 설정도 그대로(화면 굵기는 배율 따라 달라진다)"
     # 밖 클릭 → 닫힘
+    gpage.click("#showbtn")                              # 표시 = 위쪽 줄 팝오버(R27 F02) — 밖 클릭이면 팝오버도 닫힌다
     gpage.click("#lgDdb")
     gpage.wait_for_selector("#lgDd:not([hidden])")
     gpage.mouse.click(5, 300)
     gpage.wait_for_timeout(250)
     assert gpage.is_hidden("#lgDd")
     # 랜덤 두 번 → 색이 다름, 메뉴는 열린 채
+    gpage.click("#showbtn")                              # 표시 = 위쪽 줄 팝오버(R27 F02) — 밖 클릭이면 팝오버도 닫힌다
     gpage.click("#lgDdb")
     gpage.click('#lgDd button[data-preset="random"]')
     gpage.wait_for_timeout(150)

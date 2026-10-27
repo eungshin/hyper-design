@@ -97,10 +97,10 @@ def test_send_shows_whole_turn_and_survives_reload(served, ctx):
     pg, errors = open_page(ctx, srv)
     try:
         lb, sc = pg.locator("#ldock").bounding_box(), pg.locator("#screens").bounding_box()
-        assert lb and lb["x"] == 0 and lb["width"] == 340, "대화 패널은 처음에 왼쪽 도크"
-        assert abs(sc["x"] - 340) <= 1, "판은 왼쪽 도크 옆에서 시작"
+        assert lb and lb["x"] == 0 and lb["width"] == 280, "대화 패널은 처음에 왼쪽 도크(280px — R27 F02)"
+        assert abs(sc["x"] - 280) <= 1, "판은 왼쪽 도크 옆에서 시작"
         assert pg.evaluate("!!document.getElementById('hdchat').closest('#pTalk')"), "입력창은 패널 아래"
-        assert pg.locator("#tools").bounding_box()["x"] > 340, "도구 막대는 판 안 — 패널에 가리지 않는다"
+        assert pg.locator("#tools").bounding_box()["x"] > 280, "도구 막대는 판 안 — 패널에 가리지 않는다"
         pg.click("#hdchat textarea")
         pg.keyboard.type("결제 버튼을 더 크게")
         pg.keyboard.press("Enter")

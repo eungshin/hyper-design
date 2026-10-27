@@ -467,6 +467,16 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 .dk-rs{position:absolute;right:2px;bottom:2px;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#bbb 50%,#bbb 58%,transparent 58%,transparent 70%,#bbb 70%,#bbb 78%,transparent 78%)}
 .dk-ghost{position:fixed;z-index:60;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:8px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);font:700 13px system-ui,sans-serif;pointer-events:none;opacity:.94}
 .dk-menu button{gap:8px}
+/* ---- R27 F02 (chrome): 빈 패널은 머리 줄만 — 연결(화면을 안 골랐을 때)·메모 없음·반영 대기 없음은 몸통을 접고 남는 높이를 다른 묶음에 ---- */
+.dk-g:has(#legend[hidden]),.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
+.dk-g:has(#legend[hidden])>.dk-body,.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
+/* ---- /R27 F02 ---- */
+/* ---- R27 F15 (chrome): 도크 탭 = 아이콘 + 툴팁, 이름은 고른 탭에만(자르지 않음) · 닫기 ×는 고른 탭에 올렸을 때만(안 고른 탭은 창 메뉴로 닫음) ---- */
+.dk-tab.on{flex:none}
+.dk-tab .dk-x{display:none}
+.dk-tab.on .dk-x{display:inline-flex;visibility:hidden}
+.dk-tab.on:hover .dk-x,.dk-tab.on:focus-visible .dk-x{visibility:visible}
+/* ---- /R27 F15 ---- */
 .lgi{display:flex;color:#666}.lgi svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 #pShow .lgw{margin-top:8px}
 
