@@ -1972,7 +1972,7 @@ def test_memo_pending_history_panels(dpage):
 
 @pytest.mark.area("helper")
 def test_file_mode_chip(epage):                                            # 2.2 E9 — 파일로 열면 바로 쓰기가 안 된다고 위쪽 줄에 늘 보인다
-    assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨"
+    assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨" and epage.is_visible("#mode"), "예외 상태는 보인다(R27 F11)"
     assert "도우미" not in epage.text_content("header"), "화면 글에 '도우미' 말을 쓰지 않는다"
 
 

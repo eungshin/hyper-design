@@ -52,7 +52,7 @@ def live(ctx):
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto(srv.url)
     pg.wait_for_function("window.__hdReady !== undefined")
-    pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+    pg.wait_for_selector('#livechip[data-mode="live"]', state="attached", timeout=8000)   # 정상 상태 칩은 숨김(R27 F11)
     pg.srv = srv
     yield pg
     pg.close()

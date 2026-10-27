@@ -27,6 +27,9 @@ button{font:inherit;color:inherit}
 .mchip::before{content:'';flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}
 .mchip.on::before{background:#7a9a7a}
 .mchip:empty{display:none}
+/* ---- R27 F11 (chrome): 위쪽 상태는 예외만 — 늘 같은 정상 상태(파일에 바로 씀 · 실시간 · 연결 중)는 숨기고, 파일로 열림 · 2초 확인 · 받는 곳 없음만 보인다(Linear 동기화 표시처럼). 뜻은 칩 title ---- */
+#mode.on,#livechip[data-mode="live"],#livechip[data-mode="connecting"]{display:none}
+/* ---- /R27 F11 ---- */
 .hd .vbtn.tsend{background:var(--ui-primary);color:#fff;padding:0 12px;font-weight:600;margin-left:4px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
 .hd .vbtn.tsend:disabled{background:#E1E1DC;color:#9a9a95}
 .hd .vbtn.decn{color:var(--ui-accent);font-weight:700}   /* 결정 필요 N(#232) — 강조색은 이것 하나 */

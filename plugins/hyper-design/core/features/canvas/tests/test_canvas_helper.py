@@ -230,7 +230,7 @@ def test_helper_server_applies_from_canvas_and_falls_back_to_copy(ctx, out):
               {id: 'x2', screen: 'job', targets: [{path: 'h1', text: 'q'}], path: 'h1', text: 'q', note: '이건 무슨 뜻?', intent: 'question', sent: false}])); }""")
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined")
-        assert pg.text_content("#mode") == "파일에 바로 씀", "모드 칩(E9)"
+        assert pg.text_content("#mode") == "파일에 바로 씀" and pg.is_hidden("#mode"), "모드 칩(E9) — 정상 상태는 위쪽 줄에 안 보인다(R27 F11)"
         assert pg.text_content("#aichip") == "받는 곳 없음" and pg.is_visible("#aichip"), "보내기가 AI 로 가는지 위쪽 줄에 늘 보인다"
         pg.evaluate("window.__hdStay = 1")               # 새로고침하면 사라지는 표지
         m = swap_mark(pg)
