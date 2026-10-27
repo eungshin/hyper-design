@@ -148,6 +148,12 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 #mclose{flex:none;width:22px;height:20px;border:0;border-radius:4px;background:none;color:#e6e6e1;display:grid;place-items:center;padding:0;cursor:pointer}
 #mclose:hover,#mclose:focus-visible{background:#55554f;outline:0}
 #mclose svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+/* ---- R27 F16 (chrome): 크게 보기 머리 = 밝은 줄 · 13px 제목 · 닫기 하나(어두운 막대가 화면보다 세게 테를 두르지 않게) · 크게 보기에서 못 쓰는 도구는 숨김 ---- */
+#modal .mbar{height:30px;padding:0 6px 0 14px;background:#fff;color:#3a3a37;font-size:13px;font-weight:600;border-bottom:1px solid #ececea}
+#mclose{width:24px;height:24px;border-radius:6px;color:#8a8a85}
+#mclose:hover,#mclose:focus-visible{background:#F2F2EF;color:#2b2b29}
+body.modal-open #tools .tb[aria-disabled="true"],body.modal-open #tools hr{display:none}
+/* ---- /R27 F16 ---- */
 #modal iframe{display:block;width:var(--modal-w,390px);height:var(--modal-h,844px);border:0;transform-origin:0 0;background:#fff}
 
 /* ---------- 강조: 고른 카드 전부(E21) — 그 선·태그·이어진 카드 또렷, 나머지 흐리게 ---------- */

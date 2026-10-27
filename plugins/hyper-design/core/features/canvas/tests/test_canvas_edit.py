@@ -2276,7 +2276,10 @@ def test_header_compact_and_stable_on_modal(dpage):
       return {text: t.textContent.trim(), inModal: !!t.closest('#modal'), above: t.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 1,
               h: t.closest('.mbar').offsetHeight}; }""")   # 배치 높이 — 여는 움직임(scale) 중이어도 같다(getBoundingClientRect 는 24.96 으로 가끔 깨짐)
     assert t["text"] and t["text"] in title or title in t["text"], (t, title)
-    assert t["inModal"] and t["above"] and abs(t["h"] - 26) < 1, t
+    assert t["inModal"] and t["above"] and abs(t["h"] - 30) < 1, t
+    look = dpage.evaluate("""() => { const b = getComputedStyle(document.querySelector('#modal .mbar')), t = getComputedStyle(document.getElementById('mtitle'));
+      return {bg: b.backgroundColor, size: t.fontSize, closes: document.querySelectorAll('#modal .mbar button').length}; }""")
+    assert look == {"bg": "rgb(255, 255, 255)", "size": "13px", "closes": 1}, ("밝은 머리 · 13px 제목 · 닫기 하나(R27 F16)", look)
     ESHOTS.mkdir(parents=True, exist_ok=True)
     dpage.screenshot(path=str(ESHOTS / "h15-header-modal.png"))
     dpage.click("#mclose")
@@ -2308,6 +2311,7 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
     assert all(t[k][1] != "true" for k in ("hand", "move", "annotate", "text")), t
     assert all(t[k][1] == "true" for k in ("trigger", "knife", "layout", "memo")), t
+    assert all(dpage.is_hidden(f'#tools [data-tool="{k}"]') for k in ("trigger", "knife", "layout", "memo")), "크게 보기에서 못 쓰는 도구는 숨김(R27 F16)"
     dpage.click('#tools [data-tool="annotate"]')
     assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
     dpage.keyboard.press("p")
@@ -2318,6 +2322,7 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     dpage.wait_for_function("document.getElementById('modal').hidden")
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
     assert t["hand"][0] == "true" and all(d != "true" for p, d in t.values()), "닫으면 판의 도구(손)로, 모두 다시 쓸 수 있게"
+    assert dpage.is_visible('#tools [data-tool="knife"]'), "닫으면 다시 보인다"
 
 
 # ---------------------------------------------------------------- 조각 5 테마 패널 (H10·H12·H14)
