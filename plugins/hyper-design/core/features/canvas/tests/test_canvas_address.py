@@ -128,7 +128,14 @@ def test_copy_address_from_card_and_element_menus_and_ctrl_l(live):
     pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="addr"]', timeout=3000)
     acts = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
     assert len(acts) <= 10 and not [x for x in acts if x.startswith("card-")], acts
-    shot(pg, "element-menu.png")
+    assert pg.is_visible("#elbar"), "요소 막대가 떠 있는 채로 메뉴가 열림(겹침 검사의 전제)"
+    top = pg.evaluate("""(() => { const m = document.getElementById('cmenu'), r = m.getBoundingClientRect(), pts = [[r.left + 6, r.top + 6]];
+      for (const id of ['elbar', 'selbar']) { const b = document.getElementById(id); if (!b || b.hidden) continue; const q = b.getBoundingClientRect();
+        const x0 = Math.max(r.left, q.left), x1 = Math.min(r.right, q.right), y0 = Math.max(r.top, q.top), y1 = Math.min(r.bottom, q.bottom);
+        if (x1 > x0 && y1 > y0) pts.push([(x0 + x1) / 2, (y0 + y1) / 2]); }   // 막대와 메뉴가 겹치는 곳 = 메뉴여야
+      return [pts.length, pts.every(([x, y]) => { const e = document.elementFromPoint(x, y); return !!e && m.contains(e); })]; })()""")
+    assert top[0] >= 2 and top[1],("열린 메뉴가 맨 위 — 요소 막대·선택 막대가 머리를 덮지 않는다(Figma: 도구 막대는 메뉴 아래)", top)
+    shot(pg, "element-menu-2.png")
     pg.click('#cmenu button[data-act="addr"]')
     _toast(pg, "주소를 복사했어요")
     shot(pg, "toast.png")

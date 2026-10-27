@@ -815,14 +815,17 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // tail(카드 항목 �
   if (inModal) links = links.filter(function (it) { return !it.pick; });
   var list = [];
   var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push.apply(list, items); };   // 묶음 사이 = 구분선(R27 F05 — 회색 소제목 없음)
+  var fire = function (it) {                         // 한 동작 → 막대의 고르기·칸·목록 길(상위·안쪽·속성·부품) 또는 셸 편집 길
+    return VIA_BAR[it.act] ? function () { elemFire(from, h, inModal, it.act); } : function () { blockAct(it.act, Object.assign({}, sel, {ask: it.ask})); };
+  };
   HD.blocks.menu(h, {app: app, where: where, links: links.length}).forEach(function (g) {   // links = 10개 한도 셈(R30 주소 복사가 넘치면 그것만 빠짐)
     if (g.head === '요청') group('연결', links);
     group(g.head, g.items.filter(function (it) { return it.act !== 'addr' || AD; }).map(function (it) {
-      var o = {id: it.act, label: it.label, key: it.key};
+      var o = {id: it.act, label: it.label, key: it.key, title: it.title};
       if (it.act === 'addr') o.act = function () { AD.element(from, h, inModal); };   // 주소 복사(R30, view-address)
       else if (it.act === 'chain') o.sub = function (put) { pickList(from, h, inModal, put); };   // Figma Select layer ▸(51-3)
-      else if (VIA_BAR[it.act]) o.act = function () { elemFire(from, h, inModal, it.act); };   // 막대의 고르기·칸·목록 길(상위·안쪽·속성·부품)
-      else o.act = function () { blockAct(it.act, Object.assign({}, sel, {ask: it.ask})); };
+      else if (it.sub) { var kids = it.sub.map(function (x) { return {id: x.act, label: x.label, title: x.title, act: fire(x)}; }); o.sub = function (put) { put(kids); }; }   // 부품 ▸ = 아래에 넣기 · 다른 부품으로 바꾸기(R30)
+      else o.act = fire(it);
       return o;
     }));
   });
