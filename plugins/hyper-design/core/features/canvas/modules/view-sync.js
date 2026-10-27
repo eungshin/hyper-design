@@ -7,7 +7,7 @@
          wrote?(res, list) — write() 가 파일에 쓴 직후·카드를 다시 싣기 전(res.paths = {편집 id: 그 요소의 새 경로}, task 49b 고른 요소 따라가기)}
    aiChip = 보내기가 어디로 가는지(agent = helper 의 --paseo-agent → 'AI 연결됨', 없으면 '받는 곳 없음' = 대기열 파일에만, R4)
      aiChip 에 'hd-agent' 이벤트 {detail:{agent, name}} 가 오면(view-agents 가 고른 뒤, #214) 'AI 연결됨 · <name>' 으로 고치고 window.__hdAgent 도 바꾼다
-   보내기의 /api/forward 에 notes = 넘긴 메모 id(최대 200, 47-5b — 받는 에이전트가 어느 메모인지 안다). 받는 곳은 도우미의 붙은 에이전트(attach) 그대로.
+   보내기의 /api/forward 에 notes = 넘긴 메모 id(최대 200, 47-5b — 받는 에이전트가 어느 메모인지 안다) · images = 요청문의 첨부 이미지 경로(R28 HD.attach.paths). 받는 곳은 도우미의 붙은 에이전트(attach) 그대로.
    되돌리기 답 reverted:true(뒤 빌드가 깨져 이미 되돌린 쓰기, 47-5a) = 토스트 + 그 기록 줄에 '빌드 실패로 이미 되돌림'(op.bind 로 받은 표시 함수, HD.undoAnswer).
    on 이 아니면(file:// · 토큰 없음) 칩만 '파일로 열림' 이고 나머지는 부르지 않는다. 네트워크가 끊기면 Promise 가 실패 → 셸이 지금처럼(반영 대기·복사) */
 (function () {
@@ -124,7 +124,9 @@ function mount(ctx) {
       if (!left.length) return fin(null);
       var t = ctx.request(left); window.__hdLastSend = t;
       var ids = left.map(function (n) { return n && n.id != null ? String(n.id) : ''; }).filter(Boolean).slice(0, 200);   // 서버 한도 NOTES_MAX
-      return post('/api/forward', {text: t, notes: ids}).then(fin);
+      var body = {text: t, notes: ids}, imgs = HD.attach && HD.attach.paths ? HD.attach.paths(t) : [];
+      if (imgs.length) body.images = imgs;                 // R28 첨부 이미지 — 받는 곳이 Paseo 면 서버가 paseo send --image 로 진짜 이미지(글의 경로 줄은 그대로)
+      return post('/api/forward', body).then(fin);
     });
   }
   return {on: on, write: function (l, x) { return track(write(l, x)); }, del: function (x) { return track(del(x)); }, send: function (x) { return track(send(x)); },

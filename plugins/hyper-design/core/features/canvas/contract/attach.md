@@ -16,6 +16,7 @@
 
 - 상자 주인(메모 창 `view-memo-pop` · 대화창 `view-chat` — 대화 패널 안 입력창도 같은 요소)과는 의도로만(상자에 bubbles CustomEvent): `hd-attach-get {items, busy, done}` · `hd-attach-set {items}`(빈 배열 = 비우기) · 이 기능이 내는 `hd-attach-changed {count, busy}`
 - 요청 글 줄: 이미지마다 `첨부 이미지: <절대 경로>`(줄 머리 `attach_rules.LINE` = `HD.attach.LINE`), 글 끝에. 고쳐 저장해도 한 번만(strip 뒤 붙임). 요청문(`edits.request`)에서는 `요청:` 의 이어지는 줄로 들여 써진다 — 읽는 쪽은 `첨부 이미지: (.+)$` 로
+- 진짜 이미지(R28, `agent-info.md`): 보낼 때 `/api/forward` 본문 `images` = 요청문의 경로(`HD.attach.paths`) → 받는 곳이 Paseo 면 `paseo send … --image <abs>`(서버가 `.hd-attach` 안 파일만 고름 — `attach_rules.paths_in`·`pick_images`). 경로 줄은 그대로 남는다
 - 메모는 `attach: [{path, rel, type, size, name}]` 칸을 지닌다 — 메모 창을 다시 열면 칩, 썸네일은 `GET /api/image`(점 폴더라 정적 경로로는 404). 대화창으로 보낸 메모도 같은 칸
 - 올리는 중이면 보내기·추가를 막고 토스트(반쪽 경로를 보내지 않음). 보낸 뒤·창을 닫으면 칩을 비운다(파일은 남는다)
 - 도우미 없음(file://): 붙여넣기·끌어 놓기·클립 단추 = 토스트 `이미지 첨부는 도우미로 열었을 때만 돼요 — …`, 칩 없음. 글 붙여넣기는 그대로(파일이 있을 때만 가로챔)

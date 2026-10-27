@@ -402,6 +402,22 @@
       ]
     },
     {
+      "method": "GET", "path": "/api/agents/info", "callers": ["modules/view-agent-info.js (composer footer: model · effort · context ring, R28)"],
+      "request": "", "response": "{agent:null, paseo:false} | {agent, paseo:false} | {agent, paseo:true, name, provider, model, modelLabel, effort, effortOptions, context:{used,max,pct}|null}",
+      "cases": [
+        {"name": "no receiver", "request": {"method": "GET", "path": "/api/agents/info"}, "expect": {"status": 200, "json": {"agent": "null", "paseo": {"$eq": false}}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/agents/info", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/agents/effort", "callers": ["modules/view-agent-info.js (effort menu, R28 — paseo agent update --thinking)"],
+      "request": "{effort}", "response": "same as GET /api/agents/info | {error}",
+      "cases": [
+        {"name": "no Paseo receiver = 409", "request": {"method": "POST", "path": "/api/agents/effort", "body": {"effort": "high"}}, "expect": {"status": 409, "json": {"error": "str"}}},
+        {"name": "not an object = 400", "request": {"method": "POST", "path": "/api/agents/effort", "body": [1]}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/stop", "callers": ["hd_client.py (hd stop)"],
       "request": "{}", "response": "{stopping:true}, then the server shuts down (must stay last)",
       "cases": [

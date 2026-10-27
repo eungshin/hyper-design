@@ -24,6 +24,7 @@
      Esc = 닫기(그 글은 그대로, '/' 로 다시 시작할 때까지 안 열림), 빈칸 등 맞지 않는 글 = 닫히고 보통 글. 고르면 친 '/…' 글은 지운다.
      /memo = 칩 [메모 N건 ×](보내기 전 메모 모두 — HD.chatCmd.drafts/memoChip, 올리거나 포커스면 툴팁 .ch-tip 에 화면 이름 + 첫 글). 0건 = 토스트 '보낼 메모가 없어요', 칩 없음.
      보내면 대화 글로 만든 메모 + 그때의 보내기 전 메모를 ctx.sendNotes 한 번에(위쪽 [보내기]와 같은 요청문·같은 상태 바뀜) — 칩은 보낸 뒤 빠진다. 보낸·완료 메모는 넣지 않는다.
+   받는 터미널 정보(R28): 도구 줄 알약 뒤 칸 [data-hd-agent-info] 만 둔다 — 모델·생각 깊이·컨텍스트 고리는 등록부 기능 agentInfo(view-agent-info)가 채운다.
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
 'use strict';
@@ -112,6 +113,7 @@ function mount(ctx) {
     '<ul class="ch-cmds" id="hdcmds" role="listbox" aria-label="명령" hidden></ul><div class="ch-tip" id="hdtip" role="tooltip" hidden></div>' +
     '<textarea rows="1" aria-label="요청 글"></textarea>' +
     '<div class="ch-tools"><button type="button" class="ch-agent" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="amenu"><i></i><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' +
+    '<span class="ch-meta" data-hd-agent-info hidden></span>' +
     '<button type="button" class="ch-clip" data-hd-attach-pick aria-label="이미지 첨부" title="이미지 첨부 — 붙여넣기(Ctrl+V)·끌어 놓기도 돼요"><svg viewBox="0 0 24 24"><path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>' +
     '<button type="button" class="ch-send" disabled aria-label="보내기" title="보내기 (Enter)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>';
   document.body.appendChild(root); document.body.classList.add('has-chat');

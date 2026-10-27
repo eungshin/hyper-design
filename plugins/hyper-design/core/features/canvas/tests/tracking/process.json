@@ -1153,6 +1153,38 @@
         "test_canvas_busy_app::test_app_card_chip_lifts_on_hmr_or_reload_not_on_first_load · test_canvas_text_remove::test_large_view_text_box_has_remove_element — 영역 실행에서만 실패, 단독 통과"
       ],
       "note": "규칙 = modules/row-ops.js(Model) · 제목 끌기 = view-row-drag(View, card-pos move 길) · 다른 폴더로 = view-rows rowHeads 'hd-row-assign' + board_rows.plan_group_move"
+    },
+    {
+      "slice": "R28 대화창: Paseo 에 진짜 이미지(--image) + 모델·생각 깊이·컨텍스트 고리(시안 A)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 24
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "browser",
+          "what": "실패 토스트에 '생각 깊이를 바꾸지 못했어요' 가 두 번 — 서버 까닭을 그대로 쓰게"
+        },
+        {
+          "by": "unit",
+          "what": "attach.js paths 의 split 글이 줄바꿈으로 깨진 것(모듈 순수성 테스트가 먼저 잡음)"
+        }
+      ],
+      "waste": "부하 때 page.goto 30초 넘김 3건(test_canvas_agents 2 · ai_undo 1) — 따로 다시 돌려 통과",
+      "flaky": [
+        "test_canvas_agents.py::test_canvas_does_not_switch_existing_attachment",
+        "test_canvas_agents.py::test_canvas_auto_attaches_then_chip_menu_switches_and_send_goes_to_choice",
+        "test_canvas_ai_undo.py::test_history_row_undo_puts_old_file_back_and_card_swaps"
+      ],
+      "note": "고리는 모르면 숨김(0% 아님). 모델 바꾸기는 CLI 가 없어 보기만"
     }
   ]
 }

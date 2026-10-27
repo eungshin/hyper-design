@@ -8,6 +8,7 @@
 import datetime, json, os, pathlib, shutil, subprocess, sys, threading, time
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
+import attach_rules as AR  # 요청 글의 '첨부 이미지:' 경로 · 보낼 이미지 고르기(R28)
 import chat_log as CL  # 답 글(reply_text — 대화 패널)
 import events as EV  # 바뀐 것 알림(request.sent · notes.changed · agent.reply)
 from adapters import _paseo_args, _paseo_cmd
@@ -60,7 +61,7 @@ NO_PASEO = "Paseo 를 찾을 수 없어요"
 
 
 def list_agents(paseo=None):
-    """`paseo ls -g --json`(읽기만) → {agents:[{id, name, status, cwd, provider}]} | {agents:[], error:한국어}.
+    """`paseo ls -g --json`(읽기만) → {agents:[{id, name, status, cwd, provider, thinking}]} | {agents:[], error:한국어}(thinking = 생각 깊이, R28).
     보관(archived)된 것은 뺀다. 출력은 바이트로 받아 UTF-8 로 푼다(Windows 기본 코드 페이지로 풀면 한글 이름이 깨진다)."""
     cmd = _paseo_cmd(paseo)
     if not cmd or (("/" in cmd or "\\" in cmd) and not pathlib.Path(cmd).exists()):
@@ -87,7 +88,7 @@ def list_agents(paseo=None):
             continue
         if a.get("archived") or a.get("status") == "archived" or a.get("archivedAt"):
             continue
-        agents.append({k: (a.get(k) if isinstance(a.get(k), str) else None) for k in ("id", "name", "status", "cwd", "provider")})
+        agents.append({k: (a.get(k) if isinstance(a.get(k), str) else None) for k in ("id", "name", "status", "cwd", "provider", "thinking")})
     return {"agents": agents}
 
 
@@ -162,7 +163,8 @@ NOTES_MAX = 200                                      # /api/forward notes(메모
 
 
 def check_send(body):
-    """POST /api/forward 본문 {text, to?, notes?} → ((text, to | None, notes), None) | (None, 한국어 오류)."""
+    """POST /api/forward 본문 {text, to?, notes?, images?} → ((text, to | None, notes, images | None), None) | (None, 한국어 오류).
+    images(R28) = 첨부 이미지 절대 경로 글 목록 — 없으면 None(그때는 글의 '첨부 이미지:' 줄에서 읽는다)."""
     to = body.get("to")
     err = hd_model.agent_error(to)
     if err:
@@ -170,7 +172,10 @@ def check_send(body):
     notes = body.get("notes", [])
     if not isinstance(notes, list) or len(notes) > NOTES_MAX or not all(isinstance(n, str) and n for n in notes):
         return None, "notes: 메모 id 글 목록(%d개까지)이어야 해요" % NOTES_MAX
-    return (str(body.get("text") or ""), to, list(notes)), None
+    images = body.get("images")
+    if images is not None and (not isinstance(images, list) or len(images) > AR.IMAGES_MAX * 2 or not all(isinstance(x, str) and x for x in images)):
+        return None, "images: 첨부 이미지 절대 경로 글 목록이어야 해요"
+    return (str(body.get("text") or ""), to, list(notes), list(images) if images is not None else None), None
 
 
 
@@ -198,14 +203,14 @@ class Queue:
         got, err = check_send(body)
         if err:
             return 400, {"error": err}
-        text, to, notes = got
+        text, to, notes, images = got
         target = to or self.agent
         entry = self.presence.get(target) if (target and self.presence is not None) else None
         how = AD.choose(target, entry, {k: a.ready() for k, a in self.adapters.items()})
         p = queue_file(self.out, text)
         via = how
         if how in ("paseo", "claude"):
-            ok, why = self.adapters[how].send(p, text, entry or target)
+            ok, why = self.adapters[how].send(p, text, entry or target, images=self.images(text, images) if how == "paseo" else ())
             if ok:
                 mark_sent(p)
             else:
@@ -218,6 +223,18 @@ class Queue:
         if ev is not None:
             res["event"] = ev["id"]
         return 200, res
+
+    def images(self, text, given=None):
+        """보낼 첨부 이미지(R28) — given(본문 images) 또는 글의 '첨부 이미지:' 줄 → <out>/.hd-attach 안 · 규칙 이름 · 있는 파일만.
+        뺀 것은 [hd] 한 줄(글의 경로 줄은 그대로 가므로 받는 쪽은 경로로라도 본다)."""
+        folder = str((pathlib.Path(self.out) / AR.FOLDER).resolve())
+        ok, bad = AR.pick_images(folder, given if given is not None else AR.paths_in(text))
+        have = [x for x in ok if pathlib.Path(x).is_file()]
+        drop = bad + [x for x in ok if x not in have]
+        if drop:
+            print("[hd] 첨부 이미지 %d장은 이미지로 넘기지 않아요(.hd-attach 밖·없는 파일·한도): %s" % (len(drop), ", ".join(str(x) for x in drop)[:300]),
+                  file=sys.stderr, flush=True)
+        return have
 
     def agents(self, auto=False):
         return agents_get(self, self.paseo, auto=auto)

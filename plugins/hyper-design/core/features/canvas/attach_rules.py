@@ -81,3 +81,38 @@ def parse_rel(rel):
 
 def type_of(name):
     return TYPES.get(name.rsplit(".", 1)[-1])
+
+
+IMAGES_MAX = 6                                       # 한 요청에 실어 보낼 이미지 수(캔버스 HD.attach.COUNT 와 같은 값)
+
+
+def paths_in(text):
+    """요청 글 → '첨부 이미지: <경로>' 줄의 경로들(들여 쓴 줄도 — edits.request 는 '요청:' 이어지는 줄로 들여 쓴다). 같은 경로는 한 번."""
+    out = []
+    for line in str(text or "").splitlines():
+        s = line.strip()
+        if s.startswith(LINE.strip()):
+            p = s[len(LINE.strip()):].strip()
+            if p and p not in out:
+                out.append(p)
+    return out
+
+
+def pick_images(folder, paths):
+    """보낼 이미지 고르기(순수) — folder = <out>/.hd-attach 의 풀린 절대 경로(글). 바로 그 폴더 안 · 이 규칙이 만든 이름만 · IMAGES_MAX 장까지.
+    → (고른 것, 뺀 것). 경로 비교는 대소문자·구분자를 맞춰서(Windows)."""
+    import ntpath, posixpath
+    mod = ntpath if ("\\" in folder or (len(folder) > 1 and folder[1] == ":")) else posixpath
+    want = mod.normcase(mod.normpath(folder))
+    ok, bad = [], []
+    for p in paths if isinstance(paths, list) else []:
+        if not isinstance(p, str) or not p:
+            bad.append(p)
+            continue
+        q = mod.normpath(p)
+        if mod.isabs(q) and mod.normcase(mod.dirname(q)) == want and NAME.match(mod.basename(q)) and len(ok) < IMAGES_MAX:
+            if q not in ok:
+                ok.append(q)
+        else:
+            bad.append(p)
+    return ok, bad
