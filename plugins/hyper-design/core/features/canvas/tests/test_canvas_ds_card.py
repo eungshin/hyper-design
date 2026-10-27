@@ -113,6 +113,8 @@ def test_card_follows_theme_with_screens_and_opens_foundation(ctx, made):
 
         # 누르면 Foundation 탭
         pg.click("#dock .dk-tab[data-p='layers']")
+        # 첫 카메라는 화면 줄에서 연다(R27 F03) — 카드는 그 위, 0(전체 보기)로 보인다
+        pg.evaluate("document.activeElement && document.activeElement.blur()"); pg.keyboard.press("0"); pg.wait_for_timeout(300)
         pg.locator("#dscard .dsh b").click()
         assert pg.evaluate("document.body.dataset.tab") == "foundation"
         pg.click('.tab[data-tab="screens"]')
