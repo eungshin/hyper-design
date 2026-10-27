@@ -10,6 +10,7 @@
    살아 있는 새로 받기(A2a): 페이지가 보이는 동안 2초마다(숨으면 10초) GET /api/state. 파일 rev 가 더 크면 —
      보내지 않은 변경이 있으면 먼저 보낸다(409 = 위 충돌 길) · 바뀐 이름이 notes·note-seq·busy 뿐이면 제자리에서 받아(상태·캐시) ctx.onExternal(이름들) ·
      다른 이름(자리·폴더…)도 바뀌었으면 셸이 따로 들고 있으니 지금처럼 알리고 다시 불러오기. 네트워크 실패 3번 연속 = 멈추고 한 번 알림, 창에 돌아오면(focus) 다시.
+     답에 hubStale 칸이 있으면(허브 안 세션, R34) document 'hd-hub-stale' {detail: hubStale} 로 알린다(칩은 view-hub-stale).
      묻기는 GET /api/state?since=<rev>(#273) — 파일 rev 가 같으면 도우미가 {rev, unchanged:true} 만 답하고 아무것도 하지 않는다(옛 도우미의 전체 답도 그대로 받는다).
    413(상태가 너무 큼, #273) = 도우미의 {error} 글을 토스트로 한 번(성공할 때까지 다시 알리지 않음), 다음 변경까지 다시 보내지 않고 완료 메모 보관을 바로 해 본다.
    완료 메모 보관(#273): 쓰는 탭이 열 때와 그 뒤 한 시간에 한 번 HD.archive.pickArchive(Model) 로 고른 메모를 POST /api/archive {notes} →
@@ -187,6 +188,7 @@ function mount(ctx) {
       return r.json();
     }).then(function (j) {
       fails = 0;
+      if (j && 'hubStale' in j) document.dispatchEvent(new CustomEvent('hd-hub-stale', {detail: j.hubStale}));   // R34 허브 옛 코드 칩(view-hub-stale) — 허브 안 세션만 싣는다
       if (j && j.unchanged === true) return;          // 파일 rev 가 그대로(#273) — 본문 없음
       if (!dead && !busy && !names().length) take(j);   // 기다리는 사이 바뀐 것이 있으면 다음 번에
     }, function (e) { if (liveOn) ctx.warn('[hd] 상태 다시 읽기 실패: ' + String(e && e.message || e)); else lost(String(e && e.message || e)); }).then(function () { polling = false; next(); });
