@@ -70,7 +70,7 @@ def _reload_shows(pg, want):
     got = None
     for _ in range(20):
         reload(pg)
-        zoom_to(pg, "job", 200)
+        zoom_to(pg, "job", 300)   # 판 배율 0.35 아래는 펼친 설명을 숨긴다(R27 F01) — 읽히는 크기로
         _select(pg)
         got = _body_on_card(pg)
         if got == want:
@@ -96,7 +96,7 @@ def test_card_text_is_title_plus_one_free_body(ctx, out):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     pg, errors = _open(ctx, srv.url)
     try:
-        zoom_to(pg, "job", 200)
+        zoom_to(pg, "job", 300)   # 판 배율 0.35 아래는 펼친 설명을 숨긴다(R27 F01) — 읽히는 크기로
         _select(pg)
         merged = job["purpose"] + "\n" + "\n".join("- " + p for p in job["policies"])
         assert _body_on_card(pg) == merged, "옛 정책 줄은 본문 끝 '- ' 줄로 보인다"
@@ -135,7 +135,7 @@ def test_card_text_is_title_plus_one_free_body(ctx, out):
 @pytest.mark.area("tools")
 def test_board_shows_title_only_until_card_is_selected(ctx, out):
     pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
-    zoom_to(pg, "job", 200)
+    zoom_to(pg, "job", 300)   # 판 배율 0.35 아래는 펼친 설명을 숨긴다(R27 F01) — 읽히는 크기로
     vis = lambda: {k: pg.locator(CARD + " " + s).first.is_visible() for k, s in (("title", ".ftitle"), ("desc", ".fdesc"))}
     assert vis() == {"title": True, "desc": False}, "고르지 않은 카드 = 제목만"
     assert not pg.locator(CARD + " .capmark").is_visible()
