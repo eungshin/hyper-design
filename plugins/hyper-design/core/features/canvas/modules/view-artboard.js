@@ -56,7 +56,7 @@ var CSS =
   '#abPop .abp-foot button{flex:1;border:0;background:none;color:#fff;border-radius:6px;padding:6px;font:inherit;cursor:pointer}' +
   '#abPop .abp-foot button.pri{background:#f2f2ef;color:#1c1c1c;font-weight:600}' +
   '.card.ab-now .phone{transition:none !important}' +
-  '#selbar .ab-size{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:-.2px}';
+  '#selbar .ab-size{font:400 11px system-ui,sans-serif;color:#6b6b66;padding:5px 6px;font-variant-numeric:tabular-nums}';   // R27 F06: 크기는 메타 — 11px 회색 글(막대 끝)
 
 var SWAP_SVG = '<svg viewBox="0 0 24 24"><path d="M7 4v13M3 13l4 4 4-4"/><path d="M17 20V7M13 11l4-4 4 4"/></svg>';
 

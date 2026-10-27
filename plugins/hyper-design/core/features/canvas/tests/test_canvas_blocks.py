@@ -35,7 +35,7 @@ def _pick_element(pg, xy):
     """이동(V): 카드 고르기 → 잠시 뒤(두 번 누르기 아님) 한 번 더 = 그 자리 요소 → 요소 막대."""
     pg.keyboard.press("v")
     pg.mouse.click(*xy)
-    pg.wait_for_selector("#selbar:not([hidden])", timeout=8000)
+    pg.wait_for_selector("#selbar:not([hidden]), #elbar:not([hidden])", timeout=8000)   # R27 F06: 요소를 고른 채면 카드 막대 대신 요소 막대
     pg.wait_for_timeout(600)
     pg.mouse.click(*xy)
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
@@ -92,6 +92,7 @@ def test_board_element_bar_duplicate_writes_file_and_undo_restores(ctx, out):
         assert [b[0] for b in bar] == ["grip", "memo", "text", "ai", "more"], ("R17 시안 A: 손잡이 + 메모·글자·AI + ⋯ — 나머지는 ⋯ 메뉴", bar)
         assert all(b[2] and not b[3] for b in bar), bar
         assert pg.is_visible("#elbar .eb-grip"), "끌기 손잡이"
+        assert pg.is_hidden("#selbar"), "R27 F06: 요소 막대가 뜨면 카드 막대는 숨김 — 막대 하나만"
         e = pg.evaluate("(() => { const a = document.querySelector('#elbar').getBoundingClientRect(), b = document.querySelector('.elbox.sel').getBoundingClientRect(); return {bar: a.bottom, box: b.top, l: a.left, bl: b.left}; })()")
         assert e["bar"] <= e["box"] + 1 or e["bar"] > e["box"], e   # 막대는 고른 테두리 바로 옆(위 또는 아래)
         shot(pg, "board-elbar.png")

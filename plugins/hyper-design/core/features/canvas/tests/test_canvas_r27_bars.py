@@ -59,3 +59,27 @@ def test_picking_one_card_keeps_the_rest_of_the_flow_readable(abpage):
     assert op[0] > 0.95 and op[1] > 0.95, ("고른 카드·이어진 카드는 또렷", op)
     assert 0.75 <= op[2] < 0.95, ("이어지지 않은 카드도 읽힌다 — 살짝만 흐림", op)
     pg.keyboard.press("Escape"); pg.keyboard.press("Escape")
+
+
+@pytest.mark.area("tools", "modal")
+def test_card_bar_is_quiet_with_play_inside_and_size_as_grey_meta(abpage):
+    """F06: 카드 막대 = 밝은 막대 [▶ 보기 · 메모 · 숨기기 · 삭제 | 크기]. 크기는 11px 회색 글(굵은 글 아님),
+    고른 카드 위 따로 뜨던 검은 [▶ 보기] 알약은 없고 막대의 ▶ 가 크게 보기를 연다."""
+    pg = abpage
+    fresh(pg)
+    _pick(pg, "home")
+    bar = pg.evaluate("""() => { const b = document.getElementById('selbar'), c = getComputedStyle(b);
+        return {acts: [...b.querySelectorAll('button')].filter(x => !x.hidden).map(x => x.dataset.act), bg: c.backgroundColor,
+                size: (s => [s.fontSize, s.fontWeight, s.color])(getComputedStyle(b.querySelector('[data-act=size]')))}; }""")
+    assert bar["acts"] == ["play", "memo", "hide", "del", "size"], bar
+    assert bar["bg"] == "rgb(255, 255, 255)", ("밝은 막대 — 화면보다 튀지 않게", bar)
+    assert bar["size"][0] == "11px" and int(bar["size"][1]) <= 400 and bar["size"][2] == "rgb(107, 107, 102)", ("크기 = 조용한 회색 메타", bar)
+    ph = _box(pg, '.card[data-id="home"] .phone')
+    pg.mouse.move((ph["l"] + ph["r"]) / 2, (ph["t"] + ph["b"]) / 2)
+    pg.wait_for_timeout(150)
+    assert not pg.is_visible('.card[data-id="home"] .pres'), "고른 카드에는 따로 뜨는 [보기] 알약 없음"
+    pg.click('#selbar [data-act="play"]')
+    pg.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
+    pg.keyboard.press("Escape")
+    pg.wait_for_function("document.getElementById('modal').hidden", timeout=3000)
+    pg.keyboard.press("Escape")

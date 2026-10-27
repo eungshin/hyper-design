@@ -1404,11 +1404,11 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
     dpage.mouse.click(p["x"], p["y"])
     dpage.wait_for_timeout(150)
     sb = selbar(dpage)
-    assert picked(dpage) == [p["id"]] and sb[0].startswith("카드 크기 ") and sb[1:] == ["메모", "숨기기", "삭제"], sb   # task 46: 맨 앞 = 크기 단추
+    assert picked(dpage) == [p["id"]] and sb[:4] == ["보기", "메모", "숨기기", "삭제"] and sb[4].startswith("카드 크기 "), sb   # R27 F06: 보기 ▶ 먼저, 크기(task 46)는 끝의 조용한 글
     dpage.keyboard.press("v")
     dpage.keyboard.down("Shift"); dpage.mouse.click(q["x"], q["y"]); dpage.keyboard.up("Shift")
     dpage.wait_for_timeout(150)
-    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage)[1:] == ["메모", "숨기기", "삭제"], "여러 장이어도 메모(화면마다 같은 메모 — test_canvas_multi_memo)"
+    assert sorted(picked(dpage)) == sorted([p["id"], q["id"]]) and selbar(dpage)[:3] == ["메모", "숨기기", "삭제"], "여러 장이어도 메모(화면마다 같은 메모 — test_canvas_multi_memo) · 보기는 한 장일 때만"
     n0 = len(notes_of(dpage))
     dpage.click('#selbar [data-act="del"]')
     wait_notes(dpage, n0 + 2)
@@ -2295,9 +2295,9 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     dpage.mouse.click(c["x"], c["y"])
     dpage.wait_for_selector("#selbar:not([hidden])")
     bar = dpage.evaluate("[...document.querySelectorAll('#selbar button')].map(b => [b.dataset.act, b.textContent.trim(), b.getAttribute('aria-label'), !!b.querySelector('svg'), b.title])")
-    assert [b[0] for b in bar] == ["size", "memo", "hide", "del"], bar
-    assert all(b[1] == "" and b[2] and b[3] and b[4] for b in bar[1:]), "아이콘만 · 이름은 aria-label · 툴팁"
-    assert re.match(r"^\d+×\d+ ▾$", bar[0][1]) and bar[0][2] and bar[0][4], ("task 46: 크기 단추 = 글(W×H ▾) · aria-label · 툴팁", bar[0])
+    assert [b[0] for b in bar] == ["play", "memo", "hide", "del", "size"], bar   # R27 F06: 보기 ▶ 를 막대 안으로 · 크기는 끝
+    assert all(b[1] == "" and b[2] and b[3] and b[4] for b in bar[:4]), "아이콘만 · 이름은 aria-label · 툴팁"
+    assert re.match(r"^\d+×\d+ ▾$", bar[4][1]) and bar[4][2] and bar[4][4], ("task 46: 크기 단추 = 글(W×H ▾) · aria-label · 툴팁", bar[4])
     dpage.mouse.dblclick(c["x"], c["y"])
     dpage.wait_for_function("!document.getElementById('modal').hidden")
     assert dpage.locator("#mpick").count() == 0, "화면 위 [주석 달기] 버튼은 없다(G6)"
