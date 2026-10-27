@@ -45,7 +45,10 @@ var CSS =
   '#hdchat .ch-chips{display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;max-height:48px;overflow-y:auto;scrollbar-width:thin;padding-right:24px}' +
   '#hdchat .ch-chips[hidden]{display:none}' +
   '#hdchat .ch-chip{display:inline-flex;align-items:center;gap:2px;max-width:240px;height:22px;box-sizing:border-box;padding:0 4px 0 8px;border-radius:999px;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-on-badge-soft,#3a3a37);font-size:12px;font-weight:600}' +
-  '#hdchat .ch-chip.el{background:#2b2b29;color:#fff}' +
+  /* R27 F13 (bars): 요소 칩은 밝게(#ecece8 · 12px · 보통 굵기) + 작은 종류 아이콘 — 사용자가 쓰는 글보다 튀지 않게 */
+  '#hdchat .ch-chip.el{background:#ecece8;color:#3a3a37;font-weight:500;padding-left:6px}' +
+  '#hdchat .ch-chip.el .ch-ic{flex:none;width:12px;height:12px;margin-right:3px;fill:none;stroke:#6b6b66;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}' +
+  /* /R27 F13 */
   '#hdchat .ch-chip.note{background:#fff7c2;color:#5a4b00;box-shadow:inset 0 0 0 1px #eadb85}' +
   '#hdchat .ch-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
   '#hdchat .ch-chip button{border:0;background:none;color:inherit;font:inherit;width:18px;height:18px;border-radius:999px;cursor:pointer;opacity:.7;line-height:1}' +
@@ -138,6 +141,12 @@ function mount(ctx) {
   function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls(), notes: boardNotes()}); }
   function chipsNow() { var raw = rawChips(); dismissed = C.prune(dismissed, raw); return C.visible(raw, dismissed); }
 
+  var ICON = {                                           // 요소 칩 종류 아이콘(R27 F13) — 12px 선 그림
+    text: '<path d="M4 6V4h16v2M12 4v16M9 20h6"/>', button: '<rect x="3" y="7" width="18" height="10" rx="5"/>',
+    link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+    field: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/>', image: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/>',
+    box: '<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/>'};
+  function icon(t) { return '<svg class="ch-ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICON[t] || ICON.box) + '</svg>'; }
   function renderChips() {                               // 칩 줄(S1c): 고른 것이 있을 때만 · 3개를 넘으면 앞 2개 + '외 N개'(누르면 펼침) · 범위는 입력 안내 글로
     var list = chipsNow();
     if (list.length <= 3) open = false;                    // 접을 것이 없어지면 다음 고르기는 다시 접힌 채로
@@ -145,7 +154,8 @@ function mount(ctx) {
     if (sig === chipSig) return;
     chipSig = sig;
     chipsEl.innerHTML = f.shown.map(function (c) {
-      return '<span class="ch-chip' + (c.kind === 'el' ? ' el' : c.kind === 'note' ? ' note' : '') + '" data-key="' + ctx.esc(c.key) + '" title="' + ctx.esc(c.label) + '"><span>' + ctx.esc(c.label) +
+      return '<span class="ch-chip' + (c.kind === 'el' ? ' el' : c.kind === 'note' ? ' note' : '') + '" data-key="' + ctx.esc(c.key) + '"' + (c.kind === 'el' ? ' data-type="' + ctx.esc(c.type || 'box') + '"' : '') +
+        ' title="' + ctx.esc(c.label) + '">' + (c.kind === 'el' ? icon(c.type) : '') + '<span>' + ctx.esc(c.label) +
         '</span><button type="button" aria-label="' + ctx.esc(c.label) + ' 빼기">×</button></span>';
     }).join('') + (f.more ? '<button type="button" class="ch-chip ch-more" aria-expanded="false" title="고른 것 모두 보기">외 ' + f.more + '개</button>' : '');
     chipsEl.hidden = !list.length;

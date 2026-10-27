@@ -1,6 +1,6 @@
 """하단 대화창 Model — modules/chat.js 순수 함수 단위 테스트(node). 브라우저 없음 (S1).
 
-칩: 고른 카드마다 [화면 이름], 고른 요소 하나면 [BUTTON "기록 남기기"](그 화면 칩도) — 지운 칩(×)은 빠지고, 고르기가 바뀌면 다시 보인다.
+칩: 고른 카드마다 [화면 이름], 고른 요소 하나면 [버튼 · 기록 남기기](R27 F13)(그 화면 칩도) — 지운 칩(×)은 빠지고, 고르기가 바뀌면 다시 보인다.
 범위: 칩 없음 = 모든 화면 · 카드 칩 = 그 화면들 · 요소 칩 = 그 요소.
 build: 메모 초안 — 지금 메모와 같은 모양(memo-batch.build 재사용), 요청문(edits.request)은 /hyper-design:fix 가 읽는 형식 그대로.
 line: 마지막 요청의 상태 한 줄(메모 상태 + AI 수정 중 덮개) — 보내는 중 → 보냄 → AI 작업 중 → 반영됨 / 답.
@@ -25,6 +25,8 @@ const BTN = {path: 'main.wrap:nth-of-type(1) > button.cta:nth-of-type(1)', text:
 out.tag = [C.tagOf(BTN.path), C.tagOf('#hero'), C.tagOf('section[data-region="top"]'), C.tagOf(''), C.tagOf(null)];
 out.label = [C.elLabel(BTN), C.elLabel({path: '#hero', kind: 'box', text: ''}),
              C.elLabel({path: 'p.x:nth-of-type(1)', text: '아주 긴 문장이 여기에 들어가서 스무 글자를 넘기면 잘린다'})];
+out.types = [C.elType(BTN), C.elType({path: '#hero', kind: 'box'}), C.elType({path: 'p.x:nth-of-type(1)'}), C.elType({path: 'div > img.hero', kind: 'box'}),
+             C.elType({path: 'img'}), C.elType({path: 'aside.side', kind: 'box'}), C.elType({path: ''})];
 out.none = C.chips({ids: [], titleOf: title, el: null});
 out.cards = C.chips({ids: ['pay', 'done', 'pay', ''], titleOf: title, el: null});
 out.elem = C.chips({ids: ['pay'], titleOf: title, el: {screen: 'pay', h: BTN, app: false}});
@@ -89,12 +91,13 @@ def out():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_element_chip_label_is_tag_and_short_quote(out):
+def test_element_chip_label_is_kind_word_and_short_quote(out):
     assert out["tag"] == ["BUTTON", "", "SECTION", "", ""]
     a, b, c = out["label"]
-    assert a == 'BUTTON "기록 남기기"', "글은 quote.exact(아이콘 글자 없이)"
-    assert b == "BOX", "태그를 못 읽으면 종류(kind), 글이 없으면 따옴표 없이"
-    assert c.startswith('P "') and c.endswith('…"') and len(c) <= 2 + 1 + 1 + 20 + 2
+    assert a == "버튼 · 기록 남기기", "R27 F13: 태그 대신 사람 말(종류) · 글은 quote.exact(아이콘 글자 없이)"
+    assert b == "영역", "글이 없으면 종류만"
+    assert c.startswith("글자 · ") and c.endswith("…") and len(c) <= 2 + 3 + 20 + 1, ("종류가 없으면 태그로 짐작(P = 글자), 20자에서 자름", c)
+    assert out["types"] == ["button", "box", "text", "image", "image", "box", ""], out["types"]
 
 
 def test_chips_from_selection(out):
@@ -102,7 +105,7 @@ def test_chips_from_selection(out):
     assert [(c["kind"], c["screen"], c["label"]) for c in out["cards"]] == [("screen", "pay", "결제"), ("screen", "done", "완료")], "겹침·빈 값 빼고 고른 차례"
     assert [c["key"] for c in out["cards"]] == ["screen:pay", "screen:done"]
     e = out["elem"]
-    assert [c["kind"] for c in e] == ["screen", "el"] and e[1]["label"] == 'BUTTON "기록 남기기"' and e[1]["screen"] == "pay"
+    assert [c["kind"] for c in e] == ["screen", "el"] and e[1]["label"] == "버튼 · 기록 남기기" and e[1]["type"] == "button" and e[1]["screen"] == "pay"
     assert e[1]["key"] == "el:pay:" + "main.wrap:nth-of-type(1) > button.cta:nth-of-type(1)"
     assert [(c["kind"], c["screen"]) for c in out["elemOther"]] == [("screen", "done"), ("el", "done")], "요소의 화면 칩이 없으면 앞에 더한다"
     assert [c["kind"] for c in out["badEl"]] == ["screen"], "경로 없는 요소는 칩 없음"

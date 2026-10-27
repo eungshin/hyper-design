@@ -1,7 +1,7 @@
 """하단 대화창 v0(S1) — 브라우저. 도우미로 연 캔버스(받는 곳 없음 = 대기열 .hd-queue, 실제 Paseo 없음).
 
 카드 칩: 카드를 고르면 [결제] 칩 → 글 + Enter = 메모 하나 + 바로 보내기(위쪽 [보내기]와 같은 길) → 대기열 파일에 지금 요청문 형식, 입력창 비움, 상태 줄.
-요소 칩: 고른 카드를 이동(V)으로 한 번 더 = 요소 막대 → [BUTTON "지금 결제하기"] 칩 → 보낸 요청문의 path 가 그 요소.
+요소 칩: 고른 카드를 이동(V)으로 한 번 더 = 요소 막대 → [버튼 · 지금 결제하기] 칩 → 보낸 요청문의 path 가 그 요소.
 규칙(칩·범위·메모 초안·상태 말)은 test_canvas_unit_chat.py(unit).
 """
 import json, os, shutil, subprocess, sys, tempfile, threading
@@ -207,7 +207,10 @@ def test_element_chip_puts_element_path_in_request(live):
     pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
     pg.wait_for_selector("#hdchat .ch-chip.el", timeout=3000)
     el = pg.locator("#hdchat .ch-chip.el")
-    assert el.text_content().replace("×", "") == 'BUTTON "지금 결제하기"'
+    assert el.text_content().replace("×", "") == "버튼 · 지금 결제하기", "R27 F13: 태그 이름 대신 사람 말"
+    assert el.get_attribute("data-type") == "button" and el.locator("svg.ch-ic").count() == 1, "종류 아이콘"
+    st = el.evaluate("e => { const c = getComputedStyle(e); return [c.backgroundColor, c.fontSize, c.color]; }")
+    assert st[0] == "rgb(236, 236, 232)" and st[1] == "12px", ("밝은 칩 — 쓰는 글보다 튀지 않게", st)
     path = el.get_attribute("data-key").split(":", 2)[2]
     shot(pg, "s1-element-chip.png")
     assert "button.pay" in path
