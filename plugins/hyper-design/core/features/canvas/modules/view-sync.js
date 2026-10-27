@@ -39,7 +39,7 @@ function mount(ctx) {
     return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-HD-Token': ctx.token}, body: JSON.stringify(body || {})})
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok && r.status !== 409) throw new Error('sync ' + r.status); j.status = r.status; return j; }); });
   }
-  function wire(n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value, index: n.index}; }
+  function wire(n) { return {id: n.id, screen: n.screen, edit: n.edit, op: n.op, to: n.to, path: n.path, value: n.value, old: n.old, index: n.index}; }
   function reload(changed, stamp) {                 // 새 데이터 → 셸이 판·바뀐 카드만 다시(보던 자리·배율·고른 것 유지)
     return post('/api/data').then(function (d) { delete d.status; ctx.data(d, changed || [], stamp); });
   }

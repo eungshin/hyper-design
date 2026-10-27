@@ -427,8 +427,50 @@ def _replace_patch(src, el, markup, path):
     return el.start, _end(el, path, "바꿀"), _part(markup, path)
 
 
+SCRIPT_REASON = "이 글은 화면 스크립트가 그려요"
+JS_STR = re.compile(r"""'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`""", re.S)
+
+
+def _squash(s):
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _plain(src, el):                                 # 요소 원문 안 글(태그 빼고 · br = 줄 · 엔티티 풀고 · 공백 하나로) — palette.js plainOf 와 견줄 글
+    if el.close is None:
+        return ""
+    inner = re.sub(r"<script\b.*?</script>|<style\b.*?</style>", "", src[el.open_end:el.close[0]], flags=re.S | re.I)
+    return _squash(html.unescape(re.sub(r"<[^>]*>", "", re.sub(r"<br\s*/?>", "\n", inner, flags=re.I))))
+
+
+def _script_text_patch(src, old, value, path):
+    """화면에 보인 글(old)이 파일의 그 요소 글과 다름 = 스크립트가 그린 글 → <script> 안 문자열에서 old 한 곳을 새 글로."""
+    if "\n" in value:
+        raise ValueError(SCRIPT_REASON + " — 줄바꿈은 바로 쓸 수 없어요(AI에게 맡겨 주세요): " + path)
+    hits = []
+    for n in Tree(src).walk():
+        if n.tag != "script" or n.close is None or n.attrs.get("src"):
+            continue
+        for m in JS_STR.finditer(src, n.open_end, n.close[0]):
+            body, at = m.group(0)[1:-1], m.start() + 1
+            i = body.find(old)
+            while i >= 0:
+                hits.append((at + i, m.group(0)[0])); i = body.find(old, i + 1)
+    if len(hits) != 1:
+        raise ValueError(SCRIPT_REASON + " — 스크립트에서 그 글을 %s 찾아 파일에 쓰지 않았어요(AI에게 맡겨 주세요): %s"
+                         % ("못" if not hits else "%d곳에서" % len(hits), path))
+    a, q = hits[0]
+    v = value.replace("\\", "\\\\").replace(q, "\\" + q)
+    if q == "`":
+        v = v.replace("${", "\\${")
+    return a, a + len(old), v
+
+
 def _op_patch(src, el, op, value, path):
     if op == "text":
+        if isinstance(value, dict):                  # {value, old} — old = 고치기 전 화면에 보이던 글(캔버스, 단계 넘김 화면)
+            old, value = _squash(str(value.get("old") or "")), str(value.get("value", ""))
+            if old and old not in _plain(src, el):
+                return _script_text_patch(src, old, value, path)
         return _text_patch(src, el, value, path)
     if op == "remove":
         return _remove_patch(el, path)

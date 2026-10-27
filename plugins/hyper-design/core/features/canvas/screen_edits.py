@@ -39,8 +39,9 @@ def _cannot(e):                                      # 표에 없는 종류·op 
 
 
 
-def _op_text(e, ctx):
-    return ("text", str(e.get("value", "")))
+def _op_text(e, ctx):                              # old = 고치기 전 화면에 보이던 글 — 스크립트가 그린 글이면 html_edit 이 스크립트 문자열을 고친다
+    v = str(e.get("value", ""))
+    return ("text", {"value": v, "old": e["old"]} if isinstance(e.get("old"), str) else v)
 
 
 

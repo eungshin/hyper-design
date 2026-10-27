@@ -185,6 +185,7 @@ function mount(ctx) {
     }
     var v = String(d.text == null ? '' : d.text), n = E.note(q.screen, q.h, E.say.text(v));
     n.edit = 'text'; n.value = v;
+    if (typeof d.old === 'string') n.old = d.old;     // 고치기 전 화면 글 — 단계 넘김 화면에서 스크립트가 그린 글이면 도우미가 스크립트 문자열을 고친다
     if (!ctx.on()) {                                   // 도우미 없음 = 예전처럼 반영 대기(미리보기 점선) — 그 자리 바꿈은 거두고 미리보기가 맡는다
       post(q.f, {type: 'hd-opt-undo', tag: q.tag});
       ctx.queue('글자 고치기', [n]);
