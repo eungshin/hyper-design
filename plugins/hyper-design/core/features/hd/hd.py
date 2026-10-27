@@ -33,6 +33,8 @@
   hd parts [--check [<file>] | --rebuild [<file>]] [<name|path>]
                                           앱 부품(out/parts.json): 파일 · 낡음|최신|모름 · 미커밋 변경 포함 · 빌드 시각 — 읽기만(git 나무 도장 비교)
                                           --rebuild = build argv(cwd = 앱 저장소) → post 단계 → 파일에 원자적으로 → 기록(자물쇠, 미커밋이면 경고 + dirty)
+  hd locate <주소…|->                    캔버스 '주소 복사'(R30) 줄 → 화면 파일 · 요소 경로 · 그 요소의 지금 바깥 HTML 앞 300자(읽기만)
+                                          줄 = hd://<프로젝트>/<화면>#<요소 경로>  <화면 파일> · "<글>" — 여러 줄은 - (stdin)
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
 """
 import argparse, json, os, pathlib, sys
@@ -255,6 +257,22 @@ def cmd_parts(a):
     return {"project": p.name, "out": str(p.out), "parts": rows}, head + "\n" + hd_parts.format_rows(rows)
 
 
+def cmd_locate(a):
+    """주소 줄(들) → 화면 파일 · 경로 · 바깥 HTML(읽기만). - 또는 인자 없음 = stdin(여러 줄)."""
+    import hd_address, hd_locate
+    args = a.address or ["-"]
+    if args == ["-"]:
+        text = sys.stdin.read()
+    else:                                            # 인자마다 한 줄(따옴표로 붙임) · 따옴표 없이 붙여 쪼개진 줄은 다시 한 줄로
+        text = ("\n" if all(x.strip().startswith("hd://") for x in args) else " ").join(args)
+    lines = hd_address.lines(text)
+    if not lines:
+        raise S.HdError("hd:// 주소가 없어요 — 캔버스에서 오른쪽 클릭 → 주소 복사 한 줄을 주세요")
+    with S.client_errors():
+        rows = [hd_locate.locate(ln, lambda name: _hub().target(name).out) for ln in lines]
+    return {"items": rows}, "\n\n".join(hd_locate.format_item(r) for r in rows)
+
+
 def cmd_home(a):
     """홈 서버 띄우기 · 바로 가기 — 서버를 띄우는 일이라 SDK(서버에 말 걸기) 밖: home_server · shortcut 을 부를 뿐."""
     sys.path.insert(0, str(HOME_DIR))
@@ -363,6 +381,9 @@ def parser():
                     help="다시 빌드(build argv → post → 파일에 원자적으로 → 기록) — FILE 없으면 전부")
     pa.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     pa.set_defaults(fn=cmd_parts)
+    lc = sub.add_parser("locate", parents=[common], help="캔버스 '주소 복사' 줄 → 화면 파일 · 요소 경로 · 지금 HTML(읽기만)")
+    lc.add_argument("address", nargs="*", help="hd://… 줄(따옴표로 한 줄 통째 · - 또는 없음 = stdin, 여러 줄)")
+    lc.set_defaults(fn=cmd_locate)
     hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")
