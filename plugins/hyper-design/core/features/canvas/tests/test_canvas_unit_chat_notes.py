@@ -1,4 +1,4 @@
-"""R25 — 판 메모(board-notes)를 V 로 고르면 대화창에 노트 칩, 보내면 요청 글 끝에 '노트:' 줄(가까운 화면 이름), 칩을 빼면 빠짐(unit — modules/chat.js).
+"""R25 — 판 메모(board-notes)를 'AI에게'(R27 F19 — 고르기만으로는 아님)로 넣으면 대화창에 노트 칩, 보내면 요청 글 끝에 '노트:' 줄(가까운 화면 이름), 칩을 빼면 빠짐(unit — modules/chat.js).
 브라우저 = test_canvas_r24_chat.py."""
 import json, shutil, subprocess, sys, tempfile
 from pathlib import Path

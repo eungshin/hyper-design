@@ -16,9 +16,10 @@
    마지막 요청 record(text, memos, at) = {text, ids, at} · parseLast(raw) → {last, bad}(깨졌으면 bad — 셸 아닌 View 가 [hd] 경고)
    칩 줄 접기(S1c): fold(chips, open) → {shown, more} — 3개까지는 다, 넘으면 앞 2개(+ 고른 요소 칩은 늘) + '외 N개'(more), open = 펼침(다 보임).
    placeholder(chips) — 범위를 칩이 아니라 입력 안내 글로: 칩 없음 = '모든 화면에 대해 …', 있으면 '무엇을 바꿀까요?'.
-   판 노트(R25): chips({…, notes: [{id, text, near}]}) — 고른 판 메모(board-notes)마다 [노트 "글" ×](key note:<id>, 빈 글 빼기, 화면·요소 칩 뒤). 노트는 범위를 정하지 않는다
+   판 노트(R25): chips({…, notes: [{id, text, near}]}) — 넣은 판 메모(board-notes — 대화창이 'AI에게'로 받은 것, R27 F19)마다 [노트 "글" ×](key note:<id>, 빈 글 빼기, 화면·요소 칩 뒤). 노트는 범위를 정하지 않는다
      (scope 는 화면·요소 칩만 — 노트만이면 모든 화면). build 는 노트 칩 글을 요청 글 끝 '노트:' 줄로(noteText) — 글이 비어도 노트가 있으면 보낸다.
      noteText([{text, near}]) = '노트:\n- 글(줄바꿈은 두 칸 들여)( (가까운 화면: 이름))' · nearest(box, cards[{id,x,y,w,h}]) → 상자 사이 거리가 가장 짧은 카드 id | null(같은 좌표계).
+   함께 보낼 메모(R29, HD.chatCmd.memoChip — kind 'memos'): 범위를 정하지 않고(scope), 접히지 않으며(fold), build 는 빼고 만든다(그 메모는 View 가 그대로 함께 보낸다).
    대화창이 고치는 글 상자를 가리지 않게(R25): clear(box, dock, pane, margin) → 판을 위로 올릴 px(≥0) — 떠 있는 대화창(dock, 없으면 null)과 가로로 겹치고
      상자 아래 + margin 이 대화창 위를 넘을 때만, 상자 위 끝이 판(pane) 위 + margin 밑으로는 올라가지 않을 만큼. 모두 화면 px {top, bottom, left, right}.
    HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elType, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
@@ -48,6 +49,7 @@ var VIA = {event: '실시간', paseo: 'Paseo', claude: 'Claude', queue: '대기�
 var QUEUED = '보냄 · 대기열 — 읽는 에이전트를 기다려요';
 var PROGRESS_CUT = 60;
 var HANDS = ['sending', 'unsent', 'decide'];
+var CONTEXT = {note: 1, memos: 1};                       // 범위를 정하지 않는 칩(판 노트 R25 · 메모 N건 R29)
 var FINAL = ['applied', 'answered', 'partial'];          // 메모가 끝난 단계               // 손이 필요한 단계 = 이벤트보다 앞선다
 var REPLY_CUT = 40;
 
@@ -89,7 +91,7 @@ function chips(sel) {
   (sel.ids || []).forEach(function (id) { if (id != null && id !== '') screen(id); });
   els.forEach(function (e) { out.push({key: 'el:' + e.screen + ':' + e.h.path, kind: 'el', screen: String(e.screen), label: elLabel(e.h), type: elType(e.h) || 'box', h: e.h, app: !!e.app}); });
   var nk = {};
-  (Array.isArray(sel.notes) ? sel.notes : []).forEach(function (n) {   // 판 노트(R25) — 고른 판 메모마다, 빈 글·같은 메모 두 번은 빼고
+  (Array.isArray(sel.notes) ? sel.notes : []).forEach(function (n) {   // 판 노트(R25) — 넣은 판 메모마다, 빈 글·같은 메모 두 번은 빼고
     var t = n && typeof n.text === 'string' ? n.text.replace(/\r\n?/g, '\n').trim() : '';
     if (!n || n.id == null || !t || nk[n.id]) return; nk[n.id] = 1;
     var f = flat(t);
@@ -103,7 +105,7 @@ function prune(dismissed, list) {
   var o = {}; (list || []).forEach(function (c) { if (dismissed && dismissed[c.key]) o[c.key] = 1; }); return o;
 }
 function scope(list) {
-  list = (list || []).filter(function (c) { return c.kind !== 'note'; });   // 노트는 범위를 정하지 않는다(R25)
+  list = (list || []).filter(function (c) { return !CONTEXT[c.kind]; });   // 노트·함께 보낼 메모는 범위를 정하지 않는다(R25 · R29)
   if (!list.length) return 'all';
   return list.some(function (c) { return c.kind === 'el'; }) ? 'element' : 'screen';
 }
@@ -114,7 +116,7 @@ function scopeLabel(list) {
 function fold(list, open) {
   list = Array.isArray(list) ? list : [];
   if (open || list.length <= FOLD_AT) return {shown: list.slice(), more: 0};
-  var shown = list.filter(function (c, i) { return i < FOLD_KEEP || c.kind === 'el'; });   // 고른 요소는 접지 않는다 — 보내면 그 요소가 범위다
+  var shown = list.filter(function (c, i) { return i < FOLD_KEEP || c.kind === 'el' || c.kind === 'memos'; });   // 고른 요소는 접지 않는다 — 보내면 그 요소가 범위다 · 메모 N건(R29)도 늘 보인다
   return {shown: shown, more: list.length - shown.length};
 }
 function placeholder(list) { return list && list.length ? PLACEHOLDER_PICKED : PLACEHOLDER; }
@@ -134,7 +136,7 @@ function noteText(notes) {                               // 판 노트 → 요�
 function build(list, text, opt, mkId) {
   var note = String(text == null ? '' : text).trim(), B = HD.memoBatch;
   opt = opt || {};
-  list = list || [];
+  list = (list || []).filter(function (c) { return c.kind !== 'memos'; });   // 메모 N건(R29) = 이미 있는 메모 — 새 메모를 만들지 않는다(View 가 함께 보낸다)
   var bn = list.filter(function (c) { return c.kind === 'note'; });
   if (bn.length) {                                       // 노트 칩 = 글 끝 '노트:' 줄 — 가까운 화면은 이름으로(id 면 titleOf)
     var tt = opt.titleOf || function (x) { return x; };

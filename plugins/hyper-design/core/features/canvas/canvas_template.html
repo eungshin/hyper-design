@@ -1295,7 +1295,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
   pickedAll: function () { return EB.all().map(function (s) { return {screen: s.card.dataset.id, h: s.h, app: appCard(s.card.dataset.id)}; }); },   // 판에서 고른 요소 모두(R19 — 대화창 칩)
-  boardNotes: function () { var id = BN && BN.selected(), m = id ? BN.map() : null, n = m && m[id]; return n ? [{id: id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h || 0}] : []; },   // 고른 판 메모(R25 — 대화창 노트 칩, 읽기만)
+  boardNotes: function () { var m = BN ? BN.map() : {}; return Object.keys(m).map(function (id) { var n = m[id]; return {id: id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h || 0}; }); },   // 판 메모 모두(R27 F19 — 대화창이 'AI에게'로 넣은 것만 칩으로, 읽기만)
   sendNotes: function (list) { if (SN.busy()) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); SN.send(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
   store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},

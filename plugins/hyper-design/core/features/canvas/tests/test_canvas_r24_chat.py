@@ -79,7 +79,8 @@ PAY_BOX = """() => { const c = document.querySelector('.card[data-id="pay"] .pho
 
 
 @pytest.mark.area("chat", "tools")
-def test_selected_board_note_becomes_chip_and_goes_into_the_request(served, ctx):
+def test_board_note_goes_to_chat_only_through_ai_button_and_into_the_request(served, ctx):
+    """R27 F19 — 고르기만으로는 대화창에 싣지 않는다. 고른 메모 위 'AI에게' = 밝은 노트 칩(노랑 아님) → 보내면 요청 글 끝 '노트:' 줄."""
     out, srv = served
     pg, errors = open_page(ctx, srv)
     pg.set_viewport_size({"width": 1440, "height": 1000})
@@ -92,7 +93,12 @@ def test_selected_board_note_becomes_chip_and_goes_into_the_request(served, ctx)
         pg.keyboard.press("Escape"); pg.keyboard.press("v")
         pg.click(".bnote[data-id='bn1']")
         chip = "#hdchat .ch-chip.note"
+        pg.wait_for_selector(".bnote[data-id='bn1'].sel .bn-ai", state="visible", timeout=5000)
+        pg.wait_for_timeout(300)
+        assert pg.locator(chip).count() == 0, "고르기만으로는 AI 맥락이 되지 않는다"
+        pg.click(".bnote[data-id='bn1'] .bn-ai")
         pg.wait_for_selector(chip, timeout=5000)
+        assert pg.evaluate("getComputedStyle(document.querySelector('#hdchat .ch-chip.note')).backgroundColor") == "rgb(236, 236, 232)", "노트 칩 = 요소 칩과 같은 밝은 칩"
         assert pg.inner_text(chip + " span").startswith('노트 "결제 버튼을 더 눈에 띄게')
         assert pg.is_enabled("#hdchat .ch-send"), "노트만 있어도 보낼 수 있다"
         shot(pg, "r25-note-chip-in-dock.png")
@@ -100,7 +106,10 @@ def test_selected_board_note_becomes_chip_and_goes_into_the_request(served, ctx)
         nid = note_saved(pg, srv)
         n = next(x for x in call(srv, "GET", "/api/state")[1]["state"]["notes"] if x["id"] == nid)
         assert n["note"] == "이 노트대로 고쳐 줘\n\n노트:\n- 결제 버튼을 더 눈에 띄게\n  색은 진하게 (가까운 화면: 결제)", n["note"]
+        assert pg.locator(chip).count() == 0, "보낸 노트는 칩에서 빠진다(두 번 가지 않게)"
         # × = 그 노트를 요청에서 뺀다
+        pg.click(".bnote[data-id='bn1']"); pg.click(".bnote[data-id='bn1'] .bn-ai")
+        pg.wait_for_selector(chip, timeout=5000)
         pg.click(chip + " button")
         assert pg.locator(chip).count() == 0
     finally:
