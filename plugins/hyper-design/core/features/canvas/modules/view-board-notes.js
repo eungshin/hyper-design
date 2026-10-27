@@ -7,6 +7,8 @@
    레이어 패널(R25): 의도 'hd-note-pick' {id: 'note:<id>'} 를 받으면 그 메모를 고르고 보이게(배율 1 이하로 맞춤). 그릴 때·고른 것이 바뀔 때 A.changed()(셸 = 레이어 다시 그리기).
    숨김·잠금(R26): 의도 'hd-note-flag' {ids: ['note:<id>'], key: 'hidden'|'locked', on} (레이어 패널 눈·자물쇠·아래 막대) → 메모의 칸(B.flag) + 기록 한 줄.
      숨긴 메모 = 그리지 않음(고르기 풀림) · 전체 보기 범위에서 뺌. 잠긴 메모(.lock) = 고르기만 — 끌기·크기 손잡이·고치기·지우기는 토스트로 알리고 하지 않음.
+   AI에게(R27 F19): 고르기만으로는 대화창에 싣지 않는다 — V 로 고른 메모 위 오른쪽 작은 단추 'AI에게'(.bn-ai, 화면에서 같은 크기)를 누르면 document 에 의도
+     'hd-note-ai' {id, done:false} → 대화창(view-chat)이 노트 칩으로 넣는다. 받는 곳이 없으면(done 거짓) [hd] 경고 + 토스트. 쓰는 중·읽기만 탭에서는 안 보인다.
    읽기만인 탭(html[data-hd-tab=reader])에서는 만들기·옮기기·고치기·지우기를 하지 않는다. 쓰기 = ctx.store(상태 파일 · file:// 이면 브라우저 저장소).
    등록부 기능 'boardNotes'(needs $ · store · key · record · toast · warn · view · selected) → {attach(A), reload(), selected(), map(), layers(), layerSel(), extent(ext), reveal(id)}
      A(셸이 attach 로 건넴) = {tool() → 지금 도구, setTool(t), changed()?(레이어 패널), clear()?(카드 고르기 풀기)}. 셸은 adoptState 의 'board-notes' 에서 reload() 만 부른다
@@ -24,6 +26,12 @@ var CSS = '#bnotes{position:absolute;left:0;top:0;width:0;height:0;z-index:4}' +
   'box-sizing:border-box;background:#fff;border:calc(2px * var(--bnk,1)) solid #0f7ec2;border-radius:2px;cursor:nwse-resize;touch-action:none}' +
   '#screens.t-move .bnote.sel:not(.editing) .bn-rs{display:block}html[data-hd-tab=reader] .bn-rs,.bnote.lock .bn-rs{display:none!important}' +
   '.bnote.editing{cursor:text;user-select:text}.bnote.editing .bn-text{display:none}' +
+  /* R27 F19 (chatmemo): 고른 메모의 'AI에게' 단추 — 판 배율과 상관없이 같은 크기(--bnk), 메모 위 오른쪽 */
+  '.bn-ai{display:none;position:absolute;right:0;bottom:calc(100% + 6px * var(--bnk,1));height:calc(24px * var(--bnk,1));padding:0 calc(9px * var(--bnk,1));gap:calc(4px * var(--bnk,1));align-items:center;' +
+  'border:0;border-radius:calc(6px * var(--bnk,1));background:#fff;color:#2b2b29;font:500 calc(12px * var(--bnk,1))/1 system-ui,sans-serif;white-space:nowrap;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.10)}' +
+  '.bn-ai svg{width:calc(12px * var(--bnk,1));height:calc(12px * var(--bnk,1));fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
+  '.bn-ai::after{content:"AI에게"}.bn-ai:hover{background:#F2F2EF}#screens .bnote.sel:not(.editing) .bn-ai{display:inline-flex}html[data-hd-tab=reader] .bn-ai{display:none!important}' +
+  /* /R27 F19 */
   '.bnote textarea{display:block;width:100%;min-height:1.45em;border:0;padding:0;margin:0;font:inherit;line-height:inherit;color:inherit;background:transparent;resize:none;outline:none;overflow:hidden;white-space:pre-wrap}';
 
 function mount(ctx) {
@@ -60,6 +68,8 @@ function mount(ctx) {
       el.className = 'bnote' + (id === sel ? ' sel' : '') + (B.isLocked(n) ? ' lock' : ''); el.dataset.id = id;
       el.setAttribute('role', 'note'); el.setAttribute('aria-label', '판 메모');
       tx.className = 'bn-text'; tx.textContent = n.text; el.appendChild(tx);
+      var ai = document.createElement('button'); ai.type = 'button'; ai.className = 'bn-ai'; ai.title = '이 판 메모를 대화창 요청에 싣기';   // F19 — 고른 메모만 보인다(CSS)
+      ai.setAttribute('aria-label', 'AI에게 — 대화창 요청에 싣기'); ai.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>'; el.appendChild(ai);   // 글은 CSS ::after — 메모 글(textContent)에 섞이지 않게
       var k = document.createElement('div'); k.className = 'bn-rs'; k.title = '크기 (두 번 누르면 높이 자동)'; k.setAttribute('aria-hidden', 'true'); el.appendChild(k);
       place(el, n); layer.appendChild(el);
     });
@@ -185,6 +195,7 @@ function mount(ctx) {
   });
   layer.addEventListener('pointerover', function (e) { if (sel && e.target.closest && e.target.closest('.bnote.sel')) scaleKnob(); });
   layer.addEventListener('pointerdown', function (e) {
+    if (e.target.closest('.bn-ai')) { e.stopPropagation(); return; }   // 'AI에게' 누르기는 끌기·고르기로 새지 않게
     var el = e.target.closest('.bnote'); if (!el || !A) return;
     if (e.target.closest('.bn-rs')) {                     // 크기 손잡이(R25) — V 로 고른 메모에만 보인다
       e.stopPropagation(); e.preventDefault();
@@ -261,6 +272,14 @@ function mount(ctx) {
     if (after !== before) commit(after, before, say[d.on ? 0 : 1]);
   });
   layer.addEventListener('click', function (e) {
+    var bai = e.target.closest('.bn-ai');
+    if (bai) {                                            // F19 — 이 메모를 대화창 노트 칩으로(의도만, 받는 곳 = view-chat)
+      e.stopPropagation(); e.preventDefault();
+      var nid = bai.closest('.bnote').dataset.id, d = {id: nid, done: false};
+      document.dispatchEvent(new CustomEvent('hd-note-ai', {detail: d}));
+      if (!d.done) { ctx.warn('[hd] 판 메모 AI에게: 대화창이 붙지 않았어요'); ctx.toast('대화창이 붙지 않아 AI 에게 보낼 수 없어요'); }
+      return;
+    }
     var el = e.target.closest('.bnote'); if (!el || !A || editing) return;
     if (A.tool() === 'text' && !reader()) edit(el.dataset.id);
   });

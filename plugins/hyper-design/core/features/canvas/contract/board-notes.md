@@ -8,7 +8,7 @@
 |---|---|---|
 | `modules/board-notes.js` | Model | 판 메모 모양·만들기·쓰기 끝(빈 메모 버리기)·옮기기·지우기·저장값 거르기·409 합치기·새 메모 자리(`room`)·누른 자리 판정(`spot`)·크기(`resize`, R25)·숨김·잠금 칸(`flag` `isHidden` `isLocked`, R26)·전체 보기 범위(`extent`)·레이어 줄(`layers` — hid·lock 포함). 상태 없음. `HD.boardNotes = {NAME, W, MIN_W, MAX_W, MIN_H, MAX, LAYER, FLAGS, parse, newId, create, finish, move, resize, flag, isHidden, isLocked, remove, merge, room, spot, extent, layers, text}` |
 | `modules/view-board-notes.js` | View | 상태 이름 `board-notes`(`hd-board-notes:<hash>`)의 주인: `#stage` 안 `#bnotes` 층 그리기, 만들기·제자리 쓰기·고르기·끌기·지우기, 쓰기 + 기록 한 줄. 상태 = 메모 map · 고른 메모 · 쓰는 중 · 끄는 중(저장은 map 만). 등록부 `boardNotes`(needs `$`·`store`·`key`·`record`·`toast`·`warn`·`view`·`selected`) → `{attach({tool(), setTool(t), changed()?, clear()?}), reload(), selected(), map(), layers(), layerSel(), extent(ext), reveal(id)}` · 의도 받음 `hd-note-pick` {id} · `hd-note-flag` {ids, key, on}(R26) |
-| 셸 | — | `BN = FT.boardNotes.attach({tool, setTool, changed → LY.render, clear → 카드 고르기 풀기})` · `adoptState` 의 `has('board-notes')` → `BN.reload()` · `fit()` 의 범위 = `BN.extent(CP.extent(…))` · 레이어 `tree()` 에 `notes: BN.layers()`·`notePicked: BN.layerSel()` · 보기 메뉴 '고른 화면에 맞추기' = 고른 메모면 `BN.reveal` (붙이는 줄만) |
+| 셸 | — | ctx `boardNotes()` = 판 메모 모두(대화창이 'AI에게'로 넣은 것만 칩으로, F19) · `BN = FT.boardNotes.attach({tool, setTool, changed → LY.render, clear → 카드 고르기 풀기})` · `adoptState` 의 `has('board-notes')` → `BN.reload()` · `fit()` 의 범위 = `BN.extent(CP.extent(…))` · 레이어 `tree()` 에 `notes: BN.layers()`·`notePicked: BN.layerSel()` · 보기 메뉴 '고른 화면에 맞추기' = 고른 메모면 `BN.reveal` (붙이는 줄만) |
 | `modules/layers.js` · `view-layers.js` | Model · View | `build(…, notes)` = 맨 끝 '판 메모' 묶음(`@notes`, kind `row`, hid·lock = 모두일 때) + 메모 줄(kind `note`, hid·lock) · 메모 줄 누르기 = 의도 `hd-note-pick` · 눈·자물쇠·아래 막대 숨기기·잠그기 = 의도 `hd-note-flag` |
 | `state-file` · `history` · `save-merge` | Model·ViewModel | `NAMES`·`TRACK` 에 `board-notes` · 409 = `HD.boardNotes.merge`(메모마다, 같은 메모를 둘 다 바꾸면 잃은 변경) · 이름표 '판 메모' |
 
@@ -24,7 +24,8 @@
 - 전체 보기(0)·`fit` 범위에 메모 상자(높이 = 그려진 높이)를 넣는다 — 멀리 둔 메모도 보인다. 고른 메모가 있고 고른 카드가 없으면 '고른 화면에 맞추기' = 그 메모
 - 쉬는 동안 하는 일 없음(그리기는 바뀔 때만, 끄는 동안은 그 상자 left/top·width/min-height 만). 뷰포트 밖 떼기·작게 볼 때 자리표시는 아직 없음(메모가 많아져 느려지면 그때 — 조사 안 B)
 - 읽기만인 탭: 만들기·옮기기·고치기·지우기를 하지 않는다(두 번 누르기·Del 은 `view-read-only` 가 막고 알림). file://(도우미 없음) = 다른 프로젝트 키처럼 브라우저 저장소 `hd-board-notes:<hash>` 에만 — 새로고침해도 남고, 파일로는 가지 않는다
-- 아직 아님: AI 요청·대화창 칩에 메모 싣기(R22 뒤), 그림
+- AI에게(R27 F19): 고르기만으로는 대화창에 싣지 않는다. V 로 고른 메모 위 오른쪽에 작은 흰 단추 'AI에게'(`.bn-ai`, 24px · 화면에서 같은 크기 `--bnk`, 글은 CSS 라 메모 글에 섞이지 않음, 쓰는 중·읽기만 탭에서는 숨김). 누르면 document 의도 `hd-note-ai {id, done:false}` → 대화창이 노트 칩으로(`chat.md`). 받는 곳이 없으면 `[hd]` 경고 + 토스트. 누르기는 끌기·고르기로 새지 않는다
+- 아직 아님: 그림
 
 ## 고치면 돌릴 것
 
