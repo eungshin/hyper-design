@@ -60,7 +60,7 @@ def test_bar_skips_the_text_line_above_and_folds_extra_buttons(ctx, out):
         pg.click('#elbar [data-act="more"]')
         pg.wait_for_selector("#cmenu:not([hidden]) button[data-act]", timeout=3000)
         got = pg.evaluate("[...document.querySelectorAll('#cmenu button[data-act]')].map(b => b.dataset.act)")
-        assert {"chain", "dup", "remove", "swap", "insert", "memo"} <= set(got) and len(got) <= 10, got   # R27 F05: 10개 이하(상위·AI 는 키·막대 아이콘)
+        assert {"chain", "dup", "remove", "part", "memo"} <= set(got) and len(got) <= 10, got   # R30: 넣기·바꾸기 = 부품 ▸ · R27 F05: 10개 이하(상위·AI 는 키·막대 아이콘)
         pg.screenshot(path=str(SHOTS / "bar-tile-more-after.png"))
         assert not errors, errors
     finally:

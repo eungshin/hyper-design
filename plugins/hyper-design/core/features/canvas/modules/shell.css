@@ -406,7 +406,8 @@ body.modal-open #thid,body.modal-open #thr{display:none}
 #tools .tb[hidden],#tools hr[hidden]{display:none}
 .vbtn:disabled{opacity:.35;cursor:default;background:#fff}
 /* 우클릭 메뉴: 화면 고정 좌표의 작은 판 */
-.cm{position:fixed;z-index:35;min-width:190px;max-width:300px;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.2);padding:5px;font-size:13px}
+/* R30 follow-up: 열린 오른쪽 클릭 메뉴는 맨 위(50) — 요소 막대(35)·선택 막대(34)·요소 팝업(36~41)·토스트(42) 위, 끌기 유령·다른 메뉴(60) 아래. Figma: 도구 막대는 메뉴 아래 */
+.cm{position:fixed;z-index:50;min-width:190px;max-width:300px;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.2);padding:5px;font-size:13px}
 .cm[hidden]{display:none}
 .cm .cmh{padding:5px 8px 4px;font-size:12px;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cm button{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;border-radius:7px;padding:7px 8px;cursor:pointer;font-size:13px;font-weight:600;text-align:left}

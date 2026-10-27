@@ -1,6 +1,6 @@
 /* View — 우클릭 메뉴(#cmenu)와 그 옆 목록(#cmsub): 그리기·자리·키(↑↓ 돌기 · → 옆 목록 · ← / Esc 옆 목록 닫기)·밖 누르기·창 크기 바뀜에 닫기.
    항목을 고르는 일(무엇을 넣을지)은 셸, 이 모듈은 받은 항목을 보이고 누르면 act() 를 부른다. Esc 차례는 셸이 isOpen()/close() 로 정한다.
-   items: [{label, key?, id?, act()} | {label, id?, sub(cb)}(옆 목록 — cb([{label, title?, act}] | null = 찾는 중))] · '-' = 구분선 · {head} = 소제목
+   items: [{label, key?, id?, act()} | {label, id?, sub(cb)}(옆 목록 — cb([{label, id?, title?, act}] | null = 찾는 중), 옆 목록 id 도 data-act)] · '-' = 구분선 · {head} = 소제목
    id = 항목의 뜻(data-act — 테스트·검사는 글이 아니라 이것으로 고른다, R17) · key = 실제로 듣는 단축키 힌트(오른쪽 맞춤 kbd)
    HD.viewCmenu.mount(ctx) → {open(x, y, head, items) → 토큰, isCurrent(토큰) → 그 열기가 아직 떠 있나, isOpen(), close()}
    ctx = {$, $$, esc, menu: #cmenu, sub: #cmsub} */
@@ -46,7 +46,7 @@ function mount(ctx) {
       if (subTok !== t || cmenu.hidden) return;
       subItems = list || [];
       cmsub.innerHTML = list == null ? '<div class="cmh">찾는 중…</div>' : list.length ? list.map(function (x, i) {
-        return '<button type="button" role="menuitem" data-j="' + i + '"' + (x.title ? ' title="' + esc(x.title) + '"' : '') + '>' + esc(x.label) + '</button>'; }).join('') : '<div class="cmh">고를 요소가 없어요</div>';
+        return '<button type="button" role="menuitem" data-j="' + i + '"' + (x.id ? ' data-act="' + esc(x.id) + '"' : '') + (x.title ? ' title="' + esc(x.title) + '"' : '') + '>' + esc(x.label) + '</button>'; }).join('') : '<div class="cmh">고를 요소가 없어요</div>';
       cmsub.hidden = false;
       var r = b.getBoundingClientRect(), w = cmsub.offsetWidth, x = r.right + 2 + w > innerWidth - 8 ? r.left - w - 2 : r.right + 2;
       cmsub.style.left = Math.max(8, x) + 'px'; cmsub.style.top = Math.max(8, Math.min(innerHeight - cmsub.offsetHeight - 8, r.top - 5)) + 'px';

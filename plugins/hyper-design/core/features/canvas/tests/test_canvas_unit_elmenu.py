@@ -20,7 +20,7 @@ for (const f of ['edits.js', 'blocks.js']) vm.runInThisContext(fs.readFileSync(p
 const B = globalThis.HD.blocks, out = {};
 const h = {path: 'p', text: '뜻 보기', full: '뜻 보기', textOk: true, prev: true, next: true, root: false, up: true};
 const box = Object.assign({}, h, {textOk: false, text: '', full: ''});
-const flat = (gs) => gs.map(g => [g.head, g.items.map(i => [i.act, i.label, i.key])]);
+const flat = (gs) => gs.map(g => [g.head, g.items.map(i => i.sub ? [i.act, i.label, i.key, i.sub.map(x => [x.act, x.label, x.key])] : [i.act, i.label, i.key])]);
 out.icons = B.icons(h, {}).map(i => [i.act, i.label, i.key]);
 out.iconsBox = B.icons(box, {}).map(i => i.act);
 out.iconsApp = B.icons(h, {app: true}).map(i => [i.act, !!i.ask, i.key]);
@@ -29,10 +29,13 @@ out.menuBox = flat(B.menu(box, {where: 'board'}));
 out.menuModal = B.menu(h, {where: 'modal'})[1].items.find(i => i.act === 'text').key;
 out.menuRoot = B.menu(Object.assign({}, h, {root: true, up: false}), {}).map(g => [g.head, g.items.map(i => i.act)]);
 out.menuImg = B.menu(Object.assign({}, h, {tag: 'img', attrs: {src: 'a.png', alt: ''}}), {})[1].items.map(i => i.act);
-out.menuApp = B.menu(h, {app: true}).map(g => [g.head, g.items.map(i => [i.act, !!i.ask, i.key])]);
+out.menuApp = B.menu(h, {app: true}).map(g => [g.head, [].concat(...g.items.map(i => i.sub || [i])).map(i => [i.act, !!i.ask, i.key])]);   // 옆 목록 안 동작까지
 out.keys = ['parent', 'inner', 'text', 'dup', 'remove', 'up', 'down', 'memo', 'ai', 'swap'].map(a => B.keyOf(a, h, 'board'));
 out.keysBox = ['inner', 'text'].map(a => B.keyOf(a, box, 'board'));
 out.ai = [B.askText('ai', h), B.askText('ai', {})];
+const img = Object.assign({}, h, {tag: 'img', attrs: {src: 'a.png', alt: ''}}), acts = (gs) => [].concat(...gs.map(g => g.items.map(i => i.act)));
+out.cap = [acts(B.menu(h, {links: 2})), acts(B.menu(img, {links: 2})), acts(B.menu(img, {links: 0})), acts(B.menu(img, {links: 3}))];
+out.rootPart = B.menu(Object.assign({}, h, {root: true, up: false}), {}).some(g => g.items.some(i => i.act === 'part'));
 console.log(JSON.stringify(out));
 """
 
@@ -67,8 +70,8 @@ def test_menu_groups_and_real_shortcut_hints(js):
     assert js["menu"] == [   # R27 F05: 10개 이하 — 상위·안쪽·위/아래로 옮기기는 키(Shift+Enter · Enter · Alt+↑/↓), AI 는 막대 아이콘
         ["고르기", [["chain", "레이어 고르기", ""]]],
         ["고치기", [["text", "글자 고치기", "Enter"], ["dup", "복제", "Ctrl+D"], ["remove", "지우기", "Del"],
-                    ["insert", "아래에 넣기…", ""], ["swap", "다른 부품으로 바꾸기…", ""]]],
-        ["요청", [["memo", "메모 달기", ""]]]], js["menu"]
+                    ["part", "부품", "", [["insert", "아래에 넣기…", ""], ["swap", "다른 부품으로 바꾸기…", ""]]]]],   # R30: 부품 ▸ 옆 목록
+        ["요청", [["memo", "메모 달기", ""], ["addr", "주소 복사", "Ctrl+L"]]]], js["menu"]   # R30 주소 복사(Ctrl+L)
     assert sum(len(i) for _, i in js["menu"]) <= 10
 
 
@@ -84,7 +87,7 @@ def test_large_view_text_hint_is_double_click(js):
 
 
 def test_root_drops_disabled_edits_and_parent(js):
-    assert js["menuRoot"] == [["고르기", ["chain"]], ["고치기", ["text"]], ["요청", ["memo"]]], js["menuRoot"]
+    assert js["menuRoot"] == [["고르기", ["chain"]], ["고치기", ["text"]], ["요청", ["memo", "addr"]]], js["menuRoot"]
 
 
 def test_attr_item_only_for_elements_with_attributes(js):
@@ -103,3 +106,17 @@ def test_only_real_keys(js):
 
 def test_ai_prefill(js):
     assert js["ai"][0].startswith("바꿔 주세요") and js["ai"][1].startswith("바꿔 주세요"), js["ai"]
+
+
+def test_address_item_fits_every_element_menu_with_parts_submenu(js):
+    """R30: 아래에 넣기·다른 부품으로 바꾸기 = '부품 ▸' 하나 — 속성 칸이 있는 요소 + 판의 연결 두 줄(가장 긴 메뉴)도 주소 복사까지 10개.
+    안전줄: 셸이 덧붙일 항목(links)까지 세어 10개를 넘으면 주소 복사만 빠진다(Ctrl+L 로는 됨)."""
+    plain, img_links, img_modal, over = js["cap"]
+    assert "addr" in plain and "addr" in img_modal, (plain, img_modal)
+    assert "addr" in img_links and "attr" in img_links and len(img_links) + 2 == 10, img_links
+    assert "addr" not in over and "part" in over, over
+    assert not {"insert", "swap"} & set(img_links), "넣기·바꾸기는 옆 목록 안에만"
+
+
+def test_parts_submenu_drops_when_neither_part_action_is_on(js):
+    assert js["rootPart"] is False, "화면 뿌리 = 넣기·바꾸기 꺼짐 → 부품 ▸ 도 없음"

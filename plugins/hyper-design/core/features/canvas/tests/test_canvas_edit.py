@@ -539,7 +539,7 @@ def test_context_menu_by_target(epage):
     epage.mouse.click(c["x"], c["y"], button="right")
     cmenu_items(epage)
     epage.wait_for_timeout(400)                      # 5단계: 그 자리 요소(hd-hit-at)가 답하면 요소 항목이 위에 붙는다
-    assert cmenu_items(epage)[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"]
+    assert cmenu_items(epage)[-10:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "주소 복사", "들어오는 연결 끊기", "숨기기", "삭제"]
     assert epage.text_content("#cmenu .cmh") == title
     assert not epage.evaluate("!document.getElementById('modal').hidden"), "오른쪽 클릭은 크게 보기를 열지 않는다"
     epage.mouse.move(p["x"], p["y"])                 # 메뉴 밖 판 위(R17: 묶음이 생겨 메뉴가 길어 카드 가운데를 덮을 수 있다)
@@ -1474,13 +1474,13 @@ def test_pick_cards_selection_bar_delete_and_del_key(dpage):
 
 @pytest.mark.area("tools", "links")
 def test_card_menu_full_items_duplicate_and_cut_incoming(dpage):
-    """S7: 카드 우클릭 = 크게 보기·연결 보기·이름·설명·메모·복제·들어오는 연결 끊기·숨기기·삭제."""
+    """S7: 카드 우클릭 = 크게 보기·연결 보기·이름·설명·메모·복제·주소 복사(R30)·들어오는 연결 끊기·숨기기·삭제."""
     fit_view(dpage)
     c = visible_cover(dpage)
     dpage.mouse.click(c["x"], c["y"], button="right")
     dpage.wait_for_timeout(400)
     items = cmenu_items(dpage)
-    assert items[-9:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "들어오는 연결 끊기", "숨기기", "삭제"], items
+    assert items[-10:] == ["크게 보기", "연결 보기", "이름", "설명", "메모", "복제", "주소 복사", "들어오는 연결 끊기", "숨기기", "삭제"], items
     dpage.click('#cmenu button[data-act="card-dup"]')   # 카드 복제(요소 항목 복제 data-act="dup" 와 다름, task 49a · R17) — file:// = 예전 흰 복제 카드
     dpage.wait_for_timeout(200)
     d = drafts(dpage)

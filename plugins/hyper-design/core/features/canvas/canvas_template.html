@@ -140,6 +140,7 @@ var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.mo
 var BK = null;                                   // 요소 막대(modules/view-blocks.js · 규칙 blocks.js, task 49a) — 기능 등록부로 아래에서 붙는다
 var BT = null;                                   // 판 글 레이어(modules/view-board-text.js, t51-9) — 기능 등록부로 아래에서 붙는다
 var CC = null;                                   // 카드 바로 복제(modules/view-card-copy.js · 규칙 card-copy.js, 51-6) — 기능 등록부로 아래에서 붙는다
+var AD = null;                                   // 주소 복사(modules/view-address.js · 규칙 address.js, R30) — 기능 등록부로 아래에서 붙는다
 var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
 var BN = null;                                   // 판 메모(modules/view-board-notes.js · 규칙 board-notes.js, R23) — 기능 등록부로 아래에서 붙는다
@@ -761,7 +762,8 @@ pane.addEventListener('contextmenu', function (e) {
       {id: 'card-title', label: '이름', act: function () { var t = $('.ftitle', card); if (t) CT.open(t, {field: 'title'}); }},
       {id: 'card-desc', label: '설명', act: function () { CT.open($('.fdesc', card) || $('.ftitle', card), {field: 'purpose'}); }},   // 빈 본문도 쓸 수 있다(R21)
       {id: 'card-memo', label: '메모', act: function () { MP.card(id); }},
-      {id: 'card-dup', label: '복제' + suf, key: 'Ctrl+D', act: function () { CA.dup(ids); }},
+      {id: 'card-dup', label: '복제' + suf, key: 'Ctrl+D', act: function () { CA.dup(ids); }}]).concat(isDraft || !AD ? [] : [
+      {id: 'card-addr', label: '주소 복사' + suf, key: 'Ctrl+L', act: function () { AD.cards(ids); }}]).concat([   // R30 Figma 선택 링크 복사 — 터미널에 붙일 줄
       {id: 'card-cut-in', label: '들어오는 연결 끊기' + suf, act: function () { CA.cutIn(ids); }},
       '-',
       {id: 'card-hide', label: '숨기기' + suf, act: function () { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }},
@@ -813,13 +815,17 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // tail(카드 항목 �
   if (inModal) links = links.filter(function (it) { return !it.pick; });
   var list = [];
   var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push.apply(list, items); };   // 묶음 사이 = 구분선(R27 F05 — 회색 소제목 없음)
-  HD.blocks.menu(h, {app: app, where: where}).forEach(function (g) {
+  var fire = function (it) {                         // 한 동작 → 막대의 고르기·칸·목록 길(상위·안쪽·속성·부품) 또는 셸 편집 길
+    return VIA_BAR[it.act] ? function () { elemFire(from, h, inModal, it.act); } : function () { blockAct(it.act, Object.assign({}, sel, {ask: it.ask})); };
+  };
+  HD.blocks.menu(h, {app: app, where: where, links: links.length}).forEach(function (g) {   // links = 10개 한도 셈(R30 주소 복사가 넘치면 그것만 빠짐)
     if (g.head === '요청') group('연결', links);
-    group(g.head, g.items.map(function (it) {
-      var o = {id: it.act, label: it.label, key: it.key};
-      if (it.act === 'chain') o.sub = function (put) { pickList(from, h, inModal, put); };   // Figma Select layer ▸(51-3)
-      else if (VIA_BAR[it.act]) o.act = function () { elemFire(from, h, inModal, it.act); };   // 막대의 고르기·칸·목록 길(상위·안쪽·속성·부품)
-      else o.act = function () { blockAct(it.act, Object.assign({}, sel, {ask: it.ask})); };
+    group(g.head, g.items.filter(function (it) { return it.act !== 'addr' || AD; }).map(function (it) {
+      var o = {id: it.act, label: it.label, key: it.key, title: it.title};
+      if (it.act === 'addr') o.act = function () { AD.element(from, h, inModal); };   // 주소 복사(R30, view-address)
+      else if (it.act === 'chain') o.sub = function (put) { pickList(from, h, inModal, put); };   // Figma Select layer ▸(51-3)
+      else if (it.sub) { var kids = it.sub.map(function (x) { return {id: x.act, label: x.label, title: x.title, act: fire(x)}; }); o.sub = function (put) { put(kids); }; }   // 부품 ▸ = 아래에 넣기 · 다른 부품으로 바꾸기(R30)
+      else o.act = fire(it);
       return o;
     }));
   });
@@ -1325,6 +1331,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
   }}});
 PP = FT.popPlace || null;
+AD = FT.address || null; if (AD) AD.attach({copy: function (t) { return SN.copy(t); }});   // 주소 복사(R30) — 클립보드는 보내기와 같은 길
 // 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
 BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
   queue: function (l, list, msg) { ED.add(l, list, msg, null, true); }, hide: LF.hide, hidden: LF.hidden, tool: function () { return tool; },

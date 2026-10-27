@@ -47,7 +47,11 @@ def _act(pg, act):
         pg.click('#elbar [data-act="%s"]' % act)
     else:
         pg.click('#elbar [data-act="more"]')
-        pg.click('#cmenu:not([hidden]) button[data-act="%s"]' % act)
+        if act in ("insert", "swap"):                 # R30: 부품 ▸ 옆 목록 안
+            pg.click('#cmenu:not([hidden]) button[data-act="part"]')
+            pg.click('#cmsub:not([hidden]) button[data-act="%s"]' % act)
+        else:
+            pg.click('#cmenu:not([hidden]) button[data-act="%s"]' % act)
 
 
 def _bar(pg):
@@ -181,7 +185,7 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     mf.click(H1, button="right")                            # 오른쪽 클릭 = 판과 같은 요소 메뉴
     pg.wait_for_selector("#cmenu:not([hidden])", timeout=3000)
     items = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
-    assert {"text", "remove", "dup", "memo", "chain", "swap", "insert"} <= set(items) and len(items) <= 10, items   # R27 F05: 위/아래·상위·AI 는 키(Alt+↑↓ · Shift+Enter)·막대 아이콘
+    assert {"text", "remove", "dup", "memo", "chain", "part", "addr"} <= set(items) and len(items) <= 10, items   # R30: 넣기·바꾸기 = 부품 ▸ · R27 F05: 위/아래·상위·AI 는 키(Alt+↑↓ · Shift+Enter)·막대 아이콘
     assert "link" not in items and "retarget" not in items, "크게 보기에서는 판에서 도착을 고르는 항목이 없다"
     pg.click('#cmenu button[data-act="dup"]')
     wait_notes(pg, 1)
