@@ -120,6 +120,16 @@ class Project:
         """GET /api/files[?since=seq] → {seq, changed:[screen]} — 디스크에서 바뀐 화면 파일."""
         return self._call("GET", "/api/files" + ("" if since is None else "?since=%s" % quote(str(since))))
 
+    def layout(self):
+        """화면 목록 + 자리·크기(hd screens) → {project, out, helper, title, groups, screens:[{id, title, group, file, purpose, pos, size}]} — place.layout."""
+        from . import place
+        return place.layout(self)
+
+    def add(self, src, **opts):
+        """HTML 화면 하나를 이 캔버스에 놓기(hd add) — place.add(id · title · group · purpose · after · at · size · assets · replace)."""
+        from . import place
+        return place.add(self, src, **opts)
+
     # ------------------------------------------------------------ 쓰기(늘 서버로)
     def reply(self, ref, reply):
         """메모에 답 하나. ref = '<screen>#<no>' | 메모 id. 규칙(hd_model.check_reply)으로 먼저 보고 POST /api/reply → {rev, status, note, screen}."""

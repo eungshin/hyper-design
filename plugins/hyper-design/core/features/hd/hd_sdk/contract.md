@@ -22,8 +22,9 @@ for n in p.notes():                  # Note: 보냈고 끝나지 않은 메모
 | `sse.py` | Model(순수) | `frames` · `event_of` | SSE 줄 → frame(`retry`·주석·`: hb` 건너뜀, data 여러 줄) → `Event`(reset frame = `Event(type='reset', data{reason, last})`) | 없음 |
 | `transport.py` | Client 어댑터 | `HttpTransport` · `client_errors` | `request(method, path, body, timeout) → (code, 답)` = `hd_client.call` · `stream(path, last, timeout)` = `hd_client.stream`(SSE 줄) · hd_client 오류 → 가족 | 표지 하나 |
 | `presence.py` | Model(순수 whoami) + 맥박 | `whoami` · `session_id` · `Heartbeat` | 나는 누구(PASEO_AGENT_ID → paseo · CLAUDECODE=1 → claude-<pid> + `session` = `CLAUDE_CODE_SESSION_ID`(`[A-Za-z0-9_-]{1,128}` 일 때만) + `cwd` · 그 밖 agent-<pid>) · 맥박 한 번 `tick()`(서버가 잊었으면 hello 다시, 닿지 않으면 다음 차례) · 데몬 스레드 | 간격 · 실패 수 · 스레드 |
-| `project.py` | Service | `Project` | notes · state · screens · files · reply · claim · release · apply · attach · stop · wait · events · hello · beat · bye · progress · agents · requests | 표지 하나(attach·wait 가 고침) · me · heartbeat |
-| `hub.py` | Service | `Hub` | home.json 의 허브 · hello · new · canvases · project(고르기) · pick(고르기) · projects · open · save · forget | 없음(매번 hd_client 를 읽음) |
+| `project.py` | Service | `Project` | notes · state · screens · layout · add · files · reply · claim · release · apply · attach · stop · wait · events · hello · beat · bye · progress · agents · requests | 표지 하나(attach·wait 가 고침) · me · heartbeat |
+| `place.py` | Service | `layout` · `add` | 화면 목록·자리·크기 읽기 · 새 화면 놓기(복사·screens.json·apply 로 캔버스에 알림·상태는 PUT /api/state) — `Project.layout`·`Project.add` 가 부름, 규칙 `hd_place`(../contract.md '화면 넣기') | 없음 |
+| `hub.py` | Service | `Hub` | home.json 의 허브 · hello · new · canvases · project(고르기) · pick(고르기) · target(떠 있거나 파일만) · projects · open · save · forget | 없음(매번 hd_client 를 읽음) |
 | `text.py` | View | — | 사람용 줄(`hd_model.format_rows` · `format_canvases` · `hd_projects.format_rows` · `link_line` 을 부를 뿐) | 없음 |
 
 의존은 아래로만: hub → project → transport → `hd_client`(I/O 주인: 표지·home.json·projects.json·HTTP) → `hd_model`·`hd_projects`(규칙). errors·values 는 I/O 를 모른다(`test_hd_sdk_unit.test_model_modules_are_pure`). 규칙을 새로 만들지 않는다 — 답 검사·찾기·번호·상태·덮개·에이전트 id·고르기는 hd_model 하나(캔버스 `annotation.js` 와 같은 fixture).

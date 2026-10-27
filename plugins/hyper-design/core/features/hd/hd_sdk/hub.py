@@ -112,6 +112,31 @@ class Hub:
             raise E.NotFound(err)
         return Project(m)
 
+    def target(self, ref=None):
+        """hd screens · add 의 고르기 → Project. ref 없음 = 떠 있는 것 하나(hd_model.choose). ref = 표지 이름 · 저장한 이름 · out 경로 —
+        떠 있으면 그 세션, 아니면 저장한 링크·out 폴더를 파일만으로(도우미 없음: 읽기 · 화면 넣기는 되고 상태 파일은 쓰지 않는다). 목록에 넣지 않는다."""
+        with client_errors():
+            alive = C.running()
+            if ref is None:
+                m, err = M.choose(alive)
+                if err:
+                    raise E.NotFound(err + " — 이름이나 out 경로를 주세요(hd projects)")
+                return Project(m)
+            e = P.find(C.load_projects(), ref)
+            keys = {P.key(C.abs_out(ref))} | ({P.key(C.abs_out(e["out"]))} if e else set())
+            hits = [m for m in alive if m.get("project") == ref or P.key(C.abs_out(m["out"])) in keys]
+            if len(hits) > 1:
+                raise E.HdError("캔버스가 여럿이에요 — 하나를 고르세요(이름 또는 out 경로): %s" % _listing(hits))
+            if hits:
+                return Project(hits[0])
+            o = e["out"] if e else (C.abs_out(ref) if C.is_out(ref) else None)
+            if o is None:
+                raise E.NotFound("모르는 캔버스예요: %s — hd projects 로 이름을 보거나 out 경로를 주세요(떠 있는 것: %s)" % (ref, _listing(alive)))
+            if not C.is_out(o):
+                raise E.NotFound("'%s' 의 out 폴더가 없어요(없음): %s" % (ref, o))
+            m = C.live_record(o)                     # 다른 HD_HOME 으로 뜬 도우미도(.hd-helper.json)
+        return Project(m, out=o)
+
     # ------------------------------------------------------------ 프로젝트 목록(링크만)
     def projects(self):
         """저장한 프로젝트 줄 객체 [{name, title, out, state, url, pid, created, last_opened, starred, trashed}]."""

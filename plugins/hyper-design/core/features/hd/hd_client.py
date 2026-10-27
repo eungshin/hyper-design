@@ -647,3 +647,46 @@ def get_state(m, timeout=5):
     if code != 200 or not isinstance(res, dict) or not isinstance(res.get("state"), dict):
         raise HdError("상태를 읽지 못했어요(%s): %s" % (code, _base(m)))
     return res
+
+
+# ---------------------------------------------------------------- 화면 목록 · 새 화면 놓기(hd screens · hd add) — 규칙은 hd_place
+ARTBOARD_JS = CANVAS / "modules" / "artboard.js"
+
+
+def read_manifest(out):
+    """<out>/screens.json → (객체, 원래 글). 없으면 NotFound, 깨졌으면 HdError."""
+    p = pathlib.Path(out) / "screens.json"
+    if not p.is_file():
+        raise NotFound("screens.json 이 있는 out 폴더가 아니에요: %s" % pathlib.Path(out))
+    try:
+        raw = p.read_text(encoding="utf-8")
+        return json.loads(raw), raw
+    except (OSError, ValueError) as e:
+        raise HdError("screens.json 을 읽지 못했어요(%s): %s" % (e, p))
+
+
+def write_manifest(out, data, raw=""):
+    """screens.json 쓰기 — 원래 들여쓰기·끝 줄바꿈을 따른다(canvas out_io._write_json 과 같은 모양), 임시 파일 + os.replace."""
+    p = pathlib.Path(out) / "screens.json"
+    tmp = p.with_name("screens.json.tmp-%d" % os.getpid())
+    indent = 2 if '\n  "' in raw else (1 if '\n "' in raw else None)
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent) + ("\n" if raw.endswith("\n") else ""), encoding="utf-8", newline="")
+    os.replace(tmp, p)
+
+
+def presets():
+    """캔버스 프리셋 표(modules/artboard.js — 표는 그 파일 하나) → hd_place.parse_presets 모양. 못 읽으면 {}(WxH 만 됨)."""
+    import hd_place
+    try:
+        return hd_place.parse_presets(ARTBOARD_JS.read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+
+
+def copy_in(src, dest):
+    """파일 하나를 out 안으로(같은 폴더 임시 파일 + os.replace — 지켜보기·빌드가 반쪽 파일을 보지 않게)."""
+    dest = pathlib.Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".tmp-%d" % os.getpid())
+    tmp.write_bytes(pathlib.Path(src).read_bytes())
+    os.replace(tmp, dest)

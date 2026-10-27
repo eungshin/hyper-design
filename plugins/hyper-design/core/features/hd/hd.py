@@ -21,6 +21,11 @@
   hd claim <screen> [<name|path>] [--note TEXT] [--by ID]
                                           "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
   hd release <screen> [<name|path>]       덮개 걷기
+  hd screens [<name|path>]                화면 목록: 줄마다 id · 제목 · 파일 · 자리 +dx,+dy · W×H(프리셋) — 떠 있지 않아도 저장한 이름·out 경로로 읽음
+  hd add <file.html> [<name|path>] [--id ID] [--title T] [--group G] [--purpose P] [--after ID | --at DX,DY] [--size Desktop|WxH]
+         [--asset PATH …] [--replace]
+                                          HTML 화면 하나를 캔버스에 넣기: out 으로 복사 · screens.json 에 등록(새 줄이면 만듦) · 자리·크기(도우미로)
+                                          · 열린 캔버스에 바로 보임(새로고침 없음). 자리 = --after 옆 | --at 제 자리에서 옮긴 거리 | 그 줄 끝
   hd home [--no-browser] [--port N] [--restart]
                                           홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server, 옛 코드면 한 줄 알림)
                                           --restart = 떠 있는 허브를 끄고 지금 코드로 같은 포트에 다시 띄움
@@ -190,6 +195,25 @@ def cmd_progress(a):
             "%s · 진행: %s%s" % (p.name, a.text.strip(), " (%s)" % a.screen if a.screen else ""))
 
 
+def cmd_screens(a):
+    p = _hub().target(a.target)
+    d = p.layout()
+    head = "%s · 화면 %d개 · 줄 %d개%s" % (p.name, len(d["screens"]), len({r["group"] for r in d["screens"]}),
+                                     "" if p.online else " · 도우미 꺼짐(읽기만)")
+    return d, head + "\n" + S.place_text(d["screens"], d["groups"])
+
+
+def cmd_add(a):
+    p = _hub().target(a.target)
+    r = p.add(a.file, sid=a.id, title=a.title, group=a.group, purpose=a.purpose, after=a.after, at=a.at, size=a.size,
+              assets=a.asset or (), replace=a.replace)
+    where = "%s 옆" % r["after"] if r["after"] else ("'%s' 줄 끝" % r["group"] if r["group"] else "끝")
+    bits = [x for x in (S.place_pos(r["pos"]), S.place_size(r["size"])) if x]
+    live = "캔버스에 바로 보여요" if r["live"] else "도우미 꺼짐 — index.html 다시 빌드(다음에 열면 보여요)"
+    return r, "%s · %s %s (%s · %s%s%s) · %s" % (p.name, r["id"], "바꿈" if r["replaced"] else "넣음", r["file"], where,
+                                               " · 새 줄" if r["group_added"] else "", "".join(" · " + b for b in bits), live)
+
+
 def cmd_home(a):
     """홈 서버 띄우기 · 바로 가기 — 서버를 띄우는 일이라 SDK(서버에 말 걸기) 밖: home_server · shortcut 을 부를 뿐."""
     sys.path.insert(0, str(HOME_DIR))
@@ -274,6 +298,23 @@ def parser():
     pg.add_argument("--screen", help="화면 id")
     pg.add_argument("--agent", help="누가(기본 env PASEO_AGENT_ID)")
     pg.set_defaults(fn=cmd_progress)
+    sc = sub.add_parser("screens", parents=[common], help="화면 목록(id · 제목 · 줄 · 파일 · 자리 · 크기)")
+    sc.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    sc.set_defaults(fn=cmd_screens)
+    ad = sub.add_parser("add", parents=[common], help="HTML 화면 하나를 캔버스에 넣기(복사 · 등록 · 자리 · 바로 보임)")
+    ad.add_argument("file", help="넣을 HTML 파일")
+    ad.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    ad.add_argument("--id", help="화면 id(기본 = 파일 이름)")
+    ad.add_argument("--title", help="제목(기본 = HTML <title> | id)")
+    ad.add_argument("--group", help="줄 이름(없으면 새 줄 · 기본 = --after 의 줄 | 마지막 화면의 줄)")
+    ad.add_argument("--purpose", help="목적 한 줄")
+    pl = ad.add_mutually_exclusive_group()
+    pl.add_argument("--after", help="이 화면 바로 옆에(같은 줄 · 그 화면이 옮긴 거리 · 크기를 따름)")
+    pl.add_argument("--at", help="제 자리에서 옮긴 거리 DX,DY(판 px, hd screens 의 '자리' 와 같은 값 · 음수는 --at=-200,40)")
+    ad.add_argument("--size", help="카드 크기: 프리셋 이름(Desktop · iPhone 16 …) 또는 WxH")
+    ad.add_argument("--asset", action="append", help="같이 복사할 파일(여러 번) — 화면 폴더 안이면 그 상대 경로로, 아니면 이름만")
+    ad.add_argument("--replace", action="store_true", help="같은 id 화면·같은 이름 파일을 바꿈")
+    ad.set_defaults(fn=cmd_add)
     hm = sub.add_parser("home", parents=[common], help="홈(모든 캔버스) 허브 띄우기 · 바탕 화면 바로 가기")
     hm.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     hm.add_argument("--shortcut", action="store_true", help="바탕 화면에 바로 가기를 쓰고 끝")
