@@ -6,11 +6,18 @@ test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저
 브라우저 테스트는 수집 단계에서 실패한다. 여기를 고칠 일은 새 영역(AREAS 한 줄)뿐이다.
 SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
 `--surface frame,board` 는 -m 고른 것에 그 화면 동작(SURFACES)을 함께 쓰는 테스트 파일을 더한다 — 파일은 달라도 같은 동작을 쓰는 이웃 조각을 커밋 전에 같이 본다.
+실행 도구(hd_testrun.py): -n 2 이상이면 주 프로세스가 잠금(hd-testrun.lock)을 잡고(다른 실행이 잡고 있으면 기다림, HD_TEST_NOLOCK=1 은 건너뜀),
+끝에 깨진 것만 -n 0 으로 한 번 더 돌려 '진짜 실패 · 혼자 통과(부하로 보임)'를 나눈다. 브라우저 맥락마다 바깥 글꼴(cdn.jsdelivr.net…)은 빈 응답으로 막는다.
 """
-import json, time
+import json, os, subprocess, sys, tempfile, time
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hd_testrun  # noqa: E402
+
+hd_testrun.block_external_fonts()                   # 주·일꾼 모두 — 이 conftest 를 가져오는 프로세스의 모든 브라우저 맥락
 
 AREAS = {
     "input": "이동·확대·끌기·클릭·단축키(판 조작)",
@@ -56,6 +63,10 @@ def pytest_addoption(parser):
 SERIAL = ("test_line_click_shows_end_handles_and_drag_retargets",)
 
 
+def _xdist_main(config):                            # 일꾼이 아닌 주 프로세스, -n N(N>=1)
+    return getattr(config, "workerinput", None) is None and bool(getattr(config.option, "numprocesses", 0))
+
+
 def _xdist_on(config):                              # 주 프로세스(-n N, N>0) 또는 일꾼
     return getattr(config, "workerinput", None) is not None or bool(getattr(config.option, "numprocesses", 0))
 
@@ -87,6 +98,16 @@ def pytest_configure(config):
         extra = " or ".join(f"surface_{x}" for x in surf)
         m = getattr(config.option, "markexpr", "") or ""
         config.option.markexpr = f"({m}) or {extra}" if m else extra
+    n = getattr(config.option, "numprocesses", 0) or 0
+    if (getattr(config, "workerinput", None) is None and isinstance(n, int) and n > 1
+            and not getattr(config.option, "collectonly", False)
+            and os.environ.get(hd_testrun.ENV_NOLOCK) != "1" and not os.environ.get(hd_testrun.ENV_RERUN)):
+        _RUN["lock"] = hd_testrun.acquire(sys.argv[1:])   # 겹친 -n 실행은 차례로(브라우저 수백 개가 서로를 늦춰 시간 초과를 낸다)
+
+
+def pytest_unconfigure(config):
+    if _RUN.pop("lock", None):                        # 실패·Ctrl+C 에도 pytest 가 부른다
+        hd_testrun.release()
 
 
 @pytest.hookimpl(tryfirst=True)                     # xdist 가 묶음 이름(xdist_group)을 읽기 전에 표시를 단다
@@ -134,22 +155,67 @@ _RUN = {}
 
 
 def pytest_sessionstart(session):
-    _RUN.update(t0=time.time(), failed=[], passed=0, skipped=0)
+    _RUN.update(t0=time.time(), failed=[], failed_ids=[], passed=0, skipped=0)
 
 
 def pytest_runtest_logreport(report):
     if report.when == "call" or (report.when == "setup" and report.outcome != "passed"):
         if report.failed:
             _RUN.setdefault("failed", []).append(report.nodeid.split("::")[-1])
+            _RUN.setdefault("failed_ids", []).append(report.nodeid)
         elif report.skipped:
             _RUN["skipped"] = _RUN.get("skipped", 0) + 1
         elif report.when == "call":
             _RUN["passed"] = _RUN.get("passed", 0) + 1
 
 
+def _abs_id(root, nodeid):                         # 실행마다 rootdir 이 달라도 같은 테스트로 맞추려 파일 부분을 절대 경로로
+    f, sep, rest = nodeid.partition("::")
+    return str((Path(root) / f).resolve()) + sep + rest
+
+
+def _rerun_alone(config, ids):
+    """-n 실행에서 깨진 것만 -n 0 하위 실행으로 한 번 더(잠금은 이 프로세스가 쥔 채). → (진짜 실패, 혼자 통과, 초)."""
+    t0 = time.time()
+    fd, out = tempfile.mkstemp(prefix="hd-rerun-", suffix=".json"); os.close(fd)
+    env = dict(os.environ, **{hd_testrun.ENV_RERUN: "1", hd_testrun.ENV_NOLOCK: "1", hd_testrun.ENV_RERUN_OUT: out})
+    ok = False
+    try:
+        r = subprocess.run([sys.executable, "-m", "pytest", *[_abs_id(config.rootpath, i) for i in ids], "-n", "0", "-p", "no:cacheprovider", "-q", "--tb=line"],
+                           cwd=str(config.rootpath), env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        got = json.loads(Path(out).read_text(encoding="utf-8"))
+        ok = r.returncode in (0, 1) and got.get("ran", 0) > 0
+        again = got.get("failed_ids", [])
+    except (OSError, ValueError):
+        again = []
+    finally:
+        try:
+            os.unlink(out)
+        except OSError:
+            pass
+    back = {_abs_id(config.rootpath, i): i for i in ids}
+    real, flaky = hd_testrun.classify(list(back), again, ok)
+    return [back[i] for i in real], [back[i] for i in flaky], round(time.time() - t0, 1)
+
+
 def pytest_sessionfinish(session, exitstatus):
     if "t0" not in _RUN or getattr(session.config.option, "collectonly", False) or hasattr(session.config, "workerinput"):
         return                                     # xdist(-n): 일꾼마다 쓰지 않고 결과를 모두 받는 주 프로세스만 한 줄
+    if os.environ.get(hd_testrun.ENV_RERUN):      # 다시 돌리는 하위 실행: 기록은 부른 실행이 — 결과만 넘긴다
+        p = os.environ.get(hd_testrun.ENV_RERUN_OUT)
+        if p:
+            Path(p).write_text(json.dumps({"ran": session.testscollected,
+                                           "failed_ids": [_abs_id(session.config.rootpath, i) for i in _RUN.get("failed_ids", [])]}), encoding="utf-8")
+        return
+    rerun = None
+    ids = list(dict.fromkeys(_RUN.get("failed_ids", [])))
+    if ids and _xdist_main(session.config):
+        if len(ids) > hd_testrun.RERUN_MAX:
+            rerun = {"skipped": f"{len(ids)} > {hd_testrun.RERUN_MAX}"}
+        else:
+            real, flaky, sec = _rerun_alone(session.config, ids)
+            rerun = {"real": [i.split("::")[-1] for i in real], "flaky": [i.split("::")[-1] for i in flaky], "sec": sec}
+        _RUN["rerun"] = rerun
     o = session.config.option
     sel = {"m": o.markexpr or "", "k": o.keyword or "", "lf": bool(getattr(o, "lf", False)),
            "files": sorted({Path(str(a)).name for a in session.config.args if str(a).endswith(".py")})}
@@ -157,6 +223,8 @@ def pytest_sessionfinish(session, exitstatus):
     rec = {"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "scope": scope, "sel": sel, "n": session.testscollected,
            "passed": _RUN.get("passed", 0), "failed": _RUN.get("failed", []), "skipped": _RUN.get("skipped", 0),
            "sec": round(time.time() - _RUN["t0"], 1)}
+    if rerun:                                      # 깨진 것을 혼자 다시 돌린 결과(review.py 는 읽지 않는 덧붙임 칸)
+        rec["rerun"] = rerun
     try:
         runs = json.loads(RUNS.read_text(encoding="utf-8")) if RUNS.exists() else []
     except (OSError, ValueError):
@@ -167,3 +235,23 @@ def pytest_sessionfinish(session, exitstatus):
         RUNS.write_text(json.dumps(runs[-500:], ensure_ascii=False, indent=1), encoding="utf-8")
     except OSError:
         pass
+
+
+def pytest_terminal_summary(terminalreporter):
+    rr = _RUN.get("rerun")
+    if not rr:
+        return
+    lines = []
+    if "skipped" in rr:
+        lines.append(f"[hd-test] 혼자 다시 돌리기 건너뜀: 깨진 것 {rr['skipped']} — 부하가 아니라 고장으로 본다")
+    else:
+        lines.append(f"[hd-test] 깨진 것만 -n 0 으로 다시({rr['sec']}초):")
+        if rr["real"]:
+            lines.append("  진짜 실패: " + ", ".join(rr["real"]))
+        if rr["flaky"]:
+            lines.append("  혼자 통과: " + ", ".join(rr["flaky"]))
+        lines.append("[hd-test] " + hd_testrun.summary_line(rr["real"], rr["flaky"]))
+    terminalreporter.ensure_newline()
+    sys.stdout.flush()                             # 아래 줄은 잠금 대기 줄처럼 utf-8 바이트로(콘솔 cp949 에서 깨지지 않게)
+    for ln in lines:
+        hd_testrun.say(sys.stdout, ln)
