@@ -78,3 +78,12 @@ def test_server_reply_record_keeps_long_text():
     assert CL.reply_text({"kind": "답변", "text": t}) == t
     d = "자세히:\n1. 버튼\n2. 여백"
     assert CL.reply_text({"kind": "반영됨", "what": "키움", "detail": d}) == "키움\n\n" + d, "긴 설명(detail)도 답 줄에"
+
+
+def test_server_reply_record_keeps_max_summary_plus_max_detail():
+    """R26 — hd 답의 detail 은 50000 자(hd_model.DETAIL_MAX)까지: 요약 칸(최대 280) + 빈 줄 + detail 50000 이 기록에서 잘리지 않는다."""
+    head, d = "요" * 280, "설" * 49999 + "끝"
+    t = CL.reply_text({"kind": "답변", "text": head, "detail": d})
+    assert t == head + "\n\n" + d
+    rec = CL.from_event({"id": 1, "type": "agent.reply", "ts": 1, "project": "p", "note": "n1", "kind": "답변", "status": "done", "text": t})
+    assert rec[1]["text"] == t and rec[1]["text"].endswith("끝"), "기록 = 요약 + detail 전체"

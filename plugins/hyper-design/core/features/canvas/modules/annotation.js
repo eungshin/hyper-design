@@ -75,6 +75,7 @@ var FIELDS = {
 };
 var OPTIONAL = {'확인': {answer: ['str', 40]}};                  // 질문에 고른 답으로 닫을 때(사람 답) — hd_model.OPTIONAL
 var COMMON = {kind: 1, by: 1, at: 1, detail: 1};
+var DETAIL_MAX = 50000, TIP_CUT = 300;                       // detail = 긴 답 본문(hd_model.DETAIL_MAX, R26) · 툴팁엔 앞 TIP_CUT 자만(메모 묶음이 전체를 보인다)
 function field(errs, name, v, spec) {
   var shape = spec[0], lim = spec[1];
   if (shape === 'str') { if (!str(v)) errs.push(name + ': 빈 글이 아니어야 해요'); else if (v.length > lim) errs.push(name + ': ' + lim + '자 넘음(' + v.length + '자)'); }
@@ -99,7 +100,7 @@ function validReply(r, intent, agent) {
       .forEach(function (k) { errs.push(k + ': ' + r.kind + ' 에 없는 칸'); });
     Object.keys(spec).forEach(function (k) { if (!has(r, k)) errs.push(k + ': 없어요'); else field(errs, k, r[k], spec[k]); });
     Object.keys(opt).forEach(function (k) { if (has(r, k)) field(errs, k, r[k], opt[k]); });
-    if (has(r, 'detail') && !(typeof r.detail === 'string' && r.detail.length <= 2000)) errs.push('detail: 2000자 이하 글');
+    if (has(r, 'detail') && !(typeof r.detail === 'string' && r.detail.length <= DETAIL_MAX)) errs.push('detail: ' + DETAIL_MAX + '자 이하 글');
     if (has(r, 'by') && !(str(r.by) && r.by.length <= 40)) errs.push('by: 1–40자 이름');
     if (has(r, 'at') && !str(r.at)) errs.push('at: ISO 시각 글');
   }
@@ -121,10 +122,11 @@ function says(r) {
   }
   return String(r.kind || '');
 }
-// 답 줄에 올렸을 때 더 볼 것: 반영됨 = 화면·캡처 확인 여부(+ detail), 그 밖 = detail(없으면 '')
+// 답 줄에 올렸을 때 더 볼 것: 반영됨 = 화면·캡처 확인 여부(+ detail), 그 밖 = detail(없으면 '') — detail 은 앞 TIP_CUT 자(전체는 메모 묶음 본문, R26)
 function tip(r) {
   if (!r) return '';
   var d = typeof r.detail === 'string' ? r.detail : '';
+  if (d.length > TIP_CUT) d = d.slice(0, TIP_CUT - 1) + '…';
   if (r.kind === '반영됨') return '화면: ' + (Array.isArray(r.screens) ? r.screens.join(', ') : '') + ' · 캡처 ' + (r.captured ? '확인함' : '안 봄') + (d ? '\n' + d : '');
   return d;
 }

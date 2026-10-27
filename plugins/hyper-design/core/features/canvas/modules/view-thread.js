@@ -1,8 +1,10 @@
-/* View — 카드 메모 배지(.nbadge)를 누르면 그 화면 메모 묶음(Word 메모처럼, #224): 배지 옆 작은 창에 요소·종류·글 전체, 줄마다 [고치기]·[지우기], 아래 [메모 추가].
+/* View — 카드 메모 배지(.nbadge)를 누르면 그 화면 메모 묶음(Word 메모처럼, #224): 배지 옆 작은 창에 요소·종류·글 전체, 줄마다 고치기·지우기·완료 아이콘, 머리 줄 + 아이콘 = 메모 추가.
+   R26: 줄 동작은 메타 줄 오른쪽 끝 작은 아이콘(.thib — 연필·휴지통·체크 · 닫힌 메모는 되돌리기 화살표 = 다시 열기, 메모 패널 .nib 와 같은 모양), 평소엔 흐리고 줄에 올리거나 포커스면 진하게.
+   이름은 aria-label + 꼬리말 #thtip(요소 막대 #eltip 과 같은 모양 — 올리기·키보드 포커스일 때). 글(.tht)이 가장 또렷하고 메타(번호·대상·상태·의도)는 작은 회색 한 줄.
    메모 나누기(배지 수와 같은 것)는 HD.edits.split(Model). 고치기·지우기·더하기는 셸이 메모 패널과 같은 함수를 건넨다(여기서 메모를 바꾸지 않는다).
    상태 = 지금 연 화면 id 하나(저장하지 않음). 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc(셸이 close 를 부른다)·바깥 누르기 = 닫기.
    줄마다 번호 #n.no · 범위 말(이 요소가 아닐 때만, HD.annotation.scopeWord — R7) · 상태 말(HD.annotation.label — 받는 곳 없이 보낸 것 = '대기열', decide 만 강조색) · 답(답마다 회색 한 줄 HD.annotation.says, 마지막 것 펼침, 앞 것 접힘,
-   반영됨 줄에 올리면 화면·캡처 · 사람 답은 작게 '완료함/다시 엶' + 시각) · 빈 레이아웃에서 옮겨 온 메모면 회색 한 줄(HD.promote.movedSay) · 기다리는 질문이면 고를 것 단추(누르기 = ctx.choose) · [완료](사람 답 '확인'). 닫힌 메모는 아래 접힌 '완료 N' 묶음에 [다시 열기].
+   답에 detail 이 있으면 그 줄 아래 전체(.thdet, R26), 반영됨 줄에 올리면 화면·캡처 · 사람 답은 작게 '완료함/다시 엶' + 시각) · 빈 레이아웃에서 옮겨 온 메모면 회색 한 줄(HD.promote.movedSay) · 기다리는 질문이면 고를 것 단추(누르기 = ctx.choose) · [완료](사람 답 '확인'). 닫힌 메모는 아래 접힌 '완료 N' 묶음에 [다시 열기].
    보낸 메모 숨기기(task 29): 줄은 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = ctx.showSent(), 주인 view-notes) — 꺼짐이면 AI 작업 중·완료 메모는 빠지고
    ('완료 N' 묶음도 켜졌을 때만) 숨긴 수를 회색 한 줄로. 켜짐이 바뀌면 셸이 refresh() 를 부른다(#263).
    다시 찾지 못한 대상(ctx.lost — 같은 요소가 여럿·없음)이 있고 닫히지 않은 메모 = "요소를 찾을 수 없음"(.thlost, title = 까닭, #285). 줄에 올리면 ctx.highlight(화면, no) — 그 핀·요소 테두리.
@@ -14,6 +16,13 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var INTENT = {change: '바꾸기', question: '질문'};
+var ICON = {                                         // 줄·머리 아이콘(R26) — 연필·휴지통은 메모 패널(view-notes)과 같은 그림
+  edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+  del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>',
+  done: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  reopen: '<svg viewBox="0 0 24 24"><path d="M4 5v5h5"/><path d="M5.6 15a7 7 0 101.5-7.2L4 10"/></svg>',
+  add: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'};
+var NAME = {edit: '고치기', del: '지우기', done: '완료', reopen: '다시 열기', add: '메모 추가'};
 
 function mount(ctx) {
   var esc = ctx.esc, cur = null, A = HD.annotation;  // cur = {id, badge, no, at(마지막 자리)}
@@ -22,8 +31,23 @@ function mount(ctx) {
   box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '이 화면 메모');
   document.body.appendChild(box);
   var css = document.createElement('style'); css.id = 'hd-thread-sent-css';
-  css.textContent = '#thread .thhid{padding:6px 12px;color:#888;font-size:12px}';
+  css.textContent = '#thread .thhid{padding:6px 12px;color:#888;font-size:12px}' +
+    '#thread .thdet{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:17px;color:#555;max-height:240px;overflow:auto;margin:2px 0 4px;padding:4px 8px;background:#F6F6F3;border-radius:6px;user-select:text}';
   document.head.appendChild(css);
+  var tip = document.createElement('div');           // 아이콘 꼬리말(R26) — 요소 막대 #eltip 과 같은 모양(shell.css #thtip)
+  tip.id = 'thtip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tip);
+  function ib(act) {                                 // 아이콘 단추 하나 — 이름은 aria-label·꼬리말(data-tip), data-act 그대로
+    return '<button type="button" class="thib" data-act="' + act + '" data-tip="' + NAME[act] + '" aria-label="' + NAME[act] + '">' + ICON[act] + '</button>';
+  }
+  function showTip(b) {
+    if (!b || !b.dataset.tip || box.hidden) { hideTip(); return; }
+    tip.textContent = b.dataset.tip; tip.hidden = false;
+    var r = b.getBoundingClientRect(), x = Math.max(4, Math.min(innerWidth - tip.offsetWidth - 4, r.left + r.width / 2 - tip.offsetWidth / 2)), y = r.top - tip.offsetHeight - 6;
+    if (y < 4) y = r.bottom + 6;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.hidden = true; }
 
   function memosOf(id) { return HD.edits.split(ctx.list()).memos.filter(function (n) { return n.screen === id; }); }
   function label(n) {
@@ -41,7 +65,9 @@ function mount(ctx) {
     var rs = (n.replies || []).filter(function (r) { return r && typeof r === 'object'; }); if (!rs.length) return '';
     var line = function (r) {
       var me = A.USER.indexOf(r.kind) >= 0, t = A.tip(r), w = me ? when(r.at) : '';
-      return '<div class="thr1' + (me ? ' me' : '') + '" data-kind="' + esc(r.kind) + '"' + (t ? ' title="' + esc(t) + '"' : '') + '>' + esc(A.says(r)) + (w ? ' · ' + esc(w) : '') + '</div>';
+      var d = typeof r.detail === 'string' && r.detail.trim() ? r.detail : '';   // 긴 답 본문(R26, ≤50000) = 줄 아래 전체(줄바꿈 그대로, 길면 그 안에서 스크롤)
+      return '<div class="thr1' + (me ? ' me' : '') + '" data-kind="' + esc(r.kind) + '"' + (t ? ' title="' + esc(t) + '"' : '') + '>' + esc(A.says(r)) + (w ? ' · ' + esc(w) : '') + '</div>' +
+        (d ? '<div class="thdet">' + esc(d) + '</div>' : '');
     };
     var older = rs.slice(0, -1);
     return '<div class="threp">' + (older.length ? '<details class="thold"><summary>이전 답 ' + older.length + '개</summary>' + older.map(line).join('') + '</details>' : '') + line(rs[rs.length - 1]) + '</div>';
@@ -58,20 +84,18 @@ function mount(ctx) {
     var st = A.status(n), open = st !== 'done';
     return '<li data-id="' + esc(n.id) + '" data-no="' + esc(n.no) + '"' + (n.sent && open ? ' class="sent"' : '') + '><div class="thl"><span class="thn">#' + esc(n.no) + '</span><span class="the">' + esc(label(n)) + '</span>' +
       '<span class="ths" data-st="' + st + '"' + (st === 'working' && ctx.queued() ? ' data-q="1"' : '') + '>' + esc(A.label(n, ctx.queued())) + '</span>' + (A.scopeWord(n) ? '<span class="thsc">' + esc(A.scopeWord(n)) + '</span>' : '') +
-      '<span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span></div>' +
+      '<span class="thi">' + esc(INTENT[n.intent] || n.intent || '') + '</span><span class="tha">' + (open ? ib('edit') + ib('del') + ib('done') : ib('reopen')) + '</span></div>' +
       (open && ctx.lost(n) ? '<div class="thlost" title="화면이 바뀌어 같은 요소가 여러 개이거나 없어요">요소를 찾을 수 없음</div>' : '') +
-      '<div class="tht">' + esc(n.note || '') + '</div>' + moved(n) + reps(n) + choices(n) +
-      '<div class="tha">' + (open ? '<button type="button" class="nbtn" data-act="edit">고치기</button><button type="button" class="nbtn" data-act="del">지우기</button><button type="button" class="nbtn" data-act="done">완료</button>'
-                                 : '<button type="button" class="nbtn" data-act="reopen">다시 열기</button>') + '</div></li>';
+      '<div class="tht">' + esc(n.note || '') + '</div>' + moved(n) + reps(n) + choices(n) + '</li>';
   }
   function draw() {
     var all = memosOf(cur.id), sh = ctx.showSent(), ms = all.filter(function (n) { return A.visible(n, sh); }), nh = all.length - ms.length;
     var open = ms.filter(A.isOpen), done = ms.filter(function (n) { return !A.isOpen(n); });
     var keep = box.querySelector('details.thdone'), wasOpen = keep && keep.open;
-    box.innerHTML = '<div class="thh">' + esc(ctx.title(cur.id)) + ' · 메모 ' + open.length + '건</div><div class="thbody"><ol class="thlist">' + open.map(row).join('') + '</ol>' +
+    hideTip();
+    box.innerHTML = '<div class="thh"><span class="thhn">' + esc(ctx.title(cur.id)) + ' · 메모 ' + open.length + '건</span>' + ib('add') + '</div><div class="thbody"><ol class="thlist">' + open.map(row).join('') + '</ol>' +
       (nh ? '<div class="thhid">보낸 메모 ' + nh + '건 숨김 — 메모 패널 [보낸 메모 보기]</div>' : '') +
-      (done.length ? '<details class="thdone"' + (wasOpen ? ' open' : '') + '><summary>완료 ' + done.length + '</summary><ol class="thlist thdl">' + done.map(row).join('') + '</ol></details>' : '') + '</div>' +
-      '<div class="thf"><button type="button" class="nbtn pri" data-act="add">메모 추가</button></div>';
+      (done.length ? '<details class="thdone"' + (wasOpen ? ' open' : '') + '><summary>완료 ' + done.length + '</summary><ol class="thlist thdl">' + done.map(row).join('') + '</ol></details>' : '') + '</div>';
   }
   function focusRow(no) {                            // 핀으로 열었으면 그 메모로(접힌 묶음·답도 편다)
     if (no == null) return;
@@ -94,12 +118,12 @@ function mount(ctx) {
     box.hidden = false; draw(); place();
     badge.setAttribute('aria-expanded', 'true');
     focusRow(cur.no);
-    var b = (cur.no != null && box.querySelector('li.focus button')) || box.querySelector('button'); if (b) b.focus({preventScroll: true});
+    var b = (cur.no != null && box.querySelector('li.focus button')) || box.querySelector('.thbody button') || box.querySelector('button'); if (b) b.focus({preventScroll: true});
   }
   function close() {
     if (!cur) return false;
     if (cur.badge) cur.badge.setAttribute('aria-expanded', 'false');
-    cur = null; box.hidden = true; box.innerHTML = ''; ctx.highlight(null, null);
+    cur = null; box.hidden = true; box.innerHTML = ''; hideTip(); ctx.highlight(null, null);
     return true;
   }
   function refresh() {                               // 메모가 바뀌면(셸 renderNotes) 다시 — 다 지웠으면 닫는다, 배지가 없어지면(열린 메모 0) 그 자리에 둔다
@@ -150,7 +174,13 @@ function mount(ctx) {
     var li = e.target.closest ? e.target.closest('li[data-no]') : null;
     if (cur) ctx.highlight(cur.id, li ? +li.dataset.no : null);
   });
-  box.addEventListener('mouseleave', function () { if (cur) ctx.highlight(cur.id, null); });
+  box.addEventListener('mouseleave', function () { hideTip(); if (cur) ctx.highlight(cur.id, null); });
+  box.addEventListener('pointerover', function (e) { var b = e.target.closest ? e.target.closest('button[data-tip]') : null; if (b) showTip(b); else hideTip(); });
+  box.addEventListener('focusin', function (e) {     // 키보드 포커스일 때만(열 때 첫 단추로 옮기는 초점은 꼬리말 없이)
+    var b = e.target.closest ? e.target.closest('button[data-tip]') : null;
+    if (b && b.matches(':focus-visible')) showTip(b); else hideTip();
+  });
+  box.addEventListener('focusout', hideTip);
   ['pointerdown', 'wheel', 'keydown', 'contextmenu'].forEach(function (n) { box.addEventListener(n, function (e) { if (n !== 'keydown' || e.key !== 'Escape') e.stopPropagation(); }); });
 
   return {open: open, close: close, refresh: refresh, isOpen: function () { return !!cur; }};

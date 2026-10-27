@@ -53,7 +53,7 @@ def test_panel_shows_whole_long_reply_with_code_and_copy(served, ctx, monkeypatc
         pg.click("#hdchat textarea"); pg.keyboard.type("결제 화면 설명해 줘"); pg.keyboard.press("Enter")
         pg.wait_for_selector("#pTalk .tk-turn", timeout=15000)
         nid = note_saved(pg, srv)
-        detail = "결제 화면은 세 부분이에요.\n- 금액\n- 버튼\n" + "설명 " * 300 + "\n답-끝"   # 요약 칸은 프로토콜이 짧게(140) — 긴 설명은 detail(≤2000)
+        detail = "결제 화면은 세 부분이에요.\n- 금액\n- 버튼\n" + "설명 " * 300 + "\n답-끝"   # 요약 칸은 프로토콜이 짧게(140) — 긴 설명은 detail(≤50000, R26)
         code, res = call(srv, "POST", "/api/reply", {"note": nid, "reply": {"kind": "반영됨", "what": "설명을 남겼어요", "detail": detail,
                                                                           "screens": ["pay"], "captured": False, "by": "ag-1"}})
         assert code == 200, res

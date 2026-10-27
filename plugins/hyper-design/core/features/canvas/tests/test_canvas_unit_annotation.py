@@ -65,6 +65,7 @@ out.fixture = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')).map(c => {
 // 답 글 · 질문 고르기 · 대기열 말
 out.says = ['반영됨', '일부', '대체됨', '답변', '질문'].map(k => A.says(R(k))).concat([A.says({kind: '확인'}), A.says(A.answer('B', 't')), A.says({kind: '다시'})]);
 out.tip = [A.tip(R('반영됨')), A.tip(Object.assign(R('반영됨'), {captured: false, detail: 'd'})), A.tip(R('일부')), A.tip(Object.assign(R('답변'), {detail: '더'}))];
+out.tipLong = A.tip(Object.assign(R('답변'), {detail: 'x'.repeat(50000)})).length;
 const ask = {sent: true, replies: [R('질문')]};
 out.ask = {q: A.question(ask), none: [A.question({sent: true, replies: [R('질문'), R('반영됨')]}), A.question({sent: false, replies: [R('질문')]}), A.question({})],
   answered: (() => { const n = {sent: true, replies: [R('질문'), A.answer('b', 't1')]}; return [A.status(n), A.validReply(n.replies[1]).ok, A.question(n)]; })(),
@@ -154,6 +155,7 @@ def test_shared_fixture_matches_hd_model(out):
 def test_says_one_line_per_kind(out):
     assert out["says"] == ["반영됨 — w · s", "일부 — d · 남은 것 l", "대체됨 → x", "답변 — t", "질문 — q", "완료함", "완료함 — 고름: B", "다시 엶"]
     assert out["tip"] == ["화면: s · 캡처 확인함", "화면: s · 캡처 안 봄\nd","", "더"], "반영됨 줄에 올리면 화면·캡처"
+    assert out["tipLong"] == 300, "긴 detail(R26)은 툴팁엔 앞 300자 — 전체는 메모 묶음 본문"
 
 
 def test_question_answer_closes_and_follow_up(out):

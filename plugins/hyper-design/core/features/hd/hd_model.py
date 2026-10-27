@@ -25,7 +25,7 @@ FIELDS = {
 }
 OPTIONAL = {"확인": {"answer": ("str", 40)}}   # 있어도 되는 칸: 사람이 질문에 고른 답으로 닫을 때(annotation.js OPTIONAL)
 COMMON = {"kind", "by", "at", "detail"}
-DETAIL_MAX = 2000
+DETAIL_MAX = 50000   # 긴 답 본문(R26) — 요약 칸(what·text …)은 한 줄 상태에 쓰이니 짧게 두고, 전체 답은 detail 에(대화 패널·메모가 다 보인다)
 BY_MAX = 40
 QUOTE_MAX = 60
 

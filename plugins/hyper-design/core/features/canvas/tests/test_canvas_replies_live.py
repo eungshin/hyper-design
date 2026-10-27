@@ -94,7 +94,8 @@ def test_agent_reply_shows_live_without_reload(live):
     pg.wait_for_function(f"document.querySelectorAll('{PIN}').length === 2", timeout=8000)
     assert pg.text_content(BADGE) == "2"
     pg.evaluate("window.__hdStay = 1")
-    reply(pg, "m1", {"kind": "반영됨", "what": "버튼 키움", "screens": ["pay"], "captured": True})
+    long = "".join("%03d 줄 자세한 설명\n" % i for i in range(900))[:9995] + "설명-끝"   # R26: 긴 답 본문(detail ≤50000)은 묶음 답 줄 아래 전체
+    reply(pg, "m1", {"kind": "반영됨", "what": "버튼 키움", "screens": ["pay"], "captured": True, "detail": long})
     pg.wait_for_selector(PIN + '[data-id="m1"][data-st="done"]', state="attached", timeout=4000)
     assert pg.locator(PIN).count() == 2 and pg.text_content(BADGE) == "2", "켜져 있으면 완료한 메모도 보인다(흐리게)"
     assert pg.evaluate("window.__hdStay") == 1, "새로고침 없이"
@@ -105,6 +106,9 @@ def test_agent_reply_shows_live_without_reload(live):
     line = pg.locator('#thread details.thdone li[data-id="m1"] .thr1[data-kind="반영됨"]')
     assert line.count() == 1, "답 줄"
     assert "캡처 확인함" in line.get_attribute("title")
+    det = pg.locator('#thread details.thdone li[data-id="m1"] .thdet')
+    assert det.count() == 1 and det.text_content() == long, "detail 10,000자 = 답 줄 아래 전체(줄바꿈 그대로)"
+    assert len(line.get_attribute("title")) < 400, "툴팁은 앞부분만"
     pg.keyboard.press("Escape")
     show_sent(pg, False)
     pg.wait_for_selector(BADGE, state="detached", timeout=3000)

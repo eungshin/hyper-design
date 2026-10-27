@@ -4,7 +4,8 @@
   hd notes [<project>|--out PATH] [--open|--sent|--all]
                                           메모: screen #no · status · intent · target · text (답은 들여 쓴 줄)
   hd reply <screen>#<no>|<note-id> --kind 반영됨 --what … --screens a,b --captured yes|no
-           (일부: --done --left · 대체됨: --where · 답변: --text · 질문: --question --choice X --choice Y · 모두: --detail --by NAME)
+           (일부: --done --left · 대체됨: --where · 답변: --text · 질문: --question --choice X --choice Y · 모두: --detail|--detail-file PATH|- --by NAME)
+           요약 칸은 짧게(한 줄 상태), 긴 답 전체는 detail(50000자 — 대화 패널·메모가 다 보인다). 긴 글은 --detail-file(명령줄 한도)
   hd projects                             저장한 프로젝트(링크): name · out · url|꺼짐|없음 · 연 때
   hd save [--name N] [--out PATH]         링크 넣기·고치기(기본 out = 떠 있는 캔버스 하나) — 복사하지 않는다
   hd open <name|path> [--agent ID] [--no-open]
@@ -76,7 +77,21 @@ def build_reply(a):
     return r
 
 
+def read_detail(a):
+    """--detail-file PATH|- → a.detail(R26: 긴 답은 파일·표준 입력으로 — Windows 명령줄은 약 32000자). --detail 과 함께면 오류."""
+    if a.detail_file is None:
+        return
+    if a.detail is not None:
+        raise SystemExit("--detail 과 --detail-file 중 하나만 쓰세요")
+    try:
+        raw = sys.stdin.buffer.read() if a.detail_file == "-" else pathlib.Path(a.detail_file).read_bytes()
+        a.detail = raw.decode("utf-8-sig").replace("\r\n", "\n")   # Windows 에서 쓴 파일도 같은 줄바꿈
+    except (OSError, UnicodeDecodeError) as e:
+        raise SystemExit("--detail-file 을 읽지 못했어요(UTF-8 글이어야 해요): %s" % e)
+
+
 def cmd_reply(a):
+    read_detail(a)
     p = _hub().project(a.project, a.out, need_helper=True)
     res = p.reply(a.note, build_reply(a))
     r = S.parse_ref(a.note)
@@ -215,6 +230,7 @@ def parser():
     r.add_argument("--kind", required=True, choices=S.AGENT_KINDS)
     for k in ("what", "done", "left", "where", "text", "question", "detail", "by"):
         r.add_argument("--" + k)
+    r.add_argument("--detail-file", help="긴 답 본문(detail, 50000자까지)을 UTF-8 파일에서 · - = 표준 입력")
     r.add_argument("--screens", help="쉼표로: a,b")
     r.add_argument("--captured", choices=("yes", "no"))
     r.add_argument("--choice", action="append", help="질문의 고를 것(2–4번)")

@@ -97,3 +97,40 @@ def test_several_canvases_require_a_choice(tmp_path):
         assert code == 0 and d["project"] == "proj-b", err
     finally:
         hdfix.stop_helper(pa); hdfix.stop_helper(pb)
+
+
+CHAT_JS = r"""
+const fs = require('fs'), vm = require('vm');
+vm.runInThisContext(fs.readFileSync(process.argv[2], 'utf8'), {filename: 'chat-log.js'});
+const C = globalThis.HD.chatLog, body = JSON.parse(fs.readFileSync(0, 'utf8')), p = C.parse(body);
+const lines = [].concat(...C.turns(p.records, Date.now()).map(t => t.lines)).filter(l => l.kind === 'reply');
+process.stdout.write(JSON.stringify(lines.map(l => l.text)));
+"""
+
+
+def test_long_reply_through_hd_reply_reaches_the_chat_panel_whole(canvas, tmp_path):
+    """R26 — 10,000자 답: hd reply --detail-file(명령줄 길이 한도를 넘는 글) → 도우미가 저장 → 대화 기록(/api/chat) → 대화 패널 Model(chat-log.js turns)의 답 줄에 전체."""
+    import shutil, urllib.parse, urllib.request
+    out, home, url = canvas
+    detail = "".join("%04d 줄 — 긴 답의 한 줄이에요.\n" % i for i in range(500))
+    detail = (detail * 2)[:9997] + "끝-표"
+    assert len(detail) == 10000
+    f = tmp_path / "detail.md"
+    f.write_text(detail, encoding="utf-8")
+    code, res, err = hdj(home, "reply", "home#2", "--kind", "답변", "--text", "네, 토큰이에요(아래 자세히)", "--detail-file", str(f))
+    assert code == 0 and res["status"] == "done", (res, err)
+    st = json.loads((out / ".hd-canvas.json").read_text(encoding="utf-8"))["state"]
+    assert next(n for n in st["notes"] if n["id"] == "n2")["replies"][-1]["detail"] == detail, "저장된 detail = 파일 글 그대로"
+    tok = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["hd"][0]
+    base = "http://" + urllib.parse.urlparse(url).netloc
+    with urllib.request.urlopen(urllib.request.Request(base + "/api/chat", headers={"X-HD-Token": tok}), timeout=10) as r:
+        chat = r.read().decode("utf-8")
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node 없음")
+    js = tmp_path / "c.js"
+    js.write_text(CHAT_JS, encoding="utf-8")
+    p = subprocess.run([node, str(js), str(hdfix.CANVAS / "modules" / "chat-log.js")], input=chat, capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert p.returncode == 0, p.stderr
+    texts = json.loads(p.stdout)
+    assert texts and texts[-1] == "네, 토큰이에요(아래 자세히)\n\n" + detail, "패널 답 줄 = 요약 + 10,000자 설명 전체"
