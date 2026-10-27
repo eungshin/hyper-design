@@ -33,6 +33,8 @@ out.menuApp = B.menu(h, {app: true}).map(g => [g.head, g.items.map(i => [i.act, 
 out.keys = ['parent', 'inner', 'text', 'dup', 'remove', 'up', 'down', 'memo', 'ai', 'swap'].map(a => B.keyOf(a, h, 'board'));
 out.keysBox = ['inner', 'text'].map(a => B.keyOf(a, box, 'board'));
 out.ai = [B.askText('ai', h), B.askText('ai', {})];
+const img = Object.assign({}, h, {tag: 'img', attrs: {src: 'a.png', alt: ''}}), acts = (gs) => [].concat(...gs.map(g => g.items.map(i => i.act)));
+out.cap = [acts(B.menu(h, {links: 2})), acts(B.menu(img, {links: 2})), acts(B.menu(img, {links: 0}))];
 console.log(JSON.stringify(out));
 """
 
@@ -68,7 +70,7 @@ def test_menu_groups_and_real_shortcut_hints(js):
         ["고르기", [["chain", "레이어 고르기", ""]]],
         ["고치기", [["text", "글자 고치기", "Enter"], ["dup", "복제", "Ctrl+D"], ["remove", "지우기", "Del"],
                     ["insert", "아래에 넣기…", ""], ["swap", "다른 부품으로 바꾸기…", ""]]],
-        ["요청", [["memo", "메모 달기", ""]]]], js["menu"]
+        ["요청", [["memo", "메모 달기", ""], ["addr", "주소 복사", "Ctrl+L"]]]], js["menu"]   # R30 주소 복사(Ctrl+L)
     assert sum(len(i) for _, i in js["menu"]) <= 10
 
 
@@ -84,7 +86,7 @@ def test_large_view_text_hint_is_double_click(js):
 
 
 def test_root_drops_disabled_edits_and_parent(js):
-    assert js["menuRoot"] == [["고르기", ["chain"]], ["고치기", ["text"]], ["요청", ["memo"]]], js["menuRoot"]
+    assert js["menuRoot"] == [["고르기", ["chain"]], ["고치기", ["text"]], ["요청", ["memo", "addr"]]], js["menuRoot"]
 
 
 def test_attr_item_only_for_elements_with_attributes(js):
@@ -103,3 +105,11 @@ def test_only_real_keys(js):
 
 def test_ai_prefill(js):
     assert js["ai"][0].startswith("바꿔 주세요") and js["ai"][1].startswith("바꿔 주세요"), js["ai"]
+
+
+def test_address_item_drops_only_when_menu_would_pass_ten(js):
+    """R30: '주소 복사'는 요청 묶음 끝 — 셸이 덧붙일 연결 항목(links)까지 세어 10개를 넘으면 그것만 빠진다(Ctrl+L 로는 됨). 다른 항목은 그대로."""
+    plain, img_links, img_modal = js["cap"]
+    assert "addr" in plain and len(plain) + 2 <= 10, plain
+    assert "addr" not in img_links and len(img_links) + 2 == 10 and "attr" in img_links, img_links
+    assert "addr" in img_modal, img_modal

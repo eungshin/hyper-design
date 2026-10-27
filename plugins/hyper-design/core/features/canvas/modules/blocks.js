@@ -7,7 +7,8 @@ HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 �
                 tone(h, o) → 'app'|''(요소 상자 색 — 앱 카드 = 요청으로만, Figma 인스턴스 보라 자리, 51-3), parentPick(h, chain) → 고를 상위 hit|null,
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글,
                 R17 시안 A: icons(h, o) → 막대 아이콘 [{act, label, key, ask}](메모 · 글자(글을 바꿀 수 있을 때만) · AI · 전체 메뉴 ⋯),
-                menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title}]}], keyOf(act, h, where) → 실제로 듣는 키 힌트|''} */
+                menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title}]}], keyOf(act, h, where) → 실제로 듣는 키 힌트|''}
+   o.links = 셸이 '연결' 묶음으로 덧붙일 항목 수 — 메뉴 전체가 MENU_MAX(10) 를 넘으면 '주소 복사'(R30, Ctrl+L 로도 됨)만 뺀다(다른 항목은 그대로) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -141,12 +142,13 @@ function tone(h, o) { return (o && o.app) || (h && h.src && h.src.file) ? 'app' 
 // ---- R17 시안 A: 작은 아이콘 막대 + 전체 메뉴(오른쪽 클릭 = ⋯). 힌트는 실제로 듣는 키만(keyAct · 크게 보기 hd-dbl)
 var MENU = {parent: '상위 고르기', inner: '안쪽 고르기', chain: '레이어 고르기',
             text: '글자 고치기', attr: '속성 고치기…', dup: '복제', remove: '지우기', up: '위로 옮기기', down: '아래로 옮기기',
-            insert: '아래에 넣기…', swap: '다른 부품으로 바꾸기…', memo: '메모 달기', ai: 'AI에게 바꿔 달라기'};
+            insert: '아래에 넣기…', swap: '다른 부품으로 바꾸기…', memo: '메모 달기', ai: 'AI에게 바꿔 달라기', addr: '주소 복사'};
 // R27 F05: 요소 메뉴는 10개 이하 · 겹침 없이 — 상위(Shift+Enter · [)·안쪽(Enter)·위/아래로 옮기기(Alt+↑/↓ · 막대 손잡이)는 키로, AI에게 바꿔 달라기는 막대 AI 아이콘·메모 창 '바꾸기'로.
 //   레이어 고르기 ▸ 목록이 그 요소 + 조상(상위 고르기와 같은 길)을 준다
-var GROUPS = [['고르기', ['chain']], ['고치기', ['text', 'attr', 'dup', 'remove', 'insert', 'swap']], ['요청', ['memo']]];
-var PICK_ONLY = {inner: 1, chain: 1, ai: 1};          // bar 에 없는 항목 — 고르기·요청이라 늘 켜짐(앱 카드도 그대로)
-var KEY = {parent: 'Shift+Enter', dup: 'Ctrl+D', remove: 'Del', up: 'Alt+↑', down: 'Alt+↓'};   // keyAct 와 같은 키
+var GROUPS = [['고르기', ['chain']], ['고치기', ['text', 'attr', 'dup', 'remove', 'insert', 'swap']], ['요청', ['memo', 'addr']]];
+var PICK_ONLY = {inner: 1, chain: 1, ai: 1, addr: 1};   // addr = 주소 복사(R30) — 읽기만이라 앱 카드도 그대로
+var MENU_MAX = 10;          // bar 에 없는 항목 — 고르기·요청이라 늘 켜짐(앱 카드도 그대로)
+var KEY = {parent: 'Shift+Enter', dup: 'Ctrl+D', remove: 'Del', up: 'Alt+↑', down: 'Alt+↓', addr: 'Ctrl+L'};   // addr = view-address 가 듣는 키   // keyAct 와 같은 키
 function keyOf(act, h, where) {
   if (act === 'inner') return enterOf(h) === 'down' ? 'Enter' : '';
   if (act === 'text') return where === 'modal' ? '더블클릭' : enterOf(h) === 'text' ? 'Enter' : '';
@@ -156,14 +158,17 @@ function menu(h, o) {
   h = h || {}; o = o || {};
   var by = {};
   bar(h, o).forEach(function (b) { by[b.act] = b; });
-  return GROUPS.map(function (g) {
+  var gs = GROUPS.map(function (g) {
     return {head: g[0], items: g[1].map(function (act) {
       if (PICK_ONLY[act]) return {act: act, label: MENU[act], key: keyOf(act, h, o.where), on: true, ask: false, title: ''};
       var b = by[act];
       if (!b || (!b.on && act !== 'text')) return null;   // 꺼진 것은 빼되 글자 고치기는 남긴다(누르면 까닭)
       return {act: act, label: MENU[act] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask || !b.on ? '' : keyOf(act, h, o.where), on: b.on, ask: b.ask, title: b.title};
     }).filter(Boolean)};
-  }).filter(function (g) { return g.items.length; });
+  });
+  var n = (+o.links || 0) + gs.reduce(function (s, g) { return s + g.items.length; }, 0);
+  if (n > MENU_MAX) gs.forEach(function (g) { g.items = g.items.filter(function (it) { return it.act !== 'addr'; }); });
+  return gs.filter(function (g) { return g.items.length; });
 }
 function icons(h, o) {
   h = h || {}; o = o || {};

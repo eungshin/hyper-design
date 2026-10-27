@@ -1,0 +1,69 @@
+{
+ "_doc": "R30 주소 줄 — canvas modules/address.js(build·parse)와 hd/hd_address.py(parse)가 같이 읽는다. line = build(x), parse(line) = x. bad = 읽지 못함(null/None).",
+ "lines": [
+  {
+   "name": "element",
+   "x": {
+    "project": "dayfine-onboarding-v1",
+    "screen": "home",
+    "path": "header.titlebar:nth-of-type(1)",
+    "file": "C:/Code/hyper-design/runs/dayfine-onboarding-v1/out/screens/home.html",
+    "text": "오늘의 할 일"
+   },
+   "line": "hd://dayfine-onboarding-v1/home#header.titlebar:nth-of-type(1)  C:/Code/hyper-design/runs/dayfine-onboarding-v1/out/screens/home.html · \"오늘의 할 일\""
+  },
+  {
+   "name": "korean-project-and-spaces",
+   "x": {
+    "project": "온보딩 시안 2",
+    "screen": "홈 화면",
+    "path": "#main > div.card:nth-of-type(2) > button",
+    "file": "C:/Users/me/My Designs/온보딩/out/screens/홈 화면.html",
+    "text": "Say \"hi\" now"
+   },
+   "line": "hd://온보딩%20시안%202/홈%20화면#%23main%20>%20div.card:nth-of-type(2)%20>%20button  C:/Users/me/My Designs/온보딩/out/screens/홈 화면.html · \"Say \\\"hi\\\" now\""
+  },
+  {
+   "name": "card-no-element",
+   "x": {
+    "project": "gym-v2",
+    "screen": "settings",
+    "path": null,
+    "file": "/home/u/gym v2/out/settings.html",
+    "text": "설정"
+   },
+   "line": "hd://gym-v2/settings  /home/u/gym v2/out/settings.html · \"설정\""
+  },
+  {
+   "name": "region-percent-slash-backslash",
+   "x": {
+    "project": "a/b?c",
+    "screen": "50%off#x",
+    "path": "section[data-region=\"a \\\"b\\\"\"] > p:nth-of-type(1)",
+    "file": "D:/x/out/s.html",
+    "text": "back\\slash"
+   },
+   "line": "hd://a%2Fb%3Fc/50%25off%23x#section[data-region=%22a%20\\%22b\\%22%22]%20>%20p:nth-of-type(1)  D:/x/out/s.html · \"back\\\\slash\""
+  },
+  {
+   "name": "empty-text",
+   "x": {
+    "project": "p",
+    "screen": "s",
+    "path": "body",
+    "file": "C:/o/s.html",
+    "text": ""
+   },
+   "line": "hd://p/s#body  C:/o/s.html · \"\""
+  }
+ ],
+ "bad": [
+  "http://p/s",
+  "hd://",
+  "hd://proj",
+  "hd://proj/",
+  "hd:///s",
+  "hd://%E0%A4/s  C:/f.html · \"x\"",
+  "  plain text"
+ ]
+}

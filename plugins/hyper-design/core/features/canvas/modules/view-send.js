@@ -1,6 +1,6 @@
 /* View — 보내기 길 하나: 위쪽 [보내기](#nsend)·질문 고르기·등록부 sendNotes 가 같은 send, 도우미가 없거나 꺼지면 요청문 복사, [보낸 것 완료로](#nclear).
    보낸 뒤 말 = Model HD.agents.sentSay · 요청문 = HD.edits.request. 보낸 요청문은 window.__hdLastSend, 도우미 답은 window.__hdLastHelper(테스트가 읽음).
-   HD.viewSend.mount(ctx) → {send(list), busy() → 보내는 중(두 번 누르기 = 같은 요청 두 번 · S1), answer(id, choice), request(list) → 요청문}
+   HD.viewSend.mount(ctx) → {send(list), busy() → 보내는 중(두 번 누르기 = 같은 요청 두 번 · S1), answer(id, choice), request(list) → 요청문, copy(text) → Promise<복사됐나>}
    ctx = {$, notes(NS), save(), record(op), toast(m, undo?, ms?, connect? {label, tip} = 받는 곳 고르기 단추), history: {sent(), applied()}, sync() → VS, cover() → VB|null, cardEl(id), sizes() → 카드 크기|null, agent() → 받는 곳|null(바뀔 수 있다), out() → out 폴더|''} */
 (function () {
 'use strict';
@@ -99,7 +99,7 @@ function mount(ctx) {
     ctx.record({label: '보낸 것 완료로', redo: go, undo: function () { memos.forEach(function (n, i) { n.replies = n.replies.slice(0, k[i]); }); NS.set(before); ctx.save(); }});
   });
 
-  return {send: send, busy: function () { return sending; }, answer: answer, request: request};
+  return {send: send, busy: function () { return sending; }, answer: answer, request: request, copy: copyText};   // copy = 클립보드 + 예전 길(주소 복사 R30 도 이 길)
 }
 
 HD.viewSend = {mount: mount};
