@@ -91,11 +91,14 @@ function mount(ctx) {
 HD.viewRows = {mount: mount};
 
 // ---------------------------------------------------------------- 줄 = 섹션(51-4)
+// R27 F01: 줄 제목 = Figma 섹션 이름처럼 화면에서 늘 12px(--lz = 1/판 배율, view-label-scale) · 카드 바로 위 4px 에 붙는다.
+// 자리 상자는 예전 그대로 145px(위 129 + 글 16) — 줄 배치가 바뀌지 않게. 글자는 아래 왼쪽을 축으로 scale 만(테두리·여백도 같이 화면 px)
 var CSS =
-  '#rows .flow>.glabel{width:max-content;cursor:pointer;border-radius:calc(6px * var(--ts,1))}\n' +
-  '#rows .flow>.glabel:hover{background:var(--ui-badge-soft);box-shadow:0 0 0 calc(8px * var(--ts,1)) var(--ui-badge-soft)}\n' +
-  '#rows .flow>.glabel.hd-row-on{outline:calc(3px * var(--ts,1)) solid var(--ui-mark);outline-offset:calc(8px * var(--ts,1))}\n' +
-  '#rows .flow>.glabel[contenteditable]{cursor:text;background:none;box-shadow:none;outline:calc(3px * var(--ts,1)) solid var(--ui-mark);outline-offset:calc(8px * var(--ts,1))}\n' +
+  '#rows .flow>.glabel{height:16px;margin:129px 0 0;font:600 12px/16px system-ui,-apple-system,sans-serif;color:#3a3a37;width:max-content;cursor:pointer;border-radius:4px;' +
+  'transform-origin:0 100%;transform:translateY(calc(-4px * var(--lz,1))) scale(var(--lz,1))}\n' +
+  '#rows .flow>.glabel:hover{background:var(--ui-badge-soft);box-shadow:0 0 0 4px var(--ui-badge-soft)}\n' +
+  '#rows .flow>.glabel.hd-row-on{outline:2px solid var(--ui-mark);outline-offset:3px}\n' +
+  '#rows .flow>.glabel[contenteditable]{cursor:text;background:none;box-shadow:none;outline:2px solid var(--ui-mark);outline-offset:3px}\n' +
   '.hd-rmenu{position:fixed;z-index:60;min-width:190px;background:#fff;border:1px solid var(--ui-badge-soft);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:4px}\n' +
   '.hd-rmenu .cmh{padding:4px 8px;font:700 12px system-ui,sans-serif;color:var(--ui-badge);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}\n' +
   '.hd-rmenu button{display:flex;align-items:center;gap:12px;width:100%;height:28px;padding:0 8px;border:0;border-radius:5px;background:none;font:13px system-ui,sans-serif;color:var(--ui-primary);cursor:pointer;text-align:left}\n' +
