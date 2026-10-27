@@ -272,6 +272,13 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 .wm-ck{width:14px;font-size:12px;text-align:center}
 .wm-row kbd{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:#888}
 .wm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
+/* ---- R27 F14 (chrome): 보기(배율) 메뉴 = 글자 줄 + 오른쪽 단축키(창 메뉴와 같은 줄 모양) ---- */
+#vmenu{flex-direction:column;gap:0;min-width:210px}
+#vmenu hr{border:0;border-top:1px solid #eee;margin:4px 2px}
+.vm-row{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;padding:0 10px 0 6px;border:0;border-radius:7px;background:none;font-size:13px;color:#2b2b29;cursor:pointer;text-align:left}
+.vm-row:hover{background:#F2F2EF}.vm-row:disabled{opacity:.4;cursor:default;background:none}
+.vm-row kbd{margin-left:auto;padding-left:16px;font:11px ui-monospace,Menlo,monospace;color:#888}
+/* ---- /R27 F14 ---- */
 body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #ldock,body.bare #dklayer{display:none}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}

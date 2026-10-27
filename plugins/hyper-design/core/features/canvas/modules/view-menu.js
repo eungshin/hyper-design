@@ -1,5 +1,5 @@
 /* View — 위쪽 줄 메뉴 둘(조각 3, H1·H2·H4·H11).
-   보기 메뉴 = 화면 아이콘 단추(#vbtn) 또는 배율 칩 `72% ▾`(#zoom)을 누르면 아이콘 줄: 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
+   보기 메뉴 = 화면 아이콘 단추(#vbtn) 또는 배율 칩 `72% ▾`(#zoom)을 누르면 글자 줄(오른쪽 단축키, R27 F14): 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
    그 아래 창 나누기 줄(하나 · 좌우 2분할, 조각 6) + 동시 스크롤(나눴을 때만). 나누기 상태의 주인은 modules/viewport.js.
    창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 대화창(S1b — 판 아래 입력창, 대화 패널이 보이면 꺼진 줄) · 패널마다 켜짐 체크(대화 = S3 대화 패널)(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
    창 상태의 주인은 modules/dock.js(도크와 같은 곳) — 여기는 의도만 보낸다(ctx.dock.dispatch).
@@ -11,17 +11,16 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 var ZOOM = [
-  {z: 'fit', key: '0', name: '전체 보기', svg: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'},
-  {z: '100', key: '1', name: '100%', svg: '<text x="12" y="16" text-anchor="middle" font-size="10" font-weight="700" stroke="none" fill="currentColor">1:1</text>'},
-  {z: 'in', key: '+', name: '확대', svg: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M8.5 11h5M11 8.5v5"/>'},
-  {z: 'out', key: '-', name: '축소', svg: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M8.5 11h5"/>'},
-  {z: 'pick', key: '', name: '고른 화면에 맞추기', svg: '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M3 7V3h4M21 7V3h-4M3 17v4h4M21 17v4h-4"/>'}
+  {z: 'fit', key: '0', name: '전체 보기'},
+  {z: '100', key: '1', name: '100%'},
+  {z: 'in', key: '+', name: '확대'},
+  {z: 'out', key: '-', name: '축소'},
+  {z: 'pick', key: '', name: '고른 화면에 맞추기'}
 ];
 var SPLIT = [
-  {mode: 'one', name: '나누지 않기', svg: '<rect x="3" y="5" width="18" height="14" rx="2"/>'},
-  {mode: 'lr', name: '좌우로 나누기', svg: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/>'}
+  {mode: 'one', name: '나누지 않기'},
+  {mode: 'lr', name: '좌우로 나누기'}
 ];
-var SYNC = '<path d="M7 4v16M17 4v16"/><path d="M4 8l3-3 3 3M14 16l3 3 3-3"/>';
 var CHROME = [
   {w: 'tools', name: '도구 막대', svg: '<rect x="4" y="3" width="6" height="18" rx="2"/><path d="M7 7v.01M7 11v.01M7 15v.01"/>'},
   {w: 'chat', name: '대화창', svg: '<path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 4v-4H6a2 2 0 01-2-2z"/>'}
@@ -31,17 +30,17 @@ function mount(ctx) {
   var $ = ctx.$, esc = ctx.esc, zbtn = $('#zoom'), vbtn = $('#vbtn'), wbtn = $('#wbtn'), vmenu = $('#vmenu'), wmenu = $('#wmenu');
 
   function svg(d) { return '<svg viewBox="0 0 24 24">' + d + '</svg>'; }
-  function renderView() {
+  function renderView() {                            // 글자 줄 + 오른쪽 단축키(R27 F14 — Figma 배율 메뉴처럼, 아이콘만인 줄 없음)
     var sp = ctx.split.state();
+    var item = function (attrs, role, label, right, off, checked) {
+      return '<button type="button" class="vm-row" ' + attrs + ' role="' + role + '"' + (checked == null ? '' : ' aria-checked="' + checked + '"') + (off ? ' disabled' : '') +
+        '><span class="wm-ck">' + (checked ? '✓' : '') + '</span><span>' + esc(label) + '</span>' + (right ? '<kbd>' + esc(right) + '</kbd>' : '') + '</button>';
+    };
     vmenu.innerHTML = ZOOM.map(function (x) {
-      var off = x.z === 'pick' && !ctx.view.canPick();
-      return '<button type="button" class="vm-ib"' + (x.z === 'fit' ? ' id="fit"' : '') + ' data-z="' + x.z + '" role="menuitem"' + (off ? ' disabled' : '') +
-        ' title="' + esc(x.name + (x.key ? ' (' + x.key + ')' : '')) + '" aria-label="' + esc(x.name) + '">' + svg(x.svg) + '</button>';
+      return item((x.z === 'fit' ? 'id="fit" ' : '') + 'data-z="' + x.z + '"', 'menuitem', x.name, x.key, x.z === 'pick' && !ctx.view.canPick());
     }).join('') + '<hr>' + SPLIT.map(function (x) {
-      return '<button type="button" class="vm-ib" data-split="' + x.mode + '" role="menuitemradio" aria-checked="' + (sp.split === x.mode) + '"' +
-        ' title="' + esc(x.name) + '" aria-label="' + esc(x.name) + '">' + svg(x.svg) + '</button>';
-    }).join('') + '<button type="button" class="vm-ib" data-act="sync" role="menuitemcheckbox" aria-checked="' + sp.sync + '"' + (sp.split === 'one' ? ' disabled' : '') +
-      ' title="동시 스크롤" aria-label="동시 스크롤">' + svg(SYNC) + '</button>';
+      return item('data-split="' + x.mode + '"', 'menuitemradio', x.name, '', false, sp.split === x.mode);
+    }).join('') + item('data-act="sync"', 'menuitemcheckbox', '동시 스크롤', '', sp.split === 'one', sp.sync);
   }
   function row(id, name, icon, on) {
     return '<button type="button" class="wm-row" role="menuitemcheckbox" data-w="' + id + '" aria-checked="' + on + '">' +

@@ -2000,6 +2000,9 @@ def test_view_and_window_menus(dpage):
     dpage.wait_for_selector("#vmenu", state="hidden")
     dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu:not([hidden])")
+    rows = dpage.eval_on_selector_all("#vmenu [data-z]", "els => els.map(e => [e.querySelector('span:not(.wm-ck)').innerText, (e.querySelector('kbd') || {}).innerText || ''])")
+    assert rows[:4] == [["전체 보기", "0"], ["100%", "1"], ["확대", "+"], ["축소", "-"]], ("배율 메뉴 = 글자 줄 + 오른쪽 단축키(R27 F14)", rows)
+    assert dpage.locator("#vmenu svg").count() == 0, "아이콘만인 줄 없음"
     dpage.click("#fit")
     dpage.wait_for_selector("#vmenu", state="hidden")
     zf = zoom_of(dpage)
