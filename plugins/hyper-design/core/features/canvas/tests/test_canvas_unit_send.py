@@ -55,12 +55,14 @@ def js():
 
 def test_sent_say_queue_without_terminal(js):
     q = js["queued"]
-    assert q["text"].startswith("AI 터미널이 연결돼 있지 않아요 — 2건을 대기열 파일(.hd-queue)에만 저장했어요") and q["ms"] == 9000 and q["ok"] is False
+    assert q["text"] == "AI가 연결되지 않아 2건을 대기열에 저장했어요" and q["ms"] == 9000 and q["ok"] is False
+    assert q["connect"]["label"] == "연결" and "hd notes" in q["connect"]["tip"] and "--paseo-agent" in q["connect"]["tip"], "알림은 한 줄 · CLI 안내는 [연결] 툴팁(R27 F04)"
+    assert "hd-queue" not in q["text"] and "hd notes" not in q["text"]
 
 
 def test_sent_say_agent_and_paseo(js):
-    assert js["agentQueued"]["text"] == "AI 에이전트에게 보내지 못해 1건을 대기열 파일에만 저장했어요"
-    assert js["paseo"]["ok"] is True and js["paseo"]["text"].startswith("바로 반영 1건 · ")
+    assert js["agentQueued"]["text"] == "AI 에이전트에게 보내지 못해 1건을 대기열에 저장했어요" and js["agentQueued"]["connect"]["label"] == "연결"
+    assert js["paseo"]["ok"] is True and js["paseo"]["text"].startswith("바로 반영 1건 · ") and "connect" not in js["paseo"]
 
 
 def test_sent_say_refused_and_warn_lead(js):

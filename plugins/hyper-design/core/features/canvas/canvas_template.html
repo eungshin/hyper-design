@@ -780,9 +780,11 @@ LF.renderHidden();
 /* ---------- 트리거(L) · 소켓 끌기 · 자르기(C · 오른쪽 끌기) — 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓는다
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
 var toastT = 0, pickT = null;
-function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간
+function toast(msg, withUndo, ms, act) {            // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간 · act = {label, tip, run} 다른 단추 하나(R27 F04 [연결])
   var t = $('#toast'); t.textContent = msg;
-  if (withUndo) { var b = document.createElement('button'); b.type = 'button'; b.textContent = '되돌리기'; b.addEventListener('click', function () { undo(); t.hidden = true; }); t.appendChild(b); }
+  var btn = function (label, run, tip) { var b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (tip) b.title = tip; b.addEventListener('click', function () { t.hidden = true; run(); }); t.appendChild(b); };
+  if (withUndo) btn('되돌리기', undo);
+  if (act && act.label && act.run) btn(act.label, act.run, act.tip);
   t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, ms || (withUndo ? 5000 : 2600));
 }
 // 카드 화면에 묻기(modules/view-frame-ask.js): 그 자리 요소(hd-hit-at → hd-hit) · 조상(hd-up → hd-upchain) — 메시지 모양은 그대로
@@ -1257,12 +1259,13 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
   built: function (ids) { if (OP) OP.built(ids); },
   revert: function (ids, why, screens) {             // 뒤 빌드가 깨져 도우미가 쓰기를 되돌림 — 먼저 보인 변경을 거두고 알린 뒤 그 화면을 파일대로 다시
     var mine = (OP ? OP.reverted(ids, why) : []).concat(BT ? BT.reverted(ids) : [], CC ? CC.reverted(ids, why) : []);   // CC = 카드 복제(51-6) — 복사본을 거둔다   // BT = 판 글(t51-9) — 파일대로 다시 불러온다
-    if (!mine.length) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
+    var talk = FT.chatLog && FT.chatLog.shown && FT.chatLog.shown();   // 대화 패널이 보이면 그 빨간 줄이 알린다 — 토스트는 패널이 닫혔을 때만(R27 F04)
+    if (!mine.length && !talk) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
     if (screens.length) VS.refresh(screens, 'f' + Date.now());
   },
   reloadCards: function (ids) { reloadCards(ids); }}) : null;
 // 보내기 길 하나(modules/view-send.js): 위쪽 [보내기]·질문 고르기·등록부 sendNotes · 복사 대체 · [보낸 것 완료로] — 보낸 뒤 말은 HD.agents.sentSay
-var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms) { toast(m, u, ms); },
+var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms, c) { toast(m, u, ms, c ? {label: c.label, tip: c.tip, run: function () { var b = $('#aichip'); if (b && !b.hidden) b.click(); }} : null); },
   history: {sent: function () { HI.sent(); }, applied: function () { HI.applied(); }}, sync: function () { return VS; }, cover: function () { return VB; },
   cardEl: function (id) { return VL.cardEl(id); }, sizes: function () { return AB ? AB.sizes() : null; }, agent: function () { return window.__hdAgent || null; }, out: function () { return window.__hdOut || ''; }});
 addEventListener('keydown', function (e) {

@@ -154,6 +154,10 @@ def test_send_shows_whole_turn_and_survives_reload(served, ctx):
         assert "빌드 실패" in pg.text_content("#pTalk .tk-l[data-tone='red']")
         assert pg.evaluate("getComputedStyle(document.querySelector('#pTalk .tk-l[data-tone=\"red\"]')).color") != pg.evaluate(
             "getComputedStyle(document.querySelector('#pTalk .tk-l[data-kind=\"sent\"]')).color")
+        pg.wait_for_selector("#pTalk .tk-turn[data-state='failed']", timeout=15000)
+        assert pg.text_content("#pTalk .tk-turn[data-state='failed'] .tk-st").strip() == "", "실패는 빨간 줄 하나로 — 꼬리 '! 실패' 없음(R27 F04)"
+        pg.wait_for_timeout(300)
+        assert "빌드가 깨져" not in (pg.text_content("#toast") or "") or pg.is_hidden("#toast"), "대화 패널이 보이면 실패 토스트는 띄우지 않는다(R27 F04)"
         shot(pg, "s3-failed-build-line.png")
         recs = call(srv, "GET", "/api/chat")[1]["records"]
         assert [r["kind"] for r in recs][:2] == ["ask", "sent"] or [r["kind"] for r in recs][:2] == ["sent", "ask"]
