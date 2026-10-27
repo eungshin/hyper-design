@@ -39,6 +39,8 @@ out.baseKeepsBy = based.items.h;
 out.liftCli = Object.keys(B.reduce(L, {type: 'seen', mtimes: {'screens/h.html': 11}}).items);
 out.looks = [B.look({via: 'paseo'}), B.look({via: 'queue'}), B.look(L.items.h), B.look({via: 'cli', by: 'a', note: '아주 긴 설명이 들어가서 칩에 다 들어가지 않는 경우를 봅니다'}), B.look({via: 'cli', note: '  두  칸   '}), B.look(null)];
 out.max = B.MAX;
+out.named = [B.look(L.items.h, {'agent-7': '온보딩 고치는 에이전트'}), B.look({via: 'cli', by: '디자인 봇'}), B.look({via: 'cli', by: 'ag-fake'}),
+             B.look({via: 'cli', by: '0f3c9a12-7b4e-4d21-9a3b-1c2d3e4f5a6b'}), B.look({via: 'cli', by: 'agent-7'}, {'agent-7': '  '}), B.label(L.items.h, {'agent-7': '봇'})];
 out.labels = [B.label(L.items.h), B.label({via: 'cli'}), B.label({via: 'cli', note: '정리'}), B.label({via: 'paseo'}), B.label({via: 'queue'})];
 warns.length = 0;
 out.brokenWarn = [B.load(() => '{x', 'K', m => warns.push(m)), warns.slice()];
@@ -81,7 +83,18 @@ def test_busy_accepts_cli_and_keeps_old_vias():
 
 def test_busy_label_says_who_and_what():
     out = run_js()
-    assert out["labels"] == ["agent-7 수정 중 · 버튼 고치는 중", "AI 수정 중", "AI 수정 중 · 정리", "AI 수정 중", "대기열에 있음"]
+    assert out["labels"] == ["AI 수정 중 · 버튼 고치는 중", "AI 수정 중", "AI 수정 중 · 정리", "AI 수정 중", "대기열에 있음"], "날 id(agent-7)는 칩 글에 쓰지 않는다(R27 F12)"
+
+
+def test_busy_chip_names_the_agent_not_its_raw_id():   # R27 F12 — 칩 = 에이전트 이름, 모르면 "AI", 날 id 는 title 에만
+    named, human, fake, uuid, blank, lab = run_js()["named"]
+    assert named["text"].startswith("온보딩 고치는 에이전트 수정 중") and named["title"].startswith("온보딩 고치는 에이전트 수정 중 · 버튼 고치는 중"), named
+    assert "agent-7" not in named["title"], "이름을 알면 id 를 덧붙이지 않는다"
+    assert human["text"] == "디자인 봇 수정 중", "사람이 쓴 by 는 그대로"
+    assert fake["text"] == "AI 수정 중" and "(ag-fake)" in fake["title"], fake
+    assert uuid["text"] == "AI 수정 중" and "0f3c9a12" in uuid["title"], uuid
+    assert blank["text"] == "AI 수정 중", "빈 이름 = 모름"
+    assert lab == "봇 수정 중 · 버튼 고치는 중"
 
 
 def test_busy_look_is_a_small_chip_per_via():   # task 37 — 화면을 가리지 않는 칩: 바쁨(working) · 대기열(queued)
@@ -89,7 +102,7 @@ def test_busy_look_is_a_small_chip_per_via():   # task 37 — 화면을 가리�
     mx = run_js()["max"]
     assert paseo["kind"] == "working" and paseo["text"] == "AI 수정 중" and paseo["title"].startswith("AI 수정 중")
     assert queue["kind"] == "queued" and queue["text"] == "대기열" and queue["title"].startswith("대기열에 있음"), "대기열 = 짧은 글 · 전체는 title"
-    assert cli == {"kind": "working", "text": "agent-7 수정 중 · 버튼 고치는 중", "title": cli["title"]} and cli["title"].startswith("agent-7 수정 중 · 버튼 고치는 중")
+    assert cli == {"kind": "working", "text": "AI 수정 중 · 버튼 고치는 중", "title": cli["title"]} and cli["title"].startswith("AI 수정 중 · 버튼 고치는 중 (agent-7)")
     assert long_["kind"] == "working" and len(long_["text"]) <= mx and long_["text"].endswith("…"), "긴 글은 칩 길이로 줄이고"
     assert "아주 긴 설명이 들어가서 칩에 다 들어가지 않는 경우를 봅니다" in long_["title"], "전체는 title 에"
     assert spaced["text"] == "AI 수정 중 · 두 칸", "칸은 하나로·앞뒤 자름"

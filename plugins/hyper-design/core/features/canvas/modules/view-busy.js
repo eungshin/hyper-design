@@ -18,6 +18,7 @@
      칩이 걷히면(새 교체 'hd-swap' start · 덮개 다시 씀) 켜져 있던 전/후 보기도 off.
    실시간(47-4b, view-live): live(true) = /api/files 1초 읽기 멈춤(덮개 칩의 /api/watch 는 칩이 있는 동안 그대로) · changed(ids, seq) = 이벤트 screen.written by ai
      (폴링 답과 같은 길 — seq 를 기준으로 삼아 폴링으로 돌아가도 이어짐) · resync() = /api/files 한 번(reset 뒤 놓친 것) · since() = 지금 파일 seq|null
+   칩 글의 에이전트 이름(R27 F12): document 'hd-agent' {agent, name}(잡는 단계)로 모은 이름 — 모르면 "AI 수정 중"(날 id 는 title 에만, HD.busy.look).
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids), live(on), changed(ids, seq), resync(), since()}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
           files(since)? → Promise<{seq, changed:[id]}>, known()? → [id], modalScreen()? → id|null, reloadModal()?} */
@@ -26,28 +27,32 @@
 var HD = globalThis.HD = globalThis.HD || {};
 var EVERY = 2000, FILES_EVERY = 1000, SKIP_MS = 5000;
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
-var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--ts,1));right:calc(8px * var(--ts,1));z-index:4;display:inline-flex;flex-direction:row;align-items:center;justify-content:flex-start;' +
-  'gap:calc(5px * var(--ts,1));box-sizing:border-box;height:calc(20px * var(--ts,1));max-width:calc(100% - 16px * var(--ts,1));padding:0 calc(2px * var(--ts,1)) 0 calc(8px * var(--ts,1));' +
+var CSS = '.busy.bchip{position:absolute;inset:auto;top:calc(8px * var(--lz,1));right:calc(8px * var(--lz,1));z-index:4;display:inline-flex;flex-direction:row;align-items:center;justify-content:flex-start;' +
+  'gap:calc(5px * var(--lz,1));box-sizing:border-box;height:calc(22px * var(--lz,1));max-width:calc(100% - 16px * var(--lz,1));padding:0 calc(2px * var(--lz,1)) 0 calc(8px * var(--lz,1));' +
   'border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(255,255,255,.95);color:#2b2b29;box-shadow:0 1px 4px rgba(0,0,0,.14);' +
-  'font:600 calc(11px * var(--ts,1))/1 system-ui,sans-serif;white-space:nowrap;pointer-events:auto;cursor:default}' +
+  'font:600 calc(12px * var(--lz,1))/1 system-ui,sans-serif;white-space:nowrap;pointer-events:auto;cursor:default}' +
   '.busy.bchip[data-kind=queued]{background:rgba(241,241,238,.95);color:#6b6b66;font-weight:500}' +
   '.busy.bchip .busy-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0;text-align:left}' +
-  '.busy.bchip .bspin{flex:none;box-sizing:border-box;width:calc(10px * var(--ts,1));height:calc(10px * var(--ts,1));border:calc(1.5px * var(--ts,1)) solid #d6d6d1;' +
+  '.busy.bchip .bspin{flex:none;box-sizing:border-box;width:calc(11px * var(--lz,1));height:calc(11px * var(--lz,1));border:calc(1.5px * var(--lz,1)) solid #d6d6d1;' +
   'border-top-color:var(--ui-accent,#c2590a);border-radius:50%;animation:hd-bchip-spin .9s linear infinite}' +
-  '.busy.bchip .bdot{flex:none;width:calc(6px * var(--ts,1));height:calc(6px * var(--ts,1));border-radius:50%;background:#a3a39d}' +
-  '.busy.bchip [data-act=lift]{flex:none;display:grid;place-items:center;width:calc(16px * var(--ts,1));height:calc(16px * var(--ts,1));padding:0;margin:0;border:0;border-radius:50%;' +
-  'background:transparent;color:inherit;font:inherit;font-size:calc(13px * var(--ts,1));line-height:1;cursor:pointer;pointer-events:auto}' +
+  '.busy.bchip .bdot{flex:none;width:calc(6px * var(--lz,1));height:calc(6px * var(--lz,1));border-radius:50%;background:#a3a39d}' +
+  '.busy.bchip [data-act=lift]{flex:none;display:grid;place-items:center;width:calc(16px * var(--lz,1));height:calc(16px * var(--lz,1));padding:0;margin:0;border:0;border-radius:50%;' +
+  'background:transparent;color:inherit;font:inherit;font-size:calc(13px * var(--lz,1));line-height:1;cursor:pointer;pointer-events:auto}' +
   '.busy.bchip [data-act=lift]:hover,.busy.bchip [data-act=lift]:focus-visible{background:rgba(0,0,0,.09)}' +
   '@keyframes hd-bchip-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.busy.bchip .bspin{animation:none}}' +
-  '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--ts,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
+  '.phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--lz,1)) var(--ui-accent,#c2590a),0 3px 14px rgba(0,0,0,.10)}' +
   '.busy.bchip[data-kind=done]{transition:opacity .3s ease-out}.busy.bchip[data-kind=done].bout{opacity:0}' +
-  '.busy.bchip .bcmp{flex:none;height:calc(16px * var(--ts,1));padding:0 calc(6px * var(--ts,1));margin:0;border:1px solid rgba(0,0,0,.16);border-radius:999px;background:#fff;' +
-  'color:inherit;font:inherit;font-size:calc(10px * var(--ts,1));line-height:1;cursor:pointer;pointer-events:auto}' +
+  '.busy.bchip .bcmp{flex:none;height:calc(16px * var(--lz,1));padding:0 calc(6px * var(--lz,1));margin:0;border:1px solid rgba(0,0,0,.16);border-radius:999px;background:#fff;' +
+  'color:inherit;font:inherit;font-size:calc(10px * var(--lz,1));line-height:1;cursor:pointer;pointer-events:auto}' +
   '.busy.bchip .bcmp:hover,.busy.bchip .bcmp:focus-visible{background:rgba(0,0,0,.07)}' +
   '.busy.bchip .bcmp[aria-pressed=true]{background:#2b2b29;border-color:#2b2b29;color:#fff}' +
   '.busy.bchip[data-kind=done] .bok{flex:none;color:var(--ui-accent,#c2590a);font-weight:700}' +
   '@media (prefers-reduced-motion:reduce){.busy.bchip[data-kind=done]{transition:none}}' +
-  '#modal .mbar .busy.bchip{position:static;--ts:1;flex:none;max-width:45%}' +
+  '#modal .mbar .busy.bchip{position:static;--lz:1;flex:none;max-width:45%}' +
+  // R27 F01·F12: 칩은 화면에서 늘 같은 크기(--lz = 1/판 배율, view-label-scale) · 고른 카드·이어진 카드(focusing 그림자)에서도 강조 테두리가 보이게 · 메모 배지(오른쪽 위)와 겹치지 않게
+  '#rows.focusing .card.focus .phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--lz,1)) var(--ui-accent,#c2590a),0 0 0 calc(10px + 2px * var(--lz,1)) #1c1c1c,0 3px 14px rgba(0,0,0,.10)}' +
+  '#rows.focusing .card.hl:not(.focus) .phone[data-busy=working]{box-shadow:0 0 0 calc(2px * var(--lz,1)) var(--ui-accent,#c2590a),0 0 0 calc(6px + 2px * var(--lz,1)) #8a8d86,0 3px 14px rgba(0,0,0,.10)}' +
+  '#rows .phone:has(> .nbadge) > .busy.bchip{right:calc(38px * var(--lz,1))}' +
   '.card .cerr{margin-top:calc(8px * var(--ts,1));font:500 calc(12px * var(--ts,1))/1.35 system-ui,sans-serif;color:var(--ui-danger,#b42318);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}';
 
 function style() {
@@ -59,6 +64,7 @@ function style() {
 function mount(ctx) {
   var B = HD.busy, warn = ctx.warn || function (m) { console.warn(m); };
   var st = B.load(ctx.getItem, ctx.key, warn), els = {}, timer = 0, skip = {}, mel = null;
+  var names = {};                                     // R27 F12 — 판이 아는 에이전트 이름 {id: 이름}('hd-agent' 의도에서 모음, 저장 안 함)
   var landedRec = {}, dones = {}, swapErr = {};          // 48a — 파일이 바뀌어 걷힌 카드 · 지금 보이는 "방금 반영됨" 칩 · 교체 실패 줄을 단 카드
 
   function dispatch(a) {
@@ -69,9 +75,9 @@ function mount(ctx) {
   function ids() { return Object.keys(st.items); }
 
   function chip(id, it) {                             // 칩 하나 — 점/도는 표시 + 짧은 글 + [×]
-    var lk = B.look(it), el = document.createElement('div');
+    var lk = B.look(it, names), el = document.createElement('div');
     el.className = 'busy bchip'; el.setAttribute('data-via', it.via); el.setAttribute('data-kind', lk.kind); el.setAttribute('data-id', id);
-    el.setAttribute('data-label', B.label(it)); el.setAttribute('role', 'status'); el.title = lk.title;
+    el.setAttribute('data-label', B.label(it, names)); el.setAttribute('role', 'status'); el.title = lk.title;
     var dot = document.createElement('span'); dot.className = lk.kind === 'working' ? 'bspin' : 'bdot'; dot.setAttribute('aria-hidden', 'true'); el.appendChild(dot);
     var tx = document.createElement('span'); tx.className = 'busy-txt'; tx.textContent = lk.text; el.appendChild(tx);
     var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-act', 'lift'); b.setAttribute('aria-label', '걷기'); b.title = '걷기(지우기)'; b.textContent = '×';
@@ -81,7 +87,7 @@ function mount(ctx) {
     return el;
   }
   function same(el, host, it, id) {
-    return !!el && el.parentNode === host && el.getAttribute('data-id') === String(id) && el.getAttribute('data-via') === it.via && el.getAttribute('data-label') === B.label(it);
+    return !!el && el.parentNode === host && el.getAttribute('data-id') === String(id) && el.getAttribute('data-via') === it.via && el.getAttribute('data-label') === B.label(it, names);
   }
   function unmark(el) { var h = el && el.parentNode; if (h && h.removeAttribute) h.removeAttribute('data-busy'); }
 
@@ -93,7 +99,7 @@ function mount(ctx) {
       undone(id);
       el = chip(id, it); host.appendChild(el); els[id] = el;
     }
-    if (B.look(it).kind === 'working') host.setAttribute('data-busy', 'working'); else host.removeAttribute('data-busy');
+    if (B.look(it, names).kind === 'working') host.setAttribute('data-busy', 'working'); else host.removeAttribute('data-busy');
   }
   function drawModal() {                              // 크게 보기 제목 막대에 같은 칩(그 화면이 바쁠 때만, 덮개 없음)
     if (typeof document === 'undefined') return;
@@ -113,6 +119,13 @@ function mount(ctx) {
     for (k in st.items) draw(k, st.items[k]);
     drawModal();
   }
+  // 받는 곳 칩이 이름을 알게 되면(view-agents 고르기 · view-presence 새로고침 뒤) 'hd-agent' {agent, name} — 칩 위에서 나고 올라오지 않으므로 잡는 단계에서 듣는다.
+  // 그 에이전트의 덮개 칩 글이 날 id 대신 이름이 된다(HD.busy.label). 이름이 바뀔 때만 다시 그린다
+  document.addEventListener('hd-agent', function (e) {
+    var d = e.detail || {};
+    if (typeof d.agent !== 'string' || !d.agent || typeof d.name !== 'string' || !d.name.trim() || names[d.agent] === d.name) return;
+    names[d.agent] = d.name; render();
+  }, true);
   function compareTo(id, on) { document.dispatchEvent(new CustomEvent('hd-swap-compare', {detail: {id: id, on: on}})); }   // view-swap 이 옛 화면을 겹친다·걷는다
   function undone(id) { var d = dones[id]; if (d) { clearTimeout(d.t); d.el.remove(); delete dones[id]; if (d.on) compareTo(id, false); } }
   function showDone(id, canCompare) {                 // "방금 반영됨 ✓" — DONE_MS(전/후 보기가 있으면 COMPARE_MS) 뒤 사라짐(덮개가 다시 씌면 그 칩이 대신)

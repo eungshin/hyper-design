@@ -335,7 +335,7 @@ def test_helper_canvas_busy_chip_never_hides_screen(ctx, out):   # Q2b · task 3
 
         assert _post(srv.url.split("/index.html")[0] + "/api/claim", {"screen": "language", "by": "agent-3", "note": "색 맞춤"}, srv.token)[0] == 200
         pg.wait_for_selector(work + '[data-kind="working"]', timeout=8000)
-        assert pg.text_content(work + " .busy-txt") == "agent-3 수정 중 · 색 맞춤"
+        assert pg.text_content(work + " .busy-txt") == "AI 수정 중 · 색 맞춤"
         assert pg.get_attribute('.card[data-id="language"] .phone', "data-busy") == "working", "일하는 중 = 테두리"
         assert pg.evaluate(UNCOVERED, "job"), "일하는 칩도 가리지 않는다"
         shots = pathlib.Path(os.environ.get("TEMP", tempfile.gettempdir())) / "claude"
