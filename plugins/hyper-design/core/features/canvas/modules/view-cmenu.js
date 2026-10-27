@@ -85,6 +85,9 @@ function mount(ctx) {
     if (!cl('#cmenu') && !cl('#cmsub')) close();
   }, true);
   addEventListener('resize', function () { close(); });
+  addEventListener('message', function (e) {         // 화면 틀(크게 보기) 안 왼쪽 누름 = 밖 누르기 — 틀 안 누름은 위 pointerdown 에 오지 않는다(palette.js hd-press)
+    if (e.data && e.data.type === 'hd-press') close();
+  });
 
   return {open: open, close: close,
           isOpen: function () { return !cmenu.hidden; },

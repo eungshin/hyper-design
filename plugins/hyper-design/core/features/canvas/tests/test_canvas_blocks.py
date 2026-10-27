@@ -207,6 +207,21 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     pg.close()
 
 
+@pytest.mark.area("modal", "tools")
+def test_large_view_context_menu_closes_on_left_click_inside_the_screen(ctx, out):
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    mf = _modal(pg)
+    mf.click(H1, button="right")
+    pg.wait_for_selector("#cmenu:not([hidden])", timeout=3000)
+    fr, m = pg.evaluate("[document.getElementById('mframe'), document.getElementById('cmenu')].map(e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; })")
+    x, y = fr[2] - 30, fr[3] - 30                           # 화면(iframe) 안, 메뉴와 겹치지 않는 자리
+    assert not (m[0] <= x <= m[2] and m[1] <= y <= m[3]), (fr, m)
+    pg.mouse.click(x, y)                                    # 틀 안 왼쪽 클릭 = 메뉴 밖 — 캔버스 문서의 pointerdown 은 오지 않는다
+    pg.wait_for_selector("#cmenu", state="hidden", timeout=3000)
+    assert not errors, errors
+    pg.close()
+
+
 # ---------------------------------------------------------------- 앱 카드: 편집 = AI 요청
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
