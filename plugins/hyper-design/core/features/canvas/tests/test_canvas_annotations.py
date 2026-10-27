@@ -303,3 +303,68 @@ def test_thread_row_actions_are_quiet_icons_with_tooltips(apage):
     pg.click('#thread li[data-id="q1"] button[data-act="del"]')
     pg.wait_for_function("(() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); return !JSON.parse(localStorage.getItem(k)).some(n => n.id === 'q1'); })()", timeout=4000)
     pg.keyboard.press("Escape")
+
+
+@pytest.mark.area("notes")
+def test_memo_composer_is_quiet_and_opens_beside_its_target(apage):
+    """R27 F09: 메모 쓰는 창 — 내부 경로 줄 없음(꼬리말만) · 의도 말은 한국어(바꾸기·질문) · 범위 = 기본이 골라진 아이콘 셋(이름은 꼬리말) ·
+    의도·범위·📎·추가가 아이콘 한 줄 · × 는 머리 줄 · 글 칸이 컨트롤 글보다 크다 · 창은 누른 요소 옆(덮지 않음)."""
+    pg = apage
+    pg.evaluate(SEED_JS)
+    reload(pg)
+    ph = zoom_to(pg, "pay", 420)
+    fr = frame_of(pg, "pay")
+    pg.keyboard.press("p")
+    x, y = el_point(pg, ph, fr, "button.pay")
+    pg.mouse.click(x, y)
+    pg.wait_for_selector("#pop:not([hidden])")
+    assert pg.text_content("#ptitle") == "지금 결제하기" and "pay" in pg.get_attribute("#ptitle", "title") and pg.is_hidden("#ppath")
+    assert pg.eval_on_selector_all("#pintent button", "bs => bs.map(b => b.textContent)") == ["바꾸기", "질문"]
+    sc = pg.eval_on_selector_all("#pscope button", "bs => bs.map(b => [b.textContent.trim(), b.getAttribute('aria-label'), b.getAttribute('aria-pressed'), !!b.querySelector('svg')])")
+    assert sc == [["", "이 요소", "true", True], ["", "이 화면", "false", True], ["", "모든 화면", "false", True]], sc
+    mid = lambda sel: (lambda b: b["y"] + b["height"] / 2)(pg.locator(sel).bounding_box())
+    row = [mid(s) for s in ("#pintent", "#pscope", "#pop .patt", "#padd")]
+    assert max(row) - min(row) < 4, ("아이콘 한 줄", row)
+    pb, cb, tb = pg.locator("#pop").bounding_box(), pg.locator("#pcancel").bounding_box(), pg.locator("#pnote").bounding_box()
+    ab = pg.locator("#pop .patt").bounding_box()
+    assert pb["x"] <= ab["x"] and ab["x"] + ab["width"] <= pb["x"] + pb["width"], "📎 는 창 안(R22)"
+    assert cb["y"] + cb["height"] <= tb["y"] and pg.get_attribute("#pcancel", "aria-label") == "닫기", "× = 머리 줄"
+    fs = lambda sel: float(pg.eval_on_selector(sel, "e => getComputedStyle(e).fontSize")[:-2])
+    assert fs("#pnote") > fs("#pintent button") and fs("#pnote") >= fs("#ptitle")
+    eb = el_box(pg, ph, fr, "button.pay")
+    over = not (pb["x"] + pb["width"] <= eb["x"] or eb["x"] + eb["w"] <= pb["x"] or pb["y"] + pb["height"] <= eb["y"] or eb["y"] + eb["h"] <= pb["y"])
+    assert not over, ("창이 고른 요소를 덮지 않는다", pb, eb)
+    pg.hover('#pscope button[data-scope="all"]')
+    pg.wait_for_selector("#poptip:not([hidden])")
+    assert pg.text_content("#poptip") == "범위: 모든 화면"
+    pg.click('#pintent [data-intent="question"]')
+    assert pg.get_attribute("#pnote", "placeholder") == "무엇이 궁금한지 적어 주세요…"
+    pg.click("#pcancel")
+    assert pg.is_hidden("#pop") and pg.is_hidden("#poptip")
+    pg.keyboard.press("v")
+
+
+@pytest.mark.area("notes")
+def test_memo_panel_groups_rows_under_screen_title(apage):
+    """R27 F10: 메모 패널 — 화면 이름 머리가 화면마다 한 번 · 줄 = 작은 회색 메타(번호·의도 아이콘·대상) + 메모 글(더 크고 진함) · 화면 id·영어 의도 말 없음."""
+    pg = apage
+    pg.evaluate("""() => { const h = (function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); })(location.pathname);
+      const b = {path: 'button.pay', text: '지금 결제하기'}, body = {path: 'body', text: '결제'};
+      const mk = (id, no, screen, t, note, intent) => ({id, no, screen, targets: [t], path: t.path, text: t.text, rect: null, note, intent, sent: false, replies: []});
+      localStorage.setItem('hd-notes:' + h, JSON.stringify([mk('m1', 1, 'pay', b, '버튼을 더 크게', 'change'), mk('d1', 1, 'done', {path: 'body', text: '완료'}, '축하 그림 넣기', 'change'),
+        mk('m2', 2, 'pay', body, '이 화면이 꼭 필요할까요?', 'question')]));
+      localStorage.setItem('hd-note-seq:' + h, JSON.stringify({pay: 2, done: 1})); localStorage.removeItem('hd-show-sent:' + h); }""")
+    reload(pg)
+    pg.wait_for_selector("#notes:not([hidden])")
+    assert pg.eval_on_selector_all("#nlist .ngh", "es => es.map(e => e.textContent)") == ["결제", "완료"], "화면 이름은 화면마다 한 번"
+    assert pg.eval_on_selector_all("#nlist li", "ls => ls.map(l => l.dataset.id)") == ["m1", "m2", "d1"], "같은 화면끼리 묶임(줄 = 메모 하나)"
+    meta = pg.eval_on_selector_all("#nlist li .nl", r"es => es.map(e => e.innerText.replace(/\s+/g, ' ').trim())")
+    assert meta == ["#1 지금 결제하기", "#2 화면 전체", "#1 화면 전체"], meta
+    txt = pg.text_content("#nlist")
+    assert not any(w in txt for w in ("pay", "done", "change", "question")), ("내부 id·영어 의도 없음", txt)
+    assert pg.eval_on_selector_all("#nlist li .ni", "es => es.map(e => e.getAttribute('aria-label'))") == ["바꾸기", "질문", "바꾸기"]
+    css = lambda sel, p: pg.eval_on_selector(sel, f"e => getComputedStyle(e).{p}")
+    row = '#nlist li[data-id="m1"]'
+    assert float(css(row + " .nnote", "fontSize")[:-2]) > float(css(row + " .nl", "fontSize")[:-2]) and css(row + " .nnote", "color") == "rgb(28, 28, 28)"
+    eb, nb = pg.locator(row + ' button[data-act="edit"]').bounding_box(), pg.locator(row + " .nn").bounding_box()
+    assert abs((eb["y"] + eb["height"] / 2) - (nb["y"] + nb["height"] / 2)) < 6, "연필·휴지통은 메타 줄 끝(메모 묶음과 같이)"

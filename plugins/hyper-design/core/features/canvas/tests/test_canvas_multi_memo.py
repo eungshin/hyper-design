@@ -29,7 +29,7 @@ def test_two_cards_one_memo_goes_to_each_screen_and_undoes_together(dpage):
     n0 = len(notes_of(dpage))
     dpage.click('#selbar [data-act="memo"]')
     dpage.wait_for_selector("#pop:not([hidden])")
-    scopes = dpage.evaluate("[...document.querySelectorAll('#pscope button')].filter(b => !b.hidden).map(b => [b.dataset.scope, b.textContent, b.getAttribute('aria-pressed')])")
+    scopes = dpage.evaluate("[...document.querySelectorAll('#pscope button')].filter(b => !b.hidden).map(b => [b.dataset.scope, b.getAttribute('aria-label'), b.getAttribute('aria-pressed')])")   # R27 F09: 범위 = 아이콘, 이름은 aria-label
     assert scopes == [["screen", "고른 화면 2개", "true"], ["all", "모든 화면", "false"]], scopes
     assert "고른 화면 2개" in dpage.locator("#ptitle").text_content()
     dpage.fill("#pnote", "두 화면 여백을 같이 줄이기")
@@ -51,6 +51,6 @@ def test_single_card_memo_keeps_three_scopes(dpage):
     dpage.wait_for_timeout(150)
     dpage.click('#selbar [data-act="memo"]')
     dpage.wait_for_selector("#pop:not([hidden])")
-    scopes = dpage.evaluate("[...document.querySelectorAll('#pscope button')].filter(b => !b.hidden).map(b => b.textContent)")
+    scopes = dpage.evaluate("[...document.querySelectorAll('#pscope button')].filter(b => !b.hidden).map(b => b.getAttribute('aria-label'))")
     assert scopes == ["이 요소", "이 화면", "모든 화면"], "한 장이면 지금과 같다"
     dpage.click("#pcancel")

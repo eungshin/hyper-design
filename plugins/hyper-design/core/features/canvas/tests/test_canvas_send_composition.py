@@ -71,7 +71,7 @@ def test_scope_all_screens_reaches_the_queue_and_layout_memo_rides_with_layout(l
     pg.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
     pg.wait_for_selector("#pop:not([hidden])")
     assert pg.get_attribute('#pscope button[data-scope="screen"]', "aria-pressed") == "true", "화면 전체 메모 = 기본 '이 화면'"
-    assert pg.locator("#pscope button").all_text_contents() == ["이 요소", "이 화면", "모든 화면"]
+    assert pg.eval_on_selector_all("#pscope button", "bs => bs.map(b => b.getAttribute('aria-label'))") == ["이 요소", "이 화면", "모든 화면"]   # R27 F09: 아이콘 + 이름
     pg.click('#pscope button[data-scope="all"]')
     pg.fill("#pnote", "배경을 움직이는 그라데이션으로")
     pg.click("#padd")

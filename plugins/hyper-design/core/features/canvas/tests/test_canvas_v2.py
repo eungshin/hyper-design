@@ -169,7 +169,7 @@ def test_pick_note_pin_persists(page):
     target.click()
     page.wait_for_selector("#pop:not([hidden])")
     assert page.text_content("#ptitle") == want
-    assert page.text_content("#ppath")
+    assert page.get_attribute("#ptitle", "title") and page.is_hidden("#ppath"), "R27 F09: 내부 경로는 꼬리말(title)만"
     page.fill("#pnote", "가격을 오른쪽 끝으로 붙이고 굵게")
     page.click("#padd")
     assert page.locator("#mpins .pin").count() == 1

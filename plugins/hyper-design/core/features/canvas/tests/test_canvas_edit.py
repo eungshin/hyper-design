@@ -1238,7 +1238,9 @@ def test_annotate_tool_notes_an_element_on_the_board(dpage):
     dpage.mouse.click(x, y)
     dpage.wait_for_selector("#pop:not([hidden])", timeout=3000)
     assert dpage.evaluate("document.getElementById('modal').hidden"), "크게 보기를 열지 않는다"
-    assert "h1" in dpage.text_content("#ppath")
+    assert "h1" in dpage.get_attribute("#ptitle", "title"), "R27 F09: 내부 경로는 꼬리말만"
+    pb = dpage.locator("#pop").bounding_box()
+    assert not (pb["x"] <= x <= pb["x"] + pb["width"] and pb["y"] <= y <= pb["y"] + pb["height"]), ("메모 창이 누른 요소를 덮지 않는다(옆에)", pb, x, y)
     dpage.fill("#pnote", "제목을 더 짧게")
     dpage.click("#padd")
     wait_notes(dpage, n0 + 1)

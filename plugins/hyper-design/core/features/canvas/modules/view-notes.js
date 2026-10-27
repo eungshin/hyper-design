@@ -6,6 +6,9 @@
      #ncnt '메모 N' · #nsent · #ndec · #nclear) 안에 눈 아이콘 #nsent '보낸 메모 보기 (N)'(title·aria-label, 수 배지 .ncb[data-n] — N = 숨김이 될 메모 수, 0 이면 꺼진 단추로 자리 유지)를 그린다.
      줄의 고치기·지우기 = 줄 오른쪽 위 연필·휴지통 아이콘(늘 흐리게 보이고 올리거나 포커스면 진하게 — 카드 메모 묶음과 같이, R26 · 자리는 늘 비워 둠). 켜짐 = 그 메모도 흐리게 + 상태 말(AI 작업 중·완료). 켜짐 상태의 주인 = 이 View, 키 ctx.key('hd-show-sent')('1'|'0', 깨진 값 = [hd] 경고 + 꺼짐).
      바뀌면 ctx.sentChanged(켜짐)(의도 — 셸이 핀·묶음을 다시 그리게 잇는다, #263). 다른 View 는 셸이 건네는 showSent() 로 읽는다.
+   목록 모양(R27 F10 — 메모 묶음 #thread 와 한 식구): 화면마다 묶어 화면 이름(ctx.title)을 한 번만(그 화면 첫 줄 위 .ngh — 줄 수·li 는 메모 수 그대로),
+     줄 = 작은 회색 메타 한 줄(.nl: 번호 #n.no · 의도 아이콘 .ni(이름은 title·aria-label) · 대상 .nt(화면 전체 | 요소 글) · 상태 말 · 끝에 연필·휴지통) + 메모 글(.nnote, 가장 또렷).
+     내부 화면 id·영어 의도 말은 보이지 않는다. 묶음 차례 = 그 화면 메모가 처음 나온 차례, 묶음 안은 목록 차례.
    요소를 찾을 수 없음(#285): 화면이 다시 찾지 못한 대상(ctx.lost(n))이 있는 열린 메모 줄에 회색 말 .nlost(title = 까닭). 답이 오면 relost() — 바뀐 것이 있을 때만 목록을 다시.
    HD.viewNotes.mount(ctx) → {render(notes, ids?) → {memos, pending, decide}, filter(on), showSent(on?) → 켜짐, relost()}   ids = 메모가 바뀐 화면 — 카드 배지는 그 카드만(없으면 전부)
    ctx = {$, $$, esc, rowsEl, circled(n), title(id), edit(id), del(id), showNotes()(메모 패널을 앞으로), storage{getItem,setItem}, key(prefix) → 저장 키,
@@ -30,26 +33,46 @@ function mount(ctx) {
   var ICON = {
     eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
-    del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>'};
+    del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>',
+    change: '<svg viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5"/><path d="M20 16H7l3.5 3.5"/></svg>',          // 의도 아이콘(F10) — 바꾸기 = 오가는 화살표
+    question: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2v.1"/></svg>'};
+  var INTENT = {change: '바꾸기', question: '질문'};
   var sbtn = document.createElement('button');        // 보낸 메모 보기 — 메모 막대(템플릿 .ntool)의 #ndec 앞
   sbtn.type = 'button'; sbtn.className = 'nib'; sbtn.id = 'nsent'; sbtn.setAttribute('aria-pressed', 'false'); sbtn.disabled = true;
   sbtn.innerHTML = ICON.eye + '<span class="ncb" data-n="0" hidden>0</span>';
   $('#ndec').parentNode.insertBefore(sbtn, $('#ndec'));
   var css = document.createElement('style'); css.id = 'hd-sent-css';
-  css.textContent = '#notes li.nhid{opacity:.55}#notes .nsst,#notes .nlost{margin-left:6px;color:#888;font-size:12px}#notes .nlost{border-bottom:1px dashed #aaa;cursor:help}';
+  css.textContent = '#notes li.nhid{opacity:.55}#notes .nsst,#notes .nlost{color:#888;font-size:11.5px}#notes .nlost{border-bottom:1px dashed #aaa;cursor:help}';
   var LOST = '화면이 바뀌어 같은 요소가 여러 개이거나 없어요';
   document.head.appendChild(css);
 
   function targets(n) { return n.targets && n.targets.length ? n.targets : [{path: n.path, text: n.text, rect: n.rect}]; }
-  function memoRow(n, i) {
-    var k = targets(n).length;
-    var st = A.status(n), hid = !A.visible(n, false), cls = (n.sent ? ' sent' : '') + (hid ? ' nhid' : '');
-    return '<li data-id="' + esc(n.id) + '"' + (cls ? ' class="' + cls.slice(1) + '"' : '') + '><div><span class="nn">' + ctx.circled(i + 1) + '</span><span class="ns">' + esc(n.screen) +
-      ' · ' + esc(n.intent) + (k > 1 ? ' · ' + k + '개 요소' : '') + (n.sent ? ' · 보냄' : '') + '</span>' + (st === 'decide' ? '<span class="ndst">결정 필요</span>' : '') +
+  function where(n) {                                // 대상 말 — 메모 묶음(view-thread label)과 같이: 화면 전체 | 요소 글(40자) · N개 요소
+    var ts = targets(n), k = ts.length;
+    if (k === 1 && ts[0].path === 'body') return '화면 전체';
+    var t = String(ts[0].text || ts[0].path || '').replace(/\s+/g, ' ');
+    return (t.length > 40 ? t.slice(0, 40) + '…' : t) + (k > 1 ? ' · ' + k + '개 요소' : '');
+  }
+  function memoRow(n, i, first) {                    // first = 그 화면 묶음의 첫 줄 → 화면 이름 머리(.ngh)를 줄 안 위에(li = 메모 하나 그대로)
+    var st = A.status(n), hid = !A.visible(n, false), cls = (first ? ' ng1' : '') + (n.sent ? ' sent' : '') + (hid ? ' nhid' : '');
+    var iw = INTENT[n.intent] || INTENT.change, name = ctx.title(n.screen);
+    return '<li data-id="' + esc(n.id) + '"' + (cls ? ' class="' + cls.slice(1) + '"' : '') + '>' +
+      (first ? '<div class="ngh" title="' + esc(name) + '">' + esc(name) + '</div>' : '') +
+      '<div class="nl"><span class="nn">' + (n.no != null ? '#' + esc(n.no) : ctx.circled(i + 1)) + '</span>' +
+      '<span class="ni" role="img" title="' + iw + '" aria-label="' + iw + '">' + (ICON[n.intent] || ICON.change) + '</span>' +
+      '<span class="nt">' + esc(where(n)) + '</span>' + (n.sent ? '<span class="nsnt">보냄</span>' : '') + (st === 'decide' ? '<span class="ndst">결정 필요</span>' : '') +
       (hid ? '<span class="nsst" data-st="' + st + '">' + esc(A.LABEL[st]) + '</span>' : '') +
-      (st !== 'done' && ctx.lost(n) ? '<span class="nlost" title="' + LOST + '">요소를 찾을 수 없음</span>' : '') + '</div><div class="nt">"' + esc(n.text) + '"</div><div class="nnote">' + esc(n.note) + '</div>' +
-      '<div class="nact"><button type="button" class="nib" data-act="edit" title="고치기" aria-label="고치기">' + ICON.edit + '</button>' +
-      '<button type="button" class="nib" data-act="del" title="지우기" aria-label="지우기">' + ICON.del + '</button></div></li>';
+      (st !== 'done' && ctx.lost(n) ? '<span class="nlost" title="' + LOST + '">요소를 찾을 수 없음</span>' : '') +
+      '<span class="nact"><button type="button" class="nib" data-act="edit" title="고치기" aria-label="고치기">' + ICON.edit + '</button>' +
+      '<button type="button" class="nib" data-act="del" title="지우기" aria-label="지우기">' + ICON.del + '</button></span></div>' +
+      '<div class="nnote">' + esc(n.note) + '</div></li>';
+  }
+  function grouped(list) {                           // 화면마다 묶기(F10) — 묶음 차례 = 처음 나온 차례, 묶음 안은 목록 차례
+    var order = [], by = {};
+    list.forEach(function (n) { if (!by[n.screen]) { by[n.screen] = []; order.push(n.screen); } by[n.screen].push(n); });
+    var html = '', i = 0;
+    order.forEach(function (sid) { by[sid].forEach(function (n, j) { html += memoRow(n, i++, j === 0); }); });
+    return html;
   }
   function pendRow(n) {
     return '<li data-id="' + esc(n.id) + '"' + (n.sent ? ' class="sent"' : '') + '><div class="ns">' + esc(ctx.title(n.screen)) + (n.sent ? ' · 보냄' : '') + '</div>' +
@@ -82,7 +105,7 @@ function mount(ctx) {
     $('#ncnt').textContent = '메모 ' + vis.length;
     var dn = $('#decn'); dn.hidden = !nd; dn.textContent = '결정 필요 ' + nd; dn.dataset.n = String(nd);
     var tg = $('#ndec'); tg.hidden = !nd; tg.setAttribute('aria-pressed', String(only));
-    $('#nlist').innerHTML = (only ? vis.filter(function (n) { return A.status(n) === 'decide'; }) : vis).map(memoRow).join('');
+    $('#nlist').innerHTML = grouped(only ? vis.filter(function (n) { return A.status(n) === 'decide'; }) : vis);
     $('#plist').innerHTML = sp.pending.map(pendRow).join('');
     $('#nclear').hidden = !open.some(function (n) { return n.sent; });
     var unsent = open.filter(function (n) { return !n.sent; }).length, sc = $('#nsendc');
