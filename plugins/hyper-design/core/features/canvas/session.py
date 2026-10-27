@@ -11,6 +11,7 @@
   ChatLog        — chat_store.py: <out>/.hd-chat.jsonl 대화 기록(S3, 버스 탭)
   Archive        — note_archive.py: <out>/.hd-notes-archive.jsonl 완료 메모 보관(sweep)
   Builder        — builder.py: 쓰기 확인(데이터만) · 페이지 빌드 하나씩 · hd-data · 부품 견본 목록
+  PartsWatch     — parts_file.py(R30): <out>/parts.json 앱 부품 낡음 보기(읽기만 · 60초 캐시 · 빌드하지 않음)
   EventBus       — events.py(47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 상태: 토큰 · 붙은 코드 도장 함수(code) · 포기한 도장(_gave_up · _data_gave_up) — 나머지 상태는 부품마다 주인 하나.
 페이지(figma-lite 5): 쓰기는 데이터만 확인하고 index.html 을 굽지 않는다 — page() 가 줄 때 데이터 도장(code_stamp.page_inputs)이 지금 out 파일과 다르면 다시 빌드(refresh_data), 닫을 때도 한 번.
@@ -34,6 +35,7 @@ from busy import Busy  # AI 덮개 + 화면 파일 지켜보기
 from chat_store import ChatLog  # <out>/.hd-chat.jsonl 대화 기록(S3)
 from history import History  # 화면 파일 쓰기(apply · delete · 줄 · 되살리기)
 from note_archive import Archive  # <out>/.hd-notes-archive.jsonl
+from parts_file import PartsWatch  # <out>/parts.json 앱 부품 낡음(R30)
 from send_queue import Queue  # 보낸 메모 · 보낼 곳 · 에이전트 답
 from state_store import StateStore, state_load  # <out>/.hd-canvas.json — out_io 가 hd 폴더를 sys.path 에 넣는다
 from ticker import Ticker  # 세션 시계
@@ -75,6 +77,7 @@ class ProjectSession:
         self.spawner = AD.PaseoSpawner(lambda: _paseo_cmd(paseo), enabled=bool(self.config.get("allow_spawn")))
         self.archive = Archive(self.out, self.lock, self.events)
         self.images = Attachments(self.out)          # R22 첨부 이미지 — 붙인 이미지를 out 안에 두고 절대 경로를 요청 글에
+        self.parts = PartsWatch(self.out)            # R30 앱 부품 낡음 — GET /api/app-parts(읽기만, git 은 60초에 한 번까지)
         self.chat = ChatLog(self.out)                # S3 대화 기록 — 이미 내는 이벤트를 탭으로 받아 한 줄씩
         self.events.taps.append(self.chat.tap)
         self.transcripts = TRP.pump_for(self, paseo)  # S3b 터미널 대화 — 고른·접속한 에이전트만, 'agent.transcript' 를 publish

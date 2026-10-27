@@ -81,6 +81,7 @@ ROUTES = {
         "/api/agents": lambda s, q, b: (200, s.queue.agents(auto=q.get("auto", [""])[0] == "1")),
         "/api/archive": lambda s, q, b: (200, s.archive.get()),
         "/api/parts": lambda s, q, b: (200, s.builder.parts()),
+        "/api/app-parts": lambda s, q, b: (200, s.parts.status()),     # R30 앱 부품(out/parts.json) 낡음 — {parts, stale:[화면 id]}
         "/agents": lambda s, q, b: (200, s.presence.list()),            # 47-5a 접속한 에이전트(/v1/p/<이름>/agents)
         "/api/presence": lambda s, q, b: (200, s.presence.list()),      # 옛 뿌리 별칭(/api/agents 는 Paseo 목록 + connected)
         "/api/chat": get_chat,                                          # S3 대화 기록(.hd-chat.jsonl)

@@ -65,8 +65,15 @@ def cmd_notes(a):
     st = p.state()
     ns = p.notes(a.which, state=st)
     head = "%s · rev %s · %s · %d개%s" % (p.name, st["rev"], a.which, len(ns), "" if p.online else " · 도우미 꺼짐(읽기만)")
+    _parts_warn(p.out, p.name)
     return ({"project": p.name, "out": str(p.out), "rev": st["rev"], "helper": p.online, "which": a.which, "notes": [n.as_dict() for n in ns]},
             head + "\n" + S.text.notes(ns))
+
+
+def _parts_warn(out, name):
+    """낡은 앱 부품이 있으면 stderr 에 '[hd] …' 한 줄(R30 — 다시 빌드 명령 포함). parts.json 이 없으면 git 을 부르지 않는다."""
+    import hd_parts
+    hd_parts.warn(out, name)
 
 
 def build_reply(a):
@@ -168,6 +175,7 @@ def cmd_attach(a):
 def cmd_wait(a):
     p = _hub().pick(a.target)
     st, ns = p.wait(a.timeout)
+    _parts_warn(p.marker["out"], p.name)
     head = "%s · rev %s · working · %d개" % (p.name, st["rev"], len(ns))
     return ({"project": p.name, "out": p.marker["out"], "rev": st["rev"], "helper": True, "which": "working", "notes": [n.as_dict() for n in ns]},
             head + "\n" + S.text.notes(ns))

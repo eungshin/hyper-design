@@ -99,3 +99,16 @@ def test_unmeasurable_repo_is_unknown_not_stale(tmp_path):
     rows = PF.check(out)
     assert rows[0]["state"] == "unknown" and rows[0]["stale"] is False
     assert PF.PartsWatch(out).status()["stale"] == []
+
+
+def test_session_route_app_parts_names_stale_screens(tmp_path):
+    """GET /api/app-parts(도우미) = 세션 PartsWatch — 캔버스가 '낡음' 표시를 붙일 화면 id 와 부품 줄. 읽기만(parts.json 을 쓰지 않음)."""
+    import router as R
+    import session as S
+    repo = make_repo(tmp_path)
+    out = make_out(tmp_path, repo, "g:" + "0" * 16)
+    before = (out / "parts.json").read_bytes()
+    sess = S.ProjectSession(out, build=lambda o: subprocess.CompletedProcess([], 0, "", ""))
+    code, body = R.Router().call("GET", "/api/app-parts", {}, None, sess)
+    assert code == 200 and body["stale"] == ["tabs"] and body["parts"][0]["state"] == "stale", body
+    assert (out / "parts.json").read_bytes() == before

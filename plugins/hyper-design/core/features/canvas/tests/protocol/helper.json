@@ -167,6 +167,14 @@
       ]
     },
     {
+      "method": "GET", "path": "/api/app-parts", "callers": ["modules/view-parts.js ('낡음' chip on cards embedding a stale app part, R30)"],
+      "request": "-", "response": "{parts:[{file, state: stale|fresh|unknown, stale, stamp, current, dirty, dirty_now, built_at, label}], stale:[screen id]} from out/parts.json (read only, cached 60 s) — no parts.json = {parts:[], stale:[]}",
+      "cases": [
+        {"name": "ok (fixture has no parts.json; stale mapping is unit-tested in test_canvas_unit_parts_file)", "request": {"method": "GET", "path": "/api/app-parts"}, "expect": {"status": 200, "json": {"parts": "list", "stale": {"$list": "str"}}}},
+        {"name": "no token", "request": {"method": "GET", "path": "/api/app-parts", "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/apply", "callers": ["modules/view-sync.js (Send: direct edits)"],
       "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link|duplicate|move|attr|insert|replace, path?, value?, op?, to?, index?}]} — move: op up|down (swap with a sibling) | op 'to' + to:<int index among element siblings, script/style/template/link/meta skipped> (one write, one undo — 49c drag)",
       "response": "{applied:[id], failed:[{id, reason}], stamp, changed:[screen], history} (stamp null and no history when nothing written)",
