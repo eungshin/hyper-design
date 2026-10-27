@@ -1039,7 +1039,7 @@ function placeSelbar() {                             // 고른 카드들 위 가
   if (!bar || !SL) return;
   var ids = SL.ids().filter(function (id) { var c = VL && VL.cardEl(id); return c && c.offsetWidth; });
   var eb = $('#elbar');                              // 요소 막대가 떠 있으면 카드 막대는 숨김(R27 F06 — 막대 하나만). 요소 막대가 뜨고 질 때 다시 놓는다
-  if (eb && !eb.__hdSel) { eb.__hdSel = 1; new MutationObserver(function () { placeSelbar(); }).observe(eb, {attributes: true, attributeFilter: ['hidden']}); }
+  if (eb && !eb.__hdSel) { var ebWas = eb.hidden; eb.__hdSel = 1; new MutationObserver(function () { if (eb.hidden === ebWas) return; ebWas = eb.hidden; placeSelbar(); }).observe(eb, {attributes: true, attributeFilter: ['hidden']}); }   // 같은 값 다시 쓰기는 무시(BK.place ↔ placeSelbar 되풀이 막기)
   if (!ids.length || (drag && drag.moved && drag.card) || !modal.hidden || (eb && !eb.hidden)) { bar.hidden = true; return; }
   var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   ids.forEach(function (id) { var r = $('.phone', VL.cardEl(id)).getBoundingClientRect(); x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); y1 = Math.max(y1, r.bottom); });
