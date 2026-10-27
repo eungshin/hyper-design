@@ -9,10 +9,12 @@
    돌아가게. 처음 보는 줄은 rows 의 화면 중 has(id) 가 아닌 것(판에도·떼어 둔 곳에도 없음)으로 카드를 만든다. 붙이기(iframe 싣기·자리·크기)는 셸.
    줄 = 섹션(51-4, Figma F16·F17) — 등록부 기능 'rowHeads'(needs rowsEl·$·$$·api·record·toast·selected·warn). 상태 = 고른 줄 이름 하나(저장 안 함).
      제목 누르기 = 그 줄 카드 모두 고르기 · 두 번 = 그 자리 이름 바꾸기(Enter 저장 · Esc 취소 · 밖 누르기 저장) · Del/Backspace = 그 줄 화면 모두 지우기(기존 지우기 길)
-     · Ctrl+Backspace(·제목 오른쪽 메뉴·레이어 줄 메뉴) = 줄만 걷기: 그 줄 화면은 위 줄로, 첫 줄이면 아래 줄로(HD.rows.target). 쓰기 = 도우미
-     /api/group-rename · /api/group-dissolve 한 번 → 되돌리기 한 번(/api/restore). 판은 먼저 바꾸고(이름·카드 옮기기) 실패하면 되돌리고 알린다.
+     · Ctrl+Shift+G·Ctrl+Backspace(·제목 오른쪽 메뉴·레이어 줄 메뉴) = 폴더만 풀기(R31 이름, 예전 '줄만 걷기'): 그 줄 화면은 위 줄로, 첫 줄이면 아래 줄로(HD.rows.target)
+     · 다른 폴더로 옮기기(R31, 'hd-row-assign' — 레이어 패널 끌어 놓기, 계획 HD.rowOps.assign). 쓰기 = 도우미
+     /api/group-rename · /api/group-dissolve · /api/group-move 한 번 → 되돌리기 한 번(/api/restore). 판은 먼저 바꾸고(이름·카드 옮기기) 실패하면 되돌리고 알린다.
+     R31 제목 = 폴더(아이콘·조용한 굵기, 메뉴 글 HD.rowOps.WORDS). 제목 끌기 = 폴더째 옮기기는 view-row-drag.
      의도(document CustomEvent) — 보냄: 'hd-row-pick' {ids}(고르기 = 레이어 패널의 ctx.pick) · 'hd-row-delete' {ids}(지우기 = ctx.del) ·
-       'hd-rows-changed' {renamed?: {from, to}}(레이어 다시 그리기) / 받음: 'hd-row-rename' {from, to} · 'hd-row-dissolve' {name}(레이어 줄 메뉴) */
+       'hd-rows-changed' {renamed?: {from, to}}(레이어 다시 그리기) / 받음: 'hd-row-rename' {from, to} · 'hd-row-dissolve' {name}(레이어 줄 메뉴) · 'hd-row-assign' {ids, to} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -29,7 +31,7 @@ function mount(ctx) {
       '<div class="cbody">' + (body ? '<div class="fdesc">' + esc(body) + '</div>' : '') + '</div></div>';
   }
   function rowHtml(row, screens) {
-    return '<div class="flow"><div class="glabel">' + esc(row.group) + '</div><div class="cards">' + screens.map(cardHtml).join('') + '</div></div>';
+    return '<div class="flow"><div class="glabel" title="' + esc(HD.rowOps.WORDS.tip) + '">' + esc(row.group) + '</div><div class="cards">' + screens.map(cardHtml).join('') + '</div></div>';
   }
   function html(rows) { return (rows || []).map(function (r) { return rowHtml(r, r.screens || []); }).join(''); }
   function flows() { return $$('.flow', ctx.rowsEl); }
@@ -93,14 +95,21 @@ HD.viewRows = {mount: mount};
 // ---------------------------------------------------------------- 줄 = 섹션(51-4)
 // R27 F01: 줄 제목 = Figma 섹션 이름처럼 화면에서 늘 12px(--lz = 1/판 배율, view-label-scale) · 카드 바로 위 4px 에 붙는다.
 // 자리 상자는 예전 그대로 145px(위 129 + 글 16) — 줄 배치가 바뀌지 않게. 글자는 아래 왼쪽을 축으로 scale 만(테두리·여백도 같이 화면 px)
+// R31: 제목 = 폴더 — 앞에 폴더 아이콘(::before 마스크 — 글(textContent)은 이름 그대로라 줄 이름을 읽는 곳이 모두 같다), 판 글(.bt)·판 메모보다 조용한 500 굵기·회색,
+// 올리면 바탕 + 잡기 손(끌면 폴더째 옮김 — view-row-drag). 제목 자리 옮김(translate)은 view-row-drag 가 카드 옮긴 거리로 쓴다
+var FOLDER_SVG = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linejoin='round'%3E%3Cpath d='M3 6h7l2 2h9v11H3z'/%3E%3C/svg%3E\")";
 var CSS =
-  '#rows .flow>.glabel{height:16px;margin:129px 0 0;font:600 12px/16px system-ui,-apple-system,sans-serif;color:#3a3a37;width:max-content;cursor:pointer;border-radius:4px;' +
+  '#rows .flow>.glabel{display:flex;align-items:center;gap:4px;height:16px;margin:129px 0 0;padding:0 2px;font:500 12px/16px system-ui,-apple-system,sans-serif;color:#5f5f5a;width:max-content;cursor:grab;border-radius:4px;' +
   'transform-origin:0 100%;transform:translateY(calc(-4px * var(--lz,1))) scale(var(--lz,1))}\n' +
-  '#rows .flow>.glabel:hover{background:var(--ui-badge-soft);box-shadow:0 0 0 4px var(--ui-badge-soft)}\n' +
+  '#rows .flow>.glabel::before{content:"";flex:none;width:12px;height:12px;background:currentColor;opacity:.8;' +
+  '-webkit-mask:' + FOLDER_SVG + ' center/contain no-repeat;mask:' + FOLDER_SVG + ' center/contain no-repeat}\n' +
+  '#rows .flow>.glabel:hover{color:#3a3a37;background:var(--ui-badge-soft);box-shadow:0 0 0 4px var(--ui-badge-soft)}\n' +
+  '#rows .flow>.glabel.hd-row-moving{cursor:grabbing}\n' +
   '#rows .flow>.glabel.hd-row-on{outline:2px solid var(--ui-mark);outline-offset:3px}\n' +
   '#rows .flow>.glabel[contenteditable]{cursor:text;background:none;box-shadow:none;outline:2px solid var(--ui-mark);outline-offset:3px}\n' +
   '.hd-rmenu{position:fixed;z-index:60;min-width:190px;background:#fff;border:1px solid var(--ui-badge-soft);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:4px}\n' +
   '.hd-rmenu .cmh{padding:4px 8px;font:700 12px system-ui,sans-serif;color:var(--ui-badge);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}\n' +
+  '.hd-rmenu button span{white-space:nowrap}\n' +
   '.hd-rmenu button{display:flex;align-items:center;gap:12px;width:100%;height:28px;padding:0 8px;border:0;border-radius:5px;background:none;font:13px system-ui,sans-serif;color:var(--ui-primary);cursor:pointer;text-align:left}\n' +
   '.hd-rmenu button:hover,.hd-rmenu button:focus-visible{background:var(--ui-badge-soft);outline:0}\n' +
   '.hd-rmenu kbd{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:var(--ui-badge)}\n' +
@@ -130,12 +139,12 @@ function heads(ctx) {
     return !!cur;
   }
   function changed(d) { emit('hd-rows-changed', d); }
-  function off() { if (ctx.api.on) return false; ctx.toast('도우미로 열었을 때만 줄을 바꿀 수 있어요(파일에 바로 쓰기)'); return true; }
+  function off() { if (ctx.api.on) return false; ctx.toast('도우미로 열었을 때만 폴더를 바꿀 수 있어요(파일에 바로 쓰기)'); return true; }
   function call(path, body) {                        // → 답 몸통(성공) | null(이유는 알렸다)
     return ctx.api.call('POST', path, body).then(function (r) {
       if (r.status === 200 && r.body && !r.body.error) return r.body;
-      ctx.toast('줄을 바꾸지 못했어요: ' + ((r.body && r.body.error) || r.status)); return null;
-    }, function (e) { ctx.toast('줄을 바꾸지 못했어요 — 도우미에 닿지 않아요'); ctx.warn('[hd] 줄 쓰기 실패: ' + (e && e.message || e)); return null; });
+      ctx.toast('폴더를 바꾸지 못했어요: ' + ((r.body && r.body.error) || r.status)); return null;
+    }, function (e) { ctx.toast('폴더를 바꾸지 못했어요 — 도우미에 닿지 않아요'); ctx.warn('[hd] 폴더(줄) 쓰기 실패: ' + (e && e.message || e)); return null; });
   }
   function restore(stamp, what, after) {
     return ctx.api.call('POST', '/api/restore', {stamp: stamp}).then(function (r) {
@@ -170,8 +179,8 @@ function heads(ctx) {
     if (c.same || off()) return;
     write(from, c.name).then(function (r) {
       if (!r) return;
-      logged('줄 이름 바꾸기', r.stamp, function () { setName(c.name, from); }, function () { return write(from, c.name); });
-      ctx.toast('줄 이름을 바꿨어요 — 파일에 썼어요', true);
+      logged('폴더 이름 바꾸기', r.stamp, function () { setName(c.name, from); }, function () { return write(from, c.name); });
+      ctx.toast('폴더 이름을 바꿨어요 — 파일에 썼어요', true);
     });
   }
   function edit(g) {                                 // 그 자리 고치기 — Enter 저장 · Esc 취소 · 밖 누르기 저장
@@ -179,7 +188,7 @@ function heads(ctx) {
     var old = g.textContent, done = false;
     editing = g;
     try { g.contentEditable = 'plaintext-only'; } catch (e) { g.contentEditable = 'true'; }   // plaintext-only 를 모르는 브라우저
-    g.setAttribute('role', 'textbox'); g.setAttribute('aria-label', '줄 이름');
+    g.setAttribute('role', 'textbox'); g.setAttribute('aria-label', '폴더 이름');
     g.focus();
     var rg = document.createRange(); rg.selectNodeContents(g); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
     function end(save) {
@@ -220,7 +229,7 @@ function heads(ctx) {
     var t = R.target(names(), name);
     if (t.error) { ctx.toast(t.error); return Promise.resolve(null); }
     var m = move(name, t);
-    if (!m) { ctx.warn('[hd] 줄만 걷기: 줄을 판에서 찾지 못했어요 — ' + name); return Promise.resolve(null); }
+    if (!m) { ctx.warn('[hd] 폴더만 풀기: 줄을 판에서 찾지 못했어요 — ' + name); return Promise.resolve(null); }
     return call('/api/group-dissolve', {name: name}).then(function (r) {
       if (!r || !r.stamp) { unmove(m); return null; }
       r.move = m; return r;
@@ -232,8 +241,46 @@ function heads(ctx) {
       if (!r) return;
       var m = r.move;
       emit('hd-row-pick', {ids: m.cards.filter(function (c) { return !c.classList.contains('hid'); }).map(function (c) { return c.dataset.id; })});   // 걷은 뒤 그 화면들이 골라진 채(Figma Ungroup)
-      logged('줄만 걷기', r.stamp, function () { unmove(m); }, function () { return dissolveOnce(name).then(function (x) { if (x) m = x.move; return x; }); });
-      ctx.toast('줄만 걷었어요 — 화면 ' + m.cards.length + '개는 ' + (r.where === 'above' ? '위' : '아래') + ' 줄 「' + r.into + '」로', true);
+      logged('폴더만 풀기', r.stamp, function () { unmove(m); }, function () { return dissolveOnce(name).then(function (x) { if (x) m = x.move; return x; }); });
+      ctx.toast('폴더만 풀었어요 — 화면 ' + m.cards.length + '개는 ' + (r.where === 'above' ? '위' : '아래') + ' 폴더 「' + r.into + '」로', true);
+    });
+  }
+  // 다른 폴더로 옮기기(R31, 레이어 패널 끌어 놓기) — 계획 HD.rowOps.assign. 판 먼저(카드를 그 폴더 끝으로, 다 빠진 폴더는 뗌) → 도우미
+  // /api/group-move 한 번, 실패면 판 되돌림. 되돌리기 = /api/restore 뒤 판 되돌림
+  function rowsNow() { return flows().map(function (f) { return {name: nameOf(f), ids: $$('.card', f).map(function (c) { return c.dataset.id; })}; }); }
+  function shift(p) {
+    var into = flowOf(p.to), box = into && $('.cards', into), want = {}, back = [], gone = [];
+    if (!box) return null;
+    p.ids.forEach(function (id) { want[id] = 1; });
+    flows().forEach(function (f) { if (f !== into) $$('.card', f).forEach(function (c) { if (want[c.dataset.id]) back.push({c: c, box: c.parentNode, next: c.nextSibling}); }); });
+    back.forEach(function (b) { box.appendChild(b.c); });
+    p.emptied.forEach(function (n) { var f = flowOf(n); if (!f) return; gone.push({f: f, at: f.nextSibling}); f.remove(); if (cur === n) cur = null; });
+    paint(); changed();
+    return {back: back, gone: gone};
+  }
+  function unshift(m) {                              // 거꾸로 — 뗀 폴더 먼저, 카드는 마지막에 옮긴 것부터 제 자리(옆 카드가 이미 돌아와 있게)
+    m.gone.slice().reverse().forEach(function (g) { rowsEl.insertBefore(g.f, g.at && g.at.parentNode === rowsEl ? g.at : null); });
+    m.back.slice().reverse().forEach(function (b) { b.box.insertBefore(b.c, b.next && b.next.parentNode === b.box ? b.next : null); });
+    paint(); changed();
+  }
+  function assignOnce(ids, to) {
+    var p = HD.rowOps.assign(rowsNow(), ids, to);
+    if (p.error) { ctx.toast(p.error); return Promise.resolve(null); }
+    if (p.same) return Promise.resolve(null);
+    var m = shift(p);
+    if (!m) { ctx.warn('[hd] 폴더 옮기기: 폴더를 판에서 찾지 못했어요 — ' + to); return Promise.resolve(null); }
+    return call('/api/group-move', {ids: p.ids, to: to}).then(function (r) {
+      if (!r || !r.stamp) { unshift(m); return null; }
+      r.move = m; r.n = p.ids.length; return r;
+    });
+  }
+  function assign(ids, to) {
+    if (off()) return;
+    assignOnce(ids, to).then(function (r) {
+      if (!r) return;
+      var m = r.move;
+      logged('폴더 옮기기', r.stamp, function () { unshift(m); }, function () { return assignOnce(ids, to).then(function (x) { if (x) m = x.move; return x; }); });
+      ctx.toast('화면 ' + r.n + '개를 폴더 「' + to + '」로 옮겼어요', true);
     });
   }
   function remove(name) {                            // 그 줄 화면 모두 지우기 = 기존 지우기 길(레이어 패널 ctx.del → 셸 deleteCards, 되돌리기 한 번)
@@ -246,10 +293,11 @@ function heads(ctx) {
   function outside(e) { if (menu && !menu.contains(e.target)) closeMenu(); }
   function openMenu(x, y, name) {
     closeMenu();
-    var items = [{l: '줄 고르기', k: '누르기', a: function () { select(name); }},
-                 {l: '이름 바꾸기', k: '두 번', a: function () { var f = flowOf(name); if (f) edit(label(f)); }}, '-',
-                 {l: '줄만 걷기', k: 'Ctrl+⌫', a: function () { dissolve(name); }},
-                 {l: '줄 화면 모두 삭제', k: 'Del', a: function () { remove(name); }}];
+    var W = HD.rowOps.WORDS;                         // 레이어 줄 메뉴와 같은 글 — 폴더만 풀기(화면 남김) ≠ 폴더 지우기(화면도)
+    var items = [{l: W.pick, k: '누르기', a: function () { select(name); }},
+                 {l: W.rename, k: '두 번', a: function () { var f = flowOf(name); if (f) edit(label(f)); }}, '-',
+                 {l: W.ungroup, k: W.ungroupKey, a: function () { dissolve(name); }},
+                 {l: W.del(idsOf(name, true).length), k: W.delKey, a: function () { remove(name); }}];
     menu = document.createElement('div'); menu.className = 'hd-rmenu'; menu.setAttribute('role', 'menu');
     menu.innerHTML = '<div class="cmh"></div>' + items.map(function (it, i) {
       return it === '-' ? '<hr>' : '<button type="button" role="menuitem" data-i="' + i + '"><span></span><kbd></kbd></button>';
@@ -278,18 +326,18 @@ function heads(ctx) {
     select(g.textContent); openMenu(e.clientX, e.clientY, g.textContent);
   });
   document.addEventListener('click', function (e) { if (!headOf(e)) stillOn(); });
-  addEventListener('keydown', function (e) {        // 고른 줄 + Del/Backspace = 화면 모두 지우기 · Ctrl+Backspace = 줄만 걷기(셸의 카드 지우기보다 먼저)
-    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  addEventListener('keydown', function (e) {        // 고른 폴더 + Del/Backspace = 폴더 지우기(화면도) · Ctrl+Shift+G·Ctrl+Backspace = 폴더만 풀기(셸의 카드 지우기보다 먼저) — 키 규칙 HD.rowOps.key
+    var act = HD.rowOps.key(e); if (!act) return;
     var t = e.target, modal = document.getElementById('modal');
     if (editing || (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable))) return;
     if ((modal && !modal.hidden) || document.body.dataset.tab !== 'screens' || !stillOn()) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace') dissolve(cur);
-    else if (!e.ctrlKey && !e.metaKey && !e.altKey) remove(cur);
+    if (act === 'ungroup') dissolve(cur); else remove(cur);
   }, true);
   document.addEventListener('hd-row-rename', function (e) { var d = e.detail || {}; if (typeof d.from === 'string') rename(d.from, d.to); });
   document.addEventListener('hd-row-dissolve', function (e) { var d = e.detail || {}; if (typeof d.name === 'string') dissolve(d.name); });
-  return {selected: function () { return stillOn() ? cur : null; }, select: select, rename: rename, dissolve: dissolve};
+  document.addEventListener('hd-row-assign', function (e) { var d = e.detail || {}; if (Array.isArray(d.ids) && typeof d.to === 'string') assign(d.ids, d.to); });
+  return {selected: function () { return stillOn() ? cur : null; }, select: select, rename: rename, dissolve: dissolve, assign: assign};
 }
 
 HD.feature('rowHeads', {needs: ['rowsEl', '$', '$$', 'api', 'record', 'toast', 'selected', 'warn'], mount: heads});

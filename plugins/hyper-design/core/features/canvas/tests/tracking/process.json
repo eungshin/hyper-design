@@ -1118,6 +1118,41 @@
       "waste": "",
       "flaky": [],
       "note": "Shift+클릭 규칙 = el-pick.shift(V · 고른 요소 있음 · 고른 카드 안 · 빈 레이아웃 아님 → 요소, 그 밖 = 카드 E15). 막대·메뉴는 주인(마지막) 하나"
+    },
+    {
+      "slice": "R31 폴더(판 줄) 관리: 제목 폴더 아이콘·폴더만 풀기(Ctrl+Shift+G)·제목 끌기 = 폴더째 옮기기·레이어 끌어 다른 폴더로(/api/group-move)·레이어 두 번 누르기 이름 바꾸기 고침",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 17
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "browser",
+          "what": "K1: 레이어 폴더 이름 두 번 누르기가 이름 바꾸기를 열지 않음 — 첫 누르기 고르기가 도크 연결·정렬 패널을 열어 레이어 줄이 아래로 밀림(빨강 확인 후 고침)"
+        },
+        {
+          "by": "unit",
+          "what": "test_canvas_unit_row_ops 규칙 7개를 하나씩 깨 모두 빨강 확인(drop·assign emptied·titleShift·잠금·키·Python 차례·groups)"
+        },
+        {
+          "by": "unit",
+          "what": "plan_group_move: 같은 객체를 고친 뒤 emptied_groups 를 불러 빈 줄 이름이 안 빠짐 — 옮기기 전 사본으로"
+        }
+      ],
+      "waste": "실제 Chrome 채널이 이 기계에서 load 를 끝내지 않아(오늘) 로컬 실행은 번들 chromium 플러그인(-p, 저장소 밖)으로 돌림. 영역 실행 중 다른 일꾼 부하로 goto 30초 넘김이 잦음",
+      "flaky": [
+        "test_canvas_instant::test_async_apply_whose_build_fails_reverts_the_optimistic_change — 영역 실행·단독 pytest 에서 pageerror 'closest of null' 2번, 같은 본문을 직접 돌린 3번은 통과(원인 미확인)",
+        "test_canvas_busy_app::test_app_card_chip_lifts_on_hmr_or_reload_not_on_first_load · test_canvas_text_remove::test_large_view_text_box_has_remove_element — 영역 실행에서만 실패, 단독 통과"
+      ],
+      "note": "규칙 = modules/row-ops.js(Model) · 제목 끌기 = view-row-drag(View, card-pos move 길) · 다른 폴더로 = view-rows rowHeads 'hd-row-assign' + board_rows.plan_group_move"
     }
   ]
 }
