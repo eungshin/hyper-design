@@ -3,6 +3,7 @@
    check({type, size}) → null | 이유(한국어 한 줄) · add(list, item) → {list, why} (COUNT 넘으면 why) · done(list, id, res{path, rel, type, size}) · remove(list, id)
    busy(list) → 올리는 중인 수 · saved(list) → [{path, rel, type, size, name}](메모에 남기는 모양) · fromSaved(items) → 칩(state ok, id = rel)
    lines(saved) → '첨부 이미지: <path>' 줄들 · strip(text) → 그 줄을 걷은 글 · withText(text, saved) → strip 뒤 줄 붙이기(고쳐 저장해도 한 번만)
+   paths(text) → 요청문(들여 쓴 줄 포함)의 '첨부 이미지:' 경로들(같은 것 한 번, COUNT 장까지) — /api/forward 의 images(R28, 서버가 paseo send --image 로)
    서버 쪽 같은 말·한도는 attach_rules.py(LINE · MAX_BYTES) — 둘을 같이 고친다 */
 (function () {
 'use strict';
@@ -45,11 +46,21 @@ function lines(items) { return (items || []).map(function (x) { return LINE + x.
 function strip(text) {
   return String(text == null ? '' : text).split('\n').filter(function (l) { return l.indexOf(LINE) !== 0; }).join('\n').replace(/\s+$/, '');
 }
+function paths(text) {
+  var head = LINE.trim(), out = [];
+  String(text == null ? '' : text).split('\n').forEach(function (l) {
+    var s = l.trim();
+    if (s.indexOf(head) !== 0) return;
+    var p = s.slice(head.length).trim();
+    if (p && out.indexOf(p) < 0 && out.length < COUNT) out.push(p);
+  });
+  return out;
+}
 function withText(text, items) {
   var t = strip(text), l = lines(items);
   return l ? (t ? t + '\n' + l : l) : t;
 }
 
 HD.attach = {LINE: LINE, TYPES: TYPES, MAX: MAX, COUNT: COUNT, check: check, add: add, done: done, remove: remove, busy: busy,
-             saved: saved, fromSaved: fromSaved, lines: lines, strip: strip, withText: withText};
+             saved: saved, fromSaved: fromSaved, lines: lines, strip: strip, withText: withText, paths: paths};
 })();

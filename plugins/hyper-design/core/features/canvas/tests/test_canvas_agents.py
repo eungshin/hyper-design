@@ -66,7 +66,7 @@ def test_list_agents_decodes_korean_and_drops_archived(tmp_path):
     names = {a["id"]: a["name"] for a in r["agents"]}
     assert names["ag-run"] == "결제 화면 고치는 에이전트" and names["ag-idle"] == "한글 이름 쉬는 중", "UTF-8 로 풀어 한글이 그대로"
     assert "ag-arch" not in names and "ag-closed" in names, "보관된 것만 뺀다(닫힌 것은 캔버스 Model 이 뺀다)"
-    assert set(r["agents"][0]) == {"id", "name", "status", "cwd", "provider"}
+    assert set(r["agents"][0]) == {"id", "name", "status", "cwd", "provider", "thinking"}, "R28: thinking = 생각 깊이(대화창 알약)"
 
 
 def test_list_agents_missing_paseo_is_error_text(tmp_path):

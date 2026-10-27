@@ -3,13 +3,16 @@
   choose(target, entry, ready)   순수 규칙: 받는 곳 → 'event' | 'paseo' | 'claude' | 'queue'
   config_from_env(env)           순수: HD_CLAUDE_WAKE · HD_ALLOW_SPAWN · HD_CLAUDE_CMD (모두 기본 꺼짐)
   NoneAdapter                    대기열 파일만(파일은 부르는 쪽이 이미 씀 — 오늘 동작)
-  PaseoAdapter                   `paseo send <id> --prompt-file <파일> --no-wait`(오늘 session.forward 그대로, 옮기기만)
+  PaseoAdapter                   `paseo send <id> --prompt-file <파일> [--image <절대 경로>]… --no-wait`(R28: 첨부 이미지를 진짜 이미지로) ·
+                                 update_thinking = `paseo agent update <id> --thinking <opt>` · read_json = 읽기만 하는 `paseo … --json`(R28 모델 선택지)
   ClaudeCliAdapter               `claude -p --resume <session>` — 표준 입력 = 요청문 파일, 출력 = 대기열 옆 .claude.log. 기다리지 않음. 기본 꺼짐
   PaseoSpawner                   새 터미널 에이전트 열기 `paseo run --no-wait …` — HD_ALLOW_SPAWN=1 이 아니면 403 disabled(밖으로 나가는 일 — 캔버스가 먼저 사용자에게 묻는다)
 자식 프로세스는 모두 creationflags=NO_WINDOW(창 없이 뜬 서버에서 콘솔이 깜빡이지 않게). run·popen 은 테스트가 가짜로 바꿔 끼운다.
 상태 없음(어댑터는 찾는 법 find 와 켜짐 enabled 만 안다). 쓰는 곳 = send_queue.Queue.send · send_queue.forward(옛 이름).
 """
 import json, os, pathlib, shutil, subprocess
+
+import agent_meta as AM  # paseo 인자 모양(send_argv · update_argv, R28)
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 PASEO_DEFAULT = pathlib.Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Paseo" / "resources" / "bin" / "paseo.cmd"
@@ -49,13 +52,14 @@ def choose(target, entry, ready):
 
 
 class AgentAdapter:
-    """인터페이스 — name · ready() → 쓸 수 있나 · send(path, text, target) → (넘겼나, 못 넘긴 이유 | None). target = id 또는 presence 항목."""
+    """인터페이스 — name · ready() → 쓸 수 있나 · send(path, text, target, images=()) → (넘겼나, 못 넘긴 이유 | None).
+    target = id 또는 presence 항목 · images = 첨부 이미지 절대 경로(진짜 이미지로 넘길 수 있는 어댑터만 쓴다 — 글의 '첨부 이미지:' 줄은 그대로)."""
     name = ""
 
     def ready(self):
         raise NotImplementedError
 
-    def send(self, path, text, target):
+    def send(self, path, text, target, images=()):
         raise NotImplementedError
 
 
@@ -65,7 +69,7 @@ class NoneAdapter(AgentAdapter):
     def ready(self):
         return True
 
-    def send(self, path, text, target):
+    def send(self, path, text, target, images=()):
         return True, None
 
 
@@ -87,17 +91,54 @@ class PaseoAdapter(AgentAdapter):
     def ready(self):
         return bool(self.find())
 
-    def send(self, path, text, target):
+    def send(self, path, text, target, images=()):
         cmd = self.find()
         aid = target.get("id") if isinstance(target, dict) else target
         if not cmd or not aid:
             return False, NO_PASEO if not cmd else "받을 에이전트가 없어요"
         try:
-            r = self.run(_paseo_args(cmd, ["send", aid, "--prompt-file", str(path), "--no-wait"]),
-                         capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
+            r = self.run(_paseo_args(cmd, AM.send_argv(aid, path, images)),
+                         capture_output=True, timeout=60, creationflags=NO_WINDOW)   # 바이트로(cmd 오류 글은 UTF-8 이 아닐 수 있음 — 종료 코드만 본다)
         except (OSError, subprocess.TimeoutExpired) as e:
             return False, "paseo send 실패: %s" % e
         return (True, None) if r.returncode == 0 else (False, "paseo send 종료 코드 %d" % r.returncode)
+
+    def _call(self, rest, timeout):
+        """paseo 한 번 → (종료 코드, stdout 글, stderr 마지막 줄) | 오류 글(문자열). 바이트로 받아 UTF-8 로 푼다(한글)."""
+        cmd = self.find()
+        if not cmd:
+            return NO_PASEO
+        try:
+            r = self.run(_paseo_args(cmd, rest), capture_output=True, timeout=timeout, creationflags=NO_WINDOW,
+                         env=dict(os.environ, PYTHONIOENCODING="utf-8", NO_COLOR="1"))
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return "paseo 실행 실패: %s" % e
+        dec = lambda b: b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
+        err = [x for x in dec(r.stderr).strip().splitlines() if x.strip()]
+        return r.returncode, dec(r.stdout), (err[-1][:200] if err else "")
+
+    def update_thinking(self, aid, opt):
+        """생각 깊이 바꾸기(R28) → (바꿨나, 이유 | None). 부르는 쪽이 선택지로 먼저 검사한다(agent_meta.check_effort)."""
+        if not aid:
+            return False, "받을 에이전트가 없어요"
+        got = self._call(AM.update_argv(aid, opt), 30)
+        if isinstance(got, str):
+            return False, got
+        code, out, err = got
+        return (True, None) if code == 0 else (False, err or out.strip()[-200:] or "paseo agent update 종료 코드 %d" % code)
+
+    def read_json(self, rest, timeout=20):
+        """읽기만 하는 `paseo … --json` → (값, None) | (None, 이유)."""
+        got = self._call(list(rest), timeout)
+        if isinstance(got, str):
+            return None, got
+        code, out, err = got
+        if code != 0:
+            return None, err or "종료 코드 %d" % code
+        try:
+            return json.loads(out), None
+        except ValueError:
+            return None, "JSON 이 아니에요"
 
 
 def _popen(args, **kw):
@@ -115,7 +156,7 @@ class ClaudeCliAdapter(AgentAdapter):
     def ready(self):
         return bool(self.enabled and self.find())
 
-    def send(self, path, text, target):
+    def send(self, path, text, target, images=()):        # 이미지는 글의 '첨부 이미지:' 줄로만(claude -p 표준 입력은 글)
         session = target.get("session") if isinstance(target, dict) else None
         if not self.ready():
             return False, "claude 깨우기가 꺼져 있어요(HD_CLAUDE_WAKE=1)"

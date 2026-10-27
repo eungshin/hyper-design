@@ -87,6 +87,7 @@ ROUTES = {
         "/api/chat": get_chat,                                          # S3 대화 기록(.hd-chat.jsonl)
         "/api/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),   # S3b 터미널 대화(고른 에이전트만, 그 뒤 새 줄은 이벤트)
         "/agents/transcript": lambda s, q, b: s.transcripts.http_get(q),
+        "/api/agents/info": lambda s, q, b: s.agent_info.get(q),       # R28 붙은 Paseo 터미널의 모델·생각 깊이·컨텍스트(없으면 {agent:null})
         "/api/image": lambda s, q, b: s.images.read(q),                 # R22 첨부 이미지 읽기(?rel=.hd-attach/<이름>) → {type, data(base64)}
     },
     "POST": {
@@ -114,6 +115,7 @@ ROUTES = {
         "/agents/spawn": lambda s, q, b: s.spawn(b),                    # 기본 꺼짐(HD_ALLOW_SPAWN=1)
         "/api/agents/spawn": lambda s, q, b: s.spawn(b),
         "/api/attach": lambda s, q, b: s.queue.attach(b),
+        "/api/agents/effort": _obj(lambda s, q, b: s.agent_info.effort(b)),   # R28 생각 깊이 바꾸기 {effort} — paseo agent update --thinking
         "/api/image": lambda s, q, b: s.images.save(b),                 # R22 첨부 이미지 저장 {data} → {path, rel, type, size}(본문 한도 BODY_MAX)
         "/api/watch": lambda s, q, b: (200, s.busy.mtimes(b.get("files") if isinstance(b, dict) else None)),
     },
