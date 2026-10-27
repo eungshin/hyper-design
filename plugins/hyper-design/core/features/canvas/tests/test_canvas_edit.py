@@ -836,16 +836,47 @@ def test_trigger_tool_shows_sockets_and_socket_drag_changes_target(dpage):
     dpage.keyboard.press("Escape")
 
 
+def pick_el_at(pg, x, y):
+    """이동(V): 카드 고르기 → 잠시 뒤 한 번 더 = 그 자리 요소 → 요소 막대(R27 F05: 요소 메뉴는 요소를 고른 카드 안에서만)."""
+    pg.keyboard.press("v")
+    pg.mouse.click(x, y)
+    pg.wait_for_selector("#selbar:not([hidden]), #elbar:not([hidden])", timeout=8000)
+    pg.wait_for_timeout(600)
+    pg.mouse.click(x, y)
+    pg.wait_for_selector("#elbar:not([hidden])", timeout=8000)
+
+
+def menu_acts(pg):
+    return pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
+
+
 @pytest.mark.area("tools", "input")
 def test_element_menu_via_hit_at(dpage):
+    """R27 F05: 카드 오른쪽 클릭 = 카드 메뉴만(요소 항목 없음). 그 카드 안 요소를 고른 뒤 오른쪽 클릭 = 그 자리 요소(hd-hit-at)의 요소 메뉴만 —
+    10개 이하, 같은 항목 두 번 없음, 묶음은 회색 소제목 대신 구분선."""
     fit_view(dpage)
     c = visible_cover(dpage)
     dpage.mouse.click(c["x"], c["y"], button="right")
-    dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="trigger"], #cmenu:not([hidden]) button[data-act="untrigger"]', timeout=3000)
-    items = dpage.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
-    assert ("trigger" in items or "untrigger" in items) and "card-open" in items, items
-    assert items.index("card-open") > 0, "요소 항목이 먼저, 카드 항목이 뒤"
+    dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="card-open"]', timeout=3000)
+    dpage.wait_for_timeout(500)                      # 예전엔 이 사이에 요소 항목이 붙었다
+    items = menu_acts(dpage)
+    assert "card-open" in items and not {"trigger", "untrigger", "text", "chain"} & set(items), ("카드 범위 = 카드 항목만", items)
+    assert len(items) <= 10, items
     dpage.keyboard.press("Escape")
+    pick_el_at(dpage, c["x"], c["y"])
+    dpage.mouse.click(c["x"], c["y"], button="right")
+    dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="trigger"], #cmenu:not([hidden]) button[data-act="untrigger"]', timeout=3000)
+    items = menu_acts(dpage)
+    labels = dpage.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.firstChild.textContent)")
+    assert not [a for a in items if a.startswith("card-")], ("요소 범위 = 카드 항목을 덧붙이지 않음", items)
+    assert len(items) <= 10 and len(set(labels)) == len(labels), ("10개 이하 · 겹침 없음", labels)
+    assert dpage.locator("#cmenu .cmh.sub").count() == 0 and dpage.locator("#cmenu hr").count() >= 1, "묶음 = 구분선"
+    kb = dpage.evaluate("(() => { const k = document.querySelector('#cmenu kbd'); if (!k) return null; const s = getComputedStyle(k); return [s.fontSize, s.color]; })()")
+    assert kb is None or kb == ["11px", "rgb(153, 153, 153)"], ("단축키 = 11px #999", kb)
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("Escape")
+    dpage.keyboard.press("h")
 
 
 @pytest.mark.area("tools")
@@ -970,6 +1001,7 @@ def test_dblclick_screen_text_edits_with_preview(dpage):
 def test_element_menu_edit_text(dpage):
     fit_view(dpage)
     c = visible_cover(dpage)
+    pick_el_at(dpage, c["x"], c["y"])                # R27 F05: 요소 메뉴 = 요소를 고른 카드 안에서
     dpage.mouse.click(c["x"], c["y"], button="right")
     dpage.wait_for_selector('#cmenu:not([hidden]) button[data-act="text"]', timeout=3000)
     dpage.click('#cmenu button[data-act="text"]')
@@ -978,6 +1010,7 @@ def test_element_menu_edit_text(dpage):
     dpage.keyboard.press("Escape")
     fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 0", timeout=3000)
     assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc 는 고치기를 취소"
+    dpage.keyboard.press("Escape"); dpage.keyboard.press("Escape"); dpage.keyboard.press("h")
 
 
 # ---------------------------------------------------------------- 재작업 A: 연결 편집은 캔버스에 바로 보인다(원 세션 검증 10-20)

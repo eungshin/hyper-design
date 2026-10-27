@@ -753,8 +753,10 @@ pane.addEventListener('contextmenu', function (e) {
       '-',
       {id: 'card-hide', label: '숨기기' + suf, act: function () { LF.hide(ids, true); SL.dispatch({type: 'clear'}); }},
       {id: 'card-del', label: '삭제' + suf, key: 'Del', act: function () { CA.del(ids); }}]);
-    var tok = CM.open(x, y, titleOf(id), cardItems);   // 그 자리 요소를 화면에 물어(hd-hit-at) 오면 요소 항목을 위에 더한다
-    FA.hit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y, cardItems); });
+    var tok = CM.open(x, y, titleOf(id), cardItems);   // 범위(R27 F05, HD.elPick.menuScope): 그 카드 안 요소를 골라 둔 때만 그 자리 요소(hd-hit-at)의 요소 메뉴로 바꾼다 — 카드 항목은 덧붙이지 않음
+    var es = EB.selected();
+    if (HD.elPick.menuScope({card: id, elCard: es && es.card ? es.card.dataset.id : null}) === 'element')
+      FA.hit(card, x, y, true, function (h) { if (CM.isCurrent(tok) && h && !h.none) openElemMenu(id, h, x, y); });
     return;
   }
   var r = pane.getBoundingClientRect(), px = x - r.left, py = y - r.top, n = Object.keys(LF.hidden()).length;
@@ -787,7 +789,7 @@ function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 
 }
 // 카드 화면에 묻기(modules/view-frame-ask.js): 그 자리 요소(hd-hit-at → hd-hit) · 조상(hd-up → hd-upchain) — 메시지 모양은 그대로
 var FA = HD.viewFrameAsk.mount({$: $, $$: $$, toast: function (m) { toast(m); }, wOf: wOf, load: function (f) { LC.load(f); }});
-function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시안 A): 고르기 · 고치기 · 연결 · 요청 묶음 + 실제로 듣는 단축키(HD.blocks.menu) — 오른쪽 클릭과 막대 [⋯] 가 같은 것. 크게 보기 = 판에서 도착을 고르는 항목 빼고
+function openElemMenu(from, h, x, y, tail, inModal) {   // tail(카드 항목 덧붙이기)은 R27 F05 부터 쓰지 않는다 — 요소 메뉴 = 요소 범위만   // 요소 메뉴(R17 시안 A): 고르기 · 고치기 · 연결 · 요청 묶음 + 실제로 듣는 단축키(HD.blocks.menu) — 오른쪽 클릭과 막대 [⋯] 가 같은 것. 크게 보기 = 판에서 도착을 고르는 항목 빼고
   var app = appCard(from), where = inModal ? 'modal' : 'board', sel = {screen: from, h: h, app: app, where: where, at: {x: x, y: y}};
   var links = app ? [] : h.to ? [{id: 'retarget', label: '도착 바꾸기', pick: 1, act: function () { startPick(from, [h], x, y); }},
                     {id: 'untrigger', label: '트리거 해제', act: function () { ED.add('트리거 해제', [ED.note(from, h, HD.edits.say.untrigger(ED.scr(h.to)), 'untrigger', h.to)]); }}]
@@ -795,7 +797,7 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시
                     {id: 'link', label: '잇기', key: 'L 끌기', pick: 1, act: function () { startPick(from, [h], x, y); }}];
   if (inModal) links = links.filter(function (it) { return !it.pick; });
   var list = [];
-  var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push({head: head}); list.push.apply(list, items); };
+  var group = function (head, items) { if (!items.length) return; if (list.length) list.push('-'); list.push.apply(list, items); };   // 묶음 사이 = 구분선(R27 F05 — 회색 소제목 없음)
   HD.blocks.menu(h, {app: app, where: where}).forEach(function (g) {
     if (g.head === '요청') group('연결', links);
     group(g.head, g.items.map(function (it) {
@@ -806,7 +808,6 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // 요소 메뉴(R17 시
       return o;
     }));
   });
-  if (tail && tail.length) { list.push('-', {head: '카드'}); list.push.apply(list, tail); }
   CM.open(x, y, titleOf(from), list);
 }
 var VIA_BAR = {parent: 1, inner: 1, attr: 1, swap: 1, insert: 1};

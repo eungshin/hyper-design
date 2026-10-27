@@ -67,8 +67,8 @@ def test_move_hover_shows_next_pick_then_parent_dashed_and_pick_menu(ctx, out):
 
         pg.mouse.click(x, y, button="right")
         pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="chain"]', timeout=4000)
-        heads = pg.evaluate("[...document.querySelectorAll('#cmenu .cmh.sub')].map(h => h.textContent)")
-        assert heads[0] == "고르기", ("요소 메뉴 첫 묶음 = 고르기(R17)", heads)
+        first = pg.evaluate("document.querySelector('#cmenu button[data-act]').dataset.act")
+        assert first == "chain", ("요소 메뉴 첫 항목 = 레이어 고르기(R17 · R27 F05 소제목 없음)", first)
         assert pg.get_attribute('#cmenu button[data-act="chain"]', "aria-haspopup") == "menu", "레이어 고르기 ▸ = 옆 목록"
         pg.hover('#cmenu button[data-act="chain"]')
         pg.wait_for_selector("#cmsub:not([hidden]) button", timeout=4000)

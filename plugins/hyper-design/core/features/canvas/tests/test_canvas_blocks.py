@@ -181,7 +181,7 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     mf.click(H1, button="right")                            # 오른쪽 클릭 = 판과 같은 요소 메뉴
     pg.wait_for_selector("#cmenu:not([hidden])", timeout=3000)
     items = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
-    assert {"text", "remove", "dup", "up", "down", "memo", "ai", "parent", "swap", "insert"} <= set(items), items
+    assert {"text", "remove", "dup", "memo", "chain", "swap", "insert"} <= set(items) and len(items) <= 10, items   # R27 F05: 위/아래·상위·AI 는 키(Alt+↑↓ · Shift+Enter)·막대 아이콘
     assert "link" not in items and "retarget" not in items, "크게 보기에서는 판에서 도착을 고르는 항목이 없다"
     pg.click('#cmenu button[data-act="dup"]')
     wait_notes(pg, 1)
@@ -294,13 +294,14 @@ def test_icon_bar_tip_ai_request_and_more_menu(ctx, out):
     path0 = pg.get_attribute("#elbar", "data-path")
     pg.click('#elbar [data-act="more"]')
     pg.wait_for_selector("#cmenu:not([hidden]) button[data-act]", timeout=3000)
-    heads = pg.evaluate("[...document.querySelectorAll('#cmenu .cmh.sub')].map(h => h.textContent)")
-    assert heads[:2] == ["고르기", "고치기"] and "요청" in heads, heads
+    assert pg.locator("#cmenu .cmh.sub").count() == 0, "R27 F05: 묶음 = 구분선(회색 소제목 없음)"
     keys = dict(pg.evaluate("[...document.querySelectorAll('#cmenu button[data-act]')].map(b => [b.dataset.act, (b.querySelector('kbd') || {}).textContent || ''])"))
-    assert keys["parent"] == "Shift+Enter" and keys["dup"] == "Ctrl+D" and keys["remove"] == "Del" and keys["memo"] == "", keys
+    assert list(keys)[0] == "chain" and keys["dup"] == "Ctrl+D" and keys["remove"] == "Del" and keys["memo"] == "" and "parent" not in keys, keys
     pg.wait_for_timeout(300)                              # 메뉴 열림 움직임이 끝난 뒤
     shot(pg, "r17-more-menu.png")
-    pg.click('#cmenu button[data-act="parent"]')
+    pg.hover('#cmenu button[data-act="chain"]')        # R27 F05: 상위 고르기 = 레이어 고르기 ▸ 둘째 줄(상자가 다른 첫 조상) · 키 Shift+Enter
+    pg.wait_for_selector("#cmsub:not([hidden]) button:nth-of-type(2)", timeout=4000)
+    pg.click("#cmsub button:nth-of-type(2)")
     pg.wait_for_function("(p) => { const b = document.querySelector('#elbar'); return !b.hidden && b.dataset.path && b.dataset.path !== p; }", arg=path0, timeout=5000)
     assert "h1" not in pg.get_attribute("#elbar", "data-path"), ("메뉴의 상위 고르기 = 감싼 요소", path0, pg.get_attribute("#elbar", "data-path"))
     assert not errors, errors

@@ -64,18 +64,19 @@ def test_app_card_text_icon_is_an_ai_request_without_key(js):
 
 
 def test_menu_groups_and_real_shortcut_hints(js):
-    assert js["menu"] == [
-        ["고르기", [["parent", "상위 고르기", "Shift+Enter"], ["inner", "안쪽 고르기", ""], ["chain", "레이어 고르기", ""]]],
-        ["고치기", [["text", "글자 고치기", "Enter"], ["dup", "복제", "Ctrl+D"], ["remove", "지우기", "Del"], ["up", "위로 옮기기", "Alt+↑"],
-                    ["down", "아래로 옮기기", "Alt+↓"], ["insert", "아래에 넣기…", ""], ["swap", "다른 부품으로 바꾸기…", ""]]],
-        ["요청", [["memo", "메모 달기", ""], ["ai", "AI에게 바꿔 달라기", ""]]]], js["menu"]
+    assert js["menu"] == [   # R27 F05: 10개 이하 — 상위·안쪽·위/아래로 옮기기는 키(Shift+Enter · Enter · Alt+↑/↓), AI 는 막대 아이콘
+        ["고르기", [["chain", "레이어 고르기", ""]]],
+        ["고치기", [["text", "글자 고치기", "Enter"], ["dup", "복제", "Ctrl+D"], ["remove", "지우기", "Del"],
+                    ["insert", "아래에 넣기…", ""], ["swap", "다른 부품으로 바꾸기…", ""]]],
+        ["요청", [["memo", "메모 달기", ""]]]], js["menu"]
+    assert sum(len(i) for _, i in js["menu"]) <= 10
 
 
 def test_enter_hint_goes_to_inner_when_not_text(js):
     g = dict((h, items) for h, items in js["menuBox"])
-    assert ["inner", "안쪽 고르기", "Enter"] in g["고르기"]
     assert ["text", "글자 고치기", ""] in g["고치기"], "꺼진 글자는 남긴다(누르면 까닭) — 힌트 없음"
-    assert js["keysBox"] == ["Enter", ""]
+    assert js["keysBox"] == ["Enter", ""], "안쪽 고르기는 메뉴에서 빠졌고(R27 F05) Enter 로"
+
 
 
 def test_large_view_text_hint_is_double_click(js):
@@ -83,7 +84,7 @@ def test_large_view_text_hint_is_double_click(js):
 
 
 def test_root_drops_disabled_edits_and_parent(js):
-    assert js["menuRoot"] == [["고르기", ["inner", "chain"]], ["고치기", ["text"]], ["요청", ["memo", "ai"]]], js["menuRoot"]
+    assert js["menuRoot"] == [["고르기", ["chain"]], ["고치기", ["text"]], ["요청", ["memo"]]], js["menuRoot"]
 
 
 def test_attr_item_only_for_elements_with_attributes(js):
@@ -93,7 +94,7 @@ def test_attr_item_only_for_elements_with_attributes(js):
 def test_app_card_edits_are_ai_requests_without_hints(js):
     g = dict((h, items) for h, items in js["menuApp"])
     assert all(a and not k for _, a, k in g["고치기"]), g["고치기"]
-    assert ["parent", False, "Shift+Enter"] in g["고르기"] and ["ai", False, ""] in g["요청"]
+    assert ["chain", False, ""] in g["고르기"] and ["memo", False, ""] in g["요청"]
 
 
 def test_only_real_keys(js):
