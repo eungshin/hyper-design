@@ -133,3 +133,26 @@ def test_file_watch_absorbs_own_writes():
     w.absorb({"a": 2.0})                              # 도우미가 스스로 쓴 뒤
     assert w.tick({"a": 2.0}) == [] and w.seq == 0, "스스로 쓴 것은 알리지 않는다"
     assert w.tick({"a": 3.0}) == ["a"] and w.seq == 1, "그 뒤 바깥에서 바뀐 것은 알린다"
+
+
+def test_scan_marks_a_screen_changed_when_a_file_it_embeds_changes():
+    """F25 — 화면이 iframe·css 로 끌어 쓰는 out 안 파일만 바뀌어도 그 화면이 '바뀜'(카드 다시 싣기). 바깥 주소는 보지 않는다."""
+    import busy
+    import os
+    out = pathlib.Path(tempfile.mkdtemp(prefix="hd-scan-dep-"))
+    (out / "screens").mkdir()
+    (out / "screens.json").write_text(json.dumps({"screens": [{"id": "home", "file": "screens/home.html"}]}), encoding="utf-8")
+    (out / "screens" / "home.html").write_text(
+        '<link rel="stylesheet" href="home.css"><iframe src="mock-tab.html?src=abc#x"></iframe>'
+        '<iframe src="https://example.com/x.html"></iframe>', encoding="utf-8")
+    (out / "screens" / "home.css").write_text("a{}", encoding="utf-8")
+    (out / "screens" / "mock-tab.html").write_text("<p>old</p>", encoding="utf-8")
+    for f in (out / "screens").iterdir():
+        os.utime(f, (1000, 1000))
+    cache, watch = {}, busy.FileWatch()
+    assert watch.tick(busy.scan(out, cache)) == []
+    os.utime(out / "screens" / "mock-tab.html", (2000, 2000))
+    assert watch.tick(busy.scan(out, cache)) == ["home"]
+    os.utime(out / "screens" / "home.css", (3000, 3000))
+    assert watch.tick(busy.scan(out, cache)) == ["home"]
+    assert watch.tick(busy.scan(out, cache)) == []

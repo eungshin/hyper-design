@@ -4,7 +4,7 @@
 부르는 곳: session.ProjectSession(Busy, History 의 on_written = absorb) · router(/api/claim · /api/release · /api/files · /api/watch) · helper(예전 이름).
 오류 탐지: screens.json 을 못 읽으면 [hd] 한 줄(한 번) 뒤 그 차례를 건너뜀 · 모양이 틀린 claim 은 400, 없는 화면은 404 · 덮개 경고는 stderr 로.
 """
-import datetime, json, pathlib, sys, threading
+import datetime, json, pathlib, re, sys, threading
 
 import events as EV  # 바뀐 것 알림(claim · release · screen.written by ai · ai.write)
 from out_io import _inside, _screen_files  # out_io 가 hd 폴더를 sys.path 에 넣는다
@@ -130,10 +130,45 @@ def scan(out, cache):
     for sid, rel in cache["sj"][1].items():
         p = out / rel
         try:
-            res[sid] = p.stat().st_mtime if _inside(out, p) and p.is_file() else None
+            res[sid] = _newest(out, p, cache) if _inside(out, p) and p.is_file() else None
         except (OSError, ValueError):
             res[sid] = None
     return res
+
+
+_DEP = re.compile(r"""<(?:iframe|link|script)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"'#?]+)""", re.I)
+
+
+def _deps(out, p, cache):
+    """화면이 iframe·link·script 로 끌어 쓰는 out 안 파일들(F25) — 화면 mtime 이 바뀔 때만 다시 읽는다. 바깥 주소(scheme·//)는 뺀다."""
+    m = p.stat().st_mtime
+    hit = cache.setdefault("deps", {}).get(p)
+    if hit and hit[0] == m:
+        return hit[1]
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    found = []
+    for ref in _DEP.findall(text):
+        if ":" in ref or ref.startswith("/"):
+            continue
+        d = (p.parent / ref).resolve()
+        if d != p.resolve() and _inside(out, d):
+            found.append(d)
+    cache["deps"][p] = (m, found)
+    return found
+
+
+def _newest(out, p, cache):
+    """화면 파일과 그 화면이 끌어 쓰는 파일 중 가장 늦은 mtime — 안쪽 파일만 바뀌어도 카드를 다시 싣게(F25)."""
+    t = p.stat().st_mtime
+    for d in _deps(out, p, cache):
+        try:
+            t = max(t, d.stat().st_mtime)
+        except OSError:
+            pass
+    return t
 
 
 
