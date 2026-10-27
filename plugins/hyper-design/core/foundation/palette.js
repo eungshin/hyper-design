@@ -745,18 +745,18 @@
     (items || []).forEach(function (it) {
       var el = find(it.path);
       if (!el) return;
-      var o = 3 + 6 * (seen[it.path] || 0);            // 같은 요소의 두 번째 쌍부터 바깥으로(3px 틈)
+      var o = 2 + 4 * (seen[it.path] || 0);            // 같은 요소의 두 번째 쌍부터 바깥으로(2px 틈)
       seen[it.path] = (seen[it.path] || 0) + 1;
       var r = el.getBoundingClientRect(), d = document.createElement('div');
       d.setAttribute('data-hd-links', '');
       d.style.cssText = 'position:absolute;z-index:2147483646;pointer-events:none;border-radius:6px;box-sizing:border-box;' +
         'left:' + (r.left + scrollX - o) + 'px;top:' + (r.top + scrollY - o) + 'px;width:' + (r.width + 2 * o) + 'px;height:' + (r.height + 2 * o) + 'px;' +
-        'border:3px solid ' + it.color + ';box-shadow:0 0 0 2px rgba(255,255,255,.85)';
+        'border:1px dashed ' + it.color + ';box-shadow:0 0 0 1px rgba(255,255,255,.6)';   // R27 F08: 화면 내용 위 표시는 얇은 점선 하나 — 디자인과 다투지 않게
       if (it.n) {
         var b = document.createElement('span');
         b.textContent = it.n <= 20 ? String.fromCharCode(0x245F + it.n) : '(' + it.n + ')';
-        b.style.cssText = 'position:absolute;right:-10px;top:-12px;min-width:22px;height:22px;padding:0 3px;border-radius:999px;background:' + it.color +
-          ';color:#fff;font:700 14px/22px sans-serif;text-align:center';
+        b.style.cssText = 'position:absolute;right:-8px;top:-9px;min-width:16px;height:16px;padding:0 2px;box-sizing:border-box;border-radius:999px;background:' + it.color +
+          ';color:#fff;font:600 10px/16px sans-serif;text-align:center';
         d.appendChild(b);
       }
       document.documentElement.appendChild(d); paints.push(d);

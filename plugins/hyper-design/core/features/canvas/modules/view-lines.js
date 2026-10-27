@@ -187,7 +187,21 @@ function mount(ctx) {
       c.classList.toggle('hl', on && !!linked[c.dataset.id]);
       c.classList.toggle('focus', !!foc[c.dataset.id]);
     });
+    declutter();
   }
+  // R27 F08: 보이는 태그(고른·올린 카드의 것뿐)가 화면에서 겹치면 아래로 민다 — 화면 px 거리 --dy(태그 CSS 가 판 배율로 되돌림), 규칙 HD.labelScale.stack.
+  // 판 배율이 멈춘 뒤(document 'hd-label-scale')에도 다시 잰다(태그 크기는 화면에서 같지만 태그 사이 판 거리는 배율 따라 달라진다)
+  function declutter() {
+    var shown = [];
+    lbEls.forEach(function (n) {
+      if (n.style.getPropertyValue('--dy')) n.style.removeProperty('--dy');
+      if (n.isConnected && getComputedStyle(n).display !== 'none') shown.push(n);
+    });
+    if (shown.length < 2 || !HD.labelScale) return;
+    var rs = shown.map(function (n) { var r = n.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; });
+    HD.labelScale.stack(rs, 3).forEach(function (dy, i) { if (dy > 0) shown[i].style.setProperty('--dy', dy.toFixed(1) + 'px'); });
+  }
+  document.addEventListener('hd-label-scale', function () { if (rowsEl.classList.contains('focusing') || hov) declutter(); });
   // 자르기: 그은 선(판 좌표 점, from 번째 마디부터)이 가로지른 선들(기획 갈래·숨긴 선 빼고)
   function segX(a, b, c, d) {
     function o(p, q, r) { return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]); }
