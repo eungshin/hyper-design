@@ -287,14 +287,26 @@ function zoomAt(px, py, nz) {
   var c = HD.viewport.zoomAt({z: z, tx: tx, ty: ty}, px, py, clampZ(nz));
   z = c.z; tx = c.tx; ty = c.ty; apply();
 }
-function home() {
-  z = Z0;
-  tx = pane.clientWidth < 600 ? 12 - LEFT * z : 24 - contentLeft * z;   // 폰: 화면 줄이 바로 보이게 통로는 화면 밖으로
-  ty = 0; apply();
+function toolEdge() {                             // 떠 있는 도구 막대의 오른쪽 끝(판 기준 px, 없거나 숨김 = 0) — 카메라가 내용을 그 오른쪽에 두게(S3 · R27 F17)
+  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;
+  return tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left)) : 0;
 }
+function firstRowTop() {                          // 첫 화면 줄(.flow)의 판 좌표 위 — 없으면 null
+  var f = rowsEl.querySelector('.flow'); if (!f) return null;
+  var sr = stage.getBoundingClientRect(), k = stage.offsetHeight ? sr.height / stage.offsetHeight : 1;
+  return (f.getBoundingClientRect().top - sr.top) / (k || 1);
+}
+function home() {                                  // 첫 카메라(R27 F03): 첫 화면 줄이 위에 — 소개 글·DS 카드는 위로 굴려 보는 곁 내용, 열자마자 보이는 것은 화면들
+  z = Z0;
+  var narrow = pane.clientWidth < 600, top = firstRowTop();
+  tx = narrow ? 12 - LEFT * z : Math.max(24, toolEdge() + 16) - contentLeft * z;   // 폰: 화면 줄이 바로 보이게 통로는 화면 밖으로 · 넓으면 도구 막대 오른쪽부터(F17)
+  ty = top == null ? 0 : Math.min(0, 20 - top * z); apply();
+  homeCam = {z: z, tx: tx, ty: ty};
+}
+var homeCam = null;
+function rehome() { if (homeCam && z === homeCam.z && tx === homeCam.tx && ty === homeCam.ty) home(); }   // 글꼴·줄 높이가 늦게 바뀌어 첫 줄이 움직였으면 — 아직 아무도 판을 옮기지 않았을 때만 다시
 function fit() {
-  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
-  var g = tr && tr.width ? Math.max(0, Math.round(tr.right - pane.getBoundingClientRect().left + 8 - 16)) : 0;
+  var e = toolEdge(), g = e ? Math.max(0, e + 8 - 16) : 0;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
   var ex = CP.extent(contentLeft), pw = pane.clientWidth - g, ph = pane.clientHeight;
   if (BN) ex = BN.extent(ex);                      // 판 메모까지(R25) — 멀리 둔 메모도 전체 보기에 든다
   fitMin = Math.min(ZMIN, HD.viewport.fit(ex, pw, ph, 32).z);
@@ -499,7 +511,7 @@ function sizeModal() {
   var g = tr && tr.width ? Math.max(0, Math.round(tr.right - (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0) + 8)) : 0;
   modal.style.paddingLeft = g ? g + 'px' : '';
   var m = modalSize(), mw = m.w, mh = m.h;
-  var s = Math.min(1, (innerHeight - top - 128 - 26) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 26
+  var s = Math.min(1, (innerHeight - top - 128 - 30) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
   mscale = s;
   mframe.style.width = m.custom ? mw + 'px' : ''; mframe.style.height = m.custom ? mh + 'px' : '';   // 크기를 바꾼 카드 = 그 크기로 크게 보기(task 46)
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
@@ -580,7 +592,7 @@ var LF = HD.viewLayerFlags.mount({$: $, $$: $$, rowsEl: rowsEl, cardEl: function
   live: function () { return HD.layerFlags.live(D.rows, NS.list()).concat(HD.boardText.IDS); },
   record: function (op) { record(op); }, toast: function (m) { toast(m); }, redraw: function () { drawArrows(); }, openHidden: function () { openHidl(); },
   hiddenChanged: function (ids, on) { if (on) SL.dispatch({type: 'drop', ids: ids}); drawArrows(); LC.schedule(); },   // 숨긴 화면은 고르기에서 뺀다
-  layersChanged: function () { if (LY) LY.render(); }, lockedChanged: function () { if (LY) LY.render(); if (VA) VA.render(); }});
+  layersChanged: function () { if (LY) LY.render(); }, lockedChanged: function () { if (LY) LY.render(); if (VA) VA.render(); if (VD) VD.render(); }});
 var names = LF.names;
 function pendingFor(from) { return HD.edits.pendingFor(NS.list(), from); }   // 아직 파일에 안 들어간 연결 편집 → 연결 보기가 바로 겹쳐 그린다(모델: edits.js)
 var LN = HD.viewLines.mount({rowsEl: rowsEl, svg: $('#ar'), $: $, $$: $$, esc: esc, circled: circled, CARD: CARD, sizeOf: sizeOf, LEFT: LEFT, prefs: prefs, savePrefs: savePrefs, record: record,
@@ -616,10 +628,9 @@ var VM = HD.viewMotion.mount({VL: VL, LN: LN, select: function (id) { if (id) SL
                               setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); },
                               openModal: function (file, title) { openModal(file, title); }, closeModal: function () { closeModal(); },
                               modalOpen: function () { return !modal.hidden; }, mframe: mframe});
-// 오른쪽 패널 도크 View(modules/view-dock.js · 배치 모델 modules/dock.js) — 연결·표시·메모·반영 대기·기록·레이어·정렬·테마 패널(아래 panels)을 옮겨 붙인다(id 그대로)
+// 오른쪽 패널 도크 View(modules/view-dock.js · 배치 모델 modules/dock.js) — 연결·메모·반영 대기·기록·레이어·정렬·테마 패널(아래 panels)을 옮겨 붙인다(id 그대로) · 표시(#pShow)는 위쪽 줄 팝오버(view-show-pop, R27 F02)
 var DOCK_ICON = {
   links: '<svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 6H13a3 3 0 013 3v6.5"/><path d="M13.5 13l2.5 2.5 2.5-2.5"/></svg>',
-  show: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="1.2"/><path d="M4 7h7" stroke-width="3"/><path d="M4 12h11" stroke-width="2.2"/><path d="M4 17h5" stroke-width="3.6"/></svg>',
   notes: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg>',
   pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
   history: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8 8 8 0 00-6.3 3M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>',
@@ -631,7 +642,8 @@ var VD = null, VMN = null, VP = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), lroot: $('#ldock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
                         absent: !!window.__hdHelper && /^https?:$/.test(location.protocol) ? [] : ['talk'],   // 대화 패널(S3)은 도우미로 열 때만 — 기록·진행이 도우미에 있다(VS.on 과 같은 규칙, VS 는 아래에서 붙음)
-                        panels: {links: $('#pLinks'), show: $('#pShow'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign'), talk: $('#pTalk')},
+                        hidden: function () { return VA && SL && CP.boxes(SL.ids()).boxes.length >= 2 ? [] : ['align']; },   // 정렬은 두 장 이상 골랐을 때만(R27 F02) — 고르기가 바뀌면 VD.render()
+                        panels: {links: $('#pLinks'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign'), talk: $('#pTalk')},
                         title: function (id) { var sp = HD.edits.split(NS.list()); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
@@ -659,9 +671,10 @@ function fitCards(ids, maxZ) {                     // 그 카드들 범위가 �
   if (!cs.length) return;
   var p = pane.getBoundingClientRect(), o = {left: p.left + tx, top: p.top + ty}, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   cs.forEach(function (c) { var b = CP.boxOf(c, o); x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); });
-  var pw = pane.clientWidth, ph = pane.clientHeight;
+  var e = toolEdge(), g = e ? e + 8 - 32 : 0, pw = pane.clientWidth - Math.max(0, g), ph = pane.clientHeight;   // 도구 막대 오른쪽만 쓴다(R27 F17 — 막대가 고른 화면을 가리지 않게)
+  g = Math.max(0, g);
   z = clampZ(Math.min((pw - 64) / (x1 - x0), (ph - 64) / (y1 - y0), maxZ || Infinity));
-  tx = (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
+  tx = g + (pw - (x1 - x0) * z) / 2 - x0 * z; ty = (ph - (y1 - y0) * z) / 2 - y0 * z; apply();
 }
 // 테마 패널 View(modules/view-theme.js · 규칙 modules/theme.js, 조각 5) — 위쪽 팔레트 대신(H10), 기본은 닫힘(창 메뉴로)
 var VT = HD.viewTheme.mount({$: $, $$: $$, esc: esc, root: $('#pTheme'), bases: (P && P.options) || [], record: record,
@@ -782,9 +795,11 @@ LF.renderHidden();
 /* ---------- 트리거(L) · 소켓 끌기 · 자르기(C · 오른쪽 끌기) — 화면 파일을 바꾸는 편집은 메모(intent=change)로 쌓는다
    (보내기 요청문 형식은 /hyper-design:fix 가 읽으므로 그대로). 되돌리기 한 단계 = 편집 한 번. 이미 보낸 메모는 지우지 않고 취소 요청을 새로 ---------- */
 var toastT = 0, pickT = null;
-function toast(msg, withUndo, ms) {                 // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간
+function toast(msg, withUndo, ms, act) {            // withUndo: [되돌리기] 버튼(누르면 마지막 한 단계) · ms: 보여 둘 시간 · act = {label, tip, run} 다른 단추 하나(R27 F04 [연결])
   var t = $('#toast'); t.textContent = msg;
-  if (withUndo) { var b = document.createElement('button'); b.type = 'button'; b.textContent = '되돌리기'; b.addEventListener('click', function () { undo(); t.hidden = true; }); t.appendChild(b); }
+  var btn = function (label, run, tip) { var b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (tip) b.title = tip; b.addEventListener('click', function () { t.hidden = true; run(); }); t.appendChild(b); };
+  if (withUndo) btn('되돌리기', undo);
+  if (act && act.label && act.run) btn(act.label, act.run, act.tip);
   t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, ms || (withUndo ? 5000 : 2600));
 }
 // 카드 화면에 묻기(modules/view-frame-ask.js): 그 자리 요소(hd-hit-at → hd-hit) · 조상(hd-up → hd-upchain) — 메시지 모양은 그대로
@@ -1024,6 +1039,7 @@ var DR = HD.viewDrafts.mount({$: $, $$: $$, rowsEl: rowsEl, notes: NS, zoom: fun
 var SL = HD.viewSelect.mount({rowsEl: rowsEl, $$: $$, onChange: function (st, prev) {   // 고른 카드 — 주인은 HD.selection
   if (LY) LY.render();
   if (VA) VA.render();
+  if (VD) VD.render();                              // 정렬 패널은 두 장 이상일 때만 그려진다(R27 F02)
   if (PN && st.ids.length) PN.focus(null);          // 다른 카드를 고르면 막 메모를 단 카드의 핀 보이기는 끝
   if (AB) AB.closePop();                            // 고른 카드가 바뀌면 크기 팝오버는 닫는다(다른 카드에 잘못 적용하지 않게)
   EB.keep(function (id) { return st.ids.indexOf(id) >= 0; });   // 놓은 카드의 고른 요소는 풀린다(task 49a · 여러 요소 R19)
@@ -1268,12 +1284,13 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
   built: function (ids) { if (OP) OP.built(ids); },
   revert: function (ids, why, screens) {             // 뒤 빌드가 깨져 도우미가 쓰기를 되돌림 — 먼저 보인 변경을 거두고 알린 뒤 그 화면을 파일대로 다시
     var mine = (OP ? OP.reverted(ids, why) : []).concat(BT ? BT.reverted(ids) : [], CC ? CC.reverted(ids, why) : []);   // CC = 카드 복제(51-6) — 복사본을 거둔다   // BT = 판 글(t51-9) — 파일대로 다시 불러온다
-    if (!mine.length) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
+    var talk = FT.chatLog && FT.chatLog.shown && FT.chatLog.shown();   // 대화 패널이 보이면 그 빨간 줄이 알린다 — 토스트는 패널이 닫혔을 때만(R27 F04)
+    if (!mine.length && !talk) toast('빌드가 깨져 파일 쓰기를 되돌렸어요 — ' + why, false, 8000);
     if (screens.length) VS.refresh(screens, 'f' + Date.now());
   },
   reloadCards: function (ids) { reloadCards(ids); }}) : null;
 // 보내기 길 하나(modules/view-send.js): 위쪽 [보내기]·질문 고르기·등록부 sendNotes · 복사 대체 · [보낸 것 완료로] — 보낸 뒤 말은 HD.agents.sentSay
-var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms) { toast(m, u, ms); },
+var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms, c) { toast(m, u, ms, c ? {label: c.label, tip: c.tip, run: function () { var b = $('#aichip'); if (b && !b.hidden) b.click(); }} : null); },
   history: {sent: function () { HI.sent(); }, applied: function () { HI.applied(); }}, sync: function () { return VS; }, cover: function () { return VB; },
   cardEl: function (id) { return VL.cardEl(id); }, sizes: function () { return AB ? AB.sizes() : null; }, agent: function () { return window.__hdAgent || null; }, out: function () { return window.__hdOut || ''; }});
 addEventListener('keydown', function (e) {
@@ -1363,13 +1380,13 @@ home();
 LC.visible();
 var hashTab = (location.hash || '').slice(1);
 if (hashTab === 'foundation' || hashTab === 'components') showTab(hashTab);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); rehome(); });
 if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 와서 줄 높이가 바뀌면 화살표를 다시
   var roRaf = 0, roH = 0;
   new ResizeObserver(function () {
     if (rowsEl.offsetHeight === roH) return;
     RW.space(); roH = rowsEl.offsetHeight;          // 줄 높이가 바뀌면(카드 크기·글꼴) 줄 사이도 다시(t51-8)
-    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
+    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(function () { drawArrows(); rehome(); });
   }).observe(rowsEl);
 }
 window.__hdReady = performance.now();

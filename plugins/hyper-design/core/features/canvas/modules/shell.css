@@ -27,6 +27,9 @@ button{font:inherit;color:inherit}
 .mchip::before{content:'';flex:none;width:7px;height:7px;border-radius:50%;background:#b5b5b0}
 .mchip.on::before{background:#7a9a7a}
 .mchip:empty{display:none}
+/* ---- R27 F11 (chrome): 위쪽 상태는 예외만 — 늘 같은 정상 상태(파일에 바로 씀 · 실시간 · 연결 중)는 숨기고, 파일로 열림 · 2초 확인 · 받는 곳 없음만 보인다(Linear 동기화 표시처럼). 뜻은 칩 title ---- */
+#mode.on,#livechip[data-mode="live"],#livechip[data-mode="connecting"]{display:none}
+/* ---- /R27 F11 ---- */
 .hd .vbtn.tsend{background:var(--ui-primary);color:#fff;padding:0 12px;font-weight:600;margin-left:4px}   /* 주 행동 한 자리(E16) — 배율 오른쪽, 어느 탭에서든 */
 .hd .vbtn.tsend:disabled{background:#E1E1DC;color:#9a9a95}
 .hd .vbtn.decn{color:var(--ui-accent);font-weight:700}   /* 결정 필요 N(#232) — 강조색은 이것 하나 */
@@ -145,6 +148,12 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 #mclose{flex:none;width:22px;height:20px;border:0;border-radius:4px;background:none;color:#e6e6e1;display:grid;place-items:center;padding:0;cursor:pointer}
 #mclose:hover,#mclose:focus-visible{background:#55554f;outline:0}
 #mclose svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+/* ---- R27 F16 (chrome): 크게 보기 머리 = 밝은 줄 · 13px 제목 · 닫기 하나(어두운 막대가 화면보다 세게 테를 두르지 않게) · 크게 보기에서 못 쓰는 도구는 숨김 ---- */
+#modal .mbar{height:30px;padding:0 6px 0 14px;background:#fff;color:#3a3a37;font-size:13px;font-weight:600;border-bottom:1px solid #ececea}
+#mclose{width:24px;height:24px;border-radius:6px;color:#8a8a85}
+#mclose:hover,#mclose:focus-visible{background:#F2F2EF;color:#2b2b29}
+body.modal-open #tools .tb[aria-disabled="true"],body.modal-open #tools hr{display:none}
+/* ---- /R27 F16 ---- */
 #modal iframe{display:block;width:var(--modal-w,390px);height:var(--modal-h,844px);border:0;transform-origin:0 0;background:#fff}
 
 /* ---------- 강조: 고른 카드 전부(E21) — 그 선·태그·이어진 카드 또렷, 나머지 흐리게 ---------- */
@@ -281,6 +290,13 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 .wm-ck{width:14px;font-size:12px;text-align:center}
 .wm-row kbd{margin-left:auto;font:11px ui-monospace,Menlo,monospace;color:#888}
 .wm hr{border:0;border-top:1px solid #eee;margin:4px 2px}
+/* ---- R27 F14 (chrome): 보기(배율) 메뉴 = 글자 줄 + 오른쪽 단축키(창 메뉴와 같은 줄 모양) ---- */
+#vmenu{flex-direction:column;gap:0;min-width:210px}
+#vmenu hr{border:0;border-top:1px solid #eee;margin:4px 2px}
+.vm-row{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;padding:0 10px 0 6px;border:0;border-radius:7px;background:none;font-size:13px;color:#2b2b29;cursor:pointer;text-align:left}
+.vm-row:hover{background:#F2F2EF}.vm-row:disabled{opacity:.4;cursor:default;background:none}
+.vm-row kbd{margin-left:auto;padding-left:16px;font:11px ui-monospace,Menlo,monospace;color:#888}
+/* ---- /R27 F14 ---- */
 body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #ldock,body.bare #dklayer{display:none}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
@@ -473,6 +489,16 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 .dk-rs{position:absolute;right:2px;bottom:2px;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#bbb 50%,#bbb 58%,transparent 58%,transparent 70%,#bbb 70%,#bbb 78%,transparent 78%)}
 .dk-ghost{position:fixed;z-index:60;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:8px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);font:700 13px system-ui,sans-serif;pointer-events:none;opacity:.94}
 .dk-menu button{gap:8px}
+/* ---- R27 F02 (chrome): 빈 패널은 머리 줄만 — 연결(화면을 안 골랐을 때)·메모 없음·반영 대기 없음은 몸통을 접고 남는 높이를 다른 묶음에 ---- */
+.dk-g:has(#legend[hidden]),.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
+.dk-g:has(#legend[hidden])>.dk-body,.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
+/* ---- /R27 F02 ---- */
+/* ---- R27 F15 (chrome): 도크 탭 = 아이콘 + 툴팁, 이름은 고른 탭에만(자르지 않음) · 닫기 ×는 고른 탭에 올렸을 때만(안 고른 탭은 창 메뉴로 닫음) ---- */
+.dk-tab.on{flex:none}
+.dk-tab .dk-x{display:none}
+.dk-tab.on .dk-x{display:inline-flex;visibility:hidden}
+.dk-tab.on:hover .dk-x,.dk-tab.on:focus-visible .dk-x{visibility:visible}
+/* ---- /R27 F15 ---- */
 .lgi{display:flex;color:#666}.lgi svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 #pShow .lgw{margin-top:8px}
 

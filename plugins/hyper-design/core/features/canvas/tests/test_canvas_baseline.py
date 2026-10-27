@@ -203,3 +203,22 @@ def test_notes_roundtrip_same_key(bpage):
     assert bpage.locator(f'.card[data-id="{sid}"] .nbadge').text_content() == "1"
     bpage.evaluate("(k) => localStorage.removeItem(k)", keys[0])
     reload(bpage)
+
+
+@pytest.mark.area("input")
+def test_first_camera_opens_on_screen_rows_right_of_tools(ctx, out_dir):
+    """R27 F03·F17: 처음 열면 첫 화면 줄이 판 위쪽에 보이고(소개 글은 위로 굴려 보는 곁 내용), 그 줄은 떠 있는 도구 막대 오른쪽에서 시작한다."""
+    pg = ctx.new_page()
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    try:
+        pg.goto((out_dir / "index.html").resolve().as_uri())
+        pg.wait_for_function("window.__hdReady !== undefined")
+        r = pg.evaluate("""() => { const p = document.getElementById('screens').getBoundingClientRect(),
+            f = document.querySelector('#rows .flow').getBoundingClientRect(), c = document.querySelector('#rows .flow .card').getBoundingClientRect(),
+            t = document.getElementById('tools').getBoundingClientRect();
+            return {rowTop: f.top - p.top, cardLeft: c.left, toolsRight: t.right, cardBottom: c.bottom, paneBottom: p.bottom}; }""")
+        assert 0 <= r["rowTop"] <= 60, ("첫 화면 줄이 판 맨 위에", r)
+        assert r["cardBottom"] <= r["paneBottom"], ("첫 카드가 접힘 위에 다 보인다", r)
+        assert r["cardLeft"] >= r["toolsRight"] + 8, ("첫 카드는 도구 막대에 가리지 않는다", r)
+    finally:
+        pg.close()

@@ -67,7 +67,10 @@ def test_notes_panel_in_dock_scrolls(epage):
     epage.screenshot(path=str(ESHOTS / "1-notes-open-scrolled.png"))
     epage.evaluate("(k) => localStorage.removeItem(k)", key)
     reload(epage)
-    assert epage.is_hidden("#notes") and epage.is_visible("#pNotes .dkp-empty"), "메모가 없으면 빈 안내"
+    assert epage.is_hidden("#notes") and epage.is_hidden("#pNotes"), "메모가 없으면 그 묶음은 머리 줄(탭)만 — 빈 안내로 자리를 채우지 않는다(R27 F02)"
+    g = epage.evaluate("(() => { const g = document.getElementById('pNotes').closest('.dk-g'), t = g.querySelector('.dk-tabs'); return [g.getBoundingClientRect().height, t.getBoundingClientRect().height]; })()")
+    assert g[0] <= g[1] + 2 and epage.is_visible('#dock .dk-tab[data-p="notes"]'), ("빈 묶음 높이 = 탭 줄", g)
+    assert epage.is_hidden("#pLinks") and epage.is_hidden("#pAlign"), "화면을 안 골랐으면 연결도 머리 줄만 · 정렬은 없다"
 
 
 # ---------------------------------------------------------------- 오른쪽 패널 도크: 합치기·떼기·띄우기·크기·접기·닫기·저장
@@ -93,7 +96,7 @@ def test_dock_merge_split_float_resize_collapse_persist(epage):
     epage.evaluate("localStorage.removeItem('hd-dock')")
     reload(epage)
     sw = lambda: epage.evaluate("getComputedStyle(document.body).getPropertyValue('--dockw').trim()")
-    assert sw() == "300px" and epage.locator("#dock .dk-g").count() == 3, "기본: 세 묶음 · 너비 300"
+    assert sw() == "300px" and epage.locator("#dock .dk-g").count() == 2, "기본: 보이는 묶음 둘(연결 · 메모 — 정렬은 두 장 이상 골랐을 때만, R27 F02) · 너비 300"
     right = epage.evaluate("document.getElementById('screens').getBoundingClientRect().right")
     assert abs(right - epage.evaluate("document.getElementById('dock').getBoundingClientRect().left")) <= 1, "도크가 판을 밀어 좁힌다(겹치지 않음)"
     # 합치기: 메모 탭 → 첫 묶음 탭 줄
@@ -121,12 +124,12 @@ def test_dock_merge_split_float_resize_collapse_persist(epage):
     drag_to(epage, e, e["x"] - 80, e["y"] + 200)
     assert 370 <= int(sw()[:-2]) <= 395, sw()
     # 닫기 · 다시 열기
-    epage.hover('#dock .dk-tab[data-p="show"]')
-    epage.click('#dock .dk-tab[data-p="show"] .dk-x')
-    assert "show" in dock_state(epage)["closed"] and epage.locator('#dock .dk-tab[data-p="show"]').count() == 0
+    epage.hover('#dock .dk-tab[data-p="links"]')
+    epage.click('#dock .dk-tab[data-p="links"] .dk-x')
+    assert "links" in dock_state(epage)["closed"] and epage.locator('#dock .dk-tab[data-p="links"]').count() == 0
     epage.click("#dock .dk-more")
-    epage.click('.dk-menu button[data-p="show"]')
-    assert "show" not in dock_state(epage)["closed"] and epage.is_visible("#lgDdb"), "다시 열면 보인다"
+    epage.click('.dk-menu button[data-p="links"]')
+    assert "links" not in dock_state(epage)["closed"] and epage.is_visible('#dock .dk-tab[data-p="links"].on'), "다시 열면 보인다"
     # 접기 → 아이콘 줄, 아이콘 누르면 펴짐
     epage.click("#dock .dk-fold")
     assert sw() == "44px" and epage.locator("#dock .dk-sb").count() >= 2
@@ -196,12 +199,12 @@ def test_dock_width_drag_once_per_frame_and_tab_switch_keeps_nodes(epage):
     epage.evaluate("window.__g0 = document.querySelector('#dock .dk-g[data-g=\"0\"] .dk-tabs')")
     epage.click('#dock .dk-tab[data-p="pending"]')
     assert dock_state(epage)["groups"][2]["active"] == "pending"
-    assert epage.evaluate("!!document.getElementById('pPending').closest('.dk-g[data-g=\"2\"] .dk-body')"), "고른 패널이 그 묶음 몸통에"
+    assert epage.evaluate("!!document.getElementById('pPending').closest('.dk-g[data-g=\"1\"] .dk-body')"), "고른 패널이 그 묶음 몸통에(그려진 둘째 묶음 — 정렬은 숨김, R27 F02)"
     assert epage.evaluate("!document.getElementById('pNotes').closest('#dock')"), "앞에서 빠진 패널은 보관함으로"
     assert epage.evaluate("document.querySelector('#dock .dk-tab.on[data-p=\"pending\"]').getAttribute('aria-selected')") == "true"
     assert epage.evaluate("document.querySelector('#dock .dk-g[data-g=\"0\"] .dk-tabs') === window.__g0"), "다른 묶음은 다시 만들지 않는다"
     epage.click('#dock .dk-tab[data-p="notes"]')
-    assert epage.evaluate("!!document.getElementById('pNotes').closest('.dk-g[data-g=\"2\"] .dk-body')")
+    assert epage.evaluate("!!document.getElementById('pNotes').closest('.dk-g[data-g=\"1\"] .dk-body')")
     epage.evaluate("localStorage.removeItem('hd-dock')")
     reload(epage)
 
@@ -1772,7 +1775,7 @@ def test_all_lines_visible_without_clicking(dpage):
 
 @pytest.mark.area("links", "dock")
 def test_line_controls_show_width_opacity_persist(dpage):
-    """E7: 표시 패널에서 전체 선 보이기/숨기기 · 굵기 · 투명도 — 새로고침 뒤에도 그대로."""
+    """E7: 표시 팝오버(R27 F02)에서 전체 선 보이기/숨기기 · 굵기 · 투명도 — 새로고침 뒤에도 그대로."""
     fit_view(dpage)
     d = dpage.locator("#dock").bounding_box()
     dpage.mouse.move(d["x"] + d["width"] / 2, d["y"] + d["height"] - 20)   # 카드 위가 아니게(올린 카드 선은 진하게 바뀐다)
@@ -1783,12 +1786,14 @@ def test_line_controls_show_width_opacity_persist(dpage):
     dpage.wait_for_timeout(300)
     l1 = next(l for l in lines(dpage) if l["from"] == l0["from"] and l["to"] == l0["to"])
     assert abs(l1["op"] - 0.3) < 0.05 and l1["w"] > l0["w"], (l0, l1)
+    dpage.click("#showbtn")                              # 표시 = 위쪽 줄 팝오버(R27 F02)
     dpage.click("#lnShow")
     dpage.wait_for_timeout(150)
     assert not any(l["shown"] for l in lines(dpage)), "숨기기 = 선 모두 숨김"
     reload(dpage)
     assert not any(l["shown"] for l in lines(dpage)), "새로고침 뒤에도 숨김"
     assert dpage.evaluate("document.getElementById('lnOp').value") == "0.3"
+    dpage.click("#showbtn")
     dpage.click("#lnShow")
     dpage.evaluate("(v) => { const r = document.getElementById('lnOp'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "0.55")
     dpage.evaluate("(v) => { const r = document.getElementById('lgW'); r.value = v; r.dispatchEvent(new Event('input', {bubbles: true})); r.dispatchEvent(new Event('change', {bubbles: true})); }", "2.5")
@@ -2007,7 +2012,7 @@ def test_memo_pending_history_panels(dpage):
 
 @pytest.mark.area("helper")
 def test_file_mode_chip(epage):                                            # 2.2 E9 — 파일로 열면 바로 쓰기가 안 된다고 위쪽 줄에 늘 보인다
-    assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨"
+    assert epage.text_content("#mode") == "파일로 열림 · 바로 쓰기 안 됨" and epage.is_visible("#mode"), "예외 상태는 보인다(R27 F11)"
     assert "도우미" not in epage.text_content("header"), "화면 글에 '도우미' 말을 쓰지 않는다"
 
 
@@ -2035,6 +2040,9 @@ def test_view_and_window_menus(dpage):
     dpage.wait_for_selector("#vmenu", state="hidden")
     dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu:not([hidden])")
+    rows = dpage.eval_on_selector_all("#vmenu [data-z]", "els => els.map(e => [e.querySelector('span:not(.wm-ck)').innerText, (e.querySelector('kbd') || {}).innerText || ''])")
+    assert rows[:4] == [["전체 보기", "0"], ["100%", "1"], ["확대", "+"], ["축소", "-"]], ("배율 메뉴 = 글자 줄 + 오른쪽 단축키(R27 F14)", rows)
+    assert dpage.locator("#vmenu svg").count() == 0, "아이콘만인 줄 없음"
     dpage.click("#fit")
     dpage.wait_for_selector("#vmenu", state="hidden")
     zf = zoom_of(dpage)
@@ -2060,7 +2068,7 @@ def test_view_and_window_menus(dpage):
     dpage.wait_for_selector("#wmenu:not([hidden])")
     rows = dpage.evaluate("[...document.querySelectorAll('#wmenu [data-w]')].map(r => [r.dataset.w, r.getAttribute('aria-checked'), r.textContent.trim()])")
     keys = [r[0] for r in rows]
-    assert keys[:2] == ["tools", "chat"] and set(["links", "show", "notes", "pending", "history", "layers"]) <= set(keys), rows
+    assert keys[:2] == ["tools", "chat"] and set(["links", "notes", "pending", "history", "layers"]) <= set(keys) and "show" not in keys, rows   # 표시는 위쪽 줄 팝오버(R27 F02)
     assert all(r[2] for r in rows), "줄마다 짧은 이름(H11)"
     assert all(r[1] == ("false" if r[0] in ("theme", "talk") else "true") for r in rows), "체크 = 실제로 켜져 있는지(테마 패널은 처음엔 꺼짐 · 대화는 도우미 없이는 없음)"
     dpage.click('#wmenu [data-w="tools"]')
@@ -2089,12 +2097,18 @@ def test_view_and_window_menus(dpage):
     dpage.keyboard.press("h"); dpage.keyboard.press("e")
     assert dpage.get_attribute('#tools [data-tool="text"]', "aria-pressed") == "true"
     dpage.keyboard.press("h")
-    # 움직임 줄이기 = 표시 패널 체크
-    dpage.click('#dock .dk-tab[data-p="show"]')
+    # 움직임 줄이기 = 표시 팝오버 체크(R27 F02 — 늘 열린 도크 패널이 아니라 위쪽 줄 [표시] 아래)
+    assert dpage.is_hidden("#mvOff") and dpage.locator('#dock .dk-tab[data-p="show"]').count() == 0
+    dpage.click("#showbtn")
+    dpage.wait_for_selector("#showpop:not([hidden])")
+    assert dpage.get_attribute("#showbtn", "aria-expanded") == "true" and dpage.is_visible("#lgW") and dpage.is_visible("#lgDdb")
     dpage.check("#mvOff")
     assert dpage.evaluate("document.body.classList.contains('nomotion') && JSON.parse(localStorage.getItem('hd-canvas-prefs')).motion === false")
     dpage.uncheck("#mvOff")
     assert not dpage.evaluate("document.body.classList.contains('nomotion')")
+    dpage.keyboard.press("Escape")
+    dpage.wait_for_selector("#showpop", state="hidden")
+    assert dpage.get_attribute("#showbtn", "aria-expanded") == "false", "Esc = 닫기"
     assert not errs, errs
 
 
@@ -2308,7 +2322,10 @@ def test_header_compact_and_stable_on_modal(dpage):
       return {text: t.textContent.trim(), inModal: !!t.closest('#modal'), above: t.getBoundingClientRect().bottom <= f.getBoundingClientRect().top + 1,
               h: t.closest('.mbar').offsetHeight}; }""")   # 배치 높이 — 여는 움직임(scale) 중이어도 같다(getBoundingClientRect 는 24.96 으로 가끔 깨짐)
     assert t["text"] and t["text"] in title or title in t["text"], (t, title)
-    assert t["inModal"] and t["above"] and abs(t["h"] - 26) < 1, t
+    assert t["inModal"] and t["above"] and abs(t["h"] - 30) < 1, t
+    look = dpage.evaluate("""() => { const b = getComputedStyle(document.querySelector('#modal .mbar')), t = getComputedStyle(document.getElementById('mtitle'));
+      return {bg: b.backgroundColor, size: t.fontSize, closes: document.querySelectorAll('#modal .mbar button').length}; }""")
+    assert look == {"bg": "rgb(255, 255, 255)", "size": "13px", "closes": 1}, ("밝은 머리 · 13px 제목 · 닫기 하나(R27 F16)", look)
     ESHOTS.mkdir(parents=True, exist_ok=True)
     dpage.screenshot(path=str(ESHOTS / "h15-header-modal.png"))
     dpage.click("#mclose")
@@ -2340,6 +2357,7 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
     assert all(t[k][1] != "true" for k in ("hand", "move", "annotate", "text")), t
     assert all(t[k][1] == "true" for k in ("trigger", "knife", "layout", "memo")), t
+    assert all(dpage.is_hidden(f'#tools [data-tool="{k}"]') for k in ("trigger", "knife", "layout", "memo")), "크게 보기에서 못 쓰는 도구는 숨김(R27 F16)"
     dpage.click('#tools [data-tool="annotate"]')
     assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
     dpage.keyboard.press("p")
@@ -2350,6 +2368,7 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     dpage.wait_for_function("document.getElementById('modal').hidden")
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
     assert t["hand"][0] == "true" and all(d != "true" for p, d in t.values()), "닫으면 판의 도구(손)로, 모두 다시 쓸 수 있게"
+    assert dpage.is_visible('#tools [data-tool="knife"]'), "닫으면 다시 보인다"
 
 
 # ---------------------------------------------------------------- 조각 5 테마 패널 (H10·H12·H14)
@@ -2510,9 +2529,11 @@ def test_align_panel_aligns_distributes_and_stacks(dpage):
     ids = dpage.evaluate(MOVABLE_JS, 3)
     assert None not in ids and len(set(ids)) == 3, ids
     fit_view(dpage)
-    dpage.click('#dock .dk-tab[data-p="align"]')
-    assert dpage.text_content("#pAlign .al-n") == "화면을 두 개 이상 고르세요" and dpage.is_disabled('#pAlign [data-al="top"]')
+    assert dpage.locator('#dock .dk-tab[data-p="align"]').count() == 0 and dpage.is_hidden("#pAlign"), "정렬 패널은 두 장 이상 골랐을 때만(R27 F02)"
+    shift_pick(dpage, ids[:1])
+    assert dpage.locator('#dock .dk-tab[data-p="align"]').count() == 0, "한 장이면 아직 없다"
     shift_pick(dpage, ids)
+    assert dpage.is_visible('#dock .dk-tab[data-p="align"].on'), "두 장 이상 = 정렬 패널이 나타난다"
     assert dpage.text_content("#pAlign .al-n") == "고른 화면 3개" and not dpage.is_disabled('#pAlign [data-dist="x"]')
     b0 = boxes(dpage, ids)
     assert len({round(b["y"]) for b in b0.values()}) == 3, ("줄이 다른 카드 셋", b0)

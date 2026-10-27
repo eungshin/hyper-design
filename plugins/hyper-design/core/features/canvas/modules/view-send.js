@@ -1,7 +1,7 @@
 /* View — 보내기 길 하나: 위쪽 [보내기](#nsend)·질문 고르기·등록부 sendNotes 가 같은 send, 도우미가 없거나 꺼지면 요청문 복사, [보낸 것 완료로](#nclear).
    보낸 뒤 말 = Model HD.agents.sentSay · 요청문 = HD.edits.request. 보낸 요청문은 window.__hdLastSend, 도우미 답은 window.__hdLastHelper(테스트가 읽음).
    HD.viewSend.mount(ctx) → {send(list), busy() → 보내는 중(두 번 누르기 = 같은 요청 두 번 · S1), answer(id, choice), request(list) → 요청문}
-   ctx = {$, notes(NS), save(), record(op), toast(m, undo?, ms?), history: {sent(), applied()}, sync() → VS, cover() → VB|null, cardEl(id), sizes() → 카드 크기|null, agent() → 받는 곳|null(바뀔 수 있다), out() → out 폴더|''} */
+   ctx = {$, notes(NS), save(), record(op), toast(m, undo?, ms?, connect? {label, tip} = 받는 곳 고르기 단추), history: {sent(), applied()}, sync() → VS, cover() → VB|null, cardEl(id), sizes() → 카드 크기|null, agent() → 받는 곳|null(바뀔 수 있다), out() → out 폴더|''} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -54,7 +54,7 @@ function mount(ctx) {
       ctx.save();
       if (r.left.length) ctx.history.sent(); else ctx.history.applied();   // 보낸 자리 = 기록의 경계(그 앞은 되돌리지 않는다)
       var s = HD.agents.sentSay(r, {agent: ctx.agent(), warn: warn});   // 어디로 갔는지·AI 가 켜졌는지 말로(대기열이면 아무도 안 읽는다)
-      ctx.toast(say(s.text), false, s.ms);
+      ctx.toast(say(s.text), false, s.ms, s.connect || null);   // 대기열에만 남음 = [연결](받는 곳 고르기) + CLI 안내 툴팁(R27 F04)
       window.__hdLastHelper = {apply: r.res, forward: r.fw};
       var VB = ctx.cover();
       if (VB && r.left.length) {                        // 터미널로 넘긴 화면마다 덮개(Paseo = AI 수정 중 · 대기열 = 걷기 버튼)

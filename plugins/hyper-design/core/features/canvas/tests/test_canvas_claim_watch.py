@@ -156,7 +156,7 @@ def test_ai_write_event_reloads_the_card_with_polling_off(ctx, out):
     try:
         pg.goto(srv.url)
         pg.wait_for_function("window.__hdReady !== undefined")
-        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        pg.wait_for_selector('#livechip[data-mode="live"]', state="attached", timeout=8000)   # 정상 상태 칩은 숨김(R27 F11)
         assert pg.text_content("#livechip") == "실시간"
         pg.evaluate("window.__sameLoad = 1")
         pg.wait_for_timeout(500)

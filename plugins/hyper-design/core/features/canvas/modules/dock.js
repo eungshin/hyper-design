@@ -21,17 +21,17 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, LW0 = 340, FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
-var PANELS = ['links', 'show', 'align', 'notes', 'pending', 'history', 'layers', 'theme', 'talk'];
+var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, LW0 = 280,   // 왼쪽(대화) 기본 280 — 판이 주인공(R27 F02)
+    FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
+var PANELS = ['links', 'align', 'notes', 'pending', 'history', 'layers', 'theme', 'talk'];   // 표시(선 색·굵기·투명도)는 도크 패널이 아니라 위쪽 줄 팝오버(R27 F02, view-show-pop) — 예전 저장 상태의 'show' 는 normalize 가 버린다
 var CLOSED0 = ['theme'];                          // 처음엔 닫힌 패널(창 메뉴로 켬)
-var HOME = {align: 'show'};
 var SIDE = {talk: 'left'};                        // 집이 왼쪽인 패널(처음 자리 · 예전 저장 상태에 없을 때 · 닫았다 다시 열 때)                       // 나중에 생긴 패널: 예전 저장 상태에 없으면 이 패널 옆에(없으면 마지막 묶음)
-var LABEL = {links: '연결', show: '표시', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마', align: '정렬', talk: '대화'};
+var LABEL = {links: '연결', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마', align: '정렬', talk: '대화'};
 
 function defaults() {
   return {v: V, w: W0, lw: LW0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, chat: true, bare: false,
           left: [{tabs: ['talk'], active: 'talk', h: 1}],
-          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['show', 'align'], active: 'show', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 범례 줄과 선 색을 함께 보게 따로
+          groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['align'], active: 'align', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 정렬은 자기 묶음 — 두 장 이상 골랐을 때만 그려진다(view-dock hidden, R27 F02)
 }
 function clampW(w, d) { return typeof w === 'number' && isFinite(w) ? Math.round(Math.max(W_MIN, Math.min(W_MAX, w))) : d == null ? W0 : d; }
 function gcopy(g) { return {tabs: g.tabs.slice(), active: g.active, h: g.h}; }
@@ -80,10 +80,7 @@ function normalize(o) {
     if (seen[p] || SIDE[p] !== 'left') return; seen[p] = 1;
     if (s.left.length) s.left[s.left.length - 1].tabs.push(p); else s.left.push({tabs: [p], active: p, h: 1});
   });
-  var miss = PANELS.filter(function (p) { return !seen[p]; }).filter(function (p) {
-    var f = HOME[p] ? find(s, HOME[p]) : null; if (!f) return true;
-    f.box.tabs.splice(f.box.tabs.indexOf(HOME[p]) + 1, 0, p); return false;
-  });
+  var miss = PANELS.filter(function (p) { return !seen[p]; });
   if (miss.length) {
     if (!s.groups.length) s.groups.push({tabs: [], active: null, h: 1});
     var last = s.groups[s.groups.length - 1]; last.tabs = last.tabs.concat(miss);

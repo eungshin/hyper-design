@@ -20,7 +20,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var EVERY = 4000;
 var REFRESH = ['request.sent', 'agent.progress', 'agent.reply', 'ai.write', 'build.done', 'build.failed', 'notes.changed'];
-var STATE_SAY = {running: '작업 중…', queued: '대기 중 — 읽는 에이전트를 기다려요', done: '끝', failed: '실패', decide: '결정 필요 — 메모에서 골라 주세요', undone: '되돌림'};
+var STATE_SAY = {running: '작업 중…', queued: '대기 중 — 읽는 에이전트를 기다려요', done: '끝', failed: '', decide: '결정 필요 — 메모에서 골라 주세요', undone: '되돌림'};   // 실패 = 빨간 빌드 실패 줄 하나로 말한다(꼬리 '! 실패' 없음, R27 F04)
 var NO_TERM = '이 터미널의 대화는 가져올 수 없어요';
 
 var CSS =
@@ -97,7 +97,7 @@ function mount(ctx) {
       var body = l.kind === 'reply' ? rich(l.text, 'r' + l.seq) : ctx.esc(l.text);   // 답 = 전체(R24)
       return '<li class="tk-l' + (l.kind === 'reply' ? ' tk-md' : '') + (fresh(l.seq) ? ' tk-new' : '') + '" data-kind="' + l.kind + '" data-tone="' + (l.tone || '') + '">' + body + '</li>';
     }).join('') + '</ol>' : '';
-    var ic = t.state === 'done' ? '✓' : t.state === 'failed' ? '!' : '';
+    var ic = t.state === 'done' ? '✓' : '';
     var undo = t.undoable && on ? '<button type="button" class="tk-undo"' + (undoing[t.id] ? ' disabled' : '') + ' title="이 요청으로 AI 가 바꾼 화면을 되돌려요">' +
       (undoing[t.id] ? '되돌리는 중…' : '되돌리기') + '</button>' : '';
     return '<li class="tk-turn" data-turn="' + t.id + '" data-state="' + t.state + '" tabindex="0" title="누르면 이 요청이 닿은 화면으로">' + ask + lines +

@@ -326,21 +326,22 @@ const K = globalThis.HD.dock, R = K.reduce, out = {};
 const tabs = s => s.groups.map(g => g.tabs.join('+') + ':' + g.active).join(' | ');
 out.allDefaults = tabs(K.defaults());
 const pre = {v: 1, groups: [{tabs: ['links'], active: 'links'}, {tabs: ['show'], active: 'show'}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes'}], closed: ['theme']};
-out.oldSaved = tabs(K.normalize(pre));                                        // 정렬 패널 전 저장 상태 → 표시 옆에
-out.oldNoShow = tabs(K.normalize(Object.assign({}, pre, {groups: pre.groups.slice(2), closed: ['theme', 'links', 'show']})));   // 표시가 닫혀 있으면 마지막 묶음에
-K.PANELS.splice(K.PANELS.indexOf('pending'), 2);   // 아래 배치 동작 확인은 패널 넷으로(모델은 같은 배열을 쓴다)
+out.oldSaved = tabs(K.normalize(pre));                                        // 정렬 패널 전 저장 상태 → 표시는 버리고 정렬은 마지막 묶음에
+out.oldNoShow = tabs(K.normalize(Object.assign({}, pre, {groups: pre.groups.slice(2), closed: ['theme', 'links', 'show']})));   // 닫힌 표시도 버린다
+out.oldShowAlign = tabs(K.normalize({v: 1, groups: [{tabs: ['links'], active: 'links'}, {tabs: ['show', 'align'], active: 'show'}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes'}]}));   // R27 F02 전 기본 배치
+K.PANELS.splice(K.PANELS.indexOf('history'), 1);   // 아래 배치 동작 확인은 패널 넷으로(모델은 같은 배열을 쓴다)
 K.PANELS.splice(K.PANELS.indexOf('align'), 1);
-const base = K.normalize({v: 1, groups: [{tabs: ['links', 'show'], active: 'links'}, {tabs: ['notes', 'layers'], active: 'notes'}]});
+const base = K.normalize({v: 1, groups: [{tabs: ['links', 'pending'], active: 'links'}, {tabs: ['notes', 'layers'], active: 'notes'}]});
 let s = base;
 out.def = tabs(s); out.defaults = tabs(K.defaults());
 const s0 = s; s = R(s, {type: 'move', id: 'notes', to: 0}); out.merge = tabs(s); out.pure = tabs(s0);
-s = R(s, {type: 'move', id: 'show', to: 'new', at: 1}); out.split = tabs(s);
-out.lone = R(s, {type: 'move', id: 'show', to: 'new', at: 0}) === s;
+s = R(s, {type: 'move', id: 'pending', to: 'new', at: 1}); out.split = tabs(s);
+out.lone = R(s, {type: 'move', id: 'pending', to: 'new', at: 0}) === s;
 s = R(s, {type: 'close', id: 'layers'}); out.closeHidden = tabs(s) + ' / ' + s.closed.join(',');
-s = R(s, {type: 'close', id: 'show'}); out.closeStyle = tabs(s);
-s = R(R(s, {type: 'collapse', on: true}), {type: 'activate', id: 'show'}); out.reopen = tabs(s) + ' / ' + s.closed.join(',') + ' / ' + s.collapsed;
+s = R(s, {type: 'close', id: 'pending'}); out.closeStyle = tabs(s);
+s = R(R(s, {type: 'collapse', on: true}), {type: 'activate', id: 'pending'}); out.reopen = tabs(s) + ' / ' + s.closed.join(',') + ' / ' + s.collapsed;
 out.w = [R(s, {type: 'width', w: 9999}).w, R(s, {type: 'width', w: 10}).w, R(s, {type: 'width', w: 333.4}).w];
-out.hs = R(R(s, {type: 'move', id: 'show', to: 'new'}), {type: 'heights', hs: [2, 0.5]}).groups.map(g => g.h);
+out.hs = R(R(s, {type: 'move', id: 'pending', to: 'new'}), {type: 'heights', hs: [2, 0.5]}).groups.map(g => g.h);
 out.hsBad = R(s, {type: 'heights', hs: [1, 1, 1]}) === s;
 out.vis = [K.visible(s), K.visible(R(s, {type: 'collapse', on: true}))];
 out.norm = tabs(K.normalize({groups: [{tabs: ['zzz', 'notes', 'notes'], active: 'zzz'}], closed: ['links', 'notes'], w: 'x'}));
@@ -354,10 +355,10 @@ f = R(f, {type: 'move', id: 'layers', to: 'float', fi: 0}); out.fMerge = ftabs(f
 f = R(f, {type: 'float', fi: 0, w: 50, h: 9000, x: 10.6}); out.fRect = ftabs(f);
 f = R(f, {type: 'move', id: 'notes', to: 'new'}); out.fBack = ftabs(f);
 f = R(f, {type: 'move', id: 'layers', to: 'float', x: 5, y: 6}); out.fLoneMove = ftabs(f);
-f = R(R(f, {type: 'collapse', on: true}), {type: 'move', id: 'show', to: 'float', x: 0, y: 0}); out.fVis = K.visible(f); out.fCol = f.collapsed;
+f = R(R(f, {type: 'collapse', on: true}), {type: 'move', id: 'pending', to: 'float', x: 0, y: 0}); out.fVis = K.visible(f); out.fCol = f.collapsed;
 f = R(f, {type: 'activate', id: 'layers'}); out.fTop = f.floats.map(x => x.active); out.fCol2 = f.collapsed;
 out.oldHidden = tabs(K.normalize({v: 1, groups: [{tabs: ['links', 'hidden'], active: 'hidden'}], closed: []}));   // 조각 4 전 저장 상태
-f = R(f, {type: 'close', id: 'show'}); out.fClose = ftabs(f) + ' / ' + f.closed.join(',');
+f = R(f, {type: 'close', id: 'pending'}); out.fClose = ftabs(f) + ' / ' + f.closed.join(',');
 out.fNorm = ftabs(K.normalize({groups: [{tabs: ['links']}], floats: [{tabs: ['links', 'notes', 'q'], x: 'a', w: 10}]}));
 st = {}; K.save(f, (k, v) => { st[k] = v; }); out.fRound = ftabs(K.load(k => st[k])) === ftabs(f);
 console.log(JSON.stringify(out));
@@ -376,34 +377,35 @@ def test_dock_model():
         out = json.loads(r.stdout)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    assert out["allDefaults"] == "links:links | show+align:show | notes+pending+history+layers:notes", "기본: 표시 옆에 정렬, 메모·반영 대기·기록·레이어이 한 묶음"
-    assert out["oldSaved"] == "links:links | show+align:show | notes+pending+history+layers:notes", "정렬 패널 전 저장 상태도 그대로 열리고 정렬은 표시 옆에"
-    assert out["oldNoShow"] == "notes+pending+history+layers+align:notes", "표시가 닫혀 있으면 정렬은 마지막 묶음에"
-    assert out["def"] == "links+show:links | notes+layers:notes"
-    assert out["merge"] == "links+show+notes:notes | layers:layers", "합치면 그 묶음 끝에 들어가 활성"
+    assert out["allDefaults"] == "links:links | align:align | notes+pending+history+layers:notes", "기본: 정렬은 자기 묶음(두 장 이상일 때만 그려짐), 메모·반영 대기·기록·레이어이 한 묶음 — 표시는 도크 패널이 아니다(R27 F02)"
+    assert out["oldSaved"] == "links:links | notes+pending+history+layers+align:notes", "정렬 패널 전 저장 상태도 열리고(표시는 버림) 정렬은 마지막 묶음에"
+    assert out["oldShowAlign"] == "links:links | align:align | notes+pending+history+layers:notes", "예전 기본 배치의 표시 탭은 빠지고 정렬이 그 묶음에 남는다"
+    assert out["oldNoShow"] == "notes+pending+history+layers+align:notes", "닫힌 표시도 버리고 정렬은 마지막 묶음에"
+    assert out["def"] == "links+pending:links | notes+layers:notes"
+    assert out["merge"] == "links+pending+notes:notes | layers:layers", "합치면 그 묶음 끝에 들어가 활성"
     assert out["pure"] == out["def"], "reduce 는 원래 상태를 바꾸지 않는다"
-    assert out["split"] == "links+notes:notes | show:show | layers:layers", "떼면 그 자리에 새 묶음"
+    assert out["split"] == "links+notes:notes | pending:pending | layers:layers", "떼면 그 자리에 새 묶음"
     assert out["lone"], "혼자 있는 탭은 떼어도 그대로"
-    assert out["closeHidden"] == "links+notes:notes | show:show / theme,layers", "빈 묶음은 없어진다"
+    assert out["closeHidden"] == "links+notes:notes | pending:pending / theme,layers", "빈 묶음은 없어진다"
     assert out["closeStyle"] == "links+notes:notes"
-    assert out["reopen"] == "links+notes+show:show / theme,layers / false", "닫힌 패널을 부르면 마지막 묶음에 다시 열고 편다"
+    assert out["reopen"] == "links+notes+pending:pending / theme,layers / false", "닫힌 패널을 부르면 마지막 묶음에 다시 열고 편다"
     assert out["w"] == [560, 220, 333]
     assert out["hs"] == [2, 0.5] and out["hsBad"]
-    assert out["vis"] == [["talk", "show"], ["talk"]], "왼쪽 도크(대화, S3)는 오른쪽을 접어도 보인다"
-    assert out["norm"] == "notes+show+layers:notes", "모르는 패널·겹친 패널은 버리고 빠진 패널은 마지막 묶음에"
+    assert out["vis"] == [["talk", "pending"], ["talk"]], "왼쪽 도크(대화, S3)는 오른쪽을 접어도 보인다"
+    assert out["norm"] == "notes+pending+layers:notes", "모르는 패널·겹친 패널은 버리고 빠진 패널은 마지막 묶음에"
     assert out["normClosed"] == ["links", "theme"]          # 테마는 처음엔 닫힌 패널(조각 5)
     assert out["round"] and out["bad"] == [out["defaults"]] * 3
     # 떠 있는 창(D1): 빼기 · 합치기 · 옮기기/크기(최소) · 도크로 되돌리기 · 혼자 뜬 창 옮기기 · 접어도 보임 · 맨 위로 · 닫기 · 복구 · 저장
-    assert out["fOut"] == "links+show:links | layers:layers || notes:notes@100,50,280,320", "도크 묶음에서 빼면 판 위 떠 있는 창"
-    assert out["fMerge"] == "links+show:links || notes+layers:layers@100,50,280,320", "떠 있는 창에 합치면 빈 도크 묶음은 없어진다"
-    assert out["fRect"] == "links+show:links || notes+layers:layers@11,50,200,9000", "최소 너비 200"
-    assert out["fBack"] == "links+show:links | notes:notes || layers:layers@11,50,200,9000", "도크 끝에 끌어 넣으면 새 묶음"
+    assert out["fOut"] == "links+pending:links | layers:layers || notes:notes@100,50,280,320", "도크 묶음에서 빼면 판 위 떠 있는 창"
+    assert out["fMerge"] == "links+pending:links || notes+layers:layers@100,50,280,320", "떠 있는 창에 합치면 빈 도크 묶음은 없어진다"
+    assert out["fRect"] == "links+pending:links || notes+layers:layers@11,50,200,9000", "최소 너비 200"
+    assert out["fBack"] == "links+pending:links | notes:notes || layers:layers@11,50,200,9000", "도크 끝에 끌어 넣으면 새 묶음"
     assert out["fLoneMove"].endswith("layers:layers@5,6,200,9000"), "혼자 뜬 창을 다시 빼면 그 창이 옮겨질 뿐"
-    assert out["fVis"] == ["talk", "layers", "show"] and out["fCol"], "도크를 접어도 떠 있는 창은 보인다"
-    assert out["fTop"] == ["show", "layers"] and out["fCol2"], "누른 떠 있는 창이 맨 위로, 도크는 접힌 채"
-    assert out["fClose"] == "links:links | notes:notes || layers:layers@5,6,200,9000 / theme,show"
-    assert out["oldHidden"].startswith("links+layers+show+notes") and out["oldHidden"].endswith(":layers"), "예전 숨긴 화면 탭은 그 자리의 레이어 탭으로"
-    assert out["fNorm"] == "links+show+layers:links || notes:notes@40,40,200,320", "이미 쓴 패널·모르는 패널 버림, 틀린 좌표는 기본값"
+    assert out["fVis"] == ["talk", "layers", "pending"] and out["fCol"], "도크를 접어도 떠 있는 창은 보인다"
+    assert out["fTop"] == ["pending", "layers"] and out["fCol2"], "누른 떠 있는 창이 맨 위로, 도크는 접힌 채"
+    assert out["fClose"] == "links:links | notes:notes || layers:layers@5,6,200,9000 / theme,pending"
+    assert out["oldHidden"].startswith("links+layers+notes+pending") and out["oldHidden"].endswith(":layers"), "예전 숨긴 화면 탭은 그 자리의 레이어 탭으로"
+    assert out["fNorm"] == "links+pending+layers:links || notes:notes@40,40,200,320", "이미 쓴 패널·모르는 패널 버림, 틀린 좌표는 기본값"
     assert out["fRound"]
 
 

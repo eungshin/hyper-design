@@ -345,7 +345,7 @@ def test_async_apply_whose_build_fails_reverts_the_optimistic_change(ctx, out):
     bodies = []
     pg.on("request", lambda r: bodies.append(r.post_data) if r.url.endswith("/api/apply") else None)
     try:
-        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        pg.wait_for_selector('#livechip[data-mode="live"]', state="attached", timeout=8000)   # 정상 상태 칩은 숨김(R27 F11)
         mf = _modal(pg)
         before = _job(out)
         _pick(pg, mf, TILE % 2)
@@ -387,7 +387,7 @@ def test_drag_whose_async_build_fails_puts_the_order_back(ctx, out):
         return sp.CompletedProcess([], 1, "", "시험용 빌드 실패") if len(calls) == 1 else sp.CompletedProcess([], 0, "", "")
     pg, errors = _open(ctx, srv.url)
     try:
-        pg.wait_for_selector('#livechip[data-mode="live"]', timeout=8000)
+        pg.wait_for_selector('#livechip[data-mode="live"]', state="attached", timeout=8000)   # 정상 상태 칩은 숨김(R27 F11)
         mf = _modal(pg)
         before = _job(out)
         _pick(pg, mf, TILE % 1)
