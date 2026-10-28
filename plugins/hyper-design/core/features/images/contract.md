@@ -1,6 +1,7 @@
 # images 계약
 
-`python3 $SK/features/images/imggen.py out [--placeholders-only] [--cmd "<생성기>"] [--timeout 480]`
+`python3 $SK/features/images/imggen.py out [--placeholders-only] [--svg] [--cmd "<생성기>"] [--timeout 480]`
+`python3 $SK/features/images/svgfill.py out [--final]` — svg 모드 마무리(illustrator 에이전트가 부른다)
 
 ## 입력
 - `out/image_slots.json` (목록). `kind == "photo"`만 쓴다 — `kind`가 없으면 photo로 본다.
@@ -36,8 +37,13 @@
 | `done` | 모든 사진 자리가 생성됨 |
 | `fallback` | 하나 이상이 자리표시로 남음 — `reason`/`notes`에 이유 |
 
+## SVG 모드
+- 생성기 없음, `--svg`, 또는 환경변수 `HD_IMAGE_MODE=svg` → 자리표시만 쓰고 `state: running`, `mode: svg`, 출력 `imggen svg: …`. 메인이 `hyper-design:illustrator`를 띄운다.
+- illustrator가 `out/.images/svg/<slot>.svg`(flat, 슬롯 비율 viewBox)를 쓰고 `svgfill.py`를 부른다: SVG를 렌더해 `assets/photos/<slot>.jpg`(긴 변 1200)를 덮어쓰고, 구운 칸만 credits(`author: "AI 일러스트 (Claude SVG)"`, `license: generated`).
+- `svgfill.py`(중간) → `running` 유지. `--final` → 모두 구웠으면 `done`, 아니면 `fallback`(notes `svg <slot>: missing|invalid|render failed`).
+- status에 `t0`(imggen 시작 epoch), `timeline`([{slot, t}] — SVG 파일이 쓰인 시각 - t0), `first_svg_s`, `last_svg_s`.
+
 ## 대체 규칙
-- 생성기 없음 → `fallback`, reason `no generator`, 자리표시 유지.
 - `--placeholders-only` → `fallback`, reason `placeholders-only`.
 - 시트의 시간 초과(`--timeout`, 기본 480초)·0 아닌 종료·출력 없음 → 그 시트의 칸만 자리표시 유지, 이유 기록, 다음 시트 계속.
 - 처리된 경우는 모두 종료 코드 0 — fallback은 오류가 아니다.

@@ -67,7 +67,7 @@ description: PRD(기획 문서) 한 장으로 모바일 앱 HTML 디자인을 �
 
 ### 1.5단계 — 제품 판단: 가장 중요한 것만 남긴다 (목표 2분)
 
-**같은 메시지에서 함께**: `python3 $SK/scripts/expand_states.py out --stage go`(1차 상태 펼치기 — 결과 화면(`done`)만. 오류·확인·빈·진행은 max가 펼친다). 메인은 판단하는 동안 **이미지 자리 목록** `out/image_slots.json`을 쓴다(`$SK/references/images.md` 1절) — 항목마다 `kind`: `photo`(실사) · `icon`(아이콘성 사물 — 바구니·트럭·영수증처럼 물건 하나) · `drawing`(도식·지도·QR만). photo·icon은 `en` 필수: photo는 영어 묘사 한 문장, icon은 영어 사물 이름 **선호 순서 목록**(대안 포함, 예: `["washing machine", "bubbles"]`). 쓰자마자 **같은 메시지에서** `python3 $SK/features/images/imggen.py out`을 **백그라운드로**(Bash `run_in_background` — 자리표시를 먼저 쓰고 사진을 생성해 덮어쓴다, 빌드는 그 경로를 쓴다) + `python3 $SK/features/icons/resolve.py out`(포그라운드, 몇 초 — `out/icons.json`).
+**같은 메시지에서 함께**: `python3 $SK/scripts/expand_states.py out --stage go`(1차 상태 펼치기 — 결과 화면(`done`)만. 오류·확인·빈·진행은 max가 펼친다). 메인은 판단하는 동안 **이미지 자리 목록** `out/image_slots.json`을 쓴다(`$SK/references/images.md` 1절) — 항목마다 `kind`: `photo`(실사) · `icon`(아이콘성 사물 — 바구니·트럭·영수증처럼 물건 하나) · `drawing`(도식·지도·QR만). photo·icon은 `en` 필수: photo는 영어 묘사 한 문장, icon은 영어 사물 이름 **선호 순서 목록**(대안 포함, 예: `["washing machine", "bubbles"]`). 쓰자마자 **같은 메시지에서** `python3 $SK/features/images/imggen.py out`을 **백그라운드로**(Bash `run_in_background` — 자리표시를 먼저 쓰고 사진을 생성해 덮어쓴다, 빌드는 그 경로를 쓴다) + `python3 $SK/features/icons/resolve.py out`(포그라운드, 몇 초 — `out/icons.json`). imggen 출력이 `imggen svg:`로 시작하면(생성기 없음 또는 `HD_IMAGE_MODE=svg`) **같은 메시지에서** 서브에이전트 `hyper-design:illustrator`를 **백그라운드로**(`model` 인자 없이, 프롬프트 `OUT=<out 절대경로> SK=<$SK 절대경로>`) — 사진 자리마다 flat SVG 일러스트를 그려 `svgfill.py`로 같은 사진 경로에 굽는다. 그 종류를 쓸 수 없으면 일반 서브에이전트를 `model: "opus"`로 띄우고 `agents/illustrator.md` 전문을 프롬프트 맨 위에 붙인다.
 
 `out/decisions.json`:
 ```json

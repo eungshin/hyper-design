@@ -122,8 +122,8 @@ def main():
     ap.add_argument("--run", required=True); ap.add_argument("--harness", required=True)
     ap.add_argument("--prd", default=""); ap.add_argument("--note", default=""); ap.add_argument("--out", default="")
     a = ap.parse_args()
-    if a.latest:   # Claude Code는 실행 폴더 경로의 ':' '/' '\' 를 '-'로 바꾼 이름의 폴더에 세션을 남긴다
-        proj = pathlib.Path.home() / ".claude/projects" / re.sub(r"[:/\\]", "-", str(pathlib.Path(a.latest).resolve()))
+    if a.latest:   # Claude Code는 실행 폴더 경로의 영숫자·'-' 밖 글자(':' '/' '\' '_' …)를 '-'로 바꾼 이름의 폴더에 세션을 남긴다
+        proj = pathlib.Path.home() / ".claude/projects" / re.sub(r"[^A-Za-z0-9-]", "-", str(pathlib.Path(a.latest).resolve()))
         hits = sorted(proj.glob("*.jsonl"), key=lambda f: f.stat().st_mtime)[-1:]
     else:
         hits = glob.glob(str(pathlib.Path.home() / f".claude/projects/*/{a.session}.jsonl"))

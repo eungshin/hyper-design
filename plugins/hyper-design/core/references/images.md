@@ -1,6 +1,6 @@
 # 이미지 — 자리 목록 · 사진 생성(imggen) · 아이콘 고르기(resolve)
 
-사진은 `$SK/features/images/imggen.py`가 시트로 생성·자르기(계약: `features/images/contract.md`), 아이콘은 `$SK/features/icons/resolve.py`(계약: `features/icons/contract.md`). 메인은 자리 목록만 쓴다.
+사진은 `$SK/features/images/imggen.py`가 시트로 생성·자르기(계약: `features/images/contract.md`), 아이콘은 `$SK/features/icons/resolve.py`(계약: `features/icons/contract.md`). 메인은 자리 목록만 쓴다. 사진 생성기가 없으면 imggen이 svg 모드로 끝나고, 메인이 `hyper-design:illustrator`를 띄워 같은 사진 경로를 flat SVG 일러스트로 채운다(계약 "SVG 모드").
 
 ## 1. 자리 목록 — 메인이 1.5단계에서 직접 쓴다(1분)
 

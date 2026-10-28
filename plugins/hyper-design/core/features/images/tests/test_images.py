@@ -123,16 +123,74 @@ def test_fake_generator_done(tmp_path):
     assert (w, h) == (1200, 900)
 
 
-def test_no_generator_fallback(tmp_path):
+def test_no_generator_svg_mode(tmp_path):
     out = make_out(tmp_path)
     r = run(out, "--cmd", str(tmp_path / "does-not-exist"), home=tmp_path / "nohome")
     assert r.returncode == 0, r.stderr
     st = status(out)
-    assert st["state"] == "fallback"
-    assert st.get("reason") == "no generator"
+    assert st["state"] == "running" and st["mode"] == "svg"
+    assert "dispatch illustrator" in r.stdout
     for f in PHOTO_FILES:
         assert (out / f).exists()
     assert not any(f in credits(out) for f in PHOTO_FILES)
+
+
+def test_env_svg_skips_a_working_generator(tmp_path):
+    out = make_out(tmp_path)
+    gen = tmp_path / "fake_gen.py"
+    gen.write_text(FAKE_GEN, encoding="utf-8")
+    r = run(out, "--cmd", f'"{sys.executable}" "{gen}"', env_extra={"HD_IMAGE_MODE": "svg"}, home=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert status(out)["mode"] == "svg"
+    assert not (out / ".images/sheet-1.png").exists()
+
+
+SVGFILL = HERE.parent / "svgfill.py"
+SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}"><rect width="{w}" height="{h}" fill="#2B96ED"/></svg>'
+
+
+def svgfill(out, *args):
+    return subprocess.run([sys.executable, str(SVGFILL), str(out), *args], capture_output=True, text=True,
+                          encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=120)
+
+
+def svg_out(tmp_path, done):
+    out = make_out(tmp_path)
+    run(out, "--svg", home=tmp_path)
+    d = out / ".images/svg"
+    d.mkdir(parents=True)
+    for k in done:
+        w, h = (800, 600) if k == "wide" else (800, 800)
+        (d / f"{k}.svg").write_text(SVG.format(w=w, h=h), encoding="utf-8")
+    return out
+
+
+def test_svgfill_final_all_drawn_is_done(tmp_path):
+    out = svg_out(tmp_path, [f"p{i}" for i in range(5)] + ["wide"])
+    r = svgfill(out, "--final")
+    assert r.returncode == 0, r.stderr
+    st = status(out)
+    assert st["state"] == "done" and st["generated"] == 6, st
+    assert [x["slot"] for x in st["timeline"]] and st["first_svg_s"] is not None
+    im = Image.open(out / "assets/photos/wide.jpg")
+    assert im.size == (1200, 900)
+    r_, g_, b_ = im.convert("RGB").getpixel((600, 450))
+    assert b_ > 200 and r_ < 80  # brand blue, not the grey placeholder
+    cr = credits(out)
+    assert all(cr[f]["author"] == "AI 일러스트 (Claude SVG)" for f in PHOTO_FILES)
+
+
+def test_svgfill_partial_stays_running_and_final_flags_missing(tmp_path):
+    out = svg_out(tmp_path, ["p0"])
+    (out / ".images/svg/p1.svg").write_text("<svg", encoding="utf-8")
+    svgfill(out)
+    st = status(out)
+    assert st["state"] == "running" and st["generated"] == 1
+    svgfill(out, "--final")
+    st = status(out)
+    assert st["state"] == "fallback" and st["placeholders"] == 5
+    assert any("p1: invalid" in n for n in st["notes"]) and any("wide: missing" in n for n in st["notes"])
+    assert "assets/photos/p0.jpg" in credits(out) and "assets/photos/p1.jpg" not in credits(out)
 
 
 def test_failing_generator_fallback(tmp_path):

@@ -1,9 +1,10 @@
 """사진 자리(image_slots.json 의 kind=photo)를 생성 시트로 채운다 — 실패하면 회색 자리표시를 그대로 둔다.
 
-  python3 imggen.py <out> [--placeholders-only] [--cmd "<generator command>"] [--timeout 480]
+  python3 imggen.py <out> [--placeholders-only] [--svg] [--cmd "<generator command>"] [--timeout 480]
 
 순서: ① 자리표시 즉시 생성 ② 시트 계획(최소 시트, 칸마다 슬롯 비율로 자르기)·프롬프트 ③ 생성기를 시트마다 순서대로 호출 ④ 흰 간격 감지로 자르기
 ⑤ 빈칸은 같은 시트 사진의 다른 구도(.images/alt/) ⑥ credits.json 병합 ⑦ .images/status.json 기록. 처리된 경우는 모두 종료 코드 0.
+생성기가 없거나 --svg(또는 HD_IMAGE_MODE=svg)면 자리표시만 쓰고 state=running·mode=svg로 끝낸다 — 메인이 illustrator 에이전트를 띄우고 svgfill.py가 마무리한다.
 """
 import argparse
 import json
@@ -277,6 +278,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="image_slots.json 의 사진 자리를 생성 시트로 채운다(실패 시 회색 자리표시 유지).")
     ap.add_argument("out", help="산출 폴더(image_slots.json 이 있는 곳)")
     ap.add_argument("--placeholders-only", action="store_true", help="자리표시만 쓰고 끝낸다")
+    ap.add_argument("--svg", action="store_true", help="생성기를 쓰지 않고 SVG 일러스트 모드로(자리표시 + mode=svg)")
     ap.add_argument("--cmd", default=None, help='생성기 명령 — `<cmd> "<prompt>" <abs.png>` 로 호출')
     ap.add_argument("--timeout", type=int, default=480, help="시트당 제한 시간(초)")
     a = ap.parse_args(argv)
@@ -297,7 +299,7 @@ def main(argv=None):
     alternates = [0]
 
     def status(state, **kw):
-        d = {"state": state, "sheets": len(sheets), "generated": len(generated),
+        d = {"state": state, "t0": round(t0, 1), "sheets": len(sheets), "generated": len(generated),
              "placeholders": len(photos) - len(generated), "alternates": alternates[0],
              "elapsed_s": round(time.time() - t0, 1), "notes": notes, "sheet_plan": sheet_plan(sheets)}
         d.update(kw)
@@ -318,10 +320,12 @@ def main(argv=None):
         return finish("fallback", reason="placeholders-only")
     if not photos:
         return finish("done")
-    argv_cmd = resolve_cmd(a.cmd)
+    argv_cmd = None if (a.svg or os.environ.get("HD_IMAGE_MODE") == "svg") else resolve_cmd(a.cmd)
     if not argv_cmd:
-        notes.append("no generator")
-        return finish("fallback", reason="no generator")
+        notes.append("mode: svg" if (a.svg or os.environ.get("HD_IMAGE_MODE") == "svg") else "no generator → mode: svg")
+        status("running", mode="svg")
+        print(f"imggen svg: placeholders {len(photos)} · dispatch illustrator (OUT={out})")
+        return 0
 
     for n, (r, cols, rows, chunk) in enumerate(sheets, 1):
         sheet = out / ".images" / f"sheet-{n}.png"

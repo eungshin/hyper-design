@@ -18,7 +18,7 @@ subprocess.run(["git", "init", "-q"], cwd=work)  # 상위 레포 CLAUDE.md 차�
 def claude(prompt, cwd, resume=None, model=MODEL):
     cmd = ["claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", "--plugin-dir", str(PLUGIN)]
     if resume: cmd += ["--resume", resume]
-    r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=cwd)
+    r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=cwd)
     try: return json.loads(r.stdout)
     except Exception: return {"result": r.stdout + r.stderr, "session_id": resume, "is_error": True}
 
