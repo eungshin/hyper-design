@@ -28,7 +28,7 @@ import sys, os, json, re, html, pathlib, shutil
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES = ["graph", "route", "labels", "style", "camera", "focus", "prefs", "view-links", "view-motion"]   # 순서 고정: Model → ViewModel → View
+MODULES = ["graph", "route", "labels", "style", "camera", "board-notes", "focus", "prefs", "view-links", "view-motion", "view-board-notes"]   # 순서 고정: Model → ViewModel → View
 MODULES_MARKER = "<!-- hd-modules -->"
 MOTION_CSS = MODULES_DIR / "motion.css"
 MOTION_MARKER = "/* hd-motion */"
