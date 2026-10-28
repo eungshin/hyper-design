@@ -236,6 +236,25 @@ body.modal-open #khint{display:none}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee}
 #notes .nmsg{flex-basis:100%;color:#166534;font-size:13px}
 #modal .mtitle{position:absolute;top:max(10px,env(safe-area-inset-top));left:16px;right:96px;color:#fff;font-size:15px;font-weight:600;min-height:44px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 판 노트 · 사용자 선(modules/view-board-notes.js) — 기존 선(.ar 점선 · .lks 색 선)보다 옅게 */
+#bnl{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:-1}   /* 카드 아래 — 카드 사이 빈 곳에서만 보인다 */
+#bnl path.bl{fill:none;stroke:#B9BDB6;stroke-width:calc(var(--lw,2) * .75);stroke-linecap:round;marker-end:url(#bn-head)}
+#bnl marker path{fill:#B9BDB6}
+#bnh{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:8}
+#bnh path.bhit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+#bnl path.bl.sel{stroke:#6b7a8f}
+#bnh text.blab{font:500 13px system-ui,sans-serif;fill:#7d827a;text-anchor:middle;paint-order:stroke;stroke:#f4f4f2;stroke-width:4px}
+#bnotes{position:absolute;left:0;top:0;width:0;height:0;z-index:9}
+.bnote{position:absolute;min-height:36px;padding:8px 10px;background:#fffdf5;border:1px solid #e6e0c8;border-radius:8px;font:15px/1.45 system-ui,sans-serif;color:#3b3b36;box-shadow:0 1px 3px rgba(0,0,0,.06);cursor:grab;touch-action:none}
+.bnote .bt{white-space:pre-wrap;word-break:break-word}
+.bnote.sel{border-color:#6b7a8f;box-shadow:0 0 0 2px rgba(107,122,143,.25)}
+.bnote .bta{display:block;width:100%;min-height:22px;border:0;outline:0;padding:0;margin:0;resize:none;background:transparent;font:inherit;color:inherit;overflow:hidden}
+.bnote .bh{position:absolute;width:10px;height:10px;border-radius:50%;background:#fff;border:1.5px solid #9aa3ad;opacity:0;cursor:crosshair}
+.bnote:hover .bh,.bnote.sel .bh{opacity:1}
+.bnote .bh[data-side=top]{left:calc(50% - 5px);top:-6px}.bnote .bh[data-side=bottom]{left:calc(50% - 5px);bottom:-6px}
+.bnote .bh[data-side=left]{left:-6px;top:calc(50% - 5px)}.bnote .bh[data-side=right]{right:-6px;top:calc(50% - 5px)}
+.blin{position:absolute;transform:translateX(-50%);width:160px;font:13px system-ui,sans-serif;padding:2px 6px;border:1px solid #9aa3ad;border-radius:4px;background:#fff}
+#rows.focusing~#bnl,#rows.focusing~#bnh,#rows.focusing~#bnotes{opacity:.2}
 /* hd-motion */
 </style>
 </head>
@@ -845,6 +864,9 @@ if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 �
     cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
   }).observe(rowsEl);
 }
+// 판 노트 · 사용자 선 View(modules/view-board-notes.js) — 빈 판 두 번 누르기 · 변의 점 끌어 잇기 · '판 노트 복사'
+var BN = HD.viewBoardNotes.mount({D: D, pane: pane, stage: stage, rowsEl: rowsEl, $: $, $$: $$, esc: esc, typing: typing, outDir: outDir, copy: copyText,
+                                  getView: function () { return {z: z, tx: tx, ty: ty}; }, setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }});
 window.__hdReady = performance.now();
 })();
 </script>
