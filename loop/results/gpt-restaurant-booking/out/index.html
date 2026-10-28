@@ -236,6 +236,25 @@ body.modal-open #khint{display:none}
 #notes .nfoot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid #eee}
 #notes .nmsg{flex-basis:100%;color:#166534;font-size:13px}
 #modal .mtitle{position:absolute;top:max(10px,env(safe-area-inset-top));left:16px;right:96px;color:#fff;font-size:15px;font-weight:600;min-height:44px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 판 노트 · 사용자 선(modules/view-board-notes.js) — 기존 선(.ar 점선 · .lks 색 선)보다 옅게 */
+#bnl{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:-1}   /* 카드 아래 — 카드 사이 빈 곳에서만 보인다 */
+#bnl path.bl{fill:none;stroke:#B9BDB6;stroke-width:calc(var(--lw,2) * .75);stroke-linecap:round;marker-end:url(#bn-head)}
+#bnl marker path{fill:#B9BDB6}
+#bnh{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:8}
+#bnh path.bhit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+#bnl path.bl.sel{stroke:#6b7a8f}
+#bnh text.blab{font:500 13px system-ui,sans-serif;fill:#7d827a;text-anchor:middle;paint-order:stroke;stroke:#f4f4f2;stroke-width:4px}
+#bnotes{position:absolute;left:0;top:0;width:0;height:0;z-index:9}
+.bnote{position:absolute;min-height:36px;padding:8px 10px;background:#fffdf5;border:1px solid #e6e0c8;border-radius:8px;font:15px/1.45 system-ui,sans-serif;color:#3b3b36;box-shadow:0 1px 3px rgba(0,0,0,.06);cursor:grab;touch-action:none}
+.bnote .bt{white-space:pre-wrap;word-break:break-word}
+.bnote.sel{border-color:#6b7a8f;box-shadow:0 0 0 2px rgba(107,122,143,.25)}
+.bnote .bta{display:block;width:100%;min-height:22px;border:0;outline:0;padding:0;margin:0;resize:none;background:transparent;font:inherit;color:inherit;overflow:hidden}
+.bnote .bh{position:absolute;width:10px;height:10px;border-radius:50%;background:#fff;border:1.5px solid #9aa3ad;opacity:0;cursor:crosshair}
+.bnote:hover .bh,.bnote.sel .bh{opacity:1}
+.bnote .bh[data-side=top]{left:calc(50% - 5px);top:-6px}.bnote .bh[data-side=bottom]{left:calc(50% - 5px);bottom:-6px}
+.bnote .bh[data-side=left]{left:-6px;top:calc(50% - 5px)}.bnote .bh[data-side=right]{right:-6px;top:calc(50% - 5px)}
+.blin{position:absolute;transform:translateX(-50%);width:160px;font:13px system-ui,sans-serif;padding:2px 6px;border:1px solid #9aa3ad;border-radius:4px;background:#fff}
+#rows.focusing~#bnl,#rows.focusing~#bnh,#rows.focusing~#bnotes{opacity:.2}
 /* 캔버스 움직임 — transitions-dev 토큰(_root.css 에서 필요한 것만 옮김) + 캔버스 전환을 그 토큰으로.
    build_canvas.py 가 index.html <style> 안 hd-motion 표시 자리에 끼워 넣는다.
    전환마다 @media (prefers-reduced-motion: reduce) 가드, 그리고 '애니메이션 끄기'(body.nomotion)도 같은 효과. */
@@ -824,6 +843,206 @@ function ms(s, dflt) {                              // '250ms' / '0.25s' → 250
 }
 
 HD.camera = {plan: plan, at: at, bezier: bezier, parseEase: parseEase, ms: ms};
+})();
+</script>
+<script data-hd-module="board-notes">
+/* Model — 판 노트와 사용자 선(Obsidian Canvas 식 노드·간선): 모양·만들기·고치기·잇기·지우기·빈 자리·선 경로·복사 글. DOM·저장소를 쓰지 않는다.
+   판 = {notes: {<id>: {x, y, w, text, at}}, edges: {<id>: {from, fromSide, to, toSide, label?, at}}} — 판(#stage) 좌표 정수 px, at = 마지막으로 바꾼 시각(ms).
+     끝(from·to) = 'note:<노트 id>' | 'screen:<화면 id>'. 변(side) = 'top'|'right'|'bottom'|'left'. 모르는 칸은 그대로 둔다.
+   parse(text) → {board, bad} — 깨진 JSON = 빈 판(bad:'broken') · 모양이 틀린 노트·선만 뺌(bad:'dropped') · 없음 = 빈 판(bad:null)
+   newId(prefix, now, rnd) → prefix + 시각 36진 + 4자
+   create(b, id, {x, y, w?}, now) → 새 판(글 빈 노트 — 셸은 쓰기 전까지 저장하지 않는다)
+   finish(b, id, text, now) → {board, kind}: 'drop'(빈 글 = 노트와 그 노트의 선을 뺌) | 'keep'(글이 바뀜) | 'same'(그대로)
+   move(b, id, x, y, now) · removeNote(b, id) → 새 판(없는 id = 같은 판). removeNote 는 그 노트에 닿은 선도 뺀다
+   connect(b, id, from, fromSide, to, toSide, now) → {board, ok}: 노트에서만 출발 · 자기 자신·없는 노트·같은 쌍(같은 방향) 거절
+   unlink(b, id) · label(b, id, text, now) → 새 판(이름 = 평문 한 줄 LABEL_MAX 자, 비우면 칸을 뺀다)
+   live(b, hasScreen) → 그릴 선 목록 — 끝이 지금 판에 있는 것만(저장값은 지우지 않는다: 같은 id 화면이 다시 생기면 되돌아온다)
+   room(pt, boxes) → {free, x, y, w} — 새 노트 자리: 누른 점이 카드 상자 안이면 free:false, 오른쪽 같은 높이 카드 앞까지 폭(MIN_W..W)
+   spot(chain) → 'note' | 'empty' | 'busy' — 누른 자리(맨 안쪽부터 바깥으로, 요소마다 '#id'·'.class'·'tag' 목록)
+   anchor(box, side) → 변 가운데 점 · nearSide(box, pt) → pt 에 가장 가까운 변 · path(a, aSide, b, bSide) → 곱 베지어 SVG d
+   stamp(D) → 프로젝트 도장(제목 + 화면 id 목록의 해시) — 같은 out/ 에 새 프로젝트를 만들면 옛 노트가 뜨지 않게
+   copyText(b, {out, boxes, titles}) → '[hyper-design 판 노트]' 평문(노트마다 가장 가까운 화면 · 선마다 '가 → 나')
+   HD.boardNotes = {NAME, W, MIN_W, MAX_W, MAX, LABEL_MAX, SIDES, parse, newId, create, finish, move, removeNote, connect, unlink, label, live,
+                    room, spot, anchor, nearSide, path, stamp, hash, copyText, nearest, text, EMPTY, BUSY} */
+(function () {
+'use strict';
+var HD = globalThis.HD = globalThis.HD || {};
+var NAME = 'hd-board', W = 240, MIN_W = 120, MAX_W = 1600, MAX = 2000, LABEL_MAX = 40, PAD_X = 14, PAD_Y = 26, GAP = 12, BAND = 80, BEND = 80;
+var SIDES = ['top', 'right', 'bottom', 'left'];
+var EMPTY = ['#screens', '#stage', '#intro', '#rows', '#foot', '.flow', '.cards'];   // 이 요소 자체를 누름 = 빈 판
+var BUSY = ['.card', '.bnote', '.alabel', '.glabel', '.ltag', 'svg', 'button', 'input', 'textarea', '#legend'];   // 조상에 이것이 있으면 빈 판이 아님
+var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
+function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+function copy(o) { var r = {}; for (var k in o) if (has(o, k)) r[k] = o[k]; return r; }
+function num(v) { return typeof v === 'number' && isFinite(v); }
+function board(b) { return {notes: copy(isObj(b) && isObj(b.notes) ? b.notes : {}), edges: copy(isObj(b) && isObj(b.edges) ? b.edges : {})}; }
+function end(s) { return typeof s === 'string' && /^(note|screen):./.test(s); }
+function noteOf(s) { return typeof s === 'string' && s.indexOf('note:') === 0 ? s.slice(5) : null; }
+
+function text(t) {
+  var s = String(t == null ? '' : t).replace(/\r\n?/g, '\n').replace(/\s+$/, '');
+  return s.length > MAX ? s.slice(0, MAX) : s;
+}
+function cleanNote(n) {
+  if (!isObj(n) || !num(n.x) || !num(n.y) || typeof n.text !== 'string') return null;
+  var o = copy(n);
+  o.x = Math.round(n.x); o.y = Math.round(n.y);
+  o.w = num(n.w) && n.w >= 40 ? Math.round(Math.min(MAX_W, n.w)) : W;
+  o.text = text(n.text);
+  if (!num(n.at)) o.at = 0;
+  return o.text ? o : null;
+}
+function cleanEdge(e) {
+  if (!isObj(e) || !end(e.from) || !end(e.to) || SIDES.indexOf(e.fromSide) < 0 || SIDES.indexOf(e.toSide) < 0) return null;
+  var o = copy(e);
+  if (has(o, 'label')) { var l = typeof o.label === 'string' ? o.label.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX) : ''; if (l) o.label = l; else delete o.label; }
+  if (!num(e.at)) o.at = 0;
+  return o;
+}
+function parse(t) {
+  if (t == null) return {board: {notes: {}, edges: {}}, bad: null};
+  var v; try { v = JSON.parse(t); } catch (e) { return {board: {notes: {}, edges: {}}, bad: 'broken'}; }
+  if (!isObj(v)) return {board: {notes: {}, edges: {}}, bad: 'broken'};
+  var out = {notes: {}, edges: {}}, dropped = false;
+  Object.keys(isObj(v.notes) ? v.notes : {}).forEach(function (id) { var n = cleanNote(v.notes[id]); if (n) out.notes[id] = n; else dropped = true; });
+  Object.keys(isObj(v.edges) ? v.edges : {}).forEach(function (id) {
+    var e = cleanEdge(v.edges[id]), src = e && noteOf(e.from), dst = e && noteOf(e.to);
+    if (e && src && has(out.notes, src) && (!dst || has(out.notes, dst))) out.edges[id] = e; else dropped = true;   // 노트 끝은 있어야 한다(화면 끝은 live 가 거른다)
+  });
+  return {board: out, bad: dropped ? 'dropped' : null};
+}
+function newId(prefix, now, rnd) {
+  var r = '';
+  for (var i = 0; i < 4; i++) r += Math.floor((rnd ? rnd() : Math.random()) * 36).toString(36);
+  return (prefix || 'n') + Math.floor(now).toString(36) + r;
+}
+function create(b, id, at, now) {
+  var o = board(b);
+  o.notes[id] = {x: Math.round(at.x), y: Math.round(at.y), w: num(at.w) && at.w >= 40 ? Math.round(at.w) : W, text: '', at: now};
+  return o;
+}
+function removeNote(b, id) {
+  if (!isObj(b) || !has(b.notes, id)) return b;
+  var o = board(b), key = 'note:' + id;
+  delete o.notes[id];
+  Object.keys(o.edges).forEach(function (k) { if (o.edges[k].from === key || o.edges[k].to === key) delete o.edges[k]; });
+  return o;
+}
+function finish(b, id, t, now) {
+  if (!isObj(b) || !has(b.notes, id)) return {board: b, kind: 'same'};
+  var v = text(t);
+  if (!v.trim()) return {board: removeNote(b, id), kind: 'drop'};
+  if (v === b.notes[id].text) return {board: b, kind: 'same'};
+  var o = board(b); o.notes[id] = copy(b.notes[id]); o.notes[id].text = v; o.notes[id].at = now;
+  return {board: o, kind: 'keep'};
+}
+function move(b, id, x, y, now) {
+  if (!isObj(b) || !has(b.notes, id)) return b;
+  var n = b.notes[id], nx = Math.round(x), ny = Math.round(y);
+  if (n.x === nx && n.y === ny) return b;
+  var o = board(b); o.notes[id] = copy(n); o.notes[id].x = nx; o.notes[id].y = ny; o.notes[id].at = now;
+  return o;
+}
+function connect(b, id, from, fromSide, to, toSide, now) {
+  var src = noteOf(from), dst = noteOf(to);
+  if (!isObj(b) || !src || !has(b.notes, src) || !end(to) || from === to || (dst && !has(b.notes, dst)) ||
+      SIDES.indexOf(fromSide) < 0 || SIDES.indexOf(toSide) < 0) return {board: b, ok: false};
+  var dup = Object.keys(b.edges || {}).some(function (k) { return b.edges[k].from === from && b.edges[k].to === to; });
+  if (dup) return {board: b, ok: false};
+  var o = board(b);
+  o.edges[id] = {from: from, fromSide: fromSide, to: to, toSide: toSide, at: now};
+  return {board: o, ok: true};
+}
+function unlink(b, id) {
+  if (!isObj(b) || !has(b.edges, id)) return b;
+  var o = board(b); delete o.edges[id]; return o;
+}
+function label(b, id, t, now) {
+  if (!isObj(b) || !has(b.edges, id)) return b;
+  var l = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX), e = b.edges[id];
+  if ((e.label || '') === l) return b;
+  var o = board(b); o.edges[id] = copy(e); o.edges[id].at = now;
+  if (l) o.edges[id].label = l; else delete o.edges[id].label;
+  return o;
+}
+function live(b, hasScreen) {
+  var E = isObj(b) && isObj(b.edges) ? b.edges : {}, N = isObj(b) && isObj(b.notes) ? b.notes : {};
+  var ok = function (s) { var n = noteOf(s); return n ? has(N, n) : hasScreen(s.slice(7)); };
+  return Object.keys(E).filter(function (k) { return ok(E[k].from) && ok(E[k].to); }).map(function (k) { var e = copy(E[k]); e.id = k; return e; });
+}
+function room(pt, boxes) {
+  var x = Math.round(pt.x - PAD_X), y = Math.round(pt.y - PAD_Y), w = W;
+  for (var i = 0; i < (boxes || []).length; i++) {
+    var c = boxes[i];
+    if (pt.x >= c.x0 && pt.x <= c.x1 && pt.y >= c.y0 && pt.y <= c.y1) return {free: false, x: x, y: y, w: 0};
+    if (c.x0 >= pt.x && c.y0 < y + BAND && c.y1 > y) w = Math.min(w, Math.floor(c.x0 - GAP - x));   // 같은 높이 띠의 오른쪽 카드 앞까지
+  }
+  return {free: true, x: x, y: y, w: Math.max(MIN_W, w)};
+}
+function matches(tags, list) { return (tags || []).some(function (t) { return list.indexOf(t) >= 0; }); }
+function spot(chain) {
+  chain = Array.isArray(chain) ? chain : [];
+  for (var i = 0; i < chain.length; i++) {
+    if (matches(chain[i], ['.bnote'])) return 'note';
+    if (matches(chain[i], BUSY)) return 'busy';
+  }
+  return chain.length && matches(chain[0], EMPTY) ? 'empty' : 'busy';
+}
+function anchor(box, side) {
+  var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  return side === 'top' ? {x: cx, y: box.y} : side === 'bottom' ? {x: cx, y: box.y + box.h} :
+         side === 'left' ? {x: box.x, y: cy} : {x: box.x + box.w, y: cy};
+}
+function nearSide(box, pt) {
+  var best = 'right', bd = Infinity;
+  SIDES.forEach(function (s) { var a = anchor(box, s), d = Math.hypot(a.x - pt.x, a.y - pt.y); if (d < bd) { bd = d; best = s; } });
+  return best;
+}
+var NORMAL = {top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0]};
+function path(a, aSide, b, bSide) {
+  var r = function (v) { return Math.round(v * 10) / 10; };
+  var k = Math.min(BEND, Math.max(24, Math.hypot(b.x - a.x, b.y - a.y) / 2));   // 짧은 선은 덜 휘게
+  var na = NORMAL[aSide] || [1, 0], nb = NORMAL[bSide] || [-1, 0];
+  return 'M' + r(a.x) + ',' + r(a.y) + ' C' + r(a.x + na[0] * k) + ',' + r(a.y + na[1] * k) + ' ' +
+         r(b.x + nb[0] * k) + ',' + r(b.y + nb[1] * k) + ' ' + r(b.x) + ',' + r(b.y);
+}
+function hash(s) { var h = 5381; s = String(s); for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+function stamp(D) {
+  var ids = [];
+  ((D && D.rows) || []).forEach(function (row) { (row.screens || []).forEach(function (s) { if (s && s.id) ids.push(s.id); }); });
+  return hash(((D && D.title) || '') + '|' + ids.sort().join(','));
+}
+function nearest(box, boxes) {                        // 노트 상자에 가장 가까운 화면 id(상자 사이 거리, 겹치면 0)
+  var best = null, bd = Infinity;
+  Object.keys(boxes || {}).forEach(function (id) {
+    var c = boxes[id], dx = Math.max(c.x - (box.x + box.w), box.x - (c.x + c.w), 0), dy = Math.max(c.y - (box.y + box.h), box.y - (c.y + c.h), 0), d = Math.hypot(dx, dy);
+    if (d < bd) { bd = d; best = id; }
+  });
+  return best;
+}
+function copyText(b, opt) {
+  opt = opt || {};
+  var N = (b && b.notes) || {}, boxes = opt.boxes || {}, titles = opt.titles || {}, hasScreen = function (id) { return has(boxes, id); };
+  var ids = Object.keys(N).sort(function (p, q) { return (N[p].y - N[q].y) || (N[p].x - N[q].x) || (p < q ? -1 : 1); });
+  var no = {}; ids.forEach(function (id, i) { no[id] = i + 1; });
+  var name = function (s) { var n = noteOf(s); return n ? '노트 ' + no[n] : '화면 ' + s.slice(7) + (titles[s.slice(7)] ? '(' + titles[s.slice(7)] + ')' : ''); };
+  var edges = live(b, hasScreen);
+  var lines = ['[hyper-design 판 노트] out=' + (opt.out || '') + ' · 노트 ' + ids.length + '개 · 선 ' + edges.length + '개'];
+  ids.forEach(function (id) {
+    var n = N[id], near = nearest({x: n.x, y: n.y, w: n.w, h: opt.heights && opt.heights[id] || 60}, boxes);
+    lines.push(no[id] + '. ' + (near ? '가까운 화면=' + near + ' · ' : '') + '"' + n.text.replace(/\s*\n\s*/g, ' / ') + '"');
+  });
+  if (edges.length) {
+    lines.push('선:');
+    edges.forEach(function (e) { lines.push('- ' + name(e.from) + ' → ' + name(e.to) + (e.label ? ' · ' + e.label : '')); });
+  }
+  return lines.join('\n');
+}
+
+HD.boardNotes = {NAME: NAME, W: W, MIN_W: MIN_W, MAX_W: MAX_W, MAX: MAX, LABEL_MAX: LABEL_MAX, SIDES: SIDES, EMPTY: EMPTY, BUSY: BUSY,
+                 parse: parse, newId: newId, create: create, finish: finish, move: move, removeNote: removeNote, connect: connect, unlink: unlink,
+                 label: label, live: live, room: room, spot: spot, anchor: anchor, nearSide: nearSide, path: path, stamp: stamp, hash: hash,
+                 copyText: copyText, nearest: nearest, text: text};
 })();
 </script>
 <script data-hd-module="focus">
@@ -1571,6 +1790,288 @@ function mount(ctx) {
 HD.viewMotion = {mount: mount, TRANSITIONS: TRANSITIONS};
 })();
 </script>
+<script data-hd-module="view-board-notes">
+/* View — 판 노트와 사용자 선의 DOM: #stage 안 선 층(svg.bnl)·노트 층(#bnotes) 그리기, 만들기·제자리 쓰기·끌기·잇기·고르기·지우기·선 이름·복사 단추.
+   규칙은 HD.boardNotes(Model). 상태 = 판 하나(저장은 판만) · 고른 것({kind:'note'|'edge', id}) · 쓰는 중 · 끄는 중.
+   선 = 보이는 층 svg#bnl(카드 아래) + 누르는 층 svg#bnh(카드 위, 카드 상자를 뚫은 clip). 저장: localStorage '<NAME>:<주소 해시>:<프로젝트 도장>' — 기존 메모(hd-notes:)와 따로. 기존 선(svg.ar·svg.lks)·태그·메모·'보내기'는 건드리지 않는다.
+   HD.viewBoardNotes.mount(ctx) → {board(), render(), copyText(), selected()}
+   ctx = {D, pane, stage, rowsEl, $, $$, esc, getView(), setView(z, tx, ty), typing(e), outDir(), copy(text)} */
+(function () {
+'use strict';
+var HD = globalThis.HD = globalThis.HD || {};
+var SVGNS = 'http://www.w3.org/2000/svg', EDIT_Z = 0.6;
+
+function mount(ctx) {
+  var M = HD.boardNotes, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, pane = ctx.pane, stage = ctx.stage, rowsEl = ctx.rowsEl, D = ctx.D || {};
+  var KEY = M.NAME + ':' + M.hash(location.pathname) + ':' + M.stamp(D);
+  var B = load(), sel = null, editing = null, drag = null, link = null, raf = 0;
+  var TITLES = {};
+  (D.rows || []).forEach(function (row) { (row.screens || []).forEach(function (s) { TITLES[s.id] = s.title; }); });
+
+  function svgLayer(id) {
+    var s = document.createElementNS(SVGNS, 'svg');
+    s.id = id; s.setAttribute('width', '1'); s.setAttribute('height', '1');
+    return s;
+  }
+  // 보이는 선 = 카드 아래 층(#bnl) · 누르는 자리와 이름 = 카드 위 층(#bnh, 카드 상자를 뚫은 clip — 카드 클릭은 그대로 카드로 간다)
+  var svg = svgLayer('bnl'), hit = svgLayer('bnh');
+  svg.innerHTML = '<defs><marker id="bn-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">' +
+                  '<path d="M0,0 L10,5 L0,10 z"/><\/marker><\/defs><g class="bl-all"><\/g><path class="bl tmp" style="display:none"/>';
+  hit.innerHTML = '<defs><clipPath id="bn-clip" clipPathUnits="userSpaceOnUse"><path clip-rule="evenodd"/><\/clipPath><\/defs><g class="bh-all" clip-path="url(#bn-clip)"><\/g>';
+  var layer = document.createElement('div'); layer.id = 'bnotes';
+  stage.appendChild(svg); stage.appendChild(hit); stage.appendChild(layer);
+  var tmp = $('path.tmp', svg), all = $('g.bl-all', svg), hall = $('g.bh-all', hit), clip = $('#bn-clip path', hit);
+
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'vbtn'; copyBtn.id = 'bncopy'; copyBtn.type = 'button'; copyBtn.hidden = true;
+  copyBtn.title = '판 노트와 선을 글로 복사 — AI 대화에 붙여 넣어요'; copyBtn.textContent = '판 노트 복사';
+  var view = $('.view[data-group="view"]'); if (view) view.insertBefore(copyBtn, view.firstChild);
+  copyBtn.addEventListener('click', function () {
+    ctx.copy(copyText());
+    copyBtn.textContent = '복사했어요'; setTimeout(function () { copyBtn.textContent = '판 노트 복사'; }, 1400);
+  });
+
+  function load() {
+    var raw = null; try { raw = localStorage.getItem(KEY); } catch (e) {}   // 저장소를 못 읽는 브라우저 = 빈 판
+    var r = M.parse(raw);
+    if (r.bad) console.warn('[hd] 판 노트 저장값 ' + (r.bad === 'broken' ? '깨짐 — 빈 판으로' : '일부 빠짐'));
+    return r.board;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(B)); } catch (e) {} }   // 저장 실패(용량·사생활 모드)는 화면 상태만 남긴다
+  function now() { return Date.now(); }
+  function z() { return ctx.getView().z; }
+  function toStage(cx, cy) { var r = stage.getBoundingClientRect(), k = z(); return {x: (cx - r.left) / k, y: (cy - r.top) / k}; }
+  function boxOf(el) {                               // 판 좌표 상자(변환 아래에서도 맞게 화면 좌표에서 되돌린다)
+    var r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(), k = z();
+    return {x: (r.left - s.left) / k, y: (r.top - s.top) / k, w: r.width / k, h: r.height / k};
+  }
+  function cardEl(id) { return $$('.card', rowsEl).filter(function (c) { return c.dataset.id === id; })[0] || null; }
+  function screenBox(id) { var c = cardEl(id), p = c && $('.phone', c); return p ? boxOf(p) : null; }
+  function noteEl(id) { return $$('.bnote', layer).filter(function (n) { return n.dataset.id === id; })[0] || null; }
+  function endBox(key) {
+    if (key.indexOf('note:') === 0) { var el = noteEl(key.slice(5)); return el ? boxOf(el) : null; }
+    return screenBox(key.slice(7));
+  }
+  function chain(el) {
+    var out = [];
+    for (var n = el; n && n !== document.documentElement; n = n.parentElement) {
+      var t = [n.tagName.toLowerCase()];
+      if (n.id) t.push('#' + n.id);
+      (n.getAttribute('class') || '').split(/\s+/).filter(Boolean).forEach(function (c) { t.push('.' + c); });
+      out.push(t);
+      if (n === pane) break;
+    }
+    return out;
+  }
+
+  /* ---------- 그리기 ---------- */
+  function renderNotes() {
+    var keep = {};
+    Object.keys(B.notes).forEach(function (id) {
+      var n = B.notes[id], el = noteEl(id);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'bnote'; el.dataset.id = id;
+        el.innerHTML = '<div class="bt"><\/div>' + M.SIDES.map(function (s) { return '<i class="bh" data-side="' + s + '"><\/i>'; }).join('');
+        layer.appendChild(el);
+      }
+      el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; el.style.width = n.w + 'px';
+      if (editing !== id) $('.bt', el).textContent = n.text;
+      el.classList.toggle('sel', !!sel && sel.kind === 'note' && sel.id === id);
+      keep[id] = 1;
+    });
+    $$('.bnote', layer).forEach(function (el) { if (!keep[el.dataset.id] && editing !== el.dataset.id) el.remove(); });
+    copyBtn.hidden = !Object.keys(B.notes).length;
+  }
+  function renderEdges() {
+    var h = '', hh = '', holes = 'M-100000,-100000 H100000 V100000 H-100000 Z';
+    $$('.card', rowsEl).forEach(function (c) { var b = boxOf(c); holes += ' M' + b.x.toFixed(1) + ',' + b.y.toFixed(1) + ' h' + b.w.toFixed(1) + ' v' + b.h.toFixed(1) + ' h' + (-b.w).toFixed(1) + ' Z'; });
+    clip.setAttribute('d', holes);
+    M.live(B, function (id) { return !!cardEl(id); }).forEach(function (e) {
+      var a = endBox(e.from), b = endBox(e.to); if (!a || !b) return;
+      var p = M.anchor(a, e.fromSide), q = M.anchor(b, e.toSide), d = M.path(p, e.fromSide, q, e.toSide);
+      var on = sel && sel.kind === 'edge' && sel.id === e.id ? ' sel' : '', id = esc(e.id);
+      h += '<path class="bl' + on + '" data-id="' + id + '" d="' + d + '"/>';
+      hh += '<g class="be' + on + '" data-id="' + id + '"><path class="bhit" d="' + d + '"/>' +
+            (e.label ? '<text class="blab" x="' + ((p.x + q.x) / 2).toFixed(1) + '" y="' + ((p.y + q.y) / 2 - 6).toFixed(1) + '">' + esc(e.label) + '<\/text>' : '') + '<\/g>';
+    });
+    all.innerHTML = h; hall.innerHTML = hh;
+  }
+  function render() { renderNotes(); renderEdges(); }
+  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; renderEdges(); }); }
+
+  /* ---------- 고르기·지우기 ---------- */
+  function select(s) { sel = s; render(); }
+  function removeSelected() {
+    if (!sel) return;
+    if (sel.kind === 'note') B = M.removeNote(B, sel.id); else B = M.unlink(B, sel.id);
+    sel = null; save(); render();
+  }
+
+  /* ---------- 쓰기 ---------- */
+  function edit(id) {
+    var el = noteEl(id); if (!el || editing) return;
+    var v = ctx.getView();
+    if (v.z < EDIT_Z) {                              // 너무 작게 보고 있으면 노트 자리를 둔 채 읽히는 배율로
+      var r = pane.getBoundingClientRect(), b = el.getBoundingClientRect(), px = b.left - r.left, py = b.top - r.top;
+      var bx = (px - v.tx) / v.z, by = (py - v.ty) / v.z;
+      ctx.setView(EDIT_Z, px - bx * EDIT_Z, py - by * EDIT_Z);
+    }
+    editing = id; select({kind: 'note', id: id});
+    var bt = $('.bt', el), ta = document.createElement('textarea');
+    ta.className = 'bta'; ta.value = B.notes[id] ? B.notes[id].text : ''; ta.setAttribute('aria-label', '판 노트');
+    bt.hidden = true; el.insertBefore(ta, bt);
+    var grow = function () { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    ta.addEventListener('input', function () { grow(); schedule(); });
+    ta.addEventListener('keydown', function (e) {
+      if (e.isComposing) return;                     // 한글 조합 중 키는 건드리지 않는다
+      if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); e.stopPropagation(); done(); }
+    });
+    ta.addEventListener('blur', function () { done(); });
+    ta.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    var ended = false;
+    function done() {
+      if (ended) return; ended = true;
+      var r = M.finish(B, id, ta.value, now());
+      editing = null; ta.remove(); bt.hidden = false;
+      B = r.board;
+      if (r.kind === 'drop') sel = null;
+      if (r.kind !== 'same') save();
+      render();
+    }
+    grow(); ta.focus();
+  }
+
+  /* ---------- 만들기: 빈 판 두 번 누르기 ---------- */
+  pane.addEventListener('dblclick', function (e) {
+    var where = M.spot(chain(e.target));
+    if (where === 'note') return;                    // 노트 위 두 번 누르기는 노트가 받는다
+    if (where !== 'empty' || editing) return;
+    var pt = toStage(e.clientX, e.clientY), boxes = $$('.card', rowsEl).map(function (c) { var b = boxOf(c); return {x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h}; });
+    var at = M.room(pt, boxes); if (!at.free) return;
+    e.preventDefault();
+    var id = M.newId('n', now());
+    B = M.create(B, id, at, now());                  // 글이 생기기 전에는 저장하지 않는다(finish 가 판정)
+    sel = {kind: 'note', id: id}; render(); edit(id);
+  });
+
+  /* ---------- 노트: 고르기·끌기·잇기 ---------- */
+  layer.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest('.bnote'); if (!el || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.stopPropagation();                             // 판 끌기로 새지 않게
+    var id = el.dataset.id, h = e.target.closest('.bh');
+    if (editing === id) return;
+    if (h) {                                         // 변의 점 끌기 = 잇기
+      e.preventDefault();
+      link = {from: 'note:' + id, side: h.dataset.side, pid: e.pointerId};
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+    var n = B.notes[id]; if (!n) return;
+    drag = {id: id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, x: n.x, y: n.y, moved: false};
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    if (!sel || sel.id !== id) select({kind: 'note', id: id});
+  });
+  layer.addEventListener('pointermove', function (e) {
+    if (link && link.pid === e.pointerId) {
+      var a = endBox(link.from); if (!a) return;
+      var p = M.anchor(a, link.side), q = toStage(e.clientX, e.clientY);
+      tmp.setAttribute('d', M.path(p, link.side, q, M.nearSide({x: q.x, y: q.y, w: 0, h: 0}, p)));
+      tmp.style.display = '';
+      return;
+    }
+    if (!drag || drag.pid !== e.pointerId) return;
+    var k = z(), dx = (e.clientX - drag.sx) / k, dy = (e.clientY - drag.sy) / k;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) <= 4) return;
+    drag.moved = true;
+    var el = noteEl(drag.id); if (el) { el.style.left = Math.round(drag.x + dx) + 'px'; el.style.top = Math.round(drag.y + dy) + 'px'; }
+    schedule();
+  });
+  function endPointer(e) {
+    if (link && link.pid === e.pointerId) {
+      tmp.style.display = 'none';
+      var hit = document.elementFromPoint(e.clientX, e.clientY), ne = hit && hit.closest('.bnote'), ce = hit && hit.closest('.card');
+      var to = ne ? 'note:' + ne.dataset.id : ce ? 'screen:' + ce.dataset.id : null;
+      if (to) {
+        var src = endBox(link.from), dst = endBox(to);
+        var toSide = dst ? M.nearSide(dst, M.anchor(src, link.side)) : 'left';
+        var r = M.connect(B, M.newId('e', now()), link.from, link.side, to, toSide, now());
+        if (r.ok) { B = r.board; save(); }
+      }
+      link = null; render();
+      return;
+    }
+    if (!drag || drag.pid !== e.pointerId) return;
+    var d = drag; drag = null;
+    if (!d.moved) return;
+    var k = z();
+    B = M.move(B, d.id, d.x + (e.clientX - d.sx) / k, d.y + (e.clientY - d.sy) / k, now());
+    save(); render();
+  }
+  layer.addEventListener('pointerup', endPointer);
+  layer.addEventListener('pointercancel', endPointer);
+  layer.addEventListener('dblclick', function (e) {
+    var el = e.target.closest('.bnote'); if (!el) return;
+    e.stopPropagation(); e.preventDefault(); edit(el.dataset.id);
+  });
+
+  /* ---------- 선: 고르기·이름 ---------- */
+  hit.addEventListener('pointerdown', function (e) { if (e.target.closest('g.be')) e.stopPropagation(); });
+  hit.addEventListener('click', function (e) {
+    var g = e.target.closest('g.be'); if (!g) return;
+    e.stopPropagation(); select({kind: 'edge', id: g.dataset.id});
+  });
+  hit.addEventListener('dblclick', function (e) {
+    var g = e.target.closest('g.be'); if (!g) return;
+    e.stopPropagation(); e.preventDefault();
+    var id = g.dataset.id, ed = B.edges[id]; if (!ed) return;
+    var a = endBox(ed.from), b = endBox(ed.to); if (!a || !b) return;
+    var p = M.anchor(a, ed.fromSide), q = M.anchor(b, ed.toSide);
+    var inp = document.createElement('input');
+    inp.className = 'blin'; inp.value = ed.label || ''; inp.maxLength = M.LABEL_MAX; inp.setAttribute('aria-label', '선 이름');
+    inp.style.left = ((p.x + q.x) / 2) + 'px'; inp.style.top = ((p.y + q.y) / 2 - 14) + 'px';
+    layer.appendChild(inp);
+    var ended = false;
+    var fin = function (keep) { if (ended) return; ended = true; if (keep) { B = M.label(B, id, inp.value, now()); save(); } inp.remove(); render(); };
+    inp.addEventListener('keydown', function (ev) {
+      if (ev.isComposing) return;
+      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); fin(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); fin(false); }
+    });
+    inp.addEventListener('blur', function () { fin(true); });
+    inp.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+    inp.focus(); inp.select();
+  });
+
+  /* ---------- 빈 곳 누르기 = 고르기 풂 · Delete = 지우기 ---------- */
+  pane.addEventListener('click', function (e) {
+    if (sel && !e.target.closest('.bnote') && !e.target.closest('g.be')) select(null);
+  });
+  addEventListener('keydown', function (e) {
+    if (!sel || editing || ctx.typing(e)) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeSelected(); }
+    else if (e.key === 'Enter' && sel.kind === 'note') { e.preventDefault(); edit(sel.id); }
+  });
+
+  /* ---------- 카드 크기가 바뀌면(긴 화면 펼치기 등) 선 끝을 다시 ---------- */
+  if (typeof ResizeObserver === 'function') {
+    var ro = new ResizeObserver(schedule);
+    $$('.card', rowsEl).forEach(function (c) { ro.observe(c); });
+  }
+
+  function copyText() {
+    var boxes = {}, heights = {};
+    $$('.card', rowsEl).forEach(function (c) { var b = screenBox(c.dataset.id); if (b) boxes[c.dataset.id] = b; });
+    Object.keys(B.notes).forEach(function (id) { var el = noteEl(id); if (el) heights[id] = boxOf(el).h; });
+    return M.copyText(B, {out: ctx.outDir(), boxes: boxes, titles: TITLES, heights: heights});
+  }
+
+  render();
+  return {board: function () { return B; }, render: render, copyText: copyText, selected: function () { return sel; }};
+}
+
+HD.viewBoardNotes = {mount: mount};
+})();
+</script>
 <script>
 (function () {
 'use strict';
@@ -2115,6 +2616,9 @@ if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 �
     cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(drawArrows);
   }).observe(rowsEl);
 }
+// 판 노트 · 사용자 선 View(modules/view-board-notes.js) — 빈 판 두 번 누르기 · 변의 점 끌어 잇기 · '판 노트 복사'
+var BN = HD.viewBoardNotes.mount({D: D, pane: pane, stage: stage, rowsEl: rowsEl, $: $, $$: $$, esc: esc, typing: typing, outDir: outDir, copy: copyText,
+                                  getView: function () { return {z: z, tx: tx, ty: ty}; }, setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }});
 window.__hdReady = performance.now();
 })();
 </script>
