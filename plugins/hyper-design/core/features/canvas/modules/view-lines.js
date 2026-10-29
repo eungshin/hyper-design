@@ -377,7 +377,7 @@ function mount(ctx) {
   function apply() {
     rowsEl.classList.toggle('nolines', !prefs.lines);
     rowsEl.classList.toggle('notags', !prefs.tags);   // 선 태그 끄기 — 선은 그대로, 태그만 숨김
-    if (tagsEl) tagsEl.checked = prefs.tags;
+    if (tagsEl) { var tt = prefs.tags ? '선 태그(버튼 이름) 숨기기' : '선 태그(버튼 이름) 보이기'; tagsEl.setAttribute('aria-pressed', String(prefs.tags)); tagsEl.title = tt; tagsEl.setAttribute('aria-label', tt); }
     rowsEl.style.setProperty('--lnop', String(prefs.op));
     rowsEl.style.setProperty('--lnk', (prefs.width / 2.5).toFixed(2));
     if (show) { show.setAttribute('aria-pressed', String(prefs.lines)); show.title = prefs.lines ? '선 숨기기' : '선 보이기'; }
@@ -399,8 +399,8 @@ function mount(ctx) {
     var a = prefs.lines, b = !a; set({lines: b});
     if (ctx.record) ctx.record({label: b ? '선 보이기' : '선 숨기기', undo: function () { set({lines: a}); }, redo: function () { set({lines: b}); }});
   });
-  if (tagsEl) tagsEl.addEventListener('change', function () {
-    var a = prefs.tags, b = tagsEl.checked; if (a === b) return;
+  if (tagsEl) tagsEl.addEventListener('click', function () {
+    var a = prefs.tags, b = !a;
     set({tags: b}); if (!b) closePop();
     if (ctx.record) ctx.record({label: b ? '선 태그 보이기' : '선 태그 숨기기', undo: function () { set({tags: a}); }, redo: function () { set({tags: b}); }});
   });
