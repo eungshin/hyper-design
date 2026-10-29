@@ -110,3 +110,36 @@ def test_board_bar_does_not_cover_the_picked_heading_its_label_or_the_line_above
         assert not errors, errors
     finally:
         pg.close()
+
+
+@pytest.mark.area("tools", "links")
+def test_board_bar_for_a_large_element_sits_near_the_click_keyboard_pick_keeps_the_edge(ctx, out):
+    """R51 — 큰 요소(오른쪽 그림 칸 aside)를 아래쪽에서 누르면 막대는 누른 자리 바로 위(요소 위 끝이 아니라) · 꼬리표·판 칸 밖은 아님.
+    Tab(형제 — 키보드 고르기)으로 옮기면 누른 자리가 없으니 예전 규칙(요소 위 끝) 그대로."""
+    pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
+    try:
+        _xy(pg, "aside.wizard-art")                      # 카드를 키움
+        art = _card_rect(pg, "aside.wizard-art")
+        xy = (art["x"] + art["w"] * 0.7, art["y"] + art["h"] - 24)
+        _pick_element(pg, xy)
+        pg.wait_for_selector(".elbox.sel", timeout=4000)
+        pg.wait_for_timeout(500)
+        bar, sel, lab, pane = pg.evaluate(RECT % "#elbar"), pg.evaluate(RECT % ".elbox.sel"), pg.evaluate(LABEL), pg.evaluate(RECT % "#screens")
+        shot(pg, "r51-large-element-click-near-bottom.png")
+        assert sel["h"] > 160, ("큰 요소를 골랐다", sel)
+        assert pg.evaluate("document.querySelector('#elbar').dataset.near") == "1", bar
+        assert 0 < xy[1] - (bar["y"] + bar["h"]) <= 20, ("막대 아래 끝 = 누른 자리 바로 위", bar, xy)
+        assert bar["x"] <= xy[0] <= bar["x"] + bar["w"], ("가로 = 누른 자리 둘레", bar, xy)
+        assert not _overlap(bar, lab), ("꼬리표를 덮지 않는다", bar, lab)
+        assert pane["x"] <= bar["x"] and bar["x"] + bar["w"] <= pane["x"] + pane["w"] and pane["y"] <= bar["y"] and bar["y"] + bar["h"] <= pane["y"] + pane["h"], (bar, pane)
+        assert not _overlap(bar, pg.evaluate(RECT % "#selbar")) if pg.is_visible("#selbar") else True
+        before = pg.evaluate("document.querySelector('#elbar').dataset.path")
+        pg.keyboard.press("Tab")                         # 키보드 고르기(형제) = 누른 자리 없음
+        pg.wait_for_function("(p) => document.querySelector('#elbar').dataset.path && document.querySelector('#elbar').dataset.path !== p", arg=before, timeout=8000)
+        pg.wait_for_timeout(400)
+        bar2, sel2 = pg.evaluate(RECT % "#elbar"), pg.evaluate(RECT % ".elbox.sel")
+        assert pg.evaluate("document.querySelector('#elbar').dataset.near") is None, ("키보드 고르기 = 예전 규칙", bar2)
+        assert not _overlap(bar2, sel2), ("예전 규칙 = 고른 요소 바깥", bar2, sel2)
+        assert not errors, errors
+    finally:
+        pg.close()

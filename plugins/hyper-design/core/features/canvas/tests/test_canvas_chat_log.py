@@ -285,6 +285,47 @@ def test_terminal_transcript_merges_into_timeline(served, ctx, monkeypatch):
     assert asked and asked[0][0] == "ag-1"
 
 
+def test_jump_to_latest_button_when_scrolled_up(served, ctx, monkeypatch):
+    """R50 — 올려 읽는 중이면 목록 오른쪽 아래(입력창 위)에 둥근 ↓ 단추, 새 줄은 당기지 않고 점, 누르면 맨 아래로 가고 단추는 숨는다."""
+    out, srv = served
+
+    def fake(s, q, b):
+        now = int(time.time() * 1000)
+        return 200, {"entries": [{"id": "a%d" % i, "role": "assistant", "text": ("답 %d — " % i) + "긴 줄 " * 40, "at": now - 90000 + i}
+                                 for i in range(14)], "cursor": "c1", "source": "claude"}
+    monkeypatch.setitem(router.ROUTES["GET"], "/api/agents/transcript", fake)
+    assert call(srv, "POST", "/api/hello", {"agent": {"id": "ag-1", "name": "클로드", "kind": "claude"}, "lease": 300})[0] == 200
+    assert call(srv, "POST", "/api/attach", {"agent": "ag-1"})[0] == 200
+    pg, errors = open_page(ctx, srv)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    gap = "(() => { const l = document.querySelector('#pTalk .tk-list'); return l.scrollHeight - l.scrollTop - l.clientHeight; })()"
+    try:
+        pg.wait_for_selector("#pTalk .tk-term[data-id='a13']", timeout=15000)
+        pg.wait_for_function(gap + " <= 24", timeout=5000)
+        assert pg.is_hidden("#pTalk .tk-jump"), "맨 아래 = 단추 없음"
+        pg.evaluate("document.querySelector('#pTalk .tk-list').scrollTop = 0")
+        pg.wait_for_selector("#pTalk .tk-jump", state="visible", timeout=3000)
+        b, lst, foot = (pg.locator(x).bounding_box() for x in ("#pTalk .tk-jump", "#pTalk .tk-list", "#pTalk .tk-foot"))
+        assert abs(b["width"] - b["height"]) < 1 and b["width"] >= 28, ("둥근 단추", b)
+        assert b["x"] + b["width"] <= lst["x"] + lst["width"] and b["x"] > lst["x"] + lst["width"] / 2, ("목록 오른쪽", b, lst)
+        assert b["y"] + b["height"] <= foot["y"], ("입력창을 덮지 않음", b, foot)
+        assert pg.evaluate("getComputedStyle(document.querySelector('#pTalk .tk-jump')).borderRadius") == "50%"
+        assert pg.is_hidden("#pTalk .tk-dot"), "아직 새 줄 없음 = 점 없음"
+        now = int(time.time() * 1000)
+        srv.session.events.publish("agent.transcript", agent="ag-1", entries=[{"id": "a99", "role": "assistant", "text": "새 답 — 끝", "at": now}])
+        pg.wait_for_selector("#pTalk .tk-term[data-id='a99']", state="attached", timeout=15000)
+        assert pg.evaluate("document.querySelector('#pTalk .tk-list').scrollTop") == 0, "올려 읽는 중 = 새 줄이 와도 당기지 않는다"
+        pg.wait_for_selector("#pTalk .tk-dot", state="visible", timeout=3000)
+        shot(pg, "r50-jump-button-unseen.png")
+        pg.click("#pTalk .tk-jump")
+        pg.wait_for_function(gap + " <= 24", timeout=5000)
+        pg.wait_for_selector("#pTalk .tk-jump", state="hidden", timeout=3000)
+        assert pg.is_hidden("#pTalk .tk-dot") and pg.is_visible("#pTalk .tk-term[data-id='a99']"), "맨 아래 = 새 답이 보이고 단추·점은 꺼짐"
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
 def test_without_helper_the_panel_is_absent(served, ctx):
     """file:// 로 연 캔버스(도우미 없음) — 대화 기록·진행이 없으니 대화 패널은 이 페이지에 없다(저장 배치는 그대로), 입력창은 판 아래(S1)."""
     out, srv = served

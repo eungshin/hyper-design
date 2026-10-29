@@ -14,6 +14,9 @@
      글은 골라 복사할 수 있고(도크의 user-select:none 을 목록만 풀어 줌 · 글을 고르는 중이면 턴 누르기를 하지 않음), 답마다 [복사](올리면 보임).
      다시 그리기는 줄마다(턴·터미널 줄 key) 바뀐 것만 새로 만들고 나머지 요소는 그대로 둔다 — 긴 기록에서도 이벤트마다 목록 전체를 다시 만들지 않는다.
    메모의 답 설명: 답 기록에 detail 이 없고 메모(note)를 이름 대면 그 메모의 같은 답 detail 을 답 줄 아래에 전체를 그린다(ctx.notes.find — 읽기만, 고르는 규칙 HD.chatLog.memoDetail).
+   맨 아래로 단추(R50, Slack·ChatGPT·Claude.ai 의 scroll-to-bottom): 목록을 위로 올려 읽는 중이면 목록 오른쪽 아래(입력창 위 — 입력창은 덮지 않음)에
+     둥근 반투명 ↓ 단추 .tk-jump · 누르면 맨 아래로(부드럽게, 움직임 줄이기면 바로) · 맨 아래면 숨김. 올려 읽는 중에 새 줄이 오면 당기지 않고 단추에 점(.tk-dot).
+     보일지·점은 HD.chatLog.jump(Model), 상태(보임·점)는 이 파일.
    움직임(FINDINGS §8): 새 줄 맥박 600ms · 패널 나타남 spring-fade 400ms · 진행 회전 1s — 움직임 줄이기면 모두 끔.
    HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl', 'notes']}) → {refresh(), records(), shown()} */
 (function () {
@@ -27,6 +30,7 @@ var NO_TERM = '이 터미널의 대화는 가져올 수 없어요';
 
 var CSS =
   '#pTalk{padding:0;height:100%;min-height:0;display:flex;flex-direction:column;box-sizing:border-box}' +
+  '#pTalk .tk-wrap{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}' +
   '#pTalk .tk-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0;padding:10px 12px 4px;list-style:none;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;-webkit-user-select:text;user-select:text;cursor:auto}' +
   '#pTalk .tk-empty{margin:auto 0;padding:24px 8px;color:var(--ui-muted,#8a8a85);font-size:12.5px;text-align:center;line-height:1.5}' +
   '#pTalk .tk-foot{flex:none;padding:0 8px 8px}' +
@@ -71,18 +75,33 @@ var CSS =
   '#pTalk .tk-copy{display:block;margin:4px 0 0 auto;padding:1px 7px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#6b6b66;font:500 11px system-ui,sans-serif;cursor:pointer;opacity:0;transition:opacity .12s;-webkit-user-select:none;user-select:none}' +
   '#pTalk .tk-copy:focus-visible,#pTalk .tk-term:hover .tk-copy,#pTalk .tk-l:hover .tk-copy{opacity:1}#pTalk .tk-copy:hover{background:#F2F2EF;color:#2b2b29}' +
   '#pTalk .tk-detail{margin-top:6px}' +
+  /* R50 맨 아래로 단추 — 목록 칸(.tk-wrap) 오른쪽 아래, 입력창(.tk-foot) 위 */
+  '#pTalk .tk-jump{position:absolute;right:12px;bottom:10px;z-index:2;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid rgba(0,0,0,.08);' +
+    'background:rgba(255,255,255,.82);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.14);color:#3a3a37;' +
+    'display:grid;place-items:center;cursor:pointer;animation:tkJump .16s ease-out;-webkit-user-select:none;user-select:none}' +
+  '#pTalk .tk-jump[hidden]{display:none}' +
+  '#pTalk .tk-jump:hover{background:rgba(255,255,255,.96);color:var(--ui-primary,#2b2b29)}' +
+  '#pTalk .tk-jump:focus-visible{outline:2px solid var(--ui-primary,#2b2b29);outline-offset:2px}' +
+  '#pTalk .tk-jump svg{width:16px;height:16px;display:block}' +
+  '#pTalk .tk-dot{position:absolute;top:1px;right:1px;width:8px;height:8px;border-radius:50%;background:var(--ui-accent,#c2590a);box-shadow:0 0 0 2px #fff}' +
+  '#pTalk .tk-dot[hidden]{display:none}' +
+  '@keyframes tkJump{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}' +
   '#pTalk .tk-quiet{font-size:11.5px;color:var(--ui-muted,#8a8a85);text-align:center}' +
   '#pTalk .tk-new{animation:tkPulse .6s ease-out;transform-origin:left center}' +
   '@keyframes tkPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}' +
   '.card.tk-hl .phone{box-shadow:0 0 0 3px var(--ui-primary,#2b2b29),0 8px 24px rgba(0,0,0,.18)!important;transition:box-shadow .3s}' +
-  '@media (prefers-reduced-motion: reduce){#pTalk.tk-in,#pTalk .tk-new,#pTalk .tk-turn[data-state="running"] .tk-ic{animation:none}.card.tk-hl .phone{transition:none}}';
+  '@media (prefers-reduced-motion: reduce){#pTalk.tk-in,#pTalk .tk-new,#pTalk .tk-turn[data-state="running"] .tk-ic,#pTalk .tk-jump{animation:none}.card.tk-hl .phone{transition:none}}';
 
 function mount(ctx) {
   var L = HD.chatLog, A = HD.aiUndo, host = ctx.$('#pTalk');
   if (!host) { console.warn('[hd] 대화 패널: 자리(#pTalk)가 없어요 — 대화 패널 없이'); return {}; }
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
-  host.innerHTML = '<ol class="tk-list" aria-label="대화"></ol><div class="tk-foot"></div>';
-  var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot');
+  host.innerHTML = '<div class="tk-wrap"><ol class="tk-list" aria-label="대화"></ol>' +
+    '<button type="button" class="tk-jump" hidden aria-label="최신 메시지로" title="최신 메시지로">' +
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>' +
+    '<span class="tk-dot" hidden></span></button></div><div class="tk-foot"></div>';
+  var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot'), jumpBtn = host.querySelector('.tk-jump'), jumpDot = host.querySelector('.tk-dot');
+  var jumpSt = {show: false, unseen: false};
   var on = !!(ctx.api && ctx.api.on), records = [], seq = null, seen = null, sig = null, warned = {};
   var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, undoing = {};
   var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {};
@@ -140,7 +159,8 @@ function mount(ctx) {
     if (s === sig && !force) return;
     sig = s;
     var bottom = L.stick(list.scrollTop, list.scrollHeight, list.clientHeight);
-    var first = seen == null, seenIds = render.ids || {};
+    var first = seen == null, seenIds = render.ids || {}, lastSeq = records.length ? records[records.length - 1].seq : 0;
+    var grew = !first && !force && (lastSeq > seen || term.entries.some(function (e) { return !seenIds[e.id]; }));   // 새 기록·새 터미널 줄(점 — 내가 누른 것은 아님)
     var fresh = function (q) { return !first && q > seen; }, never = function () { return false; };
     var items = L.timeline(ts, ents), ids = {}, rows = [];
     copies = {};
@@ -156,7 +176,23 @@ function mount(ctx) {
     render.ids = ids;
     seen = records.length ? records[records.length - 1].seq : 0;
     if (bottom || first) list.scrollTop = list.scrollHeight;   // 맨 아래를 보고 있었으면 따라간다 — 위로 올려 읽는 중이면 그대로
+    syncJump(grew);
   }
+
+  /* ---------- 맨 아래로 단추(R50) ---------- */
+  function syncJump(grew) {
+    jumpSt = L.jump(jumpSt, {top: list.scrollTop, height: list.scrollHeight, client: list.clientHeight, grew: !!grew});
+    if (jumpBtn.hidden === jumpSt.show) jumpBtn.hidden = !jumpSt.show;
+    jumpDot.hidden = !jumpSt.unseen;
+    var t = jumpSt.unseen ? '최신 메시지로 — 새 메시지가 있어요' : '최신 메시지로';
+    if (jumpBtn.title !== t) { jumpBtn.title = t; jumpBtn.setAttribute('aria-label', t); }
+  }
+  list.addEventListener('scroll', function () { syncJump(false); }, {passive: true});
+  jumpBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (list.scrollTo) list.scrollTo({top: list.scrollHeight, behavior: calm ? 'auto' : 'smooth'}); else list.scrollTop = list.scrollHeight;
+  });
 
   function patch(rows) {                                 // 바뀐 줄만 새 요소로, 차례는 맞춘다(긴 기록에서 이벤트마다 전체를 다시 만들지 않게)
     var next = {}, tpl = document.createElement('template');
@@ -287,7 +323,7 @@ function mount(ctx) {
     document.dispatchEvent(new CustomEvent('hd-composer', {detail: d}));
     if (!d.done) warnOnce('composer', '대화창(view-chat)이 붙지 않아 입력창을 패널로 옮기지 못했어요');
   }
-  if (window.ResizeObserver) new ResizeObserver(function () { if (shown() !== shownNow) placeComposer(); }).observe(host);
+  if (window.ResizeObserver) new ResizeObserver(function () { if (shown() !== shownNow) placeComposer(); syncJump(false); }).observe(host);   // 칸 높이가 바뀌면 맨 아래인지 다시
   else warnOnce('ro', 'ResizeObserver 가 없어 입력창 자리를 1초마다 봐요');
   setTimeout(placeComposer, 0);                              // view-chat 이 붙은 뒤(등록 차례가 이 파일 다음)
 
