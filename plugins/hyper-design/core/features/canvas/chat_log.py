@@ -17,7 +17,8 @@ CAP = 500                                            # 남길 턴 수
 SLACK = 50                                           # 이만큼 넘치면 한 번에 옮긴다(덧붙일 때마다 다시 쓰지 않게)
 OPEN_MS = 10 * 60 * 1000                             # 마지막 턴이 '열림'인 시간(빌드 줄 붙이기)
 NOTES_MAX = 200
-CUT = {"text": 2000, "progress": 300, "reply": 51000, "reason": 300, "label": 120, "chip": 60}   # reply = 답 전체(R24 — 대화 패널이 다 보인다, 예전 1000) = 요약 칸(≤280) + 빈 줄 + detail(hd_model.DETAIL_MAX 50000, R26)
+FULL = 51000                                         # 대화 패널은 늘 전문(R24 · login#7) — 이 한도는 터무니없는 글만 막는다. reply = 요약 칸(≤280) + 빈 줄 + detail(hd_model.DETAIL_MAX 50000, R26)
+CUT = {"text": FULL, "progress": FULL, "reply": FULL, "reason": FULL, "label": 2000, "chip": 60}   # 예전 text 2000 · progress 300 · reason 300 · label 120 은 패널 글을 잘랐다. chip = 이름표(글 아님)
 CHIPS_MAX = 20
 KINDS = ("ask", "sent", "progress", "reply", "write", "built", "failed", "undone")
 

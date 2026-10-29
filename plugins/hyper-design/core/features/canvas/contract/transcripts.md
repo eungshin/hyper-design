@@ -3,7 +3,7 @@
 터미널 창을 오가지 않게: 고르거나 붙인 터미널(에이전트)에게 한 말과 그 답·도구 부르기를 캔버스 대화 패널(S3)이 시간 차례로 보인다. 여기는 서버 쪽 모양과 구조만. `../contract.md` 의 책임 게이트(오류 탐지 포함)를 따른다.
 
 ## 모양 (S3 가 그대로 그린다)
-- 줄 `entry = {id, role: 'user'|'assistant'|'tool', text, at}` — id 는 바뀌지 않는다(Claude = 줄 uuid + `:블록 번호`, uuid 가 없으면 `c<바이트 자리>:n` · Paseo = 항목 id, 없으면 시각·역할·글 해시). tool 의 text = 한 줄 요약(`Edit screens/home.html` · `Bash <설명>`). at = ISO-8601(모르면 `''`)
+- 줄 `entry = {id, role: 'user'|'assistant'|'tool', text, at}` — id 는 바뀌지 않는다(Claude = 줄 uuid + `:블록 번호`, uuid 가 없으면 `c<바이트 자리>:n` · Paseo = 항목 id, 없으면 시각·역할·글 해시). tool 의 text = 첫 줄 요약(`Edit screens/home.html` · `Bash <설명>`, `tool_summary` ≤120) + 아래 줄마다 부른 입력 전체(`이름: 값`, 여러 줄 값은 다음 줄부터 — `tool_text`, 대화 패널은 늘 전문 login#7). at = ISO-8601(모르면 `''`)
 - `read(since) → (entries, cursor)` — cursor 는 불투명 글. 같은 cursor 로 다시 부르면 새 줄만. since 없음 = 처음부터, `'end'` = 줄 없이 지금 끝
 - 이벤트 `agent.transcript {agent, entries}` — 펌프가 지켜보기 시작한 뒤 생긴 새 줄만(지난 기록은 HTTP)
 - `GET /api/agents/transcript?agent=<id>&since=<cursor>` → `{entries, cursor, source: 'claude'|'paseo'|'none', error?}` — 한 번에 100줄까지, 빈 목록이 올 때까지 이어 부르면 끝까지. 이벤트와 HTTP 가 겹칠 수 있다 — 받는 쪽은 id 로 한 번만 그린다
@@ -11,7 +11,7 @@
 ## 객체 (층 · 맡은 일 · 상태)
 | 파일 | 층 | 객체 | 맡은 일 | 상태 |
 |---|---|---|---|---|
-| `transcript_parse.py` | Model(순수) | `parse_claude` · `claude_entries` · `parse_paseo` · `tool_summary` · `cap` · 커서 글 | 형식마다 바이트·글 → entries. 덜 쓴 마지막 줄은 먹지 않음 · 깨진 줄 건너뜀 · 글 200000자(R24 — 답은 다 보인다, 예전 4000 이 긴 답을 잘랐다) · 도구 120자 · 100줄/번 | 없음 |
+| `transcript_parse.py` | Model(순수) | `parse_claude` · `claude_entries` · `parse_paseo` · `tool_summary` · `tool_text` · `cap` · 커서 글 | 형식마다 바이트·글 → entries. 덜 쓴 마지막 줄은 먹지 않음 · 깨진 줄 건너뜀 · 글 200000자(R24 — 답은 다 보인다, 예전 4000 이 긴 답을 잘랐다) · 도구 머리 줄 120자(줄 전체는 200000) · 100줄/번 | 없음 |
 | `transcripts.py` | Client 어댑터 | `TranscriptSource`(kind · every · read) · `ClaudeTranscript` · `PaseoTranscript` · `NoTranscript` · `source_for` · `REGISTRY` | 파일(지난 바이트 자리부터 1 MB 씩) · `paseo logs <id> --json`(읽기만, NO_WINDOW) | 찾은 파일 경로 하나 |
 | `transcript_pump.py` | Service | `TranscriptPump` · `pump_for(session)` | 지켜보는 에이전트마다 읽어 이벤트로 · HTTP 지난 기록 | 지켜보는 표(id → 소스·커서·마지막 오류) — 자물쇠 하나 |
 

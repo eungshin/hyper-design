@@ -47,7 +47,7 @@ out.states = {
 };
 n = 0;
 const fl = L.turns([r(1, 'failed', {reason: 'x'.repeat(300)})], T)[0];
-out.failLine = [fl.lines[0].tone, fl.lines[0].text.length < 200, fl.ask];
+out.failLine = [fl.lines[0].tone, fl.lines[0].text === '빌드 실패 — ' + 'x'.repeat(300), fl.ask];
 out.undoRunning = L.turns([r(1, 'sent', {via: 'event'}), r(1, 'write', {stamp: 'S'})], T + 50)[0].undoable;
 out.parse = [L.parse({seq: 3, records: [{seq: 1, at: 1, turn: 1, kind: 'ask'}, {seq: 'x'}, {seq: 2, at: 1, turn: 1, kind: 'zzz'}]}), L.parse({records: []}), L.parse(null)];
 out.merge = L.merge([{seq: 2, at: 1, turn: 1, kind: 'ask'}], [{seq: 1, at: 1, turn: 1, kind: 'sent'}, {seq: 2, at: 1, turn: 1, kind: 'ask', text: 'new'}]).map(x => x.seq + (x.text || ''));
@@ -87,9 +87,9 @@ def test_turn_lines_in_order(out):
     assert t["stamps"] == ["S2", "S1"] and t["undoable"], "되돌리기 = AI 쓰기 stamp, 새것 먼저"
 
 
-def test_turn_without_ask_uses_request_first_line(out):
+def test_turn_without_ask_uses_whole_request(out):
     t = out["t2"]
-    assert t["ask"]["text"] == "hyper-design 요청" and t["ask"]["fromRequest"]
+    assert t["ask"]["text"] == "# hyper-design 요청\n\n- 제목 바꾸기" and t["ask"]["fromRequest"], "요청문 전체(login#7 — 늘 전문)"
     assert t["lines"] == ["보냄 · 대기열 — 읽는 에이전트를 기다려요"] and t["state"] == "queued" and not t["undoable"]
     assert out["order"] == [1, 6], "오래된 턴이 위"
 
@@ -105,7 +105,7 @@ def test_turn_states(out):
 
 
 def test_failed_line_and_undo_rules(out):
-    assert out["failLine"] == ["red", True, None], "빨간 줄 · 이유는 짧게 · 요청 없는 시스템 턴"
+    assert out["failLine"] == ["red", True, None], "빨간 줄 · 이유 전체(login#7) · 요청 없는 시스템 턴"
     assert out["undoRunning"] is False, "작업 중인 턴은 되돌리지 않는다"
 
 

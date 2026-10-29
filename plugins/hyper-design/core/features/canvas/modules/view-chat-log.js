@@ -1,6 +1,6 @@
 /* View — 대화 패널(S3, 도크 패널 '대화' #pTalk): 요청 하나 = 턴 하나(오래된 것 위) — 내 요청 말풍선(글 + 칩) · 보냄 · 진행 줄(에이전트가 알린 터미널 출력) · 답 ·
    AI 반영 · 빌드 완료/실패(빨간 줄) · 끝 ✓ / 작업 중 회전. 규칙(턴·상태·줄·되돌릴 stamp·자동 스크롤·터미널 섞기)은 HD.chatLog(Model).
-   상태(주인 이 파일, 저장 안 함 — 진실은 서버 .hd-chat.jsonl): 받은 기록 records + 마지막 seq · 터미널 줄 entries + cursor + 받는 곳 · 펼친 도구 줄 · 이미 본 seq(맥박).
+   상태(주인 이 파일, 저장 안 함 — 진실은 서버 .hd-chat.jsonl): 받은 기록 records + 마지막 seq · 터미널 줄 entries + cursor + 받는 곳 · 이미 본 seq(맥박).
    읽기: GET /api/chat?since= — 처음 · 서버 이벤트(view-live 의 document 'hd-event': request.sent · agent.* · ai.write · build.* · notes.changed) 뒤 ·
      실시간이 없을 때를 위해 패널이 보이는 동안 4초마다. 남기기: 대화창 의도 'hd-chat-sent' {text, chips, screens, notes, agent} → POST /api/chat ask ·
      턴 되돌리기 성공 → POST /api/chat undone.
@@ -8,12 +8,12 @@
    [되돌리기](끝난 턴, AI 쓰기가 있을 때) = 48c 되살리기(POST /api/restore, HD.aiUndo.body/outcome) 를 stamp 마다 새것부터 — 거절되면 이유 토스트, 되살린 카드는 ctx.reload.
    입력창 자리(S3): 패널이 보이면(도크·떠 있는 창 어디든) 의도 'hd-composer' {host: 패널 아래 칸} → view-chat 이 같은 #hdchat 을 그리로 옮긴다, 안 보이면 {host:null} = 판 아래로.
    터미널 대화(S3b 계약): 받는 곳(window.__hdAgent)이 있으면 GET /api/agents/transcript?agent=&since=<cursor> + 이벤트 agent.transcript — 턴과 시간 차례로 섞는다.
-     user = '터미널에서' 오른쪽 말풍선 · assistant = 에이전트 답 · tool = 회색 한 줄 '도구 · …'(누르면 펼침). 같은 요청은 한 번(HD.chatLog.echo). 없음·못 읽음 = 조용한 한 줄.
-   답 전체(R24): 답 줄·터미널 답은 다 그린다 — 줄바꿈 그대로, ``` 덩이 = 고정폭 <pre>(가로 스크롤), `인라인` = <code>(나누기는 HD.chatLog.blocks/spans).
-     글은 골라 복사할 수 있고(도크의 user-select:none 을 목록만 풀어 줌 · 글을 고르는 중이면 턴 누르기를 하지 않음), 답마다 [복사](올리면 보임). 도구 줄은 한 줄 요약 · 누르면 펼침.
+     user = '터미널에서' 오른쪽 말풍선 · assistant = 에이전트 답 · tool = 회색 머리 줄 '도구 · <첫 줄>' + 아래 부른 입력 전체(늘 펼침). 같은 요청은 한 번(HD.chatLog.echo). 없음·못 읽음 = 조용한 한 줄.
+   늘 전문(R24 · login#7): 말풍선·진행·답·실패 이유·터미널 줄을 다 그린다 — 접기·펼치기 단추 없음, 줄바꿈 그대로, 긴 낱말·경로는 줄 안에서 꺾고
+     ``` 덩이 = 고정폭 <pre>(가로 스크롤), `인라인` = <code>(나누기는 HD.chatLog.blocks/spans).
+     글은 골라 복사할 수 있고(도크의 user-select:none 을 목록만 풀어 줌 · 글을 고르는 중이면 턴 누르기를 하지 않음), 답마다 [복사](올리면 보임).
      다시 그리기는 줄마다(턴·터미널 줄 key) 바뀐 것만 새로 만들고 나머지 요소는 그대로 둔다 — 긴 기록에서도 이벤트마다 목록 전체를 다시 만들지 않는다.
-   메모의 답 설명: 답 기록에 detail 이 없고 메모(note)를 이름 대면 그 메모의 같은 답 detail 을 답 줄 아래에 그린다(ctx.notes.find — 읽기만, 고르는 규칙 HD.chatLog.memoDetail).
-     HD.chatLog.FOLD 줄을 넘으면 앞부분만 + [전체 보기](제자리에서 펼침, 다시 누르면 [접기] — 단추라 키보드로도). 펼친 답(저장 안 함)은 이 파일 상태.
+   메모의 답 설명: 답 기록에 detail 이 없고 메모(note)를 이름 대면 그 메모의 같은 답 detail 을 답 줄 아래에 전체를 그린다(ctx.notes.find — 읽기만, 고르는 규칙 HD.chatLog.memoDetail).
    움직임(FINDINGS §8): 새 줄 맥박 600ms · 패널 나타남 spring-fade 400ms · 진행 회전 1s — 움직임 줄이기면 모두 끔.
    HD.feature('chatLog', {needs: ['$', 'toast', 'esc', 'api', 'reload', 'cardEl', 'notes']}) → {refresh(), records(), shown()} */
 (function () {
@@ -33,14 +33,14 @@ var CSS =
   '#pTalk .tk-foot:empty{display:none}' +
   '#pTalk.tk-in{animation:tkIn .4s cubic-bezier(0.34,0.88,0.34,1)}' +
   '@keyframes tkIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}' +
-  '#pTalk .tk-turn{display:flex;flex-direction:column;gap:6px;border-radius:10px;padding:2px;cursor:pointer;outline:none}' +
+  '#pTalk .tk-turn{display:flex;flex-direction:column;gap:6px;min-width:0;border-radius:10px;padding:2px;cursor:pointer;outline:none}' +
   '#pTalk .tk-turn:hover .tk-lines,#pTalk .tk-turn:focus-visible .tk-lines{background:#F6F6F3}' +
-  '#pTalk .tk-ask{align-self:flex-end;max-width:88%;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-primary,#2b2b29);border-radius:14px 14px 4px 14px;padding:7px 11px;font-size:13px;line-height:18px;white-space:pre-wrap;word-break:break-word}' +
+  '#pTalk .tk-ask{align-self:flex-end;max-width:88%;background:var(--ui-badge-soft,#E4E4DF);color:var(--ui-primary,#2b2b29);border-radius:14px 14px 4px 14px;padding:7px 11px;font-size:13px;line-height:18px;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-width:0}' +
   '#pTalk .tk-ask.req{background:#F2F2EF;color:#6b6b66}' +
   '#pTalk .tk-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}' +
-  '#pTalk .tk-chip{font-size:11px;font-weight:600;line-height:18px;padding:0 7px;border-radius:999px;background:#fff;color:#3a3a37;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+  '#pTalk .tk-chip{font-size:11px;font-weight:600;line-height:18px;padding:0 7px;border-radius:999px;background:#fff;color:#3a3a37;max-width:100%;overflow-wrap:anywhere;white-space:normal}' +
   '#pTalk .tk-lines{list-style:none;margin:0;padding:4px 6px;border-radius:8px;display:flex;flex-direction:column;gap:3px}' +
-  '#pTalk .tk-l{position:relative;padding-left:14px;font-size:12px;line-height:17px;color:#5f5f5a;word-break:break-word}' +
+  '#pTalk .tk-l{position:relative;padding-left:14px;font-size:12px;line-height:17px;color:#5f5f5a;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-width:0}' +
   '#pTalk .tk-l::before{content:"";position:absolute;left:3px;top:6px;width:5px;height:5px;border-radius:50%;background:#c4c4bf}' +
   '#pTalk .tk-l[data-kind="reply"]{padding-left:0;font-size:13px;line-height:19px;color:var(--ui-primary,#2b2b29);white-space:pre-wrap}' +
   '#pTalk .tk-l[data-kind="reply"]::before{display:none}' +
@@ -56,14 +56,14 @@ var CSS =
   '@keyframes tkSpin{to{transform:rotate(360deg)}}' +
   '#pTalk .tk-undo{margin-left:auto;border:1px solid var(--ui-line,#ddd);background:#fff;border-radius:6px;padding:1px 8px;font:500 11.5px system-ui,sans-serif;color:#3a3a37;cursor:pointer}' +
   '#pTalk .tk-undo:hover{background:#F2F2EF}#pTalk .tk-undo:disabled{opacity:.5;cursor:default}' +
-  '#pTalk .tk-term{display:flex;flex-direction:column;gap:3px}' +
+  '#pTalk .tk-term{display:flex;flex-direction:column;gap:3px;min-width:0}' +
   '#pTalk .tk-term[data-role="user"]{align-self:flex-end;max-width:88%;align-items:flex-end}' +
   '#pTalk .tk-term .tk-who{font-size:10.5px;color:var(--ui-muted,#8a8a85)}' +
   '#pTalk .tk-term[data-role="user"] .tk-tx{background:#F2F2EF;border-radius:14px 14px 4px 14px;padding:6px 10px}' +
-  '#pTalk .tk-tx{font-size:13px;line-height:19px;white-space:pre-wrap;word-break:break-word;color:var(--ui-primary,#2b2b29)}' +
-  '#pTalk details.tk-tool{font-size:11.5px;color:#7a7a75}#pTalk details.tk-tool summary{cursor:pointer;list-style:none;padding-left:14px;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-  '#pTalk details.tk-tool summary::before{content:"\\203A";position:absolute;left:3px}#pTalk details.tk-tool[open] summary::before{content:"\\2304"}' +
-  '#pTalk details.tk-tool pre{margin:4px 0 0 14px;padding:6px 8px;background:#F6F6F3;border-radius:6px;font:11px/15px ui-monospace,Menlo,monospace;white-space:pre-wrap;max-height:160px;overflow:auto}' +
+  '#pTalk .tk-tx{font-size:13px;line-height:19px;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-width:0;color:var(--ui-primary,#2b2b29)}' +
+  '#pTalk .tk-tool{font-size:11.5px;color:#7a7a75;min-width:0}#pTalk .tk-tool-h{display:block;padding-left:14px;position:relative;white-space:pre-wrap;overflow-wrap:anywhere}' +
+  '#pTalk .tk-tool-h::before{content:"\\203A";position:absolute;left:3px}' +
+  '#pTalk .tk-tool pre{margin:4px 0 0 14px;padding:6px 8px;background:#F6F6F3;border-radius:6px;font:11px/15px ui-monospace,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}' +
   '#pTalk .tk-md{position:relative;white-space:normal}#pTalk .tk-md .tk-p{white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere}#pTalk .tk-md .tk-p+.tk-p,#pTalk .tk-md .tk-p+pre,#pTalk .tk-md pre+.tk-p{margin-top:6px}' +
   '#pTalk .tk-md code{font:12px/17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#EFEFEB;border-radius:4px;padding:0 3px}' +
   '#pTalk .tk-md pre.tk-code{margin:6px 0 0;padding:8px 10px;background:#F4F4F0;border:1px solid #E6E6E1;border-radius:8px;font:12px/17px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow-x:auto;scrollbar-width:thin;color:#2b2b29;tab-size:2}' +
@@ -71,8 +71,6 @@ var CSS =
   '#pTalk .tk-copy{display:block;margin:4px 0 0 auto;padding:1px 7px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#6b6b66;font:500 11px system-ui,sans-serif;cursor:pointer;opacity:0;transition:opacity .12s;-webkit-user-select:none;user-select:none}' +
   '#pTalk .tk-copy:focus-visible,#pTalk .tk-term:hover .tk-copy,#pTalk .tk-l:hover .tk-copy{opacity:1}#pTalk .tk-copy:hover{background:#F2F2EF;color:#2b2b29}' +
   '#pTalk .tk-detail{margin-top:6px}' +
-  '#pTalk .tk-more{display:inline-block;margin-top:4px;padding:1px 8px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#3a3a37;font:500 11.5px system-ui,sans-serif;cursor:pointer;-webkit-user-select:none;user-select:none}' +
-  '#pTalk .tk-more:hover{background:#F2F2EF}#pTalk .tk-more:focus-visible{outline:2px solid var(--ui-primary,#2b2b29);outline-offset:1px}' +
   '#pTalk .tk-quiet{font-size:11.5px;color:var(--ui-muted,#8a8a85);text-align:center}' +
   '#pTalk .tk-new{animation:tkPulse .6s ease-out;transform-origin:left center}' +
   '@keyframes tkPulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}' +
@@ -86,8 +84,8 @@ function mount(ctx) {
   host.innerHTML = '<ol class="tk-list" aria-label="대화"></ol><div class="tk-foot"></div>';
   var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot');
   var on = !!(ctx.api && ctx.api.on), records = [], seq = null, seen = null, sig = null, warned = {};
-  var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, openTools = {}, undoing = {};
-  var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {}, opened = {};   // opened = 펼친 메모 설명(답 seq)
+  var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, undoing = {};
+  var fetching = false, again = false, tick = 0, shownNow = false, nodes = {}, copies = {};
   function noteOf(id) { var n = ctx.notes.find(id); return n || null; }
 
   function warnOnce(k, m) { if (warned[k]) return; warned[k] = 1; console.warn('[hd] 대화 패널: ' + m); }
@@ -109,11 +107,10 @@ function mount(ctx) {
     return '<li class="tk-turn" data-turn="' + t.id + '" data-state="' + t.state + '" tabindex="0" title="누르면 이 요청이 닿은 화면으로">' + ask + lines +
       '<div class="tk-st"><span class="tk-ic" aria-hidden="true">' + ic + '</span><span class="tk-say">' + ctx.esc(say) + '</span>' + undo + '</div></li>';
   }
-  function withDetail(l) {                               // 답 줄 + 메모의 설명(detail) — 길면 앞 FOLD 줄 + [전체 보기]/[접기]
-    var f = L.fold(l.detail), open = !!opened[l.seq], key = 'r' + l.seq;
+  function withDetail(l) {                               // 답 줄 + 메모의 설명(detail) 전체 — 접지 않는다(login#7)
+    var key = 'r' + l.seq;
     copies[key] = l.text + '\n\n' + l.detail;
-    return md(l.text) + '<div class="tk-detail' + (f.fold && !open ? ' folded' : '') + '" data-detail="' + l.seq + '">' + md(f.fold && !open ? f.head : l.detail) +
-      (f.fold ? '<button type="button" class="tk-more" data-more="' + l.seq + '" aria-expanded="' + open + '">' + (open ? '접기' : '전체 보기 (' + f.lines + '줄)') + '</button>' : '') +
+    return md(l.text) + '<div class="tk-detail" data-detail="' + l.seq + '">' + md(l.detail) +
       '</div><button type="button" class="tk-copy" data-copy="' + key + '" title="이 답을 복사">복사</button>';
   }
   function rich(text, key) {                             // 답 글 → html(R24): 글 덩이 = 줄바꿈 그대로 · ``` = <pre> · `인라인` = <code> · [복사]
@@ -128,15 +125,18 @@ function mount(ctx) {
   }
   function termHtml(e, fresh) {
     var v = L.entryView(e), nw = fresh ? ' tk-new' : '';
-    if (v.role === 'tool') return '<li class="tk-term' + nw + '" data-role="tool" data-id="' + ctx.esc(e.id) + '"><details class="tk-tool"' + (openTools[e.id] ? ' open' : '') +
-      '><summary>' + ctx.esc(v.label) + '</summary><pre>' + ctx.esc(v.text) + '</pre></details></li>';
+    if (v.role === 'tool') {                              // 도구 줄 = 머리 줄 + 부른 입력 전체(늘 펼침, login#7)
+      var rest = v.text.split('\n').slice(1).join('\n');
+      return '<li class="tk-term' + nw + '" data-role="tool" data-id="' + ctx.esc(e.id) + '"><div class="tk-tool"><span class="tk-tool-h">' + ctx.esc(v.label) + '</span>' +
+        (rest.trim() ? '<pre>' + ctx.esc(rest) + '</pre>' : '') + '</div></li>';
+    }
     return '<li class="tk-term' + nw + '" data-role="' + v.role + '" data-id="' + ctx.esc(e.id) + '">' + (v.label ? '<span class="tk-who">' + ctx.esc(v.label) + '</span>' : '') +
       (v.role === 'assistant' ? '<div class="tk-tx tk-md">' + rich(v.text, 'e' + e.id) + '</div></li>' : '<div class="tk-tx">' + ctx.esc(v.text) + '</div></li>');
   }
   function render(force) {
     var ts = L.turns(records, Date.now(), {note: noteOf}), ents = L.echo(term.entries, ts);
     var s = JSON.stringify([records.length && records[records.length - 1].seq, ts.map(function (t) { return t.state + (undoing[t.id] ? 'u' : '') +
-      t.lines.map(function (l) { return l.detail ? '|' + l.seq + ':' + l.detail.length + (opened[l.seq] ? 'o' : '') : ''; }).join(''); }), ents.map(function (e) { return e.id; }), term.failed, term.source, on]);
+      t.lines.map(function (l) { return l.detail ? '|' + l.seq + ':' + l.detail.length : ''; }).join(''); }), ents.map(function (e) { return e.id; }), term.failed, term.source, on]);
     if (s === sig && !force) return;
     sig = s;
     var bottom = L.stick(list.scrollTop, list.scrollHeight, list.clientHeight);
@@ -245,18 +245,8 @@ function mount(ctx) {
   list.addEventListener('click', function (e) {
     var cp = e.target.closest('.tk-copy');
     if (cp) { e.stopPropagation(); var tx = copies[cp.dataset.copy]; if (typeof tx === 'string') copy(tx); return; }
-    var mo = e.target.closest('.tk-more');
-    if (mo) {                                             // 메모 설명 펼치기·접기 — 제자리, 다시 그린 뒤 같은 단추에 초점(키보드)
-      e.stopPropagation(); var q = mo.dataset.more;
-      if (opened[q]) delete opened[q]; else opened[q] = 1;
-      render(true);
-      var nb = list.querySelector('.tk-more[data-more="' + q + '"]'); if (nb) nb.focus();
-      return;
-    }
     var sl = window.getSelection && window.getSelection();
     if (sl && !sl.isCollapsed && String(sl).trim() && list.contains(sl.anchorNode)) return;   // 글을 골라 복사하는 중 = 턴 누르기 아님
-    var d = e.target.closest('details.tk-tool');
-    if (d) { var li = d.closest('.tk-term'); setTimeout(function () { if (li) openTools[li.dataset.id] = d.open; }, 0); return; }
     var li2 = e.target.closest('.tk-turn'); if (!li2) return;
     var t = turnOf(+li2.dataset.turn); if (!t) return;
     if (e.target.closest('.tk-undo')) { e.stopPropagation(); undo(t); return; }

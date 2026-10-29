@@ -180,7 +180,7 @@ DETAIL30 = "\n".join("설명 %d번째 줄 — 메모에만 있는 상세" % i fo
 
 
 @pytest.mark.area("chat", "dock")
-def test_old_reply_record_shows_memo_detail_folded_then_whole(served, ctx):
+def test_old_reply_record_shows_whole_memo_detail(served, ctx):
     import json
     out, srv = served
     now = int(time.time() * 1000)
@@ -198,25 +198,15 @@ def test_old_reply_record_shows_memo_detail_folded_then_whole(served, ctx):
     try:
         pg.wait_for_selector("#pTalk .tk-l[data-kind='reply']", timeout=15000)
         pg.wait_for_timeout(600)
-        shot(pg, os.environ.get("HD_DETAIL_SHOT", "chat-detail-folded.png"))
-        pg.wait_for_selector("#pTalk .tk-detail .tk-more", timeout=8000)
+        pg.wait_for_selector("#pTalk .tk-detail", timeout=8000)
         rt = pg.inner_text("#pTalk .tk-l[data-kind='reply']")
-        assert rt.startswith("요약용 추가 토큰은 없습니다(상세 참고).") and "설명 1번째 줄" in rt and "설명 12번째 줄" in rt, "답 줄 아래 메모 설명 앞부분"
-        assert "설명 13번째 줄" not in rt and "설명 30번째 줄" not in rt, "12줄 넘으면 접힘"
+        assert rt.startswith("요약용 추가 토큰은 없습니다(상세 참고).") and "설명 1번째 줄" in rt and "설명 30번째 줄" in rt, "답 줄 아래 메모 설명 전체(login#7)"
+        assert "\n설명 2번째 줄" in rt, "줄바꿈 그대로"
         assert rt.count("요약용 추가 토큰은 없습니다") == 1
-        more = pg.locator("#pTalk .tk-more")
-        assert more.inner_text().startswith("전체 보기") and more.get_attribute("aria-expanded") == "false"
-        more.click()
-        pg.wait_for_function("document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').innerText.includes('설명 30번째 줄')", timeout=5000)
-        rt = pg.inner_text("#pTalk .tk-l[data-kind='reply']")
-        assert "설명 13번째 줄" in rt and "\n설명 2번째 줄" in rt, "펼치면 전체 · 줄바꿈 그대로"
-        b = pg.locator("#pTalk .tk-more")
-        assert b.inner_text() == "접기" and b.get_attribute("aria-expanded") == "true"
-        assert pg.evaluate("document.activeElement && document.activeElement.classList.contains('tk-more')"), "다시 그려도 단추에 초점(키보드)"
+        assert pg.locator("#pTalk .tk-more").count() == 0, "펼치기 단추 없음 — 늘 전문"
+        assert pg.evaluate("(() => { const l = document.querySelector('#pTalk .tk-list'); return l.scrollWidth <= l.clientWidth + 1; })()"), "가로로 넘치지 않는다"
         pg.evaluate("document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').scrollIntoView({block: 'start'})")
-        shot(pg, "chat-detail-expanded.png")
-        pg.keyboard.press("Enter")                       # 키보드로 다시 접기
-        pg.wait_for_function("!document.querySelector('#pTalk .tk-l[data-kind=\"reply\"]').innerText.includes('설명 30번째 줄')", timeout=5000)
+        shot(pg, os.environ.get("HD_DETAIL_SHOT", "chat-detail-whole.png"))
         assert not errors, errors
     finally:
         pg.close()
