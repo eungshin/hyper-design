@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>hyper-design</title>
 <!-- 캔버스 템플릿(정적). build_canvas.py 가 아래 hd-data 에 데이터만 끼워 넣는다. 외부 라이브러리 없음. -->
-<link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'">
+<link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'" onerror="this.media='all'"><!-- onerror: 바깥 글꼴 @import 실패(인터넷 없음)에도 테마 색은 켠다 -->
 <style>
 /* hd-shell */
 /* hd-motion */

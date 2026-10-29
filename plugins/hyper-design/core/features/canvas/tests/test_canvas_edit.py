@@ -2407,6 +2407,7 @@ def test_theme_panel_switch_copy_edit_contrast_delete(dpage):
     errs = []
     dpage.on("pageerror", lambda e: errs.append(str(e)))
     dpage.keyboard.press("Escape")
+    assert dpage.evaluate("document.getElementById('tokens').media") == "all",         "테마 CSS 는 바깥 글꼴(@import)을 못 받아도 켜진다(인터넷 없음 — 테스트 브라우저는 글꼴 주소를 늘 실패시킨다)"
     assert dpage.locator("header .dot").count() == 0, "위쪽 줄 색 팔레트는 없다(H10)"
     assert dpage.locator('#dock .dk-tab[data-p="theme"]').count() == 0, "테마 패널은 기본으로 닫힘"
     dpage.click("#wbtn"); dpage.click('#wmenu [data-w="theme"]'); dpage.keyboard.press("Escape")
