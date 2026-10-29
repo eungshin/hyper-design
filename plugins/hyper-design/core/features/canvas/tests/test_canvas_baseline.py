@@ -147,14 +147,14 @@ def test_p_picks_only_inside_modal(bpage):
     bpage.keyboard.press("p")
     bpage.wait_for_timeout(80)
     assert not modal_open(bpage)
-    assert bpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true", "판에서 P = 주석 도구 고르기(재작업 S4) — 크게 보기는 열지 않는다"
+    assert bpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") == "true", "판에서 P = 메모 칸(요소 모드) 고르기(재작업 S4) — 크게 보기는 열지 않는다"
     bpage.keyboard.press("h")
     c = cover_center(bpage)
     bpage.mouse.dblclick(c["x"], c["y"])
     bpage.wait_for_function("!document.getElementById('modal').hidden")
     bpage.keyboard.press("p")
     bpage.wait_for_timeout(80)
-    assert bpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    assert bpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") == "true"
     bpage.keyboard.press("Escape")
     bpage.wait_for_timeout(120)
     if modal_open(bpage):
@@ -184,7 +184,7 @@ def test_notes_roundtrip_same_key(bpage):
     from test_canvas_v2 import open_screen
     sid = bpage.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(bpage, sid)
-    bpage.click('#tools [data-tool="annotate"]')
+    bpage.keyboard.press("p")                                # 크게 보기 요소 메모 = 메모 칸 요소 모드(P, 2026-10-29 한 칸)
     bpage.wait_for_timeout(150)
     fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first.click()
     bpage.wait_for_selector("#pop:not([hidden])")

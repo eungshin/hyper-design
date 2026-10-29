@@ -27,7 +27,7 @@ def seed_notes(pg, n):
     """메모 하나를 화면에서 만들고(키를 얻으려고) 그 키에 메모 n개를 채운 뒤 새로고침."""
     sid = pg.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(pg, sid)
-    pg.click('#tools [data-tool="annotate"]')
+    pg.keyboard.press("p")                                   # 크게 보기 요소 메모 = 메모 칸 요소 모드(P, 2026-10-29 한 칸)
     pg.wait_for_timeout(150)
     fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first.click()
     pg.wait_for_selector("#pop:not([hidden])")
@@ -556,7 +556,7 @@ def test_context_menu_by_target(epage):
     epage.mouse.click(c["x"], c["y"], button="right")
     pick(epage, "크게 보기")
     epage.wait_for_function("!document.getElementById('modal').hidden")
-    assert epage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true", "메뉴의 크게 보기 = ▶ 보기와 같다(주석은 왼쪽 도구)"
+    assert epage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") != "true", "메뉴의 크게 보기 = ▶ 보기와 같다(메모는 왼쪽 메모 칸)"
     epage.keyboard.press("Escape")
     epage.wait_for_timeout(150)
     if epage.evaluate("!document.getElementById('modal').hidden"):
@@ -1078,7 +1078,7 @@ def confirm_new(pg):
 @pytest.mark.area("tools")
 def test_toolbar_has_add_group(dpage):
     tools = dpage.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => b.dataset.tool)")
-    assert tools == ["hand", "move", "trigger", "knife", "annotate", "text", "layout", "memo"], tools
+    assert tools == ["hand", "move", "trigger", "knife", "memo", "text", "layout"], ("메모는 말풍선 한 칸(요소 P · 화면 M, 2026-10-29)", tools)
     assert dpage.evaluate("document.querySelectorAll('#tools hr').length") >= 2, "도구 / 추가 / 보기 세 묶음"
 
 
@@ -1241,7 +1241,7 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     assert "보기" in pres.text_content() and dpage.locator(".anno").count() == 0, "검정 [주석] 버튼은 없어졌다"
     pres.click()
     dpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true", "보기는 주석 달기를 켜지 않는다"
+    assert dpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") != "true", "보기는 메모(요소 고르기)를 켜지 않는다"
     fr = dpage.frame_locator("#mframe")
     fr.locator("h1").wait_for()
     dpage.wait_for_timeout(300)
@@ -1263,12 +1263,12 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
 
 @pytest.mark.area("tools", "notes")
 def test_annotate_tool_notes_an_element_on_the_board(dpage):
-    """S4: 주석 도구(P) — 크게 보기 없이 판 위 카드 안 요소를 누르면 그 요소에 메모."""
+    """S4: 메모 도구 요소 모드(P) — 크게 보기 없이 판 위 카드 안 요소를 누르면 그 요소에 메모."""
     fit_view(dpage)
     ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
     fr = frame_of(dpage, "job")
     dpage.keyboard.press("p")
-    assert tool(dpage) == ["annotate"]
+    assert tool(dpage) == ["memo"] and dpage.get_attribute('#tools [data-tool="memo"]', "data-mode") == "el", "P = 메모 칸 · 요소 모드"
     n0 = len(notes_of(dpage))
     x, y = el_point(dpage, ph, fr, "h1")
     dpage.mouse.click(x, y)
@@ -1531,10 +1531,14 @@ def test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards(dpage):
 
 
 @pytest.mark.area("tools")
-def test_memo_and_annotate_tooltips_say_whole_screen_vs_one_element(dpage):
-    """재검증 C6: 메모(M) = 화면 전체, 주석(P) = 요소 하나 — 툴팁 첫 줄에서 바로 구분."""
-    tips = dpage.evaluate("Object.fromEntries([...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.dataset.tip.split('|')[0]]))")
-    assert "화면 전체" in tips["memo"] and "요소" in tips["annotate"], tips
+def test_memo_tooltips_say_whole_screen_vs_one_element(dpage):
+    """재검증 C6: 화면 전체(M)인지 요소 하나(P)인지 툴팁 첫 줄에서 바로 구분 — 2026-10-29 부터 한 칸이라 첫 줄이 지금 모드를 말한다."""
+    tip = lambda: dpage.get_attribute('#tools [data-tool="memo"]', "data-tip").split("|")[0]
+    dpage.keyboard.press("m")
+    assert "화면 전체" in tip(), tip()
+    dpage.keyboard.press("p")
+    assert "요소" in tip() and "화면 전체" not in tip(), tip()
+    dpage.keyboard.press("h")
 
 
 @pytest.mark.area("tools", "links")
@@ -2355,15 +2359,18 @@ def test_modal_keeps_tools_annotate_is_a_tool_and_selbar_icons(dpage):
     assert dpage.locator("#mpick").count() == 0, "화면 위 [주석 달기] 버튼은 없다(G6)"
     assert dpage.is_visible("#tools"), "크게 보기에서도 도구 막대(G5)"
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}
-    assert all(t[k][1] != "true" for k in ("hand", "move", "annotate", "text")), t
-    assert all(t[k][1] == "true" for k in ("trigger", "knife", "layout", "memo")), t
-    assert all(dpage.is_hidden(f'#tools [data-tool="{k}"]') for k in ("trigger", "knife", "layout", "memo")), "크게 보기에서 못 쓰는 도구는 숨김(R27 F16)"
-    dpage.click('#tools [data-tool="annotate"]')
-    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    assert all(t[k][1] != "true" for k in ("hand", "move", "memo", "text")), t
+    assert all(t[k][1] == "true" for k in ("trigger", "knife", "layout")), t
+    assert all(dpage.is_hidden(f'#tools [data-tool="{k}"]') for k in ("trigger", "knife", "layout")), "크게 보기에서 못 쓰는 도구는 숨김(R27 F16)"
+    dpage.keyboard.press("p")                                # 메모 칸을 요소 모드로(같은 칸 단추 = 마지막 모드)
+    dpage.keyboard.press("p")
+    assert dpage.get_attribute('#tools [data-tool="hand"]', "aria-pressed") == "true"
+    dpage.click('#tools [data-tool="memo"]')
+    assert dpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") == "true"
     dpage.keyboard.press("p")
     assert dpage.get_attribute('#tools [data-tool="hand"]', "aria-pressed") == "true", "P 로 끄면 손(눌러 보기)"
     dpage.keyboard.press("p")
-    assert dpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    assert dpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") == "true"
     dpage.keyboard.press("Escape")
     dpage.wait_for_function("document.getElementById('modal').hidden")
     t = {k: (p, d) for k, p, d in dpage.evaluate(TOOLS_JS)}

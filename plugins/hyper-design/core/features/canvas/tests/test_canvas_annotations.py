@@ -418,6 +418,103 @@ def test_memo_panel_groups_rows_under_screen_title(apage):
     assert abs((eb["y"] + eb["height"] / 2) - (nb["y"] + nb["height"] / 2)) < 6, "연필·휴지통은 메타 줄 끝(메모 묶음과 같이)"
 
 
+# ---------------------------------------------------------------- 메모 도구 한 칸·두 모드(2026-10-29 브리프)
+MEMO_SHOTS = Path(tempfile.gettempdir()) / "claude" / "memo-tool-shots"
+MEMO_BTN = '#tools [data-tool="memo"]'
+
+
+def _hover_label(pg, sel):
+    pg.wait_for_function(f"(() => {{ const b = document.querySelector('{sel}'); return b && b.dataset.label; }})()", timeout=3000)
+    return pg.get_attribute(sel, "data-label")
+
+
+@pytest.mark.area("tools", "notes")
+def test_memo_tool_is_one_slot_with_two_modes(apage):
+    """메모 = 말풍선 한 칸: P = 요소 모드 · M = 화면 모드 — 귀퉁이 글·키·꼬리말 첫 줄이 지금 모드를 말하고, 같은 칸 단추 = 마지막 모드."""
+    pg = apage
+    fit_view(pg)
+    assert pg.locator('#tools [data-tool="annotate"]').count() == 0 and pg.locator(MEMO_BTN).count() == 1
+    pg.keyboard.press("m")
+    assert pg.get_attribute(MEMO_BTN, "aria-pressed") == "true"
+    assert pg.text_content(MEMO_BTN + " .tmode") == "화면" and pg.get_attribute(MEMO_BTN, "data-key") == "M"
+    assert pg.get_attribute(MEMO_BTN, "data-tip").startswith("메모 · 화면 전체|")
+    pg.keyboard.press("p")
+    assert pg.text_content(MEMO_BTN + " .tmode") == "요소" and pg.get_attribute(MEMO_BTN, "aria-label") == "메모 · 요소 (P)"
+    pg.keyboard.press("m"); pg.keyboard.press("h")
+    pg.click(MEMO_BTN)
+    assert pg.get_attribute(MEMO_BTN, "aria-pressed") == "true" and pg.text_content(MEMO_BTN + " .tmode") == "화면", "단추 = 마지막 모드"
+    pg.hover(MEMO_BTN)
+    pg.wait_for_selector("#ttip:not([hidden])")
+    assert "메모 · 화면 전체" in pg.text_content("#ttip") and "Shift" in pg.text_content("#ttip")
+    MEMO_SHOTS.mkdir(parents=True, exist_ok=True)
+    pg.locator("#tools").screenshot(path=str(MEMO_SHOTS / "toolbar-memo-slot.png"))
+    pg.mouse.move(600, 400)
+    pg.keyboard.press("h")
+
+
+@pytest.mark.area("tools", "notes")
+def test_memo_hover_shows_target_before_click(apage):
+    """누르기 전 미리 보이기: 요소 모드 = 그 요소 테두리 + '<종류> · 요소' · 화면 모드 = 카드 전체 테두리 + '<화면 이름> · 화면 전체' ·
+    요소 모드여도 카드 제목 줄 위 = 화면 전체."""
+    pg = apage
+    fit_view(pg)
+    ph = zoom_to(pg, "pay", 420)
+    fr = frame_of(pg, "pay")
+    MEMO_SHOTS.mkdir(parents=True, exist_ok=True)
+    pg.keyboard.press("p")
+    pg.mouse.move(*el_point(pg, ph, fr, "button.pay"))
+    assert _hover_label(pg, ".elbox:not(.sel):not(.par)") == "버튼 · 요소"
+    assert pg.locator(".elbox.scr").count() == 0
+    pg.screenshot(path=str(MEMO_SHOTS / "hover-element.png"))
+    tb = pg.locator('.card[data-id="pay"] .ftitle').bounding_box()
+    pg.mouse.move(tb["x"] + 10, tb["y"] + tb["height"] / 2)
+    assert _hover_label(pg, '.card[data-id="pay"] .elbox.scr') == "결제 · 화면 전체", "제목 줄 = 늘 화면 전체"
+    pg.keyboard.press("m")
+    pg.mouse.move(*el_point(pg, ph, fr, "p.lead"))
+    assert _hover_label(pg, '.card[data-id="pay"] .elbox.scr') == "결제 · 화면 전체"
+    pg.wait_for_timeout(250)                                 # 늦게 온 요소 답이 화면 테두리를 덮지 않는다
+    assert pg.locator('.card[data-id="pay"] .elbox:not(.scr):not(.sel):not(.par)').count() == 0
+    cb = pg.locator('.card[data-id="pay"]').bounding_box(); sb = pg.locator('.card[data-id="pay"] .elbox.scr').bounding_box()
+    assert sb["x"] <= cb["x"] and sb["y"] <= cb["y"] and sb["x"] + sb["width"] >= cb["x"] + cb["width"], ("카드 전체 테두리", cb, sb)
+    pg.screenshot(path=str(MEMO_SHOTS / "hover-screen.png"))
+    pg.mouse.move(5, 300)
+    pg.keyboard.press("h")
+    assert pg.locator(".elbox.scr").count() == 0, "판 밖·도구 바꾸면 걷힌다"
+
+
+@pytest.mark.area("tools", "notes")
+def test_memo_click_title_is_whole_screen_and_shift_adds_screens(apage):
+    """경계 = 늘 화면 전체(요소 모드에서 카드 제목을 눌러도) · 화면 모드 Shift+클릭 = 고른 화면 더하기·빼기(memo-batch), 쓰던 글 그대로."""
+    pg = apage
+    fit_view(pg)
+    pg.keyboard.press("p")
+    pg.click('.card[data-id="pay"] .ftitle')
+    pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+    assert pg.text_content("#ptitle") == "결제 — 화면 전체", pg.text_content("#ptitle")
+    assert pg.get_attribute('#pscope button[aria-pressed="true"]', "data-scope") == "screen"
+    pg.keyboard.press("Escape")
+    pg.wait_for_selector("#pop", state="hidden")
+    pg.keyboard.press("m")
+    cover = lambda sid: pg.locator(f'.card[data-id="{sid}"] .phone').bounding_box()
+    c = cover("pay"); pg.mouse.click(c["x"] + c["width"] / 2, c["y"] + c["height"] / 2)
+    pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+    assert pg.text_content("#ptitle") == "결제 — 화면 전체"
+    pg.fill("#pnote", "두 화면 모두")
+    d = cover("done")
+    pg.keyboard.down("Shift"); pg.mouse.click(d["x"] + d["width"] / 2, d["y"] + d["height"] / 2); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.getElementById('ptitle').textContent.startsWith('고른 화면 2개')", timeout=3000)
+    assert pg.input_value("#pnote") == "두 화면 모두" and pg.locator(".card.sel").count() == 0, "쓰던 글 그대로 · 카드 고르기로 가지 않는다"
+    pg.keyboard.down("Shift"); pg.mouse.click(d["x"] + d["width"] / 2, d["y"] + d["height"] / 2); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.getElementById('ptitle').textContent === '결제 — 화면 전체'", timeout=3000)
+    pg.keyboard.down("Shift"); pg.mouse.click(d["x"] + d["width"] / 2, d["y"] + d["height"] / 2); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.getElementById('ptitle').textContent.startsWith('고른 화면 2개')", timeout=3000)
+    pg.click("#padd")
+    pg.wait_for_function(f"({NOTES_JS}).filter(n => n.note === '두 화면 모두').length === 2", timeout=4000)
+    mine = [n for n in notes_of(pg) if n["note"] == "두 화면 모두"]
+    assert sorted(n["screen"] for n in mine) == ["done", "pay"] and all(n["path"] == "body" for n in mine), mine
+    pg.keyboard.press("h")
+
+
 def _open_board_memo(pg, ph, fr):
     pg.keyboard.press("p")
     pg.mouse.click(*el_point(pg, ph, fr, "button.pay"))
@@ -425,8 +522,8 @@ def _open_board_memo(pg, ph, fr):
 
 
 @pytest.mark.area("notes", "tools")
-def test_leaving_annotate_tool_closes_an_empty_memo_popup(apage):
-    """R52: 주석(P)으로 요소를 눌러 연 빈 메모 창 → 다른 도구(키·도구 막대 단추) = 창이 닫힌다(Figma 댓글 모드와 같게) · 고른 요소 테두리도.
+def test_leaving_memo_tool_closes_an_empty_memo_popup(apage):
+    """R52: 메모 요소 모드(P)로 요소를 눌러 연 빈 메모 창 → 다른 도구(키·도구 막대 단추) = 창이 닫힌다(Figma 댓글 모드와 같게) · 고른 요소 테두리도.
     글을 이미 썼으면 창이 그대로 남는다(쓴 글을 조용히 버리지 않는다) — 추가하거나 ×/Esc 로 직접 닫는다."""
     pg = apage
     fit_view(pg)
@@ -442,9 +539,6 @@ def test_leaving_annotate_tool_closes_an_empty_memo_popup(apage):
     pg.click('#tools [data-tool="hand"]')
     pg.wait_for_selector("#pop", state="hidden", timeout=3000)
     _open_board_memo(pg, ph, fr)
-    pg.click('#tools [data-tool="memo"]')                     # 메모 도구도 같은 창을 쓰지만 대상이 다르다 — 빈 창은 닫힘
-    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
-    _open_board_memo(pg, ph, fr)
     pg.fill("#pnote", "쓰던 글")
     pg.click('#tools [data-tool="move"]')
     pg.wait_for_timeout(200)
@@ -455,8 +549,8 @@ def test_leaving_annotate_tool_closes_an_empty_memo_popup(apage):
 
 
 @pytest.mark.area("notes", "modal")
-def test_leaving_annotate_in_large_view_closes_an_empty_memo_popup(apage):
-    """R52: 크게 보기도 같은 규칙 — 주석(P)으로 고른 요소의 빈 메모 창은 손(H)·이동 단추로 바꾸면 닫히고, 쓴 글이 있으면 남는다."""
+def test_leaving_memo_tool_in_large_view_closes_an_empty_memo_popup(apage):
+    """R52: 크게 보기도 같은 규칙 — 메모 요소 모드(P)로 고른 요소의 빈 메모 창은 손(H)·이동 단추로 바꾸면 닫히고, 쓴 글이 있으면 남는다."""
     pg = apage
     fit_view(pg)
     pg.keyboard.press("h")
@@ -471,7 +565,7 @@ def test_leaving_annotate_in_large_view_closes_an_empty_memo_popup(apage):
 
     def open_memo():
         pg.keyboard.press("p")
-        pg.wait_for_function("document.querySelector('#tools [data-tool=\"annotate\"]').getAttribute('aria-pressed') === 'true'", timeout=3000)
+        pg.wait_for_function("document.querySelector('#tools [data-tool=\"memo\"]').getAttribute('aria-pressed') === 'true'", timeout=3000)
         mf.click("button.pay")
         pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
         pg.evaluate("document.activeElement && document.activeElement.blur()")

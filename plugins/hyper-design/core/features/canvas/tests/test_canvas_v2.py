@@ -161,8 +161,8 @@ def open_screen(pg, sid):
 def test_pick_note_pin_persists(page):
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
-    page.click('#tools [data-tool="annotate"]')
-    assert page.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") == "true"
+    page.keyboard.press("p")                                 # 크게 보기 요소 메모 = 메모 칸 요소 모드(P, 2026-10-29 한 칸)
+    assert page.get_attribute('#tools [data-tool="memo"]', "aria-pressed") == "true"
     page.wait_for_timeout(150)
     target = fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S")).first
     want = re.sub(r"\s+", " ", target.inner_text()).strip()[:60]
@@ -246,7 +246,7 @@ def test_multi_select_note(page):
     reload(page)
     sid = page.evaluate("document.querySelector('#rows .card').dataset.id")
     fr = open_screen(page, sid)
-    page.click('#tools [data-tool="annotate"]')
+    page.keyboard.press("p")                                 # 크게 보기 요소 메모 = 메모 칸 요소 모드(P)
     page.wait_for_timeout(150)
     els = fr.locator("h1, h2, button, a").filter(has_text=re.compile(r"\S"))
     assert els.count() >= 2
@@ -399,7 +399,7 @@ def test_gym_annotate_button(gpage):
     gpage.wait_for_function("!document.getElementById('modal').hidden")
     gpage.frame_locator("#mframe").locator("body").wait_for()
     gpage.wait_for_timeout(400)
-    assert gpage.is_visible('#tools [data-tool="annotate"]'), "크게 보기의 주석 = 왼쪽 주석 도구(G6)"
+    assert gpage.is_visible('#tools [data-tool="memo"]'), "크게 보기의 주석 = 왼쪽 메모 칸(G6 · 2026-10-29 한 칸)"
     GSHOTS.mkdir(parents=True, exist_ok=True)
     gpage.screenshot(path=str(GSHOTS / "c-modal-annotate.png"))
     gpage.keyboard.press("Escape")
@@ -417,7 +417,7 @@ def test_gym_annotate_button(gpage):
     assert ab["y"] + ab["height"] <= b["y"] + 0.5, (ab, b)      # 카드 바깥(오른쪽 위)
     pres.click()
     gpage.wait_for_function("!document.getElementById('modal').hidden")
-    assert gpage.get_attribute('#tools [data-tool="annotate"]', "aria-pressed") != "true"
+    assert gpage.get_attribute('#tools [data-tool="memo"]', "aria-pressed") != "true", "보기는 메모(요소 고르기)를 켜지 않는다"
     gpage.keyboard.press("Escape")
     gpage.wait_for_timeout(150)
 

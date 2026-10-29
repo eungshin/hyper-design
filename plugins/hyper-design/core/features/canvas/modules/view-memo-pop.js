@@ -1,6 +1,6 @@
 /* View — 메모 창(#pop) 하나: 화면 전체·요소·크게 보기 고른 요소(hd-picked, Shift = 묶음에 더하기·빼기)의 메모 쓰기·고치기·지우기·사람 답, 범위·의도 고르기.
    메모 모양 = Model HD.annotation.make·makeId, 여러 장 = HD.memoBatch, 창 틀(옮기기·크기·저장한 자리) = 등록부 기능 popPlace(ctx.frame()) — 없으면 자동 자리만.
-   HD.viewMemoPop.mount(ctx) → {card(id | [id]), element(id, h, x?, y?, note?), elem(id, h, note, inModal, at?), edit(id), del(id), reply(ids, kind, label),
+   HD.viewMemoPop.mount(ctx) → {card(id | [id]), addCard(id)(메모 화면 모드 Shift+클릭 = 열린 화면 메모에 화면 더하기·빼기), element(id, h, x?, y?, note?), addElement(id, h, x?, y?), elem(id, h, note, inModal, at?), edit(id), del(id), reply(ids, kind, label),
      isOpen(), close(), draft() → 쓰는 중인 초안|null(핀이 고른 요소 테두리), typed() → 열린 창에 사람이 쓴 글이 있나(R52 — 셸은 도구를 바꿀 때 빈 창만 닫는다)}
    ctx = {$, $$, esc, notes(NS), save(), record(op), toast(msg), title(id), modal() → {open, screen, scale, box, picking, frame}, setScreen(id), frame() → popPlace|null,
           cardEl(id), pins()(핀 다시), focusPin(id)}
@@ -164,6 +164,13 @@ function mount(ctx) {
     editing = null; draft = HD.memoBatch.draft([].concat(id), ctx.title); att('hd-attach-set', []);
     show({text: HD.memoBatch.label(draft), path: 'body', rect: null}, '', 'change');
   }
+  function addCard(id) {                              // 메모 도구 화면 모드 Shift+클릭: 열린 새 화면 전체 메모에 그 화면 더하기·빼기(memo-batch) — 쓰던 글·의도·범위 그대로, 다 빼면 닫힘
+    if (!(draft && !editing && !pop.hidden && draft.screens && draft.targets.every(function (t) { return t.path === 'body'; }))) { card(id); return; }
+    var note = $('#pnote').value, intent = curIntent(), sc = curScope(), ids = HD.memoBatch.toggle(draft.screens, id);
+    if (!ids.length) { hide(); return; }
+    draft = HD.memoBatch.draft(ids, ctx.title);
+    show({text: HD.memoBatch.label(draft), path: 'body', rect: null}, note, intent, null, HD.memoBatch.multi(draft) && sc === 'element' ? null : sc);
+  }
   function element(id, h, x, y, note) {               // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이) · note = 미리 채울 글(요소 막대, task 49a)
     editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect, quote: h.quote || null, src: h.src || null}]};   // src = 앱 소스 줄(요청문 '소스:')
     att('hd-attach-set', []);
@@ -237,7 +244,7 @@ function mount(ctx) {
     ctx.pins(); show(popItem(draft, it), '', 'change');
   });
 
-  return {card: card, element: element, addElement: addElement, elem: elem, edit: edit, del: del, reply: reply,
+  return {card: card, addCard: addCard, element: element, addElement: addElement, elem: elem, edit: edit, del: del, reply: reply,
           isOpen: function () { return !pop.hidden; }, close: hide, draft: function () { return draft; },
           typed: function () { return typed && !pop.hidden && $('#pnote').value.trim() !== ''; }};
 }

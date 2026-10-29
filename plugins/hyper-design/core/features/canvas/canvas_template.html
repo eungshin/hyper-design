@@ -46,11 +46,10 @@
       <button type="button" class="tb" data-tool="move" data-key="V" data-tip="선택|누르면 고르고 끌면 옮겨요 · 고른 카드를 한 번 더 누르면 요소" aria-pressed="false" aria-label="선택 (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
       <button type="button" class="tb" data-tool="trigger" data-key="L" data-tip="트리거|화면 안 요소를 다른 화면에 끌어 놓으면 연결 · 누르면 메뉴" aria-pressed="false" aria-label="트리거 (L)"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
       <button type="button" class="tb" data-tool="knife" data-key="C" data-tip="선 자르기|그은 선이 지나간 연결을 끊어요 · 오른쪽 버튼 끌기도 같아요" aria-pressed="false" aria-label="선 자르기 (C)"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/></svg></button>
-      <button type="button" class="tb" data-tool="annotate" data-key="P" data-tip="요소에 주석|카드 안 요소 하나를 누르면 그 요소에 메모를 남겨요 · 화면 전체는 메모(M)" aria-pressed="false" aria-label="요소에 주석 (P)"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button>
+      <button type="button" class="tb" data-tool="memo" data-key="P" data-mode="el" data-tip="메모 · 요소|P = 누른 요소에 · M = 누른 화면 전체에 · 카드 제목·테두리는 늘 화면 전체 · Shift = 더하기" aria-pressed="false" aria-label="메모 · 요소 (P)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button>
       <button type="button" class="tb" data-tool="text" data-key="T" data-tip="글자|글자 위를 누르면 그 자리에서 고쳐요 · 카드 아래 제목·설명·정책 줄도" aria-pressed="false" aria-label="글자 (T · E)"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg></button>
       <hr>
       <button type="button" class="tb" data-tool="layout" data-key="N" data-tip="빈 레이아웃|빈 곳을 누르면 흰 카드를 놓아요 · 메모를 남기고 보내면 채워져요" aria-pressed="false" aria-label="빈 레이아웃 (N)"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg></button>
-      <button type="button" class="tb" data-tool="memo" data-key="M" data-tip="화면 전체 메모|화면을 누르면 그 화면 전체에 메모를 남겨요 · 요소 하나는 주석(P)" aria-pressed="false" aria-label="화면 전체 메모 (M)"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></svg></button>
       <hr id="thr" hidden>
       <button type="button" class="tb" id="thid" data-tip="숨긴 것|레이어 패널을 숨긴 것만으로 열어요" aria-haspopup="true" aria-expanded="false" aria-label="숨긴 화면" hidden><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c5 0 9 6 9 6a16 16 0 01-2.7 3.3M6.6 6.6C4.3 8.1 3 12 3 12s4 6 9 6a8.6 8.6 0 004.4-1.2M9.9 9.9a3 3 0 004.2 4.2"/></svg><span class="cnt" id="thidn"></span></button>
     </nav>
@@ -334,7 +333,7 @@ pane.addEventListener('wheel', function (e) { if (drag && drag.trig && drag.move
 /* ---------- 도구(4B): 손 = 기본(지금처럼 끌면 화면 이동) · 선택(V) = 카드를 끌어 옮기기. 클릭 = 크게 보기는 두 도구 모두 ---------- */
 var tool = 'hand';
 function setTool(t) {
-  if (!modal.hidden) { if (MODAL_TOOLS[t]) setMode(t); return; }   // 크게 보기: 손 = 눌러 보기 · 이동 = 요소 고르기(막대) · 주석 = 메모 · 글자 = 고치기(G5·G6, task 49a)
+  if (!modal.hidden) { if (MODAL_TOOLS[t]) setMode(t); return; }   // 메모 모드(P·M)는 view-memo-tool 이 키를 먼저 읽어 바꿔 둔다   // 크게 보기: 손 = 눌러 보기 · 이동 = 요소 고르기(막대) · 주석 = 메모 · 글자 = 고치기(G5·G6, task 49a)
   if (t !== tool && MP.isOpen() && !MP.typed()) MP.close();   // 도구를 바꾸면 빈 메모 창은 닫힘 · 쓴 글이 있으면 남김(Figma 댓글 모드, R52)
   tool = t;
   $$('#tools [data-tool]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
@@ -342,12 +341,13 @@ function setTool(t) {
   pane.classList.toggle('t-trigger', t === 'trigger');
   pane.classList.toggle('t-knife', t === 'knife');
   pane.classList.toggle('t-layout', t === 'layout');
-  pane.classList.toggle('t-memo', t === 'memo');
-  pane.classList.toggle('t-annotate', t === 'annotate');
+  MT.paint();                                       // 메모 칸 = 모드별 커서(t-annotate 요소 · t-memo 화면)
   pane.classList.toggle('t-text', t === 'text');
   endPick(); EB.clear(); EB.unselect();
 }
 $$('#tools [data-tool]').forEach(function (b) { b.addEventListener('click', function () { setTool(b.dataset.tool); }); });
+// 말풍선 메모 한 칸 · 두 모드(modules/view-memo-tool.js · 규칙 HD.tools) — P = 요소 · M = 화면 전체, 같은 칸 단추 = 마지막 모드
+var MT = HD.viewMemoTool.mount({$: $, pane: pane, tool: function () { return tool; }, typing: function (e) { return typing(e); }});
 $$('#tools .tb').forEach(function (b) {
   b.addEventListener('pointerenter', function () {
     var p = b.dataset.tip.split('|'), tip = $('#ttip'), r = b.getBoundingClientRect();
@@ -468,19 +468,21 @@ pane.addEventListener('click', function (e) {
     if (!(SL.ids().length === 1 && SL.has(mc.dataset.id))) SL.dispatch({type: 'only', id: mc.dataset.id});
     EB.pickAt(mc, e.clientX, e.clientY, true); return;
   }
-  if (mc && !mc.classList.contains('draft') && (!e.shiftKey || tool === 'annotate') && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {   // 주석 Shift = 요소 더하기·빼기(카드 여러 장 고르기 아님)
+  var mtg = mc && tool === 'memo' ? HD.tools.memoTarget(MT.mode(), !!cl('.phone') && !mc.classList.contains('draft')) : null;   // 메모: 요소 모드 = 누른 요소 · 화면 모드·제목·테두리·빈 레이아웃 = 화면 전체
+  if (mtg === 'screen') { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) MP.addCard(mc.dataset.id); else MP.card(mc.dataset.id); return; }   // Shift = 화면 더하기·빼기(memo-batch)
+  if (mc && !mc.classList.contains('draft') && e.detail <= 1 && (mtg === 'element' || (tool === 'text' && !e.shiftKey))) {   // 메모 Shift = 요소 더하기·빼기(카드 여러 장 고르기 아님)
     e.preventDefault(); e.stopPropagation();
     var tf = cl('.ftitle'), td = cl('.fdesc');
     if (tool === 'text' && (tf || td)) { CT.open(tf || td, {field: tf ? 'title' : 'purpose'}); return; }
     if (!cl('.phone')) return;
     var cid = mc.dataset.id, mx = e.clientX, my = e.clientY;
-    FA.hit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
+    FA.hit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 메모 = 그 자리 요소
       if (!h || h.none) { if (h) toast(tool === 'text' ? '여기에는 고칠 글자가 없어요' : '여기에는 고를 요소가 없어요'); return; }
       if (tool === 'text') editScreenText(cid, h); else if (e.shiftKey) MP.addElement(cid, h, mx, my); else MP.element(cid, h, mx, my);
     }, tool === 'text');
     return;
   }
-  if (mc && !e.shiftKey && (tool === 'memo' || (mc.classList.contains('draft') && e.detail >= 2 && cl('.phone')))) { e.preventDefault(); e.stopPropagation(); MP.card(mc.dataset.id); return; }   // 빈 레이아웃: 한 번 = 고르기, 두 번 = 메모(10-24)
+  if (mc && !e.shiftKey && mc.classList.contains('draft') && e.detail >= 2 && cl('.phone')) { e.preventDefault(); e.stopPropagation(); MP.card(mc.dataset.id); return; }   // 빈 레이아웃: 한 번 = 고르기, 두 번 = 메모(10-24)
   var an = cl('.pres');
   if (an) { e.preventDefault(); e.stopPropagation(); openModal(an.dataset.file, an.dataset.title); return; }   // ▶ 보기 = 실제로 눌러 보기
   var c = cl('.cover');
@@ -1047,7 +1049,7 @@ function removeElement(id, h) {                      // 요소 지우기(task 30
 // 요소 테두리·고른 요소(modules/view-elbox.js): 올린 요소 미리 테두리(도구마다) · 고른 요소 = 테두리 + 소켓 + 부모 점선 + 요소 막대
 var EB = HD.viewElbox.mount({$: $, $$: $$, rowsEl: rowsEl, pane: pane, wOf: wOf, tagScale: tagScale, zoom: function () { return z; }, app: function (id) { return appCard(id); },
   title: function (id) { return titleOf(id); }, toast: function (m) { toast(m); }, ask: FA.hit, chain: FA.chain, lastFrame: FA.lastFrame, blocks: function () { return BK; },
-  tool: function () { return tool; }, only: function (id) { return SL.ids().length === 1 && SL.has(id); }, busy: function () { return !!((drag && drag.moved) || pickT); }});
+  tool: function () { return tool; }, mode: function () { return MT.mode(); }, only: function (id) { return SL.ids().length === 1 && SL.has(id); }, busy: function () { return !!((drag && drag.moved) || pickT); }});
 function appCard(id) { var c = VL.cardEl(id), cv = c && $('.cover', c); return HD.blocks.isApp(cv ? cv.dataset.file : ''); }   // 앱 카드 = 개발 서버 주소(build_canvas.is_dev_url)
 /* ---------- 빈 레이아웃(N · 빈 곳에 놓기 · 여기에 레이아웃) · 메모 도구(M) — 빈 레이아웃은 메모(edit=new-screen) 하나, 보내면 AI 가 채운다 ---------- */
 // 빈 레이아웃(modules/view-drafts.js · 메모 모양 HD.edits.layout) — 메모 하나 = 판 위 흰 카드, 놓기(새 화면 대화상자)·그리기·이름·목적 고치기
@@ -1147,15 +1149,16 @@ function adoptExternal(names) {
   if (PR) PR.check();                                // 빈 레이아웃에 온 반영됨·대체됨 답 — 그 화면이 있으면 승격
 }
 function circled(n) { return n >= 1 && n <= 20 ? String.fromCharCode(0x245F + n) : '(' + n + ')'; }
-// 크게 보기 도구(task 49a): 손 = 눌러 보기 · 이동 = 요소 고르기(요소 막대) · 주석 = 메모(picking) · 글자 = 누른 글자 고치기. 나머지 도구는 판에서만
-var MODAL_TOOLS = {hand: 1, move: 1, annotate: 1, text: 1}, mmode = 'hand';
+// 크게 보기 도구(task 49a): 손 = 눌러 보기 · 이동 = 요소 고르기(요소 막대) · 메모 = 요소 모드면 고른 요소에 메모(picking), 화면 모드면 이 화면 전체 메모 · 글자 = 누른 글자 고치기. 나머지 도구는 판에서만
+var MODAL_TOOLS = {hand: 1, move: 1, memo: 1, text: 1}, mmode = 'hand';
 function sendPick() { try { if (mframe.contentWindow) mframe.contentWindow.postMessage({type: 'hd-pick', on: mmode !== 'hand', mode: mmode === 'text' ? 'text' : mmode === 'move' ? 'select' : ''}, '*'); } catch (e) {} }
-function setPick(on) { setMode(on ? 'annotate' : 'hand'); }
-function setMode(m) {
+function setPick(on) { setMode(on ? 'memo' : 'hand', true); }
+function setMode(m, el) {                          // el = 요소 고르기로(P·주석 달기 — 메모 모드와 상관없이)
+  if (m === 'memo' && !el && !modal.hidden && MT.mode() === 'screen') { if (mscreen) MP.card(mscreen); return; }   // 화면 모드 = 크게 보기 화면 전체 메모(도구는 그대로)
   var was = mmode;
   mmode = !modal.hidden && MODAL_TOOLS[m] ? m : 'hand';
   if (mmode !== was && MP.isOpen() && !MP.typed()) MP.close();   // 크게 보기도 같은 규칙(R52)
-  picking = mmode === 'annotate';
+  picking = mmode === 'memo';
   if (mmode !== 'move' && BK) BK.hide('modal');
   if (mmode !== 'move' && ML) ML.clear();
   modalTools();

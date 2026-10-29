@@ -1,4 +1,5 @@
 /* View — 판 위 요소 테두리: 마우스를 올린 카드 안 요소(도구마다 tools.hoverOf)를 화면에 물어 종류별 테두리, 고른 요소(테두리 고정 + 소켓 + 부모 점선 + 요소 막대).
+   메모 도구(2026-10-29): 요소 모드 = 그 요소 테두리 + 이름표 '<종류> · 요소'(tools.elLabel) · 화면 모드·카드 제목·테두리 띠(.phone 밖) = 카드 전체 테두리 .elbox.scr + '<화면 이름> · 화면 전체'(tools.screenLabel, 묻지 않음).
    묻기 = ctx.ask·chain(view-frame-ask), 부모 고르기 = HD.blocks.parentPick, 색·꼬리표 = HD.blocks.tone · HD.tools.LABEL.
    여러 요소(R19): 고른 요소는 목록(규칙 HD.elPick) — 모두 테두리 고정, 소켓·부모 점선·요소 막대는 주인(마지막 것)만. Shift+누르기 = 더하기·빼기(셸이 add 로 부른다).
    HD.viewElbox.mount(ctx) → {clear()(미리 그린 테두리 걷기), selected() → 주인 {card, h}|null, all() → 고른 요소 모두 [{card, h}](고른 차례),
@@ -6,7 +7,7 @@
    누른 자리(R51): pickAt(클릭)으로 고르면 그 자리를 카드 화면(.phone) 안 비율 pt {fx, fy} 로 고른 항목에 두고, 요소 막대에 pointer() → 지금 화면 좌표로 건넨다
      (판을 옮기거나 확대해도 따라감 — 막대 자리 규칙 HD.barPlace 가 큰 요소면 누른 자리 가까이). 메뉴·키보드·쓴 뒤 다시 고르기(select 에 pt 없음) = pointer 없음.
    ctx = {$, $$, rowsEl, pane, wOf(card), tagScale(), zoom(), app(id) → 앱 카드인가, title(id), toast(msg), ask(card, x, y, quiet, cb, leaf, deep), chain(frame, h, cb),
-          lastFrame(card), blocks() → 요소 막대(BK)|null, tool() → 지금 도구, only(id) → 그 카드만 골랐나, busy() → 끄는 중·도착 고르는 중} */
+          lastFrame(card), blocks() → 요소 막대(BK)|null, tool() → 지금 도구, mode() → 메모 모드('el'|'screen'), only(id) → 그 카드만 골랐나, busy() → 끄는 중·도착 고르는 중} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -27,7 +28,7 @@ function mount(ctx) {
     b.className = 'elbox' + (q.y * sc < 18 * ts ? ' in' : '') + (how ? ' ' + how : '');
     b.dataset.kind = h.kind || 'box';
     var tn = HD.blocks.tone(h, {app: ctx.app(card.dataset.id)}); if (tn) b.dataset.tone = tn;   // 앱 카드 = 요청으로만 색·꼬리표(51-3)
-    b.dataset.label = (HD.tools.LABEL[h.kind] || '영역') + (h.kind === 'link' && h.to ? ' → ' + ctx.title(h.to) : '');
+    b.dataset.label = !how && ctx.tool() === 'memo' ? HD.tools.elLabel(h.kind) : (HD.tools.LABEL[h.kind] || '영역') + (h.kind === 'link' && h.to ? ' → ' + ctx.title(h.to) : '');
     b.style.left = q.x * sc + 'px'; b.style.top = q.y * sc + 'px'; b.style.width = q.w * sc + 'px'; b.style.height = q.h * sc + 'px';
     b.style.borderWidth = ((how ? 1 : 2) * ts) + 'px'; b.style.setProperty('--ts', ts);
     ph.appendChild(b); if (how !== 'par') hov.card = card;
@@ -87,8 +88,18 @@ function mount(ctx) {
       if (add) toggle(card, h, pt); else select(card, h, pt);
     }, false, deep);
   }
-  function hoverMode(card) {                          // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 선택(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3)
-    return HD.tools.hoverOf(ctx.tool(), {only: ctx.only(card.dataset.id), typing: card.classList.contains('hd-typing')});
+  function hoverMode(card, edge) {                    // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 선택(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3) · edge = .phone 밖
+    return HD.tools.hoverOf(ctx.tool(), {only: ctx.only(card.dataset.id), typing: card.classList.contains('hd-typing'), mode: ctx.mode(), edge: !!edge});
+  }
+  function drawScreen(card) {                         // 메모가 화면 전체로 갈 때: 카드 전체 테두리 + '<화면 이름> · 화면 전체'
+    if (hov.card === card && $('.elbox.scr', card)) return;
+    clear();
+    var ts = ctx.tagScale(), pad = 6 * ts, b = document.createElement('div');
+    b.className = 'elbox scr'; b.dataset.kind = 'screen';
+    b.dataset.label = HD.tools.screenLabel(ctx.title(card.dataset.id));
+    b.style.left = b.style.top = -pad + 'px'; b.style.width = (card.offsetWidth + 2 * pad) + 'px'; b.style.height = (card.offsetHeight + 2 * pad) + 'px';
+    b.style.borderWidth = (2 * ts) + 'px'; b.style.setProperty('--ts', ts);
+    card.appendChild(b); hov.card = card;
   }
   function hoverAsk(card, x, y, deep) {              // 한 번에 하나만 묻고, 그 사이 움직임은 마지막 자리만 기억 · deep = Alt(가장 안쪽 — 이동 도구의 Alt+클릭과 같게)
     var mode = hoverMode(card); if (!mode) return;
@@ -97,21 +108,24 @@ function mount(ctx) {
     ctx.ask(card, x, y, true, function (h) {
       hov.busy = false;
       var mv = ctx.tool() === 'move';
-      if (hov.live === card && hoverMode(card) && !ctx.busy()) {
+      if (hov.live === card && !hov.edge && hoverMode(card) === mode && !ctx.busy()) {
         if (mv && h && h.path && P.has(sels, {card: card, h: h}, keyOf)) clear();   // 고른 요소 위 = 이미 고른 상자
         else draw(card, h, mv ? 'hov' : undefined);
       }
       var n = hov.next; hov.next = null; if (n) hoverAsk(n[0], n[1], n[2], n[3]);
     }, mode === 'leaf', ctx.tool() === 'move' && !!deep);
   }
-  function hoverOff() { hov.live = null; hov.next = null; if (hov.card) clear(); }
+  function hoverOff() { hov.live = null; hov.next = null; hov.edge = false; if (hov.card) clear(); }
 
   pane.addEventListener('mousemove', function (e) {
     if (ctx.busy()) { hoverOff(); return; }
-    var c = e.target.closest ? e.target.closest('.card:not(.draft)') : null, ph = c ? $('.phone', c) : null;
-    if (!ph || !ph.contains(e.target) || e.target.closest('.sock') || !hoverMode(c)) { hoverOff(); return; }
-    if (hov.card && hov.card !== c) clear();
-    hov.live = c; hoverAsk(c, e.clientX, e.clientY, e.altKey);
+    var c = e.target.closest ? e.target.closest('.card') : null, ph = c ? $('.phone', c) : null;
+    if (!ph || e.target.closest('.sock')) { hoverOff(); return; }
+    var edge = !ph.contains(e.target) || c.classList.contains('draft'), mode = hoverMode(c, edge);   // 빈 레이아웃 = 고를 요소가 없다(메모면 화면 전체)
+    if (mode === 'screen') { hov.live = c; hov.edge = true; hov.next = null; drawScreen(c); return; }
+    if (!mode || edge) { hoverOff(); return; }
+    if (hov.card && (hov.card !== c || hov.edge)) clear();
+    hov.live = c; hov.edge = false; hoverAsk(c, e.clientX, e.clientY, e.altKey);
   });
   pane.addEventListener('mouseleave', hoverOff);     // 판 밖으로 = 미리 표시 걷기(늦게 온 답도 그리지 않게 hov.live)
 

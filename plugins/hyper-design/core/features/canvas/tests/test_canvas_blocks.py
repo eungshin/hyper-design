@@ -176,7 +176,7 @@ def test_large_view_text_tool_context_menu_and_element_bar(ctx, out):
     pg, errors = _open(ctx, (out / "index.html").resolve().as_uri())
     mf = _modal(pg)
     st = dict((t, d) for t, d in pg.evaluate("[...document.querySelectorAll('#tools [data-tool]')].map(b => [b.dataset.tool, b.getAttribute('aria-disabled')])"))
-    assert st["text"] is None and st["move"] is None and st["annotate"] is None, st
+    assert st["text"] is None and st["move"] is None and st["memo"] is None, st
     pg.click('#tools [data-tool="text"]')                   # 글자 도구: 한 번 누르면 그 자리에서 고친다(더블클릭 아니어도)
     mf.click(H1)
     mf.wait_for_function("(s) => document.querySelector(s).isContentEditable", arg=H1, timeout=3000)   # 그 자리에서(49c)
