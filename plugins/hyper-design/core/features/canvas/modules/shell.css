@@ -170,6 +170,7 @@ body.modal-open #tools .tb[aria-disabled="true"],body.modal-open #tools hr{displ
 #rows.focusing path.ln{stroke-opacity:.18}
 #rows.focusing path.ln.on{stroke-opacity:1}
 #rows.focusing .alabel.on{display:block}
+#rows.notags .alabel:not(.editing){display:none}   /* 표시 팝오버 [선 태그] 끔 — 고른·올린 카드의 태그도(위 규칙과 같은 무게, 뒤에 와서 이긴다) */
 .nbadge{position:absolute;top:56px;right:10px;z-index:1;min-width:34px;height:34px;padding:0 9px;border-radius:999px;background:var(--ui-badge);color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0}
 .nbadge.decide{background:var(--ui-accent)}
 .nbadge:hover,.nbadge:focus-visible,.nbadge[aria-expanded="true"]{outline:3px solid var(--ui-mark);outline-offset:2px}
@@ -299,6 +300,7 @@ body.modal-open #tools .tb[aria-disabled="true"],body.modal-open #tools hr{displ
 .vm-row kbd{margin-left:auto;padding-left:16px;font:11px ui-monospace,Menlo,monospace;color:#888}
 /* ---- /R27 F14 ---- */
 body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #ldock,body.bare #dklayer{display:none}
+#pShow .lntags{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
 #pShow .lnshow{width:28px;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;display:grid;place-items:center;cursor:pointer;color:#444}

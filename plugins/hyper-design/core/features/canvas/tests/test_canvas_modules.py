@@ -69,8 +69,8 @@ out.prefs = {
   badJson: HD.prefs.load(mk({'hd-canvas-prefs': '{bad', 'hd-arrows': '0'})),
   v1: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 1, arrows: false, sat: 1.1}), 'hd-arrows': '1'})),
   v2: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 2, arrows: false, preset: 'random', rand: RS, custom: {'a>b': '#ABCDEF'}, width: 4.5, motion: false})})),
-  stored: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: false, op: 0.3, preset: 'deep', custom: {}, width: 4, motion: true})})),
-  badFields: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: 'no', op: 9, preset: 'random', rand: [1], custom: {x: '#ABCDEF', 'a>b': 'red', 'c>d': '#123456'}, width: 9, motion: 'x'})})),
+  stored: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: false, op: 0.3, preset: 'deep', custom: {}, width: 4, motion: true, tags: false})})),
+  badFields: HD.prefs.load(mk({'hd-canvas-prefs': JSON.stringify({v: 3, lines: 'no', op: 9, preset: 'random', rand: [1], custom: {x: '#ABCDEF', 'a>b': 'red', 'c>d': '#123456'}, width: 9, motion: 'x', tags: 'off'})})),
   throws: HD.prefs.load(() => { throw new Error('denied'); }),
 };
 const writes = {};
@@ -156,7 +156,7 @@ def test_add_links_replaces_and_groups(res):
     assert res["groups"] == [["c", 0, ["q1", "q3"]], ["b", 1, ["q2"]]]
 
 
-DEF = {"v": 3, "lines": True, "op": 0.55, "preset": "calm", "rand": None, "custom": {}, "width": 2.5, "motion": True}
+DEF = {"v": 3, "lines": True, "op": 0.55, "preset": "calm", "rand": None, "custom": {}, "width": 2.5, "motion": True, "tags": True}
 
 
 def test_prefs(res):
@@ -165,7 +165,7 @@ def test_prefs(res):
     assert p["migrate"] == DEF and p["fresh"] == DEF and p["throws"] == DEF and p["badJson"] == DEF and p["v1"] == DEF
     assert p["v2"] == dict(DEF, preset="random", rand=["#AA3344", "#33AA44", "#3344AA", "#AAAA33", "#33AAAA", "#AA33AA"],
                            custom={"a>b": "#ABCDEF"}, width=4.5, motion=False), "v2 → v3: 색·굵기·움직임은 옮기고 arrows 는 버림"
-    assert p["stored"] == dict(DEF, lines=False, op=0.3, preset="deep", width=4)
+    assert p["stored"] == dict(DEF, lines=False, op=0.3, preset="deep", width=4, tags=False), "선 태그 끄기(tags)도 저장된다"
     assert p["badFields"] == dict(DEF, op=1, custom={"c>d": "#123456"})              # 틀린 값은 기본값, op 는 범위 안으로
     assert list(p["writes"]) == ["hd-canvas-prefs"] and json.loads(p["writes"]["hd-canvas-prefs"]) == dict(DEF, width=5, op=0.15)
 

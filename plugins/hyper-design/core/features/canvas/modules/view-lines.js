@@ -373,9 +373,11 @@ function mount(ctx) {
   }
 
   // 표시 패널: 보이기 · 투명도 · 굵기(끌기 한 번 = 되돌리기 한 단계) · 색 프리셋
-  var show = $('#lnShow'), op = $('#lnOp'), wEl = $('#lgW'), wv = $('#lgWv');
+  var show = $('#lnShow'), op = $('#lnOp'), wEl = $('#lgW'), wv = $('#lgWv'), tagsEl = $('#lnTags');
   function apply() {
     rowsEl.classList.toggle('nolines', !prefs.lines);
+    rowsEl.classList.toggle('notags', !prefs.tags);   // 선 태그 끄기 — 선은 그대로, 태그만 숨김
+    if (tagsEl) tagsEl.checked = prefs.tags;
     rowsEl.style.setProperty('--lnop', String(prefs.op));
     rowsEl.style.setProperty('--lnk', (prefs.width / 2.5).toFixed(2));
     if (show) { show.setAttribute('aria-pressed', String(prefs.lines)); show.title = prefs.lines ? '선 숨기기' : '선 보이기'; }
@@ -396,6 +398,11 @@ function mount(ctx) {
   if (show) show.addEventListener('click', function () {
     var a = prefs.lines, b = !a; set({lines: b});
     if (ctx.record) ctx.record({label: b ? '선 보이기' : '선 숨기기', undo: function () { set({lines: a}); }, redo: function () { set({lines: b}); }});
+  });
+  if (tagsEl) tagsEl.addEventListener('change', function () {
+    var a = prefs.tags, b = tagsEl.checked; if (a === b) return;
+    set({tags: b}); if (!b) closePop();
+    if (ctx.record) ctx.record({label: b ? '선 태그 보이기' : '선 태그 숨기기', undo: function () { set({tags: a}); }, redo: function () { set({tags: b}); }});
   });
   slider(op, 'op', '선 투명도', function (v) { return Math.max(0.15, Math.min(1, v || 0.55)); });
   slider(wEl, 'width', '선 굵기', function (v) { return Math.max(1, Math.min(6, v || 2.5)); });
