@@ -430,19 +430,20 @@ def _hover_label(pg, sel):
 
 @pytest.mark.area("tools", "notes")
 def test_memo_tool_is_one_slot_with_two_modes(apage):
-    """메모 = 말풍선 한 칸: P = 요소 모드 · M = 화면 모드 — 귀퉁이 글·키·꼬리말 첫 줄이 지금 모드를 말하고, 같은 칸 단추 = 마지막 모드."""
+    """메모 = 말풍선 한 칸: P = 요소 모드 · M = 화면 모드 — 키·꼬리말 첫 줄·data-mode 가 지금 모드를 말하고(칸 아래 글은 없음), 같은 칸 단추 = 마지막 모드."""
     pg = apage
     fit_view(pg)
     assert pg.locator('#tools [data-tool="annotate"]').count() == 0 and pg.locator(MEMO_BTN).count() == 1
     pg.keyboard.press("m")
     assert pg.get_attribute(MEMO_BTN, "aria-pressed") == "true"
-    assert pg.text_content(MEMO_BTN + " .tmode") == "화면" and pg.get_attribute(MEMO_BTN, "data-key") == "M"
+    assert pg.get_attribute(MEMO_BTN, "data-mode") == "screen" and pg.get_attribute(MEMO_BTN, "data-key") == "M"
+    assert pg.locator(MEMO_BTN + " .tmode").count() == 0 and pg.inner_text(MEMO_BTN).strip() == "", "칸 아래 모드 글은 없다(다른 칸과 같은 아이콘만) — 모드는 꼬리말·키로"
     assert pg.get_attribute(MEMO_BTN, "data-tip").startswith("메모 · 화면 전체|")
     pg.keyboard.press("p")
-    assert pg.text_content(MEMO_BTN + " .tmode") == "요소" and pg.get_attribute(MEMO_BTN, "aria-label") == "메모 · 요소 (P)"
+    assert pg.get_attribute(MEMO_BTN, "data-mode") == "el" and pg.get_attribute(MEMO_BTN, "aria-label") == "메모 · 요소 (P)"
     pg.keyboard.press("m"); pg.keyboard.press("h")
     pg.click(MEMO_BTN)
-    assert pg.get_attribute(MEMO_BTN, "aria-pressed") == "true" and pg.text_content(MEMO_BTN + " .tmode") == "화면", "단추 = 마지막 모드"
+    assert pg.get_attribute(MEMO_BTN, "aria-pressed") == "true" and pg.get_attribute(MEMO_BTN, "data-mode") == "screen", "단추 = 마지막 모드"
     pg.hover(MEMO_BTN)
     pg.wait_for_selector("#ttip:not([hidden])")
     assert "메모 · 화면 전체" in pg.text_content("#ttip") and "Shift" in pg.text_content("#ttip")

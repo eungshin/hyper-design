@@ -447,3 +447,31 @@ def test_progress_line_sits_above_card(hub, width):
     pg.mouse.move(5, 300)
     pg.wait_for_timeout(700)
     shot1c(pg, f"s1c-progress-{width}.png")
+
+
+def test_chat_works_in_large_view_and_targets_that_screen(live):
+    """크게 보기에서도 대화창이 보이고 쓸 수 있다 — 덮개 위에 떠 있고(가려지지 않음), 칩 = 연 화면, Esc = 입력창에서만 나감(크게 보기는 그대로),
+    보내면 그 화면 전체 대화 메모."""
+    pg = live
+    pg.keyboard.press("0")
+    pg.keyboard.press("h")
+    pg.dblclick('.card[data-id="pay"] .cover')
+    pg.wait_for_selector("#modal:not([hidden])", timeout=5000)
+    pg.wait_for_selector("#hdchat .ch-box", state="visible", timeout=3000)
+    b = pg.locator("#hdchat textarea").bounding_box()
+    assert pg.evaluate("([x, y]) => !!document.elementFromPoint(x, y).closest('#hdchat')", [b["x"] + b["width"] / 2, b["y"] + b["height"] / 2]), "덮개에 가리지 않는다"
+    pg.wait_for_function("document.querySelector('#hdchat .ch-chip') && document.querySelector('#hdchat .ch-chip').textContent.startsWith('결제')", timeout=3000)
+    assert [c.replace("×", "") for c in chips(pg)] == ["결제"], "칩 = 연 화면"
+    mb, cb = pg.locator("#modal .box").bounding_box(), pg.locator("#hdchat .ch-box").bounding_box()
+    assert mb["y"] + mb["height"] <= cb["y"], ("크게 보기 화면은 대화창 위에서 끝난다(가리지 않음)", mb, cb)
+    pg.click("#hdchat textarea")
+    pg.keyboard.type("버튼을 더 크게")
+    pg.keyboard.press("Escape")
+    assert pg.is_visible("#modal") and pg.evaluate("document.activeElement !== document.querySelector('#hdchat textarea')"), "Esc = 입력창에서만 나감"
+    shot(pg, "chat-large-view.png")
+    pg.click("#hdchat textarea")
+    pg.keyboard.press("Enter")
+    text = queued(pg)
+    assert "screen=pay · path=body" in text and "요청: 버튼을 더 크게" in text and "범위: 이 화면 전체" in text and "intent=chat" in text, text
+    assert pg.is_visible("#modal"), "보낸 뒤에도 크게 보기 그대로"
+

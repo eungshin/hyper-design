@@ -516,8 +516,10 @@ function sizeModal() {
   var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 덮개 위에 뜨는 도구 막대(G5) 자리는 비운다 — 왼쪽 도크가 생기면 창이 그 밑에 깔려 왼쪽 내용을 가렸다(S3)
   var g = tr && tr.width ? Math.max(0, Math.round(tr.right - (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0) + 8)) : 0;
   modal.style.paddingLeft = g ? g + 'px' : '';
+  var hc = $('#hdchat'), hb = hc && hc.getClientRects().length ? hc.querySelector('.ch-box') : null, ch = hb ? hb.offsetHeight + 24 : 0;   // 대화창(덮개 위 아래 가운데, 10-29) 자리는 비운다 — 화면이 그 위에서 끝나게
+  modal.style.paddingBottom = ch ? ch + 'px' : '';
   var m = modalSize(), mw = m.w, mh = m.h;
-  var s = Math.min(1, (innerHeight - top - 128 - 30) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
+  var s = Math.min(1, (innerHeight - top - 128 - 30 - ch) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
   mscale = s;
   mframe.style.width = m.custom ? mw + 'px' : ''; mframe.style.height = m.custom ? mh + 'px' : '';   // 크기를 바꾼 카드 = 그 크기로 크게 보기(task 46)
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
@@ -543,8 +545,9 @@ function closeModal() {                            // hidden 은 바로(상태),
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
 mframe.addEventListener('load', function () { if (ML) ML.clear(); VT.send(mframe); sendPick(); if (mscreen) { sendPending(mframe, mscreen); if (PN) PN.locateModal(); } try { mframe.contentWindow.postMessage({type: 'hd-edit', on: true}, '*'); } catch (e) {} });
-addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl) → 그 자리에 고치기 칸
+addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl, 고르기 V) · 글자 도구 누르기 → 그 자리에 고치기 칸
   var d = e.data; if (!d || d.type !== 'hd-dbl' || modal.hidden || e.source !== mframe.contentWindow) return;
+  if (mmode === 'hand') return;                      // 손 도구(체험) = 고치지 않는다 — 예전 palette.js 를 가진 out 폴더도(사용자 10-29)
   if (!d.path) { toast('여기에는 고칠 글자가 없어요'); return; }
   editScreenText(String(d.screen || mscreen), d, true);
 });

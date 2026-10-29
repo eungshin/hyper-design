@@ -22,7 +22,7 @@
    함께 보낼 메모(R29, HD.chatCmd.memoChip — kind 'memos'): 범위를 정하지 않고(scope), 접히지 않으며(fold), build 는 빼고 만든다(그 메모는 View 가 그대로 함께 보낸다).
    대화창이 고치는 글 상자를 가리지 않게(R25): clear(box, dock, pane, margin) → 판을 위로 올릴 px(≥0) — 떠 있는 대화창(dock, 없으면 null)과 가로로 겹치고
      상자 아래 + margin 이 대화창 위를 넘을 때만, 상자 위 끝이 판(pane) 위 + margin 밑으로는 올라가지 않을 만큼. 모두 화면 px {top, bottom, left, right}.
-   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elType, elLabel, chips, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
+   HD.chat = {VIA, PLACEHOLDER, ALL, STAGES, tagOf, elType, elLabel, chips, modalSel, visible, prune, scope, scopeLabel, fold, placeholder, build, noteText, nearest, clear, stage, line, progress, record, parseLast} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -100,6 +100,11 @@ function chips(sel) {
               label: '노트 "' + (f.length > CUT ? f.slice(0, CUT) + '…' : f) + '"'});
   });
   return out;
+}
+function modalSel(screen, els) {                         // 크게 보기 안 대화창 → chips 의 {ids, els}: 연 화면 하나 + 그 화면에서 고른 요소만 · 연 화면이 없으면 null(판 규칙)
+  if (screen == null || screen === '') return null;
+  screen = String(screen);
+  return {ids: [screen], els: (els || []).filter(function (e) { return e && String(e.screen) === screen; })};
 }
 function visible(list, dismissed) { return (list || []).filter(function (c) { return !(dismissed && dismissed[c.key]); }); }
 function prune(dismissed, list) {
@@ -265,6 +270,6 @@ function parseLast(raw) {
   return {last: {text: v.text, ids: v.ids.slice(), at: +v.at || 0}, bad: false};
 }
 
-HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elType: elType, elLabel: elLabel, chips: chips, visible: visible, prune: prune,
+HD.chat = {VIA: VIA, PLACEHOLDER: PLACEHOLDER, ALL: ALL, STAGES: STAGES, tagOf: tagOf, elType: elType, elLabel: elLabel, chips: chips, modalSel: modalSel, visible: visible, prune: prune,
            scope: scope, scopeLabel: scopeLabel, fold: fold, placeholder: placeholder, build: build, noteText: noteText, nearest: nearest, clear: clear, stage: stage, line: line, progress: progress, record: record, parseLast: parseLast};
 })();
