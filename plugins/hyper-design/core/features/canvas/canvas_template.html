@@ -144,6 +144,7 @@ var AD = null;                                   // 주소 복사(modules/view-a
 var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
 var BN = null;                                   // 판 메모(modules/view-board-notes.js · 규칙 board-notes.js, R23) — 기능 등록부로 아래에서 붙는다
+var BL = null;                                   // R47 판 메모 선(modules/view-board-links.js · 규칙 board-links.js) — 기능 등록부로 아래에서 붙는다
 function sizeOf(id) { return AB ? AB.of(id) : {w: CARD.w, h: CARD.h, custom: false}; }   // 카드 크기를 읽는 곳 하나(없으면 프로젝트 카드 크기)
 function wOf(el) { var c = el && el.closest ? el.closest('.card') : null; return c ? sizeOf(c.dataset.id).w : CARD.w; }   // 카드 안 배율 = 실제 폭 / 그 카드 폭
 var LEFT = 300;                                 // 카드 왼쪽 통로(줄을 넘는 화살표가 지나는 곳)
@@ -238,6 +239,7 @@ function adoptState(names) {
   if (has('notes')) adoptExternal(['notes']);
   if (has('card-size') && AB) AB.reload();          // 카드 크기(task 46) — 상태는 view-artboard 가 갖고 셸은 다시 읽으라고만
   if (has('board-notes') && BN) BN.reload();       // 판 메모(R23) — 상태는 view-board-notes 가 갖는다
+  if (has('board-links') && BL) BL.reload();       // R47 판 메모 선 — 상태는 view-board-links 가 갖는다
   drawArrows(); placeSelbar();
   if (VP) VP.refresh();
 }
@@ -1320,6 +1322,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
   pickedAll: function () { return EB.all().map(function (s) { return {screen: s.card.dataset.id, h: s.h, app: appCard(s.card.dataset.id)}; }); },   // 판에서 고른 요소 모두(R19 — 대화창 칩)
   boardNotes: function () { var m = BN ? BN.map() : {}; return Object.keys(m).map(function (id) { var n = m[id]; return {id: id, text: n.text, x: n.x, y: n.y, w: n.w, h: n.h || 0}; }); },   // 판 메모 모두(R27 F19 — 대화창이 'AI에게'로 넣은 것만 칩으로, 읽기만)
+  boardLinks: function () { return BL ? BL.map() : {}; },   // R47 판 메모 선 map 모두(정보 카드가 읽기만 — 없으면 {})
   sendNotes: function (list) { if (SN.busy()) return false; list.forEach(function (n) { if (!NS.find(n.id)) NS.add(n); }); saveNotes(); SN.send(list); return true; },   // 새로 만든 카드 iframe 이 실렸을 때 = 카드 load 리스너와 같은 일(테마 변수·반영 대기·메모 자리, 48a swap)
   notes: {list: function () { return NS.list(); }, find: function (id) { return NS.find(id); }, save: function () { saveNotes(); }},
   store: {getItem: ST.getItem, setItem: ST.setItem, removeItem: ST.removeItem},
@@ -1364,7 +1367,8 @@ AB = FT.artboard ? FT.artboard.attach({
   changed: function () { drawArrows(); placeSelbar(); LC.schedule(); if (!modal.hidden) { sizeModal(); drawPins(); } if (VP) VP.refresh(); },
   guard: function (ids) { if (LF.guard(ids)) ids = ids.filter(function (id) { return !LF.isLocked(id); }); return ids; }}) : null;
 BN = FT.boardNotes ? FT.boardNotes.attach({tool: function () { return tool; }, setTool: setTool,
-  changed: function () { if (LY) LY.render(); }, clear: function () { SL.dispatch({type: 'clear'}); }}) : null;   // 판 메모(R23): T 로 빈 판 누르기·V 두 번 누르기 = 만들기
+  changed: function () { if (LY) LY.render(); if (BL) BL.notesChanged(); }, clear: function () { SL.dispatch({type: 'clear'}); }}) : null;   // 판 메모(R23) · R47 메모 바뀜 = 선 거두기: T 로 빈 판 누르기·V 두 번 누르기 = 만들기
+BL = FT.boardLinks ? FT.boardLinks.attach({tool: function () { return tool; }}) : null;   // R47 판 메모 선(점 끌어 잇기 — 선택(V)에서만)
 // 빈 레이아웃 승격(modules/view-promote.js, #241 R2) — 카드 자리·폴더의 주인은 셸이라 읽기/쓰기만 넘긴다. 붙지 못했으면 승격 없이(빈 카드가 남음, [hd] 알림)
 var PR = FT.promote ? FT.promote.attach({group: function (id) { var c = VL.cardEl(id); return c ? CP.group(c) : ''; },
   pos: {get: CP.map, set: function (m) { CP.replace(m); drawArrows(); }},
