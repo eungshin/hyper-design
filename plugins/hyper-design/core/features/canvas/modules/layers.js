@@ -1,6 +1,7 @@
 /* Model — 레이어 나무(조각 4, H6·H7 · 폴더 H17). DOM·저장소를 쓰지 않는다.
    나무 = (사용자 폴더 아래 화면들) + 줄(묶음) 아래 화면들 + 판 글(소개·끝 글). 숨김·잠금·메모 수는 밖에서 받아 줄마다 붙인다.
-   build(groups, texts, st, folders?, notes?) → [{kind: 'folder'|'row'|'screen'|'text'|'note', id, name, row?, folder?, count?, hid, lock, memo}]
+   build(groups, texts, st, folders?, notes?, cards?) → [{kind: 'folder'|'row'|'screen'|'text'|'note', id, name, row?, folder?, count?, hid, lock, memo, card?}]
+     cards = 정보 카드 메모 수(R47, HD.infoCard.counts) {screens: {화면 id: N}, folders: {줄 이름: N}} — 있으면 화면 줄·줄(묶음) 줄에 card: N(0 이면 칸 없음)
      notes = 판 메모 줄 [{id: 'note:<id>', name, hid?, lock?}](R25·R26) — 있으면 맨 끝에 묶음 줄 {kind 'row', id NOTES '@notes', name '판 메모', count, hid·lock = 모두일 때} + 메모 줄(kind 'note', row '@notes')
      groups = [{id, name, screens: [{id, name}]}] · texts = [{id: '@intro', name}] · st = {hidden, locked, memo}(id → 값)
      folders = 폴더 상태(modules/folders.js) {v, folders: [{id, name, ids, open}]} — 주면: 사용자 폴더가 맨 앞(폴더 줄 + 그 화면, 화면엔 folder: id),
@@ -20,13 +21,15 @@ var HD = globalThis.HD = globalThis.HD || {};
 var NOTES = '@notes';
 function all(xs, k) { return xs.length > 0 && xs.every(function (x) { return x[k]; }); }
 
-function build(groups, texts, st, folders, notes) {
+function build(groups, texts, st, folders, notes, cards) {
   st = st || {};
   var h = st.hidden || {}, l = st.locked || {}, m = st.memo || {}, out = [], withF = !!folders && typeof folders === 'object';
   var fs = withF && Array.isArray(folders.folders) ? folders.folders : [], inF = {}, scr = {};
   fs.forEach(function (f) { (f.ids || []).forEach(function (id) { if (!inF[id]) inF[id] = f.id; }); });
   (groups || []).forEach(function (g) { g.screens.forEach(function (s) { if (!scr[s.id]) scr[s.id] = {s: s, row: g.id}; }); });
-  var line = function (s, row) { return {kind: 'screen', id: s.id, name: s.name, row: row, hid: !!h[s.id], lock: !!l[s.id], memo: m[s.id] || 0}; };
+  var cs = cards && cards.screens || {}, cf = cards && cards.folders || {};
+  var card = function (x, n) { if (n > 0) x.card = n; return x; };
+  var line = function (s, row) { return card({kind: 'screen', id: s.id, name: s.name, row: row, hid: !!h[s.id], lock: !!l[s.id], memo: m[s.id] || 0}, cs[s.id]); };
   fs.forEach(function (f) {
     var seen = {}, kids = [];
     (f.ids || []).forEach(function (id) {
@@ -42,6 +45,7 @@ function build(groups, texts, st, folders, notes) {
       .map(function (s) { return line(s, g.id); });
     var r = {kind: 'row', id: g.id, name: g.name, hid: all(kids, 'hid'), lock: false, memo: 0};
     if (withF) { r.count = kids.length; r.lock = all(kids, 'lock'); }
+    if (String(g.id).charAt(0) !== '@') card(r, cf[g.name]);   // 줄 = 판의 묶음(screens.json group) — 빈 레이아웃 '@drafts' 는 아님
     out.push(r);
     out = out.concat(kids);
   });

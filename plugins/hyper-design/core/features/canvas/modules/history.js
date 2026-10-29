@@ -16,7 +16,7 @@
 var HD = globalThis.HD = globalThis.HD || {};
 var KEEP = 200, MAX_BYTES = 1000000;
 var STATUS = {canvas: '화면에만', pending: '반영 대기', sent: 'AI에 보냄', file: '파일에 씀'};
-var TRACK = ['notes', 'card-pos', 'link-names', 'hidden', 'locked', 'folders', 'card-size', 'board-notes'];   // 되돌릴 상태 이름(state-file NAMES 중) — edit-log(기록 자신)·busy(AI 작업 표시)·note-seq(번호는 다시 쓰지 않음)는 뺀다
+var TRACK = ['notes', 'card-pos', 'link-names', 'hidden', 'locked', 'folders', 'card-size', 'board-notes', 'board-links'];   // board-links = 판 메모 선(R47) · 되돌릴 상태 이름(state-file NAMES 중) — edit-log(기록 자신)·busy(AI 작업 표시)·note-seq(번호는 다시 쓰지 않음)는 뺀다
 var REASON = {sent: 'AI에 보낸 일이라 되돌릴 수 없어요', file: '파일에 쓴 일이라 되돌릴 수 없어요',
               old: '너무 오래된 일이라 되돌릴 수 없어요', live: '다시 열기 전에 한 화면 설정 일이라 되돌릴 수 없어요'};
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };

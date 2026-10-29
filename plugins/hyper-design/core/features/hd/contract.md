@@ -37,6 +37,7 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 - `--json` 모양(왕복): `stop` → `{project, out, pid, port, how: route|kill|gone|other}` · `attach` → `{project, out, pid, agent, was}` · `wait` → `notes` 와 같은 모양(`which: working`) · `progress` → `{project, text, screen, event}`. `wait` 시간 넘음은 종료 코드 **2**(다른 오류는 1)
 - `--json` 모양: `ls` → `[{project, out, url, agent, pid, port, started, open}]` · `notes` → `{project, out, rev, helper, which, notes:[{id, screen, no, status, intent, sent, edit, scope, target:{path, quote, count}, text, replies}]}` · `reply` → `{rev, status, note, screen}` · `projects` → `[{name, title, out, state: running|off|missing, url, pid, created, last_opened, starred, trashed}]` · `save` → `{name, out, kind, created, last_opened, added}` · `open` → `{name, out, url, pid, agent, reused}` · `forget` → 지운 항목 · 오류 → `{error}`(종료 코드 1)
 - `notes` 줄: `scope`(canvas R7 `n.scope` = element|screen|all, 없으면 element)가 element 가 아니면 대상 뒤에 `· 범위: 이 화면` / `· 범위: 모든 화면`
+- `notes`·`wait` 정보 카드(R47): 상태 `board-notes`·`board-links` + screens.json `group` 으로 화면마다 카드 글(`hd_info_card.cards_for`)을 그 화면 첫 메모 줄 아래 네 칸 들여 한 번(`유의(정보 카드):` + `- …`). 이어진 메모가 없으면 예전 그대로 · `--json` 모양은 그대로
 
 ## 프로젝트 (링크) 규칙 — `hd_projects.py`
 - 이름 = slug(글자·숫자·'-', 소문자, 한글 그대로), 목록에서 하나뿐. 기본 이름 = `project_name`(겹치면 `-2`, `-3`…). `--name` 이 다른 out 의 이름이면 오류
@@ -93,6 +94,7 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 ## 구조 (층)
 - Model `hd_model.py` — 순수: 답 검사·찍기(by/at 은 받은 값), 상태, 번호, 메모 찾기, 줄 객체·사람용 줄. I/O·시계 없음(`tests/test_hd_model.py` 순수성 검사). `canvas/helper.py` 도 이 파일 하나로 검사한다(규칙 하나)
 - Client `hd_client.py` — I/O 만: 표지 읽기 · 핑 · 상태 파일·screens.json 읽기 · 답 보내기 · 프로젝트 목록 읽고 쓰기 · 빌드·도우미 띄우기·기다리기 · 브라우저. 규칙 없음
+- Model `hd_info_card.py` — 순수: 정보 카드 규칙(canvas `modules/info-card.js` 미러, 공유 사례 canvas `contract/info-card-cases.json` · `tests/test_hd_info_card.py`) `ends` `reach` `collect` `para` `text` `for_screen` `cards_for` `counts`
 - Model `helper_model.py` — 순수: 도우미 규칙 `parse_since` `state_reply`(#273 `?since`) · `too_big`(413 글) · `archive_lines` `archive_notes`(보관 줄) · `history_prune` `queue_prune`(#281 정리 고르기 — 시각 글 비교, 기준 시각은 부르는 쪽). I/O·시계 없음(`tests/test_hd_helper_model.py` 순수성 검사)
 - Model `hd_projects.py` — 순수: 프로젝트 목록 규칙(넣기·고치기·찾기·지우기·순서·이름·줄). 경로를 풀거나 시각을 재는 일은 Client(`tests/test_hd_projects.py` 순수성 검사)
 - CLI `hd.py` — argparse → Client → Model → 출력. 캔버스 고르기(하나면 그것, 여럿이면 목록과 함께 오류)만 한다

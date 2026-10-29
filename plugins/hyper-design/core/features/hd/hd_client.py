@@ -133,6 +133,15 @@ def screen_ids(out):
         return None
 
 
+def screen_groups(out):
+    """screens.json 의 {화면 id: 줄 이름(group)} — 정보 카드(R47)가 줄 카드를 이어받는 데 쓴다. 못 읽으면 {}."""
+    try:
+        ss = json.loads((pathlib.Path(out) / "screens.json").read_text(encoding="utf-8")).get("screens", [])
+        return {str(s["id"]): s["group"] for s in ss if isinstance(s, dict) and "id" in s and isinstance(s.get("group"), str) and s["group"]}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
+
+
 def call(m, path, body=None, method="POST", timeout=10):
     """도우미 API 하나 → (code, 답 객체). 닿지 않으면 HdError."""
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
