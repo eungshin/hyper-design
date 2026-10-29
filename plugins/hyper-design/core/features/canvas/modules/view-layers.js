@@ -1,6 +1,6 @@
 /* View — 레이어 패널(조각 4, H6·H7 · 폴더 H17). 나무와 거르기는 modules/layers.js(Model), 폴더 규칙은 modules/folders.js(Model), 여기는 그리기와 누르기만.
-   줄마다: 눈(숨김) · 이름(누르면 그 카드로 + 고르기, Shift/Ctrl = 고르기에 넣고 빼기) · 메모 수 · 잠금.
-   폴더·줄(묶음) 줄: 접기 · 눈(그 아래 화면 모두) · 폴더 아이콘 · 이름(누르면 그 화면 모두 고르기) · 화면 수 ·
+   줄마다: 눈(숨김, 맨 왼쪽 한 줄) · [폴더·줄 아래면 세로 안내선 칸(data-p = 머리 줄 id, 마지막 자식 .last)] · 종류 아이콘 · 이름(누르면 그 카드로 + 고르기, Shift/Ctrl = 고르기에 넣고 빼기) · 메모 수 · 잠금.
+   폴더·줄(묶음) 줄(옅은 바탕 — 올리면 그 묶음 자식 줄도 .grp-hov): 눈(그 아래 화면 모두) · 접기 · 폴더 아이콘 · 이름(누르면 그 화면 모두 고르기) · 화면 수 ·
      올리면 [가로로 늘어놓기][세로로 늘어놓기], 사용자 폴더는 [폴더 풀기]도. 사용자 폴더 이름 두 번 누르기 = 이름 바꾸기.
    줄(묶음) = 판의 섹션(51-4): id = HD.layers.rowId(줄 이름)(셸 tree() 의 'g'+차례를 여기서 바꾼다), 이름 두 번 누르기 = 줄 이름 바꾸기,
      올리면 [줄만 걷기], 오른쪽 메뉴 = 이름 바꾸기 · 줄만 걷기 · 줄 화면 모두 삭제. 쓰기는 view-rows 'rowHeads' 가 맡는다 — 의도 'hd-row-rename' {from, to} ·
@@ -39,6 +39,9 @@ var I = {
   del: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
   fShut: '<path d="M3 6h7l2 2h9v11H3z"/>',
   fOpen: '<path d="M3 19V6h7l2 2h7v3"/><path d="M3 19l3-8h16l-3 8z"/>',
+  scr: '<rect x="6" y="3" width="12" height="18" rx="2"/>',
+  memo: '<path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/>',
+  txt: '<path d="M5 6h14M12 6v13"/>',
   fNew: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M12 11v5M9.5 13.5h5"/>',
   fUn: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M10 11.5l4 4M14 11.5l-4 4"/>',
   fMove: '<path d="M3 6h7l2 2h9v11H3z"/><path d="M9 13.5h6M12.5 11l2.5 2.5-2.5 2.5"/>',
@@ -81,18 +84,20 @@ function mount(ctx) {
     if (section(x)) b += '<button type="button" class="ly-hov" data-act="ungroup" title="' + esc(W().ungroup) + ' (' + W().ungroupKey + ') — 화면은 위 폴더로" aria-label="폴더만 풀기">' + svg(I.ungroup) + '</button>';
     return b;
   }
-  function rowHtml(x, picked) {
-    var cls = 'ly-r ' + x.kind + (x.hid ? ' hid' : '') + (x.lock ? ' locked' : '') + (picked[x.id] ? ' on' : '') + (x.folder ? ' infolder' : '');
+  function rowHtml(x, picked, last) {
+    var p = x.folder || x.row || '';                 // 폴더·줄 아래 자식이면 그 머리 줄 id(안내선 · 묶음 올림)
+    var cls = 'ly-r ' + x.kind + (x.hid ? ' hid' : '') + (x.lock ? ' locked' : '') + (picked[x.id] ? ' on' : '') + (x.folder ? ' infolder' : '') + (p && last ? ' last' : '');
     var eye = '<button type="button" class="ly-eye" aria-pressed="' + !x.hid + '" aria-label="' + (x.hid ? '보이기' : '숨기기') + '">' + svg(x.hid ? I.off : I.eye) + '</button>';
     if (x.kind === 'row' || x.kind === 'folder') {
       var shut = isFolded(x);
       return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" data-id="' + esc(x.id) + '" role="treeitem" aria-expanded="' + !shut + '">' +
-        '<button type="button" class="ly-fold" aria-label="' + (shut ? '펴기' : '접기') + '">' + (shut ? '▸' : '▾') + '</button>' + eye +
+        eye + '<button type="button" class="ly-fold" aria-label="' + (shut ? '펴기' : '접기') + '">' + (shut ? '▸' : '▾') + '</button>' +
         '<span class="ly-ficon" aria-hidden="true">' + svg(shut ? I.fShut : I.fOpen) + '</span>' +
         '<span class="ly-name" title="' + esc(x.name) + (x.kind === 'folder' || section(x) ? ' — 두 번 눌러 이름 바꾸기' : '') + '">' + esc(x.name) + '</span>' +
         badge(x) + hov(x) + '<span class="ly-count" title="' + (notes(x) ? '메모 ' : '화면 ') + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
     }
-    return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" role="treeitem"' + (x.kind === 'screen' ? ' draggable="true"' : '') + '>' + eye +
+    return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '"' + (p ? ' data-p="' + esc(p) + '"' : '') + ' role="treeitem"' + (x.kind === 'screen' ? ' draggable="true"' : '') + '>' + eye +
+      '<span class="' + (p ? 'ly-ind' : 'ly-sp') + '" aria-hidden="true"></span><span class="ly-kicon" aria-hidden="true">' + svg(x.kind === 'note' ? I.memo : x.kind === 'text' ? I.txt : I.scr) + '</span>' +
       '<span class="ly-name">' + esc(x.name) + '</span>' + badge(x) + (x.memo ? '<span class="ly-cnt" title="메모 ' + x.memo + '건">' + x.memo + '</span>' : '') +
       (x.kind === 'screen' || x.kind === 'note' ? '<button type="button" class="ly-lock" aria-pressed="' + x.lock + '" aria-label="' + (x.lock ? '잠금 풀기' : '잠그기') + '">' + svg(x.lock ? I.lock : I.open) + '</button>' : '') +
       '</div>';
@@ -121,7 +126,10 @@ function mount(ctx) {
     Object.keys(folded).forEach(function (k) { fold[k] = 1; });
     fs.folders.forEach(function (f) { if (f.open === false) fold[f.id] = 1; });
     var shown = L.filter(list, {q: q.value, only: only, folded: fold});
-    tree.innerHTML = shown.length ? shown.map(function (x) { return rowHtml(x, picked); }).join('') : '<p class="dkp-empty">맞는 레이어가 없어요</p>';
+    tree.innerHTML = shown.length ? shown.map(function (x, i) {
+      var n = shown[i + 1], p = x.folder || x.row;
+      return rowHtml(x, picked, !!p && !(n && (n.folder || n.row) === p && n.kind !== 'row' && n.kind !== 'folder'));   // 그 머리 줄의 마지막 자식 = 안내선 끝
+    }).join('') : '<p class="dkp-empty">맞는 레이어가 없어요</p>';
     $$f().forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.f === only)); });
     var fb = bar.querySelector('[data-act="folder"]'); if (fb) fb.disabled = !ids.length;
     var mb = bar.querySelector('[data-act="move"]'); if (mb) mb.disabled = !ids.length;
@@ -164,7 +172,11 @@ function mount(ctx) {
   });
 
   var hovId = null;                                  // 올린 줄(51-3) — 같은 줄 안 움직임은 한 번만 알린다
-  function hoverTo(id) { if (id === hovId) return; hovId = id; if (ctx.hover) ctx.hover(id ? L.hoverIds(list, id) : []); }
+  function hoverTo(id) {
+    if (id === hovId) return; hovId = id;
+    Array.prototype.forEach.call(tree.querySelectorAll('.ly-r[data-p]'), function (n) { n.classList.toggle('grp-hov', !!id && n.dataset.p === id); });   // 폴더 줄에 올리면 그 묶음이 함께(목업 10-29)
+    if (ctx.hover) ctx.hover(id ? L.hoverIds(list, id) : []);
+  }
   tree.addEventListener('mouseover', function (e) { var r = e.target.closest && e.target.closest('[data-ly]'); hoverTo(r && !dragId ? r.dataset.ly : null); });
   tree.addEventListener('mouseleave', function () { hoverTo(null); });
 
@@ -340,6 +352,17 @@ function mount(ctx) {
 // 폴더 모양 — 회색만(H13). 4단계에서 셸 CSS 에 붙인다.
 var CSS =
   '.ly-r.folder,.ly-r.row{font-weight:700;color:#444}\n' +
+  /* 폴더 안 구분(사용자 10-29, Photoshop·Sketch 목업): 눈 칸 왼쪽 한 줄 · 폴더 줄 바탕 · 자식 = 접기 칸 자리에 세로 안내선(마지막 자식에서 끝) + 종류 아이콘 */
+  '.ly-r.folder,.ly-r.row{background:#F4F3EF;margin-top:4px}.ly-r.folder:first-child,.ly-r.row:first-child{margin-top:0}\n' +
+  '.ly-r.folder:hover,.ly-r.row:hover{background:#ECEBE6}.ly-r.folder.on,.ly-r.row.on{background:#E4E3DE}\n' +
+  '.ly-r.folder .ly-ficon,.ly-r.row .ly-ficon{color:#b07a1e}\n' +
+  '.ly-r.screen,.ly-r.text,.ly-r.note{padding-left:0}\n' +
+  '.ly-ind,.ly-sp{flex:none;width:26px;align-self:stretch;position:relative}\n' +
+  '.ly-ind:before{content:"";position:absolute;left:12px;top:0;bottom:0;border-left:1.5px solid #D8D6CF}.ly-r.last .ly-ind:before{bottom:50%}\n' +
+  '.ly-ind:after{content:"";position:absolute;left:12px;top:50%;width:7px;border-top:1.5px solid #D8D6CF}\n' +
+  '.ly-kicon{display:grid;place-items:center;width:18px;height:18px;color:#9a9a95;flex:none}\n' +
+  '.ly-kicon svg{width:15px;height:15px}\n' +
+  '.ly-r.grp-hov{background:#FAFAF8}\n' +
   '.ly-r.folder .ly-name,.ly-r.row .ly-name{cursor:pointer}\n' +
   '.ly-ficon{display:grid;place-items:center;width:18px;height:18px;color:#777;flex:none}\n' +
   '.ly-ficon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}\n' +

@@ -174,3 +174,38 @@ def test_layers_folder_double_click_renames_and_dragging_a_screen_into_another_f
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+LAYOUT = """(head) => { const rs = [...document.querySelectorAll('#lyTree .ly-r')], i = rs.findIndex(r => r.dataset.kind === 'row' && r.querySelector('.ly-name').textContent === head);
+  const h = rs[i], kids = [];
+  for (let k = i + 1; k < rs.length && (rs[k].dataset.kind === 'screen' || rs[k].dataset.kind === 'text') && rs[k].dataset.p === h.dataset.ly; k++) kids.push(rs[k]);
+  const x = (r, s) => { const e = r.querySelector(s); return e ? Math.round(e.getBoundingClientRect().left) : null; };
+  return {headEye: x(h, '.ly-eye'), headIcon: x(h, '.ly-ficon'), headBg: getComputedStyle(h).backgroundColor,
+          kids: kids.map(r => ({eye: x(r, '.ly-eye'), name: x(r, '.ly-name'), guide: !!r.querySelector('.ly-ind'), last: r.classList.contains('last'),
+                                bg: getComputedStyle(r).backgroundColor, hov: r.classList.contains('grp-hov')}))}; }"""
+
+
+@pytest.mark.area("layers")
+def test_layers_folder_children_read_as_inside_the_folder(ctx, out):
+    """레이어 패널 폴더(사용자 10-29, Photoshop·Sketch 참고 목업): 눈 칸은 왼쪽 한 줄(들여써도 일렬) · 폴더 줄은 바탕색 ·
+    자식은 폴더 아이콘보다 안쪽 + 세로 안내선(마지막 자식에서 끝) · 폴더 줄에 올리면 그 묶음이 함께 옅게."""
+    srv, pg, errors = _open(ctx, out)
+    try:
+        pg.click('#dock .dk-tab[data-p="layers"]')
+        pg.wait_for_selector('#lyTree [data-kind="row"]')
+        L = pg.evaluate(LAYOUT, SET)
+        assert len(L["kids"]) >= 2, L
+        assert all(abs(k["eye"] - L["headEye"]) <= 1 for k in L["kids"]), ("눈 칸은 폴더 줄과 자식 줄이 일렬", L)
+        assert all(k["name"] >= L["headIcon"] + 16 for k in L["kids"]), ("자식 이름은 폴더 아이콘보다 안쪽", L)
+        assert all(k["guide"] for k in L["kids"]), ("자식마다 세로 안내선", L)
+        assert [k["last"] for k in L["kids"]] == [False] * (len(L["kids"]) - 1) + [True], ("안내선은 마지막 자식에서 끝", L)
+        assert L["headBg"] not in ("rgba(0, 0, 0, 0)", "transparent"), ("폴더 줄 바탕색", L)
+        _layer_head(pg, SET).locator(".ly-name").hover()
+        pg.wait_for_timeout(100)
+        assert all(k["hov"] for k in pg.evaluate(LAYOUT, SET)["kids"]), "폴더 줄에 올리면 그 묶음이 함께"
+        if SHOTS:
+            pg.locator("#pLayers").screenshot(path=os.path.join(SHOTS, "layers-folder-children.png"))
+        assert not errors, errors
+    finally:
+        srv.shutdown(); srv.server_close()
+        pg.close()
