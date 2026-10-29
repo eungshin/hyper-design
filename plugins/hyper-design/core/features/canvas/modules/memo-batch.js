@@ -5,7 +5,8 @@
    build(draft, {note, intent, scope}, mkId) → 메모 목록 — 셸이 NS.add 로 하나씩 넣는다:
      여러 장 + 범위 screen(또는 element) = 화면마다 메모 하나, 같은 batch = mkId() · 각자 screen=… · no=N 으로 나가 hd claim/reply 흐름 그대로.
      범위 all = 첫 화면에 메모 하나(모든 화면 요청이 여러 번 나가지 않게). 한 장 = 지금 메모와 같은 모양(batch 없음, 이 요소 = scope 칸 없음).
-   HD.memoBatch = {draft(ids, titleOf), multi(draft), scopes(draft, SCOPES), defaultScope(draft), label(draft), build(draft, input, mkId)} */
+   toggle(ids, id) → 새 목록: 있으면 빼고 없으면 끝에(겹침·빈 값 빼고 차례 그대로) — 메모 도구 화면 모드 Shift+클릭(고른 화면 더하기·빼기)
+   HD.memoBatch = {draft(ids, titleOf), multi(draft), scopes(draft, SCOPES), defaultScope(draft), label(draft), build(draft, input, mkId), toggle(ids, id)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -16,6 +17,13 @@ function draft(ids, titleOf) {
   if (!screens.length) return null;
   var titles = screens.map(function (id) { var t = titleOf ? titleOf(id) : id; return t == null || t === '' ? id : String(t); });
   return {screen: screens[0], screens: screens, titles: titles, targets: [{path: 'body', text: titles[0], rect: null}]};
+}
+function toggle(ids, id) {
+  var seen = {}, out = [];
+  (ids || []).forEach(function (x) { if (x == null || x === '') return; x = String(x); if (!seen[x]) { seen[x] = 1; out.push(x); } });
+  if (id == null || id === '') return out;
+  id = String(id);
+  return seen[id] ? out.filter(function (x) { return x !== id; }) : out.concat([id]);
 }
 function multi(d) { return !!(d && d.screens && d.screens.length > 1); }
 function scopes(d, SCOPES) {
@@ -45,5 +53,5 @@ function build(d, input, mkId) {
   return d.screens.map(function (id, i) { var m = memo(mkId(), id, d.titles[i], input); m.scope = 'screen'; m.batch = batch; return m; });
 }
 
-HD.memoBatch = {draft: draft, multi: multi, scopes: scopes, defaultScope: defaultScope, label: label, build: build};
+HD.memoBatch = {draft: draft, multi: multi, scopes: scopes, defaultScope: defaultScope, label: label, build: build, toggle: toggle};
 })();

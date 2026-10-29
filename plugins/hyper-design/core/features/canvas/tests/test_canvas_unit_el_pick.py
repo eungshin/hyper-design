@@ -30,7 +30,7 @@ out.bad = [ks(P.toggle(null, A, k)), P.primary(null), P.primary([]), P.only(null
 out.has = [P.has([A, B], {screen: 'pay', path: 'p.b'}, k), P.has([A], X, k)];
 out.keep = ks(P.keep([A, X, B], s => s.screen === 'pay'));
 const sh = o => P.shift(Object.assign({tool: 'move', els: 1, picked: true, draft: false}, o));
-out.shift = [sh({}), sh({els: 0}), sh({picked: false}), sh({tool: 'annotate'}), sh({draft: true}), P.shift(null)];
+out.shift = [sh({}), sh({els: 0}), sh({picked: false}), sh({tool: 'memo'}), sh({draft: true}), P.shift(null)];
 out.scope = [P.menuScope({card: 'pay', elCard: 'pay'}), P.menuScope({card: 'pay', elCard: null}), P.menuScope({card: 'pay', elCard: 'done'}), P.menuScope(null)];
 // 대화창 칩 · 보내기
 const title = id => ({pay: '결제', done: '완료'})[id] || id;

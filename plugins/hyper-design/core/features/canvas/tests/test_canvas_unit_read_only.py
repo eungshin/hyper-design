@@ -17,10 +17,10 @@ const fs = require('fs'), vm = require('vm');
 for (const f of ['tools.js', 'read-only.js']) vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f});
 const R = globalThis.HD.readOnly, out = {};
 out.controls = R.CONTROLS;
-out.tools = ['hand', 'move', 'trigger', 'knife', 'annotate', 'text', 'layout', 'memo', 'nope', null].map(R.editTool);
+out.tools = ['hand', 'move', 'trigger', 'knife', 'memo', 'text', 'layout', 'annotate', 'nope', null].map(R.editTool);   // annotate = 메모 칸으로 합쳐 없어진 이름(2026-10-29)
 const k = (o) => R.key(o);
 out.keys = {
-  v: k({key: 'v'}), V: k({key: 'V'}), h: k({key: 'h'}), m: k({key: 'm'}), e: k({key: 'e'}), zero: k({key: '0'}),
+  v: k({key: 'v'}), V: k({key: 'V'}), h: k({key: 'h'}), m: k({key: 'm'}), p: k({key: 'p'}), e: k({key: 'e'}), zero: k({key: '0'}),
   del: k({key: 'Delete'}), bs: k({key: 'Backspace'}), esc: k({key: 'Escape'}),
   undo: k({key: 'z', ctrl: true}), redo: k({key: 'Z', ctrl: true, shift: true}), y: k({key: 'y', meta: true}), copy: k({key: 'c', ctrl: true}),
   altV: k({key: 'v', alt: true}),
@@ -49,7 +49,8 @@ def out():
 
 
 def test_edit_tools(out):
-    assert out["tools"] == [False, True, True, True, True, True, True, True, False, False], "손만 편집이 아니다"
+    assert out["tools"] == [False, True, True, True, True, True, True, False, False, False], "손만 편집이 아니다 · 모르는(없어진) 도구 이름은 편집 도구가 아니다"
+    assert out["keys"]["p"] is True and out["keys"]["m"] is True, "메모 칸의 두 키(P 요소 · M 화면)는 읽기 전용에서 막힌다"
 
 
 def test_controls_cover_saving_buttons(out):
