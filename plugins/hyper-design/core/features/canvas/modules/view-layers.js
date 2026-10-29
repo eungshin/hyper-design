@@ -20,7 +20,9 @@
        (view-board-notes 가 메모의 칸 + 기록 한 줄). 숨긴 메모 줄은 눌러도 판에서 고르지 않는다(숨긴 화면처럼).
    ctx = {$, esc, root, tree() → {groups, texts, notes?, notePicked?}, state() → {hidden, locked, memo}, picked() → [id],
           hide(ids, on), lock(ids, on), reveal(id), addLayout(), del(ids),
-          folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y'), hover(ids)} — 폴더 셋·hover 는 없으면 그 기능만 빠진다
+          folders: {state(), dispatch(a)}, pick(ids, mode 'only'|'toggle'|'add'), arrange(ids, axis 'x'|'y'), hover(ids),
+          cardData?() → {notes, links, groups}(R47 정보 카드 — view-send 와 같은 칸)} — 폴더 셋·hover·cardData 는 없으면 그 기능만 빠진다
+   정보 카드(R47): 화면 줄·줄(묶음) 줄에 '카드 N'(HD.infoCard.counts — 그 화면·줄에 이어진 판 메모 수, 화면은 줄 카드를 이어받은 수) — AI 요청에 함께 가는 메모가 있다는 표시
    판 글 줄(kind text)을 누르면 의도 'hd-board-pick' {id}(판에서 그 글 고르기, t51-9).
    줄에 마우스를 올리면 ctx.hover(HD.layers.hoverIds(나무, 그 줄 id)) — 판이 그 카드·판 글을 강조(51-3, Figma F10), 나무 밖으로 나가면 hover([]) */
 (function () {
@@ -88,12 +90,20 @@ function mount(ctx) {
         '<button type="button" class="ly-fold" aria-label="' + (shut ? '펴기' : '접기') + '">' + (shut ? '▸' : '▾') + '</button>' + eye +
         '<span class="ly-ficon" aria-hidden="true">' + svg(shut ? I.fShut : I.fOpen) + '</span>' +
         '<span class="ly-name" title="' + esc(x.name) + (x.kind === 'folder' || section(x) ? ' — 두 번 눌러 이름 바꾸기' : '') + '">' + esc(x.name) + '</span>' +
-        hov(x) + '<span class="ly-count" title="' + (notes(x) ? '메모 ' : '화면 ') + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
+        badge(x) + hov(x) + '<span class="ly-count" title="' + (notes(x) ? '메모 ' : '화면 ') + (x.count || 0) + '개">' + (x.count || 0) + '</span></div>';
     }
     return '<div class="' + cls + '" data-ly="' + esc(x.id) + '" data-kind="' + x.kind + '" role="treeitem"' + (x.kind === 'screen' ? ' draggable="true"' : '') + '>' + eye +
-      '<span class="ly-name">' + esc(x.name) + '</span>' + (x.memo ? '<span class="ly-cnt" title="메모 ' + x.memo + '건">' + x.memo + '</span>' : '') +
+      '<span class="ly-name">' + esc(x.name) + '</span>' + badge(x) + (x.memo ? '<span class="ly-cnt" title="메모 ' + x.memo + '건">' + x.memo + '</span>' : '') +
       (x.kind === 'screen' || x.kind === 'note' ? '<button type="button" class="ly-lock" aria-pressed="' + x.lock + '" aria-label="' + (x.lock ? '잠금 풀기' : '잠그기') + '">' + svg(x.lock ? I.lock : I.open) + '</button>' : '') +
       '</div>';
+  }
+  function badge(x) { return x.card ? '<span class="ly-card" title="정보 카드 — 판 메모 ' + x.card + '개가 AI 요청에 함께 가요">카드 ' + x.card + '</span>' : ''; }
+  function cardCounts(groups) {                     // 정보 카드 수(R47) — 칸이 없거나 HD.infoCard 가 없으면 배지 없이
+    if (typeof ctx.cardData !== 'function' || !HD.infoCard) return null;
+    var ids = [], names = [];
+    (groups || []).forEach(function (g) { if (String(g.id).charAt(0) !== '@') names.push(g.name); g.screens.forEach(function (s) { ids.push(s.id); }); });
+    try { return HD.infoCard.counts(ctx.cardData() || {}, ids, names); }
+    catch (e) { console.warn('[hd] 정보 카드 수를 세지 못했어요 — 배지 없이: ' + (e && e.message || e)); return null; }
   }
   function section(x) { return x.kind === 'row' && String(x.id).indexOf('row:') === 0; }
   function W() { return HD.rowOps.WORDS; }           // 판 제목 메뉴와 같은 글(R31)   // 판의 줄(빈 레이아웃 묶음 '@drafts' 는 아님)
@@ -106,7 +116,8 @@ function mount(ctx) {
     var t = ctx.tree(), picked = {}, ids = ctx.picked(), fs = fstate(), fold = {};
     ids.forEach(function (id) { picked[id] = 1; });
     if (t.notePicked) picked[t.notePicked] = 1;
-    list = L.build(rows(t.groups), t.texts, ctx.state(), fs, t.notes);
+    var gs = rows(t.groups);
+    list = L.build(gs, t.texts, ctx.state(), fs, t.notes, cardCounts(gs));
     Object.keys(folded).forEach(function (k) { fold[k] = 1; });
     fs.folders.forEach(function (f) { if (f.open === false) fold[f.id] = 1; });
     var shown = L.filter(list, {q: q.value, only: only, folded: fold});
@@ -332,6 +343,7 @@ var CSS =
   '.ly-r.folder .ly-name,.ly-r.row .ly-name{cursor:pointer}\n' +
   '.ly-ficon{display:grid;place-items:center;width:18px;height:18px;color:#777;flex:none}\n' +
   '.ly-ficon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}\n' +
+  '.ly-card{font-size:11px;font-weight:400;line-height:16px;color:#5f5f5a;border:1px solid #DADAD5;border-radius:999px;padding:0 6px;margin-left:4px;flex:none;white-space:nowrap}\n' +
   '.ly-count{font-size:11px;font-weight:400;color:#777;min-width:18px;text-align:right;padding-right:4px;flex:none}\n' +
   '.ly-r .ly-hov{opacity:0}.ly-r:hover .ly-hov,.ly-r .ly-hov:focus-visible{opacity:1}\n' +
   '.ly-r:not(:hover):not(:focus-within) .ly-hov{position:absolute;pointer-events:none}\n' +   /* R31: 안 올렸을 때는 자리를 차지하지 않는다 — 폴더 이름이 덜 잘린다 */

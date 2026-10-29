@@ -3,7 +3,8 @@
    메모 = {id, no, screen, targets:[{path,text,rect,quote?,src?}], replies:[], path, text, rect, note, intent:'change', sent, edit, op?, to?, value?, index?, x?, y?}
      edit: link(op: link·cut·untrigger·trigger·new) · text(value '' = 글 비우기) · remove(요소 지우기, task 30) · duplicate(요소 복제) · move(op up·down — 형제와 맞바꿈, task 49a · op to + to = 형제 사이 자리, 51-5) · attr(op = 속성 이름, value = 새 값) · insert·replace(value = 부품 key, task 49b) · title · purpose · policies(value = 줄 목록 전체, task 31) · policy(옛 메모만: index, op: delete = 그 줄 지우기 · 빈 value 도 지우기) · new-screen · cut-in · delete · copy · board(판 글, screen '@board' · op set|delete · to = 칸·묶음 키 — t51-9, board-text.js)
    n.scope = element|screen|all(없음 = element, R7) — 요청문에 범위 줄
-   request(notes, out, sizes?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46)
+   request(notes, out, sizes?, context?) — sizes = {화면 id: 'W×H(프리셋)'} 이면 그 항목 아래 '   화면 크기: …' 줄(task 46) ·
+     context(screenId) → 정보 카드 글(R47) — 화면마다 첫 항목 머리 바로 아래 세 칸 들여 한 번, 없거나 빈 글이면 예전과 같은 글
    빈 레이아웃(셸 C9): layoutId(now, rnd) → 'new-…' id · layout(id, {x, y}, name?) → 빈 레이아웃 메모(edit 'new-screen', 이름 기본 '빈 레이아웃') ·
      layoutText(n) → 그 메모의 요청 글(say.layout) · layoutOf(list, id) → 그 화면의 빈 레이아웃 메모|null
    HD.edits = {note, pendingFor, overviewPending, pendingLink, directOf, instantOf, preview, split, tally, request, items, emptyLayouts, say} */
@@ -134,10 +135,19 @@ function nos(it) {
   return o.length ? ' · no=' + o.join(',') : '';
 }
 function place(a) { var t = flat(a.text); return a.path + (t && t.length <= 20 ? ' ("' + t + '")' : ''); }
-function request(notes, out, sizes) {               // sizes = {화면 id: 'W×H(프리셋)'} — 기본 크기가 아닌 카드만(task 46), 그 항목 아래 '화면 크기:' 줄
-  var list = items(notes), sz = sizes && typeof sizes === 'object' ? sizes : {};
+// context(screenId) → 글 덩어리 | ''(R47 정보 카드 — 보내는 쪽이 넘기는 제공자, 이 모듈은 메모·연결을 모른다): 화면마다 첫 항목 머리 바로 아래, 줄마다 세 칸 들여 한 번.
+//   제공자가 없거나 빈 글이면 요청문은 예전과 한 글자도 같다
+var CARD_PAD = '   ';
+function cardBlock(context, screen, seen) {
+  if (typeof context !== 'function' || seen[screen]) return '';
+  seen[screen] = 1;
+  var t = context(screen);
+  return typeof t === 'string' && t.trim() ? '\n' + CARD_PAD + t.replace(/\r\n?/g, '\n').split('\n').join('\n' + CARD_PAD) : '';
+}
+function request(notes, out, sizes, context) {      // sizes = {화면 id: 'W×H(프리셋)'} — 기본 크기가 아닌 카드만(task 46), 그 항목 아래 '화면 크기:' 줄
+  var list = items(notes), sz = sizes && typeof sizes === 'object' ? sizes : {}, seen = {};
   return '[hyper-design 수정 요청] out=' + out + ' · ' + list.length + '건\n' + list.map(function (n, i) {
-    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + nos(n) + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
+    return (i + 1) + '. screen=' + n.screen + ' · path=' + n.path + nos(n) + cardBlock(context, n.screen, seen) + '\n   text="' + String(n.text).replace(/\s+/g, ' ') + '" · intent=' + n.intent +
       '\n   요청: ' + indent(n.note, CONT) +
       (n.src && n.src.file ? '\n   소스: ' + n.src.file + (n.src.line ? ':' + n.src.line : '') : '') +
       n.memos.filter(function (m) { return flat(m.note); }).map(function (m) {
