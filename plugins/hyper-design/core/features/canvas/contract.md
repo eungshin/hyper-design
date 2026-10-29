@@ -90,7 +90,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 
 **이웃 화면 동작(surface)**: 파일이 겹치지 않아도 같은 실행 중 동작을 쓰는 조각끼리 깨진다(2026-10-25: 교체 뒤 배지·높이, DS 카드 줄이 카드를 밀어냄, 대화창이 안내 줄을 가림). 그 동작을 바꾸는 조각은 커밋 전 영역 실행에 `--surface <이름>` 을 더한다 — 예: `-m "helper or modal" --surface frame`. 이름은 `tests/conftest.py` 의 `SURFACES`: `frame`(카드 iframe 다시 싣기·교체·요소 고르기) · `board`(판 위 줄 배치·겹침). 새 테스트 파일이 그 동작을 쓰면 `SURFACES` 에 한 줄(`test_canvas_unit_surfaces.py` 가 파일이 있는지 본다). 전체 실행은 main 이 단계 끝에 한 번 — 일꾼은 영역 + 이웃까지.
 
-**겹친 실행·다시 돌리기(R33, `tests/hd_testrun.py`)**: `-n 2` 이상이면 conftest 가 잠금 `%TEMP%/claude/hd-testrun.lock`(디렉터리 + `owner.json`)을 잡는다 — 다른 실행이 쥐고 있으면 `[hd-test] 다른 실행 중: … — 기다림` 한 줄 뒤 5초마다 본다(주인 pid 가 죽었거나 `owner.json` 없는 잠금이 2시간 넘으면 치우고 잡는다). 손으로 `mkdir` 하지 않는다(그러면 자기 잠금을 기다린다). `HD_TEST_NOLOCK=1` 은 건너뜀. 깨진 것이 있으면 끝에 그것만 `-n 0` 으로 한 번 더 돌려 `진짜 실패 N · 혼자 통과(부하로 보임) M` 을 찍고 runs.json 의 `rerun` 에 남긴다(40개 넘게 깨지면 건너뜀). 브라우저 맥락마다 바깥 글꼴(cdn.jsdelivr.net 등)은 빈 응답 — 실제 글꼴로 보려면 `HD_TEST_ALLOW_NET=1`. 마크업을 지운 조각은 커밋 전 `python tests/stale_refs.py <base>` 로 테스트에 남은 옛 선택자를 본다.
+**겹친 실행·다시 돌리기(R33, `tests/hd_testrun.py`)**: `-n 2` 이상이면 conftest 가 잠금 `%TEMP%/claude/hd-testrun.lock`(디렉터리 + `owner.json`)을 잡는다 — 다른 실행이 쥐고 있으면 `[hd-test] 다른 실행 중: … — 기다림` 한 줄 뒤 5초마다 본다(주인 pid 가 죽었거나 `owner.json` 없는 잠금이 2시간 넘으면 치우고 잡는다). 손으로 `mkdir` 하지 않는다(그러면 자기 잠금을 기다린다). `HD_TEST_NOLOCK=1` 은 건너뜀. 깨진 것이 있으면 끝에 그것만 `-n 0` 으로 한 번 더 돌려 `진짜 실패 N · 혼자 통과(부하로 보임) M` 을 찍고 runs.json 의 `rerun` 에 남긴다(40개 넘게 깨지면 건너뜀). chromium 은 바깥 글꼴 주소(cdn.jsdelivr.net 등)를 이름 풀기에서 바로 실패(--host-resolver-rules, Python route 아님 — time.sleep 기다림에도 막히지 않게) — 실제 글꼴로 보려면 `HD_TEST_ALLOW_NET=1`. 마크업을 지운 조각은 커밋 전 `python tests/stale_refs.py <base>` 로 테스트에 남은 옛 선택자를 본다.
 
 **어디를 고치면 무엇을 돌리나**
 

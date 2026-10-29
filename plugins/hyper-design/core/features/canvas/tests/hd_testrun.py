@@ -16,7 +16,7 @@ ENV_RERUN_OUT = "HD_TEST_RERUN_OUT"
 ENV_ALLOW_NET = "HD_TEST_ALLOW_NET"  # 1 이면 바깥 글꼴을 막지 않는다(실제 글꼴로 보거나 전후 시간 비교)
 RERUN_MAX = 40                    # 이보다 많이 깨지면 부하가 아니라 진짜 고장 — 다시 돌리지 않는다
 
-# 테스트 페이지가 부르는 바깥 글꼴(foundation/derive.py 의 tokens.css @import) — 받지 않고 빈 응답을 준다. load 가 글꼴 ~45개를 기다리지 않게.
+# 테스트 페이지가 부르는 바깥 글꼴(foundation/derive.py 의 tokens.css @import) — 받지 않고 바로 실패시킨다(chromium 시작 인자). load 가 글꼴 ~45개를 기다리지 않게.
 EXTERNAL_FONT_HOSTS = ("cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com")
 
 
@@ -155,39 +155,27 @@ def release(lock=LOCK):
 
 
 def block_external_fonts():
-    """playwright 의 새 브라우저 맥락(new_context·new_page·launch_persistent_context)마다 바깥 글꼴 요청을 빈 200 으로 막는다.
-    테스트 파일마다 브라우저를 따로 띄우므로 한 곳(conftest 가져올 때)에서 감싼다. 두 번 불러도 한 번만."""
+    """playwright 가 띄우는 chromium(launch·launch_persistent_context)마다 바깥 글꼴 주소를 이름 풀기 단계에서 바로 실패시킨다(--host-resolver-rules ~NOTFOUND).
+    맥락 route 로 막지 않는다 — route 처리기는 Python 에서 돌아, 테스트가 time.sleep 으로 기다리는 동안 새 글자의 글꼴 조각 요청이 멈추고
+    그 뒤를 잇는 저장까지 멈췄다(전체 실행 4904741, test_canvas_testrun_fonts). 테스트 파일마다 브라우저를 따로 띄우므로 한 곳(conftest 가져올 때)에서 감싼다. 두 번 불러도 한 번만."""
     if os.environ.get(ENV_ALLOW_NET) == "1":
         return False
     try:
         from playwright.sync_api import _generated as g
     except Exception:
         return False
-    if getattr(g.Browser, "_hd_fonts_blocked", False):
+    if getattr(g.BrowserType, "_hd_fonts_blocked", False):
         return True
-    import re
-    pat = re.compile(r"^https?://(" + "|".join(re.escape(h) for h in EXTERNAL_FONT_HOSTS) + r")/")
+    rule = "--host-resolver-rules=" + ", ".join("MAP %s ~NOTFOUND" % h for h in EXTERNAL_FONT_HOSTS)
 
-    def fulfil(route):
-        u = route.request.url.split("?")[0].lower()
-        ctype = "text/css" if u.endswith(".css") or "fonts.googleapis.com" in u else "application/octet-stream"
-        route.fulfill(status=200, content_type=ctype, body="")
+    def with_rule(k):
+        args = list(k.get("args") or [])
+        if not any(a.startswith("--host-resolver-rules=") for a in args):
+            args.append(rule)
+        return dict(k, args=args)
 
-    def guard(c):
-        try:
-            c.route(pat, fulfil)
-        except Exception:
-            pass
-        return c
-
-    nc, np_, lp = g.Browser.new_context, g.Browser.new_page, g.BrowserType.launch_persistent_context
-    g.Browser.new_context = lambda self, *a, **k: guard(nc(self, *a, **k))
-    g.BrowserType.launch_persistent_context = lambda self, *a, **k: guard(lp(self, *a, **k))
-
-    def new_page(self, *a, **k):
-        p = np_(self, *a, **k)
-        guard(p.context)
-        return p
-    g.Browser.new_page = new_page
-    g.Browser._hd_fonts_blocked = True
+    la, lp = g.BrowserType.launch, g.BrowserType.launch_persistent_context
+    g.BrowserType.launch = lambda self, *a, **k: la(self, *a, **(with_rule(k) if self.name == "chromium" else k))
+    g.BrowserType.launch_persistent_context = lambda self, *a, **k: lp(self, *a, **(with_rule(k) if self.name == "chromium" else k))
+    g.BrowserType._hd_fonts_blocked = True
     return True

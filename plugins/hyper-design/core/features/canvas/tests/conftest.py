@@ -7,7 +7,7 @@ test_canvas_modules.py 와 test_canvas_unit_*.py 는 통째로 unit(브라우저
 SERIAL 의 테스트는 -n(xdist) 실행에서 빠지고 따로 `-m serial`(-n 없이)로 돈다.
 `--surface frame,board` 는 -m 고른 것에 그 화면 동작(SURFACES)을 함께 쓰는 테스트 파일을 더한다 — 파일은 달라도 같은 동작을 쓰는 이웃 조각을 커밋 전에 같이 본다.
 실행 도구(hd_testrun.py): -n 2 이상이면 주 프로세스가 잠금(hd-testrun.lock)을 잡고(다른 실행이 잡고 있으면 기다림, HD_TEST_NOLOCK=1 은 건너뜀),
-끝에 깨진 것만 -n 0 으로 한 번 더 돌려 '진짜 실패 · 혼자 통과(부하로 보임)'를 나눈다. 브라우저 맥락마다 바깥 글꼴(cdn.jsdelivr.net…)은 빈 응답으로 막는다.
+끝에 깨진 것만 -n 0 으로 한 번 더 돌려 '진짜 실패 · 혼자 통과(부하로 보임)'를 나눈다. chromium 시작 인자로 바깥 글꼴(cdn.jsdelivr.net…) 주소를 바로 실패시킨다.
 """
 import json, os, subprocess, sys, tempfile, time
 from pathlib import Path
