@@ -465,7 +465,7 @@ pane.addEventListener('click', function (e) {
     if (!(SL.ids().length === 1 && SL.has(mc.dataset.id))) SL.dispatch({type: 'only', id: mc.dataset.id});
     EB.pickAt(mc, e.clientX, e.clientY, true); return;
   }
-  if (mc && !mc.classList.contains('draft') && !e.shiftKey && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {
+  if (mc && !mc.classList.contains('draft') && (!e.shiftKey || tool === 'annotate') && e.detail <= 1 && (tool === 'annotate' || tool === 'text')) {   // 주석 Shift = 요소 더하기·빼기(카드 여러 장 고르기 아님)
     e.preventDefault(); e.stopPropagation();
     var tf = cl('.ftitle'), td = cl('.fdesc');
     if (tool === 'text' && (tf || td)) { CT.open(tf || td, {field: tf ? 'title' : 'purpose'}); return; }
@@ -473,7 +473,7 @@ pane.addEventListener('click', function (e) {
     var cid = mc.dataset.id, mx = e.clientX, my = e.clientY;
     FA.hit(mc, mx, my, false, function (h) {         // 글자 = 글자를 가진 그 요소 · 주석 = 누를 수 있는 요소 → 그 요소
       if (!h || h.none) { if (h) toast(tool === 'text' ? '여기에는 고칠 글자가 없어요' : '여기에는 고를 요소가 없어요'); return; }
-      if (tool === 'text') editScreenText(cid, h); else MP.element(cid, h, mx, my);
+      if (tool === 'text') editScreenText(cid, h); else if (e.shiftKey) MP.addElement(cid, h, mx, my); else MP.element(cid, h, mx, my);
     }, tool === 'text');
     return;
   }

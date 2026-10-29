@@ -170,6 +170,11 @@ function mount(ctx) {
       if (q && q.choices[+b.dataset.i] != null) ctx.choose(li.dataset.id, q.choices[+b.dataset.i]);
     }
   });
+  box.addEventListener('dblclick', function (e) {    // 열린 메모 글 더블클릭 = 고치기 아이콘과 같다
+    var t = e.target.closest ? e.target.closest('.tht') : null, li = t && t.closest('li[data-id]');
+    if (!li || !cur || !li.querySelector('button[data-act="edit"]')) return;
+    e.preventDefault(); close(); ctx.edit(li.dataset.id);
+  });
   box.addEventListener('mouseover', function (e) {   // 줄에 올리면 그 핀·요소 테두리
     var li = e.target.closest ? e.target.closest('li[data-no]') : null;
     if (cur) ctx.highlight(cur.id, li ? +li.dataset.no : null);

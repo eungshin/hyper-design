@@ -136,6 +136,10 @@ function mount(ctx) {
       var id = b.closest('li').dataset.id;
       if (b.dataset.act === 'del') ctx.del(id); else ctx.edit(id);
     });
+    $(sel).addEventListener('dblclick', function (e) {   // 메모 글 더블클릭 = 고치기 아이콘과 같다
+      var t = e.target.closest ? e.target.closest('.nnote') : null, li = t && t.closest('li[data-id]');
+      if (li) { e.preventDefault(); ctx.edit(li.dataset.id); }
+    });
   });
   return {render: render, filter: filter, showSent: showSent, relost: relost};
 }

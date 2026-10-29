@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from test_canvas_v2 import SCRIPTS, browser, ctx, reload, zoom_to  # noqa: F401
-from test_canvas_edit import fit_view, notes_of, wait_notes, el_point, frame_of
+from test_canvas_edit import NOTES_JS, fit_view, notes_of, wait_notes, el_point, frame_of
 
 PAY = """<!doctype html><html><head><meta charset="utf-8"><link id="tokens" rel="stylesheet" href="../tokens.css"><script src="../palette.js"></script></head>
 <body style="margin:0;font-family:sans-serif"><header><h1 class="title" style="margin:16px">결제</h1></header>
@@ -302,6 +302,54 @@ def test_thread_row_actions_are_quiet_icons_with_tooltips(apage):
     pg.wait_for_function("(() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); const m = JSON.parse(localStorage.getItem(k)).find(n => n.id === 'm1'); return m && (m.replies || []).some(r => r.kind === '확인'); })()", timeout=4000)
     pg.click('#thread li[data-id="q1"] button[data-act="del"]')
     pg.wait_for_function("(() => { const k = Object.keys(localStorage).find(k => k.startsWith('hd-notes:')); return !JSON.parse(localStorage.getItem(k)).some(n => n.id === 'q1'); })()", timeout=4000)
+    pg.keyboard.press("Escape")
+
+
+@pytest.mark.area("notes")
+def test_annotate_shift_click_adds_and_removes_elements_on_the_board(apage):
+    """주석 도구(P): 메모 창이 열린 채 같은 카드 안 Shift+클릭 = 그 요소를 메모 대상에 더하기 · 다시 Shift+클릭 = 빼기(크게 보기와 같다).
+    카드 고르기(Shift = 여러 장)로 가지 않는다."""
+    pg = apage
+    fit_view(pg)
+    ph = zoom_to(pg, "pay", 420)
+    fr = frame_of(pg, "pay")
+    pg.keyboard.press("p")
+    pg.mouse.click(*el_point(pg, ph, fr, "button.pay"))
+    pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+    lead = el_point(pg, ph, fr, "p.lead")
+    pg.keyboard.down("Shift"); pg.mouse.click(*lead); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.querySelectorAll('.card[data-id=\"pay\"] .npsel').length === 2", timeout=3000)
+    assert not pg.is_hidden("#pop") and pg.locator(".card.sel").count() == 0, "카드 고르기로 가지 않는다"
+    pg.fill("#pnote", "둘 다 크게")
+    pg.keyboard.down("Shift"); pg.mouse.click(*lead); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.querySelectorAll('.card[data-id=\"pay\"] .npsel').length === 1", timeout=3000)
+    assert pg.input_value("#pnote") == "둘 다 크게", "빼도 쓰던 글은 그대로"
+    pg.keyboard.down("Shift"); pg.mouse.click(*lead); pg.keyboard.up("Shift")
+    pg.wait_for_function("document.querySelectorAll('.card[data-id=\"pay\"] .npsel').length === 2", timeout=3000)
+    pg.click("#padd")                                       # 같은 페이지를 쓰는 앞 테스트 메모가 남아 있을 수 있다 — 이 메모만 본다
+    pg.wait_for_function(f"({NOTES_JS}).some(n => n.note === '둘 다 크게')", timeout=4000)
+    mine = [n for n in notes_of(pg) if n["note"] == "둘 다 크게"]
+    assert len(mine) == 1 and len(mine[0]["targets"]) == 2, mine
+
+
+@pytest.mark.area("notes")
+def test_double_click_on_memo_text_opens_it_for_editing(apage):
+    """메모 글 더블클릭 = 고치기 아이콘과 같다(메모 묶음 · 메모 패널) — 그 메모의 메모 창이 열린다."""
+    pg = apage
+    pg.evaluate(SEED_JS)
+    reload(pg)
+    fit_view(pg)
+    pg.click(BADGE)
+    pg.wait_for_selector("#thread:not([hidden])")
+    pg.dblclick('#thread li[data-id="m1"] .tht')
+    pg.wait_for_selector("#pop:not([hidden])")
+    assert pg.input_value("#pnote") == "버튼을 더 크게" and pg.is_hidden("#thread")
+    pg.keyboard.press("Escape")
+    pg.wait_for_selector("#pop", state="hidden")
+    pg.click('#dock .dk-tab[data-p="notes"]')
+    pg.dblclick('#nlist li[data-id="m1"] .nnote')
+    pg.wait_for_selector("#pop:not([hidden])")
+    assert pg.input_value("#pnote") == "버튼을 더 크게"
     pg.keyboard.press("Escape")
 
 

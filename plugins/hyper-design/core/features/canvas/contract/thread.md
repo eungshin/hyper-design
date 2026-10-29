@@ -4,7 +4,7 @@
 
 ## 규칙
 
-- `view-thread`(View) — 카드 메모 배지 → 그 화면 메모 묶음(#224, Word 메모처럼): 배지(`role=button`, `view-notes` 가 그림) 옆 `#thread` 에 요소·종류·글 전체, 줄마다 고치기·지우기·완료, 머리 줄 [+] = 메모 추가. 고치기·지우기는 메모 패널과 같은 `MP.edit`·`MP.del`(view-memo-pop, 지우기 = 되돌리기 한 단계), 더하기 = `openCardMemo`. 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc·바깥 누르기 = 닫기, 메모가 바뀌면 `renderNotes` 가 `refresh`
+- `view-thread`(View) — 카드 메모 배지 → 그 화면 메모 묶음(#224, Word 메모처럼): 배지(`role=button`, `view-notes` 가 그림) 옆 `#thread` 에 요소·종류·글 전체, 줄마다 고치기·지우기·완료, 머리 줄 [+] = 메모 추가. 고치기·지우기는 메모 패널과 같은 `MP.edit`·`MP.del`(열린 메모 글 `.tht` 더블클릭 = 고치기)(view-memo-pop, 지우기 = 되돌리기 한 단계), 더하기 = `openCardMemo`. 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc·바깥 누르기 = 닫기, 메모가 바뀌면 `renderNotes` 가 `refresh`
 - 아이콘 동작(R26): 줄 동작은 메타 줄(번호·대상·상태·의도 — 작은 회색 한 줄, 대상은 말줄임) 오른쪽 끝 `.thib` 아이콘 — 연필(`edit`)·휴지통(`del`)·체크(`done`), 닫힌 메모는 되돌리기 화살표(`reopen`), 머리 줄 `+`(`add`). `data-act`·`aria-label`(이름) 그대로, 꼬리말 `#thtip`(요소 막대 `#eltip` 과 같은 모양 — 올리기·키보드 포커스). 평소 흐림, 줄에 올리거나 키보드 포커스면 진하게. 메모 글(`.tht`)이 가장 또렷하다. 메모 패널(`view-notes`) 줄의 연필·휴지통도 같은 흐림 규칙
 - 보낸 메모 숨기기(task 29): 묶음 줄은 `annotation.visible(n, 켜짐)` 인 메모만 — 꺼짐이면 AI 작업 중·완료 메모는 빠지고 '완료 N' 묶음도 켜졌을 때만, 숨긴 수는 회색 한 줄 `.thhid`. 켜짐은 셸이 건넨 `ctx.showSent()`, 바뀌면 셸이 `refresh`(#263)
 - 긴 답 본문(R26): 답에 `detail`(≤50000, `hd reply --detail-file`)이 있으면 그 답 줄 아래 `.thdet` 에 전체(줄바꿈 그대로, 240px 넘으면 그 안에서 스크롤, 글 고르기 됨). 줄 툴팁(`annotation.tip`)은 detail 앞 300자만

@@ -168,6 +168,20 @@ function mount(ctx) {
     show({text: h.text || h.path, path: h.path, rect: h.rect || null}, note || '', 'change', x == null ? null : {x: x, y: y});   // rect = 그 요소 옆에 창(F09)
     ctx.pins();                                       // 메모 창이 열린 동안 그 카드에 고른 요소 테두리
   }
+  function toggleTarget(it) {                         // Shift+클릭: 열린 요소 메모 묶음에 더하거나 빼기(판 주석 도구 · 크게 보기 같은 규칙) — 쓰던 글·의도·범위 그대로
+    var note = $('#pnote').value, intent = curIntent(), sc = curScope(), at = -1;
+    draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
+    if (at >= 0) draft.targets.splice(at, 1); else draft.targets.push(it);
+    if (!draft.targets.length) { hide(); return; }
+    ctx.pins(); show(popItem(draft, it), note, intent, null, sc);
+  }
+  function addElement(id, h, x, y) {                  // 판 주석 도구 Shift+클릭: 같은 화면 요소 메모가 열려 있으면 묶음에 더하기·빼기, 아니면 새 메모
+    if (draft && !editing && !pop.hidden && draft.screen === id && draft.targets.every(function (t) { return t.path !== 'body'; })) {
+      toggleTarget({path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null});
+      return;
+    }
+    element(id, h, x, y);
+  }
   function elem(id, h, note, inModal, at) {           // 요소 하나에 메모 창(note = 미리 채울 요청 글) — 판 = 그 자리 옆, 크게 보기 = 고른 요소 아래
     var it = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null};
     if (!inModal) { element(id, h, at ? at.x : null, at ? at.y : null, note); return; }
@@ -214,20 +228,13 @@ function mount(ctx) {
     if (d.type !== 'hd-picked' || !m.picking) return;
     if (d.screen) ctx.setScreen(String(d.screen));
     var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null, src: d.src || null};   // src = 앱 소스 위치(task 27)
-    if (d.add && draft && !editing && !pop.hidden) {   // Shift+클릭: 고른 묶음에 더하거나 빼기
-      var note = $('#pnote').value, intent = curIntent(), sc = curScope(), at = -1;
-      draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
-      if (at >= 0) draft.targets.splice(at, 1); else draft.targets.push(it);
-      if (!draft.targets.length) { hide(); return; }
-      ctx.pins(); show(popItem(draft, it), note, intent, null, sc);
-      return;
-    }
+    if (d.add && draft && !editing && !pop.hidden) { toggleTarget(it); return; }   // Shift+클릭: 고른 묶음에 더하거나 빼기
     editing = null; att('hd-attach-set', []);
     draft = {screen: String(d.screen || ctx.modal().screen || ''), targets: [it]};
     ctx.pins(); show(popItem(draft, it), '', 'change');
   });
 
-  return {card: card, element: element, elem: elem, edit: edit, del: del, reply: reply,
+  return {card: card, element: element, addElement: addElement, elem: elem, edit: edit, del: del, reply: reply,
           isOpen: function () { return !pop.hidden; }, close: hide, draft: function () { return draft; }};
 }
 
