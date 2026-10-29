@@ -63,6 +63,12 @@ def cmd_ls(a):
     return rows, S.text.canvases(rows)
 
 
+def _cards(p, st, ns):
+    """화면마다 정보 카드 글(R47) — 판 메모·연결은 상태에서, 줄은 screens.json 에서. 사람용 글에만(--json 모양은 그대로)."""
+    import hd_info_card
+    return hd_info_card.cards_for(st["state"], p.groups(), [n.screen for n in ns])
+
+
 def cmd_notes(a):
     p = _hub().project(a.project, a.out)
     st = p.state()
@@ -70,7 +76,7 @@ def cmd_notes(a):
     head = "%s · rev %s · %s · %d개%s" % (p.name, st["rev"], a.which, len(ns), "" if p.online else " · 도우미 꺼짐(읽기만)")
     _parts_warn(p.out, p.name)
     return ({"project": p.name, "out": str(p.out), "rev": st["rev"], "helper": p.online, "which": a.which, "notes": [n.as_dict() for n in ns]},
-            head + "\n" + S.text.notes(ns))
+            head + "\n" + S.text.notes(ns, _cards(p, st, ns)))
 
 
 def _parts_warn(out, name):
@@ -184,7 +190,7 @@ def cmd_wait(a):
     _parts_warn(p.marker["out"], p.name)
     head = "%s · rev %s · working · %d개" % (p.name, st["rev"], len(ns))
     return ({"project": p.name, "out": p.marker["out"], "rev": st["rev"], "helper": True, "which": "working", "notes": [n.as_dict() for n in ns]},
-            head + "\n" + S.text.notes(ns))
+            head + "\n" + S.text.notes(ns, _cards(p, st, ns)))
 
 
 def cmd_claim(a):

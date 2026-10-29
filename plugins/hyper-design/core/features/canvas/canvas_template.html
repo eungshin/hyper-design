@@ -689,9 +689,19 @@ var VT = HD.viewTheme.mount({$: $, $$: $$, esc: esc, root: $('#pTheme'), bases: 
 var FKEY = 'hd-folders:' + hashStr(KEYPATH), folders = HD.folders.load(ST.getItem, FKEY);
 function setFolders(n) { if (n === folders) return; folders = n; HD.folders.save(folders, ST.setItem, FKEY); }
 function pruneFolders() { setFolders(HD.folders.reduce(folders, {type: 'prune', live: $$('.card', rowsEl).map(function (c) { return c.dataset.id; })})); }
+// ---- R47 정보 카드 읽기(modules/info-card.js 가 쓰는 그냥 데이터) — 보내기(view-send)·레이어 배지(view-layers) 둘이 같은 칸. 주인: 판 메모 = view-board-notes(BN) ·
+//      연결 = 상태 이름 board-links(r47 phase A — 아직 없으면 {}) · 줄 = 판의 묶음 이름(screens.json group = 카드의 줄 제목)
+function cardData() {
+  var links = {}, t = ST.getItem('hd-board-links:' + hashStr(KEYPATH));
+  if (t) { try { links = JSON.parse(t); } catch (e) { console.warn('[hd] board-links 저장값이 깨졌어요 — 정보 카드 없이'); } }
+  var groups = {}; $$('.card', rowsEl).forEach(function (c) { groups[c.dataset.id] = CP.group(c); });
+  return {notes: BN ? BN.map() : {}, links: links && typeof links === 'object' && !Array.isArray(links) ? links : {}, groups: groups};
+}
+// ---- R47 끝
 // 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
 var VA = null;
 var LY = HD.viewLayers.mount({$: $, esc: esc, root: $('#pLayers'),
+  cardData: cardData,                            // 정보 카드 배지(R47)
   folders: {state: function () { return folders; }, dispatch: function (a) { setFolders(HD.folders.reduce(folders, a)); if (LY) LY.render(); }},
   pick: function (ids, mode) {                   // 레이어에서 고르기: only = 그것만 · toggle = 넣고 빼기 · add = 더하기
     if (mode === 'toggle') ids.forEach(function (id) { SL.dispatch({type: 'toggle', id: id}); });
@@ -1300,7 +1310,8 @@ LV = VS.on ? HD.viewLive.mount({on: true, token: new URLSearchParams(location.se
 // 보내기 길 하나(modules/view-send.js): 위쪽 [보내기]·질문 고르기·등록부 sendNotes · 복사 대체 · [보낸 것 완료로] — 보낸 뒤 말은 HD.agents.sentSay
 var SN = HD.viewSend.mount({$: $, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms, c) { toast(m, u, ms, c ? {label: c.label, tip: c.tip, run: function () { var b = $('#aichip'); if (b && !b.hidden) b.click(); }} : null); },
   history: {sent: function () { HI.sent(); }, applied: function () { HI.applied(); }}, sync: function () { return VS; }, cover: function () { return VB; },
-  cardEl: function (id) { return VL.cardEl(id); }, sizes: function () { return AB ? AB.sizes() : null; }, agent: function () { return window.__hdAgent || null; }, out: function () { return window.__hdOut || ''; }});
+  cardEl: function (id) { return VL.cardEl(id); }, sizes: function () { return AB ? AB.sizes() : null; }, agent: function () { return window.__hdAgent || null; }, out: function () { return window.__hdOut || ''; },
+  cardData: cardData});                          // 정보 카드(R47) — 요청문에 화면마다 '유의(정보 카드):'
 addEventListener('keydown', function (e) {
   if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
   var k = (e.key || '').toLowerCase();

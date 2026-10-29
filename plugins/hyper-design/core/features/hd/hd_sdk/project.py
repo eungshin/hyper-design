@@ -116,6 +116,10 @@ class Project:
         """screens.json 의 화면 id 집합 | None(못 읽음)."""
         return C.screen_ids(self.out)
 
+    def groups(self):
+        """screens.json 의 {화면 id: 줄 이름} — 정보 카드(R47, hd_info_card) 의 줄 카드. 못 읽으면 {}."""
+        return C.screen_groups(self.out)
+
     def files(self, since=None):
         """GET /api/files[?since=seq] → {seq, changed:[screen]} — 디스크에서 바뀐 화면 파일."""
         return self._call("GET", "/api/files" + ("" if since is None else "?since=%s" % quote(str(since))))

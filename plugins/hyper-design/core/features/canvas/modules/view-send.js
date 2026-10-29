@@ -1,7 +1,9 @@
 /* View — 보내기 길 하나: 위쪽 [보내기](#nsend)·질문 고르기·등록부 sendNotes 가 같은 send, 도우미가 없거나 꺼지면 요청문 복사, [보낸 것 완료로](#nclear).
    보낸 뒤 말 = Model HD.agents.sentSay · 요청문 = HD.edits.request. 보낸 요청문은 window.__hdLastSend, 도우미 답은 window.__hdLastHelper(테스트가 읽음).
    HD.viewSend.mount(ctx) → {send(list), busy() → 보내는 중(두 번 누르기 = 같은 요청 두 번 · S1), answer(id, choice), request(list) → 요청문, copy(text) → Promise<복사됐나>}
-   ctx = {$, notes(NS), save(), record(op), toast(m, undo?, ms?, connect? {label, tip} = 받는 곳 고르기 단추), history: {sent(), applied()}, sync() → VS, cover() → VB|null, cardEl(id), sizes() → 카드 크기|null, agent() → 받는 곳|null(바뀔 수 있다), out() → out 폴더|''} */
+   ctx = {$, notes(NS), save(), record(op), toast(m, undo?, ms?, connect? {label, tip} = 받는 곳 고르기 단추), history: {sent(), applied()}, sync() → VS, cover() → VB|null, cardEl(id), sizes() → 카드 크기|null, agent() → 받는 곳|null(바뀔 수 있다), out() → out 폴더|'',
+         cardData?() → {notes: board-notes 상태, links: board-links 상태({} = 아직 없음), groups: {화면 id: 줄 이름}} — 있으면 요청문에 화면마다 정보 카드(R47, HD.infoCard), 없으면 예전 그대로}
+   대화창(view-chat)도 ctx.sendNotes → 이 send → request 한 길이라 정보 카드는 여기 한 곳에서만 붙는다 */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -15,7 +17,15 @@ function mount(ctx) {
     if (/^\/[A-Za-z]:/.test(p)) p = p.slice(1);
     return p || '/';
   }
-  function request(list) { return HD.edits.request(list, outDir(), ctx.sizes()); }
+  function context() {                               // 정보 카드 제공자(R47) — 보낼 때 한 번 읽은 판 메모·연결·줄로, 없거나 깨지면 카드 없이(요청문은 예전 그대로)
+    if (typeof ctx.cardData !== 'function' || !HD.infoCard) return null;
+    var data = ctx.cardData() || {};
+    return function (id) {
+      try { return HD.infoCard.forScreen(data, id); }
+      catch (e) { console.warn('[hd] 정보 카드를 만들지 못했어요(' + id + ') — 카드 없이 보내요: ' + (e && e.message || e)); return ''; }
+    };
+  }
+  function request(list) { return HD.edits.request(list, outDir(), ctx.sizes(), context()); }
   function copyText(t) {                              // → Promise<복사됐나>
     function fallback() {
       var ta = document.createElement('textarea'), ok = false; ta.value = t; ta.setAttribute('readonly', '');
