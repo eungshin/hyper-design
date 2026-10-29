@@ -47,6 +47,30 @@ out.never = anchors.map(a => {
   const lb = R(a.x, a.y - 14, 30, 13), p = P.place({anchor: a, label: lb, size: S, view: V, bars: bars, content: texts}), r = R(p.x, p.y, S.w, S.h);
   return p.side === 'over' || (!hit(r, a) && !hit(r, lb) && !bars.some(b => hit(r, b)) && r.x >= 0 && r.y >= 0 && r.x + r.w <= 1000 && r.y + r.h <= 800);
 });
+// 누른 자리 가까이(R51): 큰 요소를 아래쪽에서 누름 → 누른 자리 바로 위(가운데 = 누른 x) · 보이는 칸 끝에서는 아래·안으로 당김
+const BIG = R(100, 50, 600, 700), pt = (x, y) => ({x: x, y: y});
+out.bigBottom = P.place({anchor: BIG, size: S, view: V, pointer: pt(400, 700)});
+out.bigBottomNoPt = P.place({anchor: BIG, size: S, view: V});
+out.bigViewTop = P.place({anchor: R(100, -400, 600, 1000), size: S, view: V, pointer: pt(400, 20)});          // 위 끝이 칸 밖 · 칸 맨 위 가까이 누름 → 아래
+out.bigViewTopEdge = P.place({anchor: R(100, -400, 600, 1000), size: S, view: V});
+out.bigViewBottom = P.place({anchor: R(100, 50, 600, 745), size: S, view: V, pointer: pt(400, 785)});        // 칸 맨 아래 가까이 → 위(아래는 칸 밖)
+out.bigLeft = P.place({anchor: R(0, 50, 900, 700), size: S, view: V, pointer: pt(20, 500)});
+out.bigRight = P.place({anchor: R(100, 50, 900, 700), size: S, view: V, pointer: pt(990, 500)});
+out.bigBar = P.place({anchor: BIG, size: S, view: V, pointer: pt(400, 700), bars: [R(250, 640, 400, 40)]});   // 바로 위 = 다른 막대 → 바로 아래
+out.bigTop = P.place({anchor: R(100, 100, 600, 600), size: S, view: V, pointer: pt(150, 130)});              // 위 끝 가까이 누름 = 위 규칙 그대로
+out.bigTopNoPt = P.place({anchor: R(100, 100, 600, 600), size: S, view: V});
+out.small = at({pointer: pt(290, 318)});
+out.medium = P.place({anchor: R(100, 300, 600, 150), size: S, view: V, pointer: pt(650, 445)});             // 160px 보다 낮음 = 그대로
+out.mediumNoPt = P.place({anchor: R(100, 300, 600, 150), size: S, view: V});
+out.shortView = P.place({anchor: R(210, 140, 480, 140), size: S, view: R(200, 100, 500, 300), pointer: pt(680, 270)});   // 칸 300 의 40% = 120 → 140px 은 큰 요소(왼쪽 맞춤 자리에서 멂)
+out.tallView = P.place({anchor: R(210, 140, 480, 140), size: S, view: V, pointer: pt(680, 270)});                       // 같은 요소, 칸 800 = 160 → 작은 요소(그대로)
+out.tallViewNoPt = P.place({anchor: R(210, 140, 480, 140), size: S, view: V});
+out.ptOut = P.place({anchor: BIG, size: S, view: V, pointer: pt(400, 900)});                                 // 누른 자리가 칸 밖 = 그대로
+out.ptBad = P.place({anchor: BIG, size: S, view: V, pointer: {x: 'a', y: 3}});
+out.nearNever = [pt(400, 700), pt(120, 780), pt(990, 60), pt(500, 400), pt(10, 10)].map(q => {
+  const lb = R(BIG.x, BIG.y - 14, 60, 13), bs = [R(380, 0, 240, 36), R(450, 380, 300, 40)], p = P.place({anchor: BIG, label: lb, size: S, view: V, bars: bs, pointer: q}), r = R(p.x, p.y, S.w, S.h);
+  return !hit(r, lb) && !bs.some(b => hit(r, b)) && r.x >= 8 && r.y >= 8 && r.x + r.w <= 992 && r.y + r.h <= 792;
+});
 // 카드 선택 막대(R27 F07): 판 칸 = 대화 도크(0..340) 오른쪽 340..1140
 const BV = R(340, 32, 800, 968), BS = {w: 226, h: 38};
 out.cardFree = P.card({cards: R(500, 400, 400, 300), size: BS, view: BV, lift: 18});
@@ -147,3 +171,35 @@ def test_card_bar_stays_inside_the_board_and_off_the_side_dock(js):
 
 def test_card_bar_hides_when_the_card_is_off_the_board(js):
     assert js["cardOff"]["hidden"] and js["cardBad"]["hidden"], (js["cardOff"], js["cardBad"])
+
+
+def test_large_element_bar_sits_just_above_the_click(js):
+    p = js["bigBottom"]
+    assert (p["x"], p["y"], p["side"], p.get("near")) == (400 - 100, 700 - 12 - 26, "above", True), ("누른 자리 바로 위, 가운데 = 누른 x", p)
+    assert _xy(js["bigBottomNoPt"]) == (100, 50 - 6 - 26, "above") and "near" not in js["bigBottomNoPt"], "누른 자리 없음(키보드) = 위 끝 그대로"
+
+
+def test_large_element_click_near_view_edges(js):
+    t = js["bigViewTop"]
+    assert (t["x"], t["y"], t["side"], t.get("near")) == (300, 20 + 24, "below", True), ("칸 맨 위 가까이 = 바로 아래(커서 몸통 비킴)", t)
+    assert js["bigViewTopEdge"]["y"] > 500, ("이전 규칙은 요소 아래 끝 — 누른 자리에서 멀었다", js["bigViewTopEdge"])
+    b = js["bigViewBottom"]
+    assert (b["y"], b["side"], b.get("near")) == (785 - 12 - 26, "above", True), b
+    assert (js["bigLeft"]["x"], js["bigLeft"].get("near")) == (8, True), ("왼쪽 끝 = 칸 안으로 당김", js["bigLeft"])
+    assert (js["bigRight"]["x"], js["bigRight"].get("near")) == (1000 - 200 - 8, True), ("오른쪽 끝 = 칸 안으로 당김", js["bigRight"])
+
+
+def test_large_element_near_bar_never_covers_other_bars_or_label(js):
+    p = js["bigBar"]
+    assert (p["y"], p["side"], p.get("near")) == (700 + 24, "below", True), ("바로 위가 다른 막대 = 바로 아래", p)
+    assert all(js["nearNever"]), js["nearNever"]
+
+
+def test_small_or_near_top_clicks_keep_the_old_place(js):
+    assert js["small"] == js["free"], ("작은 요소 = 그대로", js["small"])
+    assert js["medium"] == js["mediumNoPt"], ("160px 보다 낮은 요소 = 그대로", js["medium"])
+    assert js["bigTop"] == js["bigTopNoPt"], ("위 끝 가까이 누름 = 위 규칙 자리가 이미 가깝다", js["bigTop"])
+    assert js["ptOut"] == js["bigBottomNoPt"] and js["ptBad"] == js["bigBottomNoPt"], "누른 자리가 칸 밖·깨짐 = 그대로"
+    s = js["shortView"]
+    assert s.get("near") and (s["x"], s["y"]) == (700 - 200 - 8, 270 - 12 - 26), ("짧은 보이는 칸 = 40% 로 큰 요소", s)
+    assert js["tallView"] == js["tallViewNoPt"], ("같은 요소라도 긴 칸에서는 작은 요소", js["tallView"])
