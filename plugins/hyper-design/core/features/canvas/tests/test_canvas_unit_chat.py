@@ -129,7 +129,8 @@ def test_build_refuses_empty_text_and_no_screen(out):
 def test_build_all_screens(out):
     m = out["all"]["memos"]
     assert len(m) == 1 and m[0]["screen"] == "home" and m[0]["scope"] == "all" and m[0]["path"] == "body"
-    assert m[0]["note"] == "전체 글꼴 키우기" and m[0]["intent"] == "change" and m[0]["sent"] is False
+    assert m[0]["note"] == "전체 글꼴 키우기" and m[0]["intent"] == "chat" and m[0]["sent"] is False   # 대화창 글 = 받는 AI 가 질문인지 바꾸기인지 정한다
+    assert "intent=chat" in out["req"]["all"]
     assert "범위: 모든 화면" in out["req"]["all"] and "screen=home · path=body" in out["req"]["all"]
 
 
@@ -200,3 +201,9 @@ def test_chip_row_folds_after_three(out):
 def test_placeholder_carries_scope(out):
     assert out["ph"] == ["모든 화면에 대해 무엇을 바꾸거나 만들까요?", "무엇을 바꿀까요?", "무엇을 바꿀까요?",
                          "모든 화면에 대해 무엇을 바꾸거나 만들까요?"], "모든 화면 칩 대신 placeholder 가 범위를 말한다"
+
+
+def test_every_chat_memo_lets_the_receiver_decide(out):
+    """대화창이 만든 메모는 칩(모든 화면 · 화면 · 요소)과 상관없이 intent=chat — 사용자가 바꾸기/질문을 고르지 않는다."""
+    for k in ("all", "one", "el"):
+        assert out[k]["memos"] and all(m["intent"] == "chat" for m in out[k]["memos"]), (k, out[k]["memos"])

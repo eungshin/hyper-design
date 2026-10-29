@@ -140,3 +140,9 @@ def test_scope_shown_when_not_element():
     assert lines[0] == "s #1 · working · change · h1 · 범위: 모든 화면 · x"
     assert lines[1] == "s #2 · working · change · (화면 전체) · 범위: 이 화면 · y"
     assert "범위" not in lines[2] and "범위" not in lines[3]
+
+
+def test_answer_is_allowed_on_chat_memos_but_not_on_change_memos():
+    """대화창 메모(intent=chat)는 받는 AI 가 질문이면 답변, 바꾸기면 반영됨으로 닫는다 — 둘 다 받는다."""
+    assert M.check_reply({"kind": "답변", "text": "네, 넘어왔어요"}, "chat") == []
+    assert M.check_reply({"kind": "답변", "text": "네"}, "change") != []

@@ -34,6 +34,13 @@ description: hyper-design 캔버스에서 '보내기'로 복사한 메모를 화
 - 메인이 채팅으로 바로 답한다 — 항목마다 짧은 한 문단. 파일은 고치지 않는다.
 - 답할 때 `<out>/screens/<screen>.html`·`<out>/screens.json`·`<out>/decisions.json`을 필요한 만큼만 읽는다. 전문 용어 금지.
 
+### 2b. 대화창 글 (`intent=chat`)
+- 캔버스 하단 대화창에서 보낸 글이다. 사용자는 질문인지 수정 요청인지 고르지 않는다 — **받는 순간 네가 글을 읽고 정한다.**
+- 질문·의견·논의·확인("넘어갔나?", "어떻게 생각해?")이면 2번처럼 채팅으로 답하고, 메모를 `답변 --text …`로 닫는다(파일은 고치지 않는다).
+- 고치기·만들기 요청이면 3번 그대로 고치고 `반영됨`(또는 `일부`·`질문`)으로 닫는다.
+- 둘이 섞였으면 고칠 것은 고치고, 물은 것은 같은 답의 `--text`/`--what`에 함께 적는다. 어느 쪽인지 정말 모호할 때만 `질문 --question …`.
+- `범위: 모든 화면`·`screen=<첫 화면> · path=body`는 대화창이 붙인 자리표일 뿐이다 — 질문이면 그 화면을 고치지 않는다.
+
 ### 3. 고치기 (`intent=change`)
 - 먼저 항목마다 `parts: existing | new`를 정한다. new = `<out>/components.css`·COMPONENTS에 없는 레이아웃 부품·클래스가 필요한 요청(블록 가운데 정렬·구분선·스크롤 목록 등). new는 screen-reviser에게 보내지 않는다 — 메인이 `components.css`를 `<out>/.hd-history/fix-components.css`로 복사해 두고, 디자인 토큰(`var(--…)`)만 써서 부품을 더한 뒤 화면 파일을 Edit.
 - existing은 화면별로 묶는다. 고칠 화면 id를 모아 `python3 $SK/features/pack/pack.py <out> --mode revise --screens <id1,id2,…>` → `<out>/packs/plan.json`의 pack마다 하나씩.
@@ -57,7 +64,7 @@ PACK=<pack 절대경로>
 - selfcheck ❌가 이번 수정 때문이면 메인이 Edit 도구로 고친다(1회). 에이전트가 `not found`로 보고한 요청은 메인이 화면 파일을 읽고 직접 고치거나, 못 찾으면 그대로 보고한다. `needs-part: <무엇>`은 3단계 분류가 틀린 것 — 메인이 new처럼 처리한다.
 
 ### 5. 마지막 메시지
-- 메모 닫기: `python3 $SK/features/hd/hd.py ls`가 되고 이 `<out>`이 목록에 있으면, 처리한 항목의 `no=` 번호마다(그 항목의 `screen` 과 함께 — `no=3,5`면 둘 다) `hd.py reply <screen>#<no> --out <out> --kind …`. 번호로 닫는다(화면·글로 메모를 다시 찾지 않는다). `no=`가 없는 옛 요청문만 `hd.py notes --out <out> --sent`에서 번호를 본다: 반영됨 `--what … --screens a,b --captured yes|no`(4단계 캡처) · 일부 `--done … --left …` · 대체됨 `--where …` · 질문 메모는 답변 `--text …` · 미루면 조용히 넘기지 않고 질문 `--question … --choice A --choice B`.
+- 메모 닫기: `python3 $SK/features/hd/hd.py ls`가 되고 이 `<out>`이 목록에 있으면, 처리한 항목의 `no=` 번호마다(그 항목의 `screen` 과 함께 — `no=3,5`면 둘 다) `hd.py reply <screen>#<no> --out <out> --kind …`. 번호로 닫는다(화면·글로 메모를 다시 찾지 않는다). `no=`가 없는 옛 요청문만 `hd.py notes --out <out> --sent`에서 번호를 본다: 반영됨 `--what … --screens a,b --captured yes|no`(4단계 캡처) · 일부 `--done … --left …` · 대체됨 `--where …` · 질문·대화창(`intent=chat`) 메모는 답변 `--text …` · 미루면 조용히 넘기지 않고 질문 `--question … --choice A --choice B`.
 - `hd`가 안 되면 항목마다 한 줄: `<번호> · done` / `<번호> · answered` / `<번호> · not found (이유 한마디)`.
 - 안내 한 줄 + 여는 주소(`http://127.0.0.1…?hd=…`): hd로 닫았으면 "메모마다 결과가 붙었어요.", 아니면 "캔버스에서 '보낸 것 완료로'를 누르면 반영된 메모가 정리돼요."
 - 마지막 줄: `[[DONE <out>/index.html]]` — 이 줄 없이 턴을 끝내면 미완성으로 처리된다.
