@@ -18,7 +18,7 @@
    자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
    예외 아이콘 + 글(R15): 자식 요소가 글이 없거나(svg·img·빈 i/span) 글 든 인라인만이면 글 조각만 바꾸고 아이콘은 그대로 — 바뀐 곳이 글 마디 하나 안이면 그 마디만(textMode 'icon', html_edit._icon_text_patch).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
-   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다.
+   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 고르기(hd-pick mode 'select')일 때 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다(손 도구 = 보내지 않음, 화면 그대로).
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
     hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸, add?} 으로(Shift = add:true, 여러 요소 R19 · 없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'},
@@ -259,7 +259,13 @@
   }, true);
   function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
   function block(e) { if (!picking || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
-  ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit', 'dblclick'].forEach(function (ev) { document.addEventListener(ev, block, true); });
+  ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit'].forEach(function (ev) { document.addEventListener(ev, block, true); });
+  document.addEventListener('dblclick', function (e) {   // 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸 — 크게 보기 고르기(V, select)일 때만(Figma).
+    if (!picking || inEdit(e)) return;                   // 손 도구(체험, picking 아님) = 화면 그대로 — 버튼을 빠르게 두 번 눌러도 고치기로 빠지지 않는다(사용자 10-29)
+    block(e);
+    if (pickMode !== 'select' || !editOn || !window.parent || window.parent === window) return;
+    var el = leafOf(e.target); if (el) sendHit(el, true, 'hd-dbl');
+  }, true);
   document.addEventListener('click', function (e) {
     if (!picking || inEdit(e)) return;
     block(e);
@@ -767,13 +773,7 @@
   }
 
   send({type: 'hd-here', screen: screenId()});
-  var editOn = false;
-  document.addEventListener('dblclick', function (e) {    // 크게 보기에서 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸
-    if (!editOn || picking || inEdit(e) || !window.parent || window.parent === window) return;
-    var el = leafOf(e.target); if (!el) return;
-    e.preventDefault(); e.stopPropagation();
-    sendHit(el, true, 'hd-dbl');
-  }, true);
+  var editOn = false;                                   // 크게 보기(hd-edit) — 두 번 누르기 고치기·오른쪽 메뉴·스크롤 알림
   document.addEventListener('contextmenu', function (e) {   // 크게 보기 오른쪽 클릭 → 캔버스 요소 메뉴(task 49a)
     if (!editOn || !window.parent || window.parent === window) return;
     e.preventDefault(); e.stopPropagation();
