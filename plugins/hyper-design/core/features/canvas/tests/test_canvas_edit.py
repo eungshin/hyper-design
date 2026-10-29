@@ -1232,7 +1232,8 @@ def test_element_tools_outline_hovered_element_by_kind(dpage):
 
 @pytest.mark.area("modal", "notes")
 def test_pres_button_and_modal_dblclick_edits_text(dpage):
-    """S3: 카드 위 [▶ 보기] = 실제로 눌러 보는 크게 보기. 그 안에서 글자를 두 번 누르면 그 자리에서 고친다."""
+    """S3: 카드 위 [▶ 보기] = 실제로 눌러 보는 크게 보기(손 도구 — 버튼을 빠르게 두 번 눌러도 글자 고치기로 빠지지 않는다, 사용자 10-29).
+    고르기(V)로 바꾸고 글자를 두 번 누르면 그 자리에서 고친다(Figma 와 같다)."""
     fit_view(dpage)
     ph = __import__("test_canvas_v2").zoom_to(dpage, "job", 420)
     dpage.mouse.move(ph["x"] + ph["width"] / 2, ph["y"] + ph["height"] / 2)
@@ -1247,6 +1248,10 @@ def test_pres_button_and_modal_dblclick_edits_text(dpage):
     dpage.wait_for_timeout(300)
     n0 = len(notes_of(dpage))
     old = fr.locator("h1").text_content().strip()
+    fr.locator("h1").dblclick()                          # 손 도구(체험) = 고치지 않는다
+    dpage.wait_for_timeout(500)
+    assert fr.locator("h1[contenteditable]").count() == 0 and dpage.evaluate("document.getElementById('tedit').hidden"), "손 도구에서 두 번 누르기 = 글자 고치기 아님"
+    dpage.click('#tools [data-tool="move"]')            # 고르기(V)
     fr.locator("h1").dblclick()
     fr.locator("h1[contenteditable]").wait_for(timeout=3000)   # 그 자리에서(49c)
     assert dpage.evaluate("document.getElementById('tedit').hidden")

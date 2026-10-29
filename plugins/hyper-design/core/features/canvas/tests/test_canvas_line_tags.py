@@ -109,7 +109,7 @@ def test_one_tag_per_line_on_its_line_with_trigger_list(ctx, out):  # noqa: F811
 
 
 def test_display_popover_turns_line_tags_off_and_keeps_lines(ctx, out):  # noqa: F811
-    """표시 팝오버의 [선 태그] 체크 — 끄면 고른 카드의 태그도 숨고(선은 그대로), 선에 올려도 목록 창이 뜨지 않으며, 새로고침 뒤에도 꺼져 있다."""
+    """표시 팝오버의 선 태그 단추(#lnTags, 꼬리표 아이콘 · aria-pressed) — 끄면 고른 카드의 태그도 숨고(선은 그대로), 선에 올려도 목록 창이 뜨지 않으며, 새로고침 뒤에도 꺼져 있다."""
     srv = helper.make_server(out, 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     pg = ctx.new_page()
@@ -127,8 +127,9 @@ def test_display_popover_turns_line_tags_off_and_keeps_lines(ctx, out):  # noqa:
         assert pg.evaluate(TAGS), "켜져 있으면(기본) 고른 카드의 태그가 보인다"
 
         pg.click("#showbtn")
-        assert pg.is_checked("#lnTags"), "기본 = 선 태그 보임"
-        pg.uncheck("#lnTags")
+        assert pg.get_attribute("#lnTags", "aria-pressed") == "true", "기본 = 선 태그 보임"
+        assert pg.get_attribute("#lnTags", "aria-label"), "아이콘 단추에 이름(읽기 도구·툴팁)"
+        pg.click("#lnTags")
         pg.wait_for_timeout(150)
         assert pg.evaluate(TAGS) == [], "끄면 고른 카드의 태그도 숨는다"
         assert pg.evaluate("[...document.querySelectorAll('#ar path.ln')].some(p => getComputedStyle(p).display !== 'none')"), "선은 그대로"
@@ -142,8 +143,8 @@ def test_display_popover_turns_line_tags_off_and_keeps_lines(ctx, out):  # noqa:
         pg.reload()
         pg.wait_for_function("window.__hdReady !== undefined", timeout=120000)
         pg.click("#showbtn")
-        assert not pg.is_checked("#lnTags"), "새로고침 뒤에도 꺼져 있다"
-        pg.check("#lnTags")
+        assert pg.get_attribute("#lnTags", "aria-pressed") == "false", "새로고침 뒤에도 꺼져 있다"
+        pg.click("#lnTags")
         pg.keyboard.press("Escape")
         pg.evaluate(CLICK, "job")
         pg.wait_for_function("document.getElementById('rows').classList.contains('focusing')", timeout=5000)

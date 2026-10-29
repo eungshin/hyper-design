@@ -300,7 +300,6 @@ body.modal-open #tools .tb[aria-disabled="true"],body.modal-open #tools hr{displ
 .vm-row kbd{margin-left:auto;padding-left:16px;font:11px ui-monospace,Menlo,monospace;color:#888}
 /* ---- /R27 F14 ---- */
 body.no-tools #tools,body.bare #tools,body.bare #dock,body.bare #ldock,body.bare #dklayer{display:none}
-#pShow .lntags{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .mvoff{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px;font-size:13px;color:#555;cursor:pointer}
 #pShow .lgln{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;margin-top:8px;padding-top:8px}
 #pShow .lnshow{width:28px;height:28px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;display:grid;place-items:center;cursor:pointer;color:#444}

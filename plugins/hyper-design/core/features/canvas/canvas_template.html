@@ -69,9 +69,8 @@
   <div class="dkp" id="pShow" data-panel="show">
     <div class="lgstyle" id="lgStyle"><span class="lgddw" id="lgDdw"><span class="lgi" title="선 색"><svg viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></svg></span><button type="button" class="lgddb" id="lgDdb" aria-haspopup="true" aria-expanded="false" aria-label="선 색"></button><span class="lgdd t-dropdown" id="lgDd" data-origin="top-left" hidden></span></span></div>
     <label class="lgw"><span class="lgi" title="선 굵기"><svg viewBox="0 0 24 24"><path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="2.2"/><path d="M4 18h16" stroke-width="3.6"/></svg></span><input id="lgW" type="range" min="1" max="6" step="0.5" value="2.5" aria-label="선 굵기"><b id="lgWv">2.5px</b></label>
-    <div class="lgln"><button type="button" class="lnshow" id="lnShow" aria-pressed="true" aria-label="선 보이기"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <div class="lgln"><button type="button" class="lnshow" id="lnShow" aria-pressed="true" aria-label="선 보이기"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button><button type="button" class="lnshow" id="lnTags" aria-pressed="true" aria-label="선 태그(버튼 이름) 숨기기" title="선 태그(버튼 이름) 숨기기"><svg viewBox="0 0 24 24"><path d="M3.5 12.4V4.5a1 1 0 011-1h7.9l8.6 8.6a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0z"/><circle cx="8" cy="8" r="1.6"/></svg></button>
       <label class="lgw"><span class="lgi" title="선 투명도"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></span><input id="lnOp" type="range" min="0.15" max="1" step="0.05" value="0.55" aria-label="선 투명도"></label></div>
-    <label class="lntags"><input type="checkbox" id="lnTags" checked> 선 태그</label>
     <label class="mvoff"><input type="checkbox" id="mvOff"> 움직임 줄이기</label>
   </div>
   <div class="dkp" id="pNotes" data-panel="notes">
@@ -518,8 +517,10 @@ function sizeModal() {
   var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 덮개 위에 뜨는 도구 막대(G5) 자리는 비운다 — 왼쪽 도크가 생기면 창이 그 밑에 깔려 왼쪽 내용을 가렸다(S3)
   var g = tr && tr.width ? Math.max(0, Math.round(tr.right - (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0) + 8)) : 0;
   modal.style.paddingLeft = g ? g + 'px' : '';
+  var hc = $('#hdchat'), hb = hc && hc.getClientRects().length ? hc.querySelector('.ch-box') : null, ch = hb ? hb.offsetHeight + 24 : 0;   // 대화창(덮개 위 아래 가운데, 10-29) 자리는 비운다 — 화면이 그 위에서 끝나게
+  modal.style.paddingBottom = ch ? ch + 'px' : '';
   var m = modalSize(), mw = m.w, mh = m.h;
-  var s = Math.min(1, (innerHeight - top - 128 - 30) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
+  var s = Math.min(1, (innerHeight - top - 128 - 30 - ch) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
   mscale = s;
   mframe.style.width = m.custom ? mw + 'px' : ''; mframe.style.height = m.custom ? mh + 'px' : '';   // 크기를 바꾼 카드 = 그 크기로 크게 보기(task 46)
   mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
@@ -545,8 +546,9 @@ function closeModal() {                            // hidden 은 바로(상태),
                        HD.camera.ms(getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur'), 150));
 }
 mframe.addEventListener('load', function () { if (ML) ML.clear(); VT.send(mframe); sendPick(); if (mscreen) { sendPending(mframe, mscreen); if (PN) PN.locateModal(); } try { mframe.contentWindow.postMessage({type: 'hd-edit', on: true}, '*'); } catch (e) {} });
-addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl) → 그 자리에 고치기 칸
+addEventListener('message', function (e) {         // 크게 보기에서 두 번 누른 글자(palette.js hd-dbl, 고르기 V) · 글자 도구 누르기 → 그 자리에 고치기 칸
   var d = e.data; if (!d || d.type !== 'hd-dbl' || modal.hidden || e.source !== mframe.contentWindow) return;
+  if (mmode === 'hand') return;                      // 손 도구(체험) = 고치지 않는다 — 예전 palette.js 를 가진 out 폴더도(사용자 10-29)
   if (!d.path) { toast('여기에는 고칠 글자가 없어요'); return; }
   editScreenText(String(d.screen || mscreen), d, true);
 });
@@ -1338,6 +1340,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   cardPos: CP, locked: function (id) { return LF.isLocked(id); }, lines: function () { scheduleArrows(true); },   // 카드 옮긴 자리(view-card-pos api) · 잠금 · 선 다시(끄는 중) — R31 폴더째 옮기기
   frameLoaded: frameLoaded,
   selected: function () { return SL.ids(); },
+  modalScreen: function () { return modal.hidden ? null : mscreen; },   // 크게 보기로 연 화면 — 대화창 칩(10-29)
   focus: function (ids) { fitCards(ids, z); },     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
   view: {get: function () { return {z: z, tx: tx, ty: ty}; }, set: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }, pane: pane},   // 카메라(S5 만드는 중 틀 따라가기)
   refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)

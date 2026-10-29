@@ -221,6 +221,7 @@ def test_large_view_text_box_has_remove_element(ctx, out):   # 크게 보기: �
     pg.wait_for_function("!document.getElementById('modal').hidden", timeout=3000)
     mf = next(f for f in pg.frames if f.parent_frame and f.frame_element().get_attribute("id") == "mframe")
     mf.wait_for_selector(H1, timeout=5000)
+    pg.click('#tools [data-tool="move"]')                # 두 번 누르기 고치기 = 고르기(V)에서만(손 도구 = 체험)
     mf.dblclick(H1)
     mf.wait_for_function("(s) => document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
     assert pg.evaluate("document.getElementById('tedit').hidden"), "글 칸이 뜨지 않는다"

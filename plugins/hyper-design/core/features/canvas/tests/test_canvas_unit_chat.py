@@ -73,6 +73,7 @@ out.fold = {five: keys(C.fold(many)), fiveOpen: keys(C.fold(many, true)), three:
             none: keys(C.fold([])), bad: keys(C.fold(null)),
             withEl: keys(C.fold(C.chips({ids: ['a', 'b', 'c', 'd'], titleOf: title, el: {screen: 'd', h: BTN}})))};
 out.ph = [C.placeholder([]), C.placeholder(out.cards), C.placeholder(out.elem), C.placeholder(null)];
+out.modal = typeof C.modalSel === 'function' ? [C.modalSel('pay', [{screen: 'pay', h: BTN}, {screen: 'done', h: BTN}]), C.modalSel('pay', []), C.modalSel(null, [{screen: 'pay', h: BTN}])] : null;
 console.log(JSON.stringify(out));
 """
 
@@ -207,3 +208,12 @@ def test_every_chat_memo_lets_the_receiver_decide(out):
     """대화창이 만든 메모는 칩(모든 화면 · 화면 · 요소)과 상관없이 intent=chat — 사용자가 바꾸기/질문을 고르지 않는다."""
     for k in ("all", "one", "el"):
         assert out[k]["memos"] and all(m["intent"] == "chat" for m in out[k]["memos"]), (k, out[k]["memos"])
+
+
+def test_large_view_targets_the_open_screen(out):
+    """크게 보기 안 대화창: 칩 = 연 화면 하나 + 그 화면에서 고른 요소만(판에서 고른 카드·다른 화면 요소는 빼고) · 연 화면이 없으면 null(판 규칙 그대로)."""
+    assert out["modal"] is not None, "HD.chat.modalSel 이 없다"
+    one, none, closed = out["modal"]
+    assert one["ids"] == ["pay"] and [e["screen"] for e in one["els"]] == ["pay"]
+    assert none == {"ids": ["pay"], "els": []}
+    assert closed is None

@@ -3,7 +3,8 @@
      · 도구 줄 28px(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽). 범위는 칩이 아니라 입력 안내 글(HD.chat.placeholder). 숨김 ⌄ = 카드 오른쪽 위, 올리거나 포커스일 때만. 상태 = 펼침 여부(저장 안 함).
    상태 = 지운 칩 표시(저장하지 않음) · 마지막 요청 {text, ids, at}(ctx.local 키 hd-chat-last:<해시>, 주인 이 파일). 메모·보내기는 셸 것 — ctx.sendNotes(list) 하나로만 나간다
    (위쪽 [보내기]와 같은 길: 도우미가 있으면 /api/forward, 없으면 복사). 고른 것은 ctx.selected()·ctx.pickedAll()(판에서 고른 요소 모두, R19 — 비면 ctx.picked() 하나) 로 읽기만, 덮개 상태(hd-busy)도 읽기만.
-   Enter = 보내기 · Shift+Enter = 줄바꿈(한글 조합 중 Enter 는 무시) · Esc = 입력창에서 나가기. 크게 보기·다른 탭·읽기만 탭·Tab(bare)에서는 숨긴다.
+   Enter = 보내기 · Shift+Enter = 줄바꿈(한글 조합 중 Enter 는 무시) · Esc = 입력창에서만 나가기(셸 Esc 로 안 감). 다른 탭·읽기만 탭·Tab(bare)에서는 숨긴다.
+   크게 보기(10-29): 덮개 위에 그대로 보이고 칩 = 연 화면 + 그 화면에서 고른 요소(ctx.modalScreen() → id|null, HD.chat.modalSel) — 패널 안이면 그동안 떠 있는 자리로.
    보이기 설정(S1b)의 주인은 dock.js(창 메뉴 '대화창', 키 hd-dock) — 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on:false} 만 보내고, 몸의 no-chat 표시로 숨는다.
    받는 곳 알약(S1b): 위쪽 #aichip 의 글을 그대로 비춰 보이고(읽기만 — 주인은 view-sync), 누르면 의도 'hd-agent-pick' {anchor} → view-agents 가 같은 메뉴를 연다.
    대화 패널 안(S3): 의도 'hd-composer' {host}(view-chat-log — 대화 패널이 보이면 그 아래 칸, 아니면 null)를 받아 같은 #hdchat 을 그리로 옮긴다(.docked —
@@ -32,7 +33,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
   '#hdchat{position:fixed;bottom:12px;left:50%;z-index:24;width:640px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
-  '#hdchat[hidden],body.no-chat #hdchat:not(.docked),body.modal-open #hdchat,body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
+  '#hdchat[hidden],body.no-chat #hdchat:not(.docked),body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
   // 상태 줄(진행 줄 S2) — 카드 위 20px 한 줄, 말이 없으면 숨김(S1c)
   '#hdchat .ch-line{display:flex;align-items:center;gap:6px;box-sizing:border-box;height:20px;margin:0 8px 4px;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(0,0,0,.08);font-size:12px;line-height:16px;color:var(--ui-badge,#5f5f5a);max-width:calc(100% - 16px);width:max-content;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}' +
   '#hdchat .ch-line[hidden]{display:none}' +
@@ -98,6 +99,8 @@ var CSS =
   '#hdchat.docked{position:static;transform:none;width:auto!important;max-width:none;z-index:auto}' +
   '#hdchat.docked .ch-line,#hdchat.docked .ch-hide{display:none}' +
   '#hdchat.docked .ch-chips[hidden]+textarea{padding-right:6px}' +
+  // 크게 보기(덮개 z 20) 위: 떠 있는 창은 그대로 위에(z 24) · 패널 안(docked)이면 패널이 덮개에 가리니 그동안 판 아래 가운데로 띄운다
+  'body.modal-open #hdchat.docked{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);width:640px!important;max-width:calc(100vw - 32px);z-index:24}' +
   '#hdchat.docked textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';   // 좁은 패널에서 안내 글이 두 줄로 잘리지 않게
 
 function mount(ctx) {
@@ -163,7 +166,11 @@ function mount(ctx) {
     }).filter(function (c) { return c.w > 0; });
     return C.nearest({x: +n.x || 0, y: +n.y || 0, w: +n.w || 0, h: +n.h || 60}, cards);
   }
-  function rawChips() { return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls(), notes: boardNotes()}); }
+  function rawChips() {                                   // 크게 보기면 연 화면 + 그 화면에서 고른 요소(HD.chat.modalSel) · 아니면 판에서 고른 것
+    var m = typeof ctx.modalScreen === 'function' ? C.modalSel(ctx.modalScreen(), pickedEls()) : null;
+    if (m) return C.chips({ids: m.ids, titleOf: ctx.title, els: m.els});
+    return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls(), notes: boardNotes()});
+  }
   function memoDrafts() { return CC.drafts(ctx.notes.list()); }
   function chipsNow() {
     var raw = rawChips(); dismissed = C.prune(dismissed, raw);
@@ -396,7 +403,7 @@ function mount(ctx) {
       if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { e.preventDefault(); runCmd(cmd.list[cmd.i]); return; }
       if (e.key === 'Escape') { e.preventDefault(); cmdOff = true; hideCmds(); return; }
     }
-    if (e.key === 'Escape') { ta.blur(); return; }
+    if (e.key === 'Escape') { e.stopPropagation(); ta.blur(); return; }   // 입력창에서만 나감 — 셸 Esc(크게 보기 닫기·고르기 풀기)까지 가지 않는다
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
     e.preventDefault();
     if (send(ta.value)) { ta.value = ''; grow(); }

@@ -262,7 +262,7 @@
   function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
   function block(e) { if (!picking || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
   ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit'].forEach(function (ev) { document.addEventListener(ev, block, true); });   // dblclick 은 아래 글자 고치기 리스너가 막고 받는다
-  var pressInl = false;                               // 그 자리 고치기 중 다른 곳을 누르기 시작함(pointerdown — 손 도구면 mousedown 의 blur 가 먼저 끝낸다)
+  var pressInl = false;                               // 그 자리 고치기 중 선택(V)으로 다른 곳을 누르기 시작함(pointerdown — 고르는 중엔 mousedown 이 막혀 blur 가 없다)
   function retarget(e) {                              // 고치는 중 다른 곳 누르기(R52 — HD.textEdit.press 와 같은 뜻): 글자 = 캔버스에 hd-dbl(→ hd-inline 이 지금 것을 저장으로 끝내고 그 글자로) · 글자 아님 = 저장하고 끝(away)
     var t = target(e), lf = t ? leafOf(t) : null;
     if (lf && lf !== document.body && lf !== document.documentElement) {
@@ -272,6 +272,12 @@
     if (inl) inlineEnd(true, true);
     return false;
   }
+  document.addEventListener('dblclick', function (e) {   // 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸 — 크게 보기 고르기(V, select)일 때만(Figma, R52 HD.textEdit.dbl 'modal').
+    if (!picking || inEdit(e)) return;                   // 손 도구(체험, picking 아님) = 화면 그대로 — 버튼을 빠르게 두 번 눌러도 고치기로 빠지지 않는다(사용자 10-29)
+    block(e);
+    if (pickMode !== 'select' || !editOn || !window.parent || window.parent === window) return;
+    var el = leafOf(e.target); if (el) sendHit(el, true, 'hd-dbl');
+  }, true);
   document.addEventListener('click', function (e) {
     if (pressInl) { pressInl = false; if (!inEdit(e) && retarget(e)) return; }
     if (!picking || inEdit(e)) return;
@@ -790,15 +796,7 @@
   }
 
   send({type: 'hd-here', screen: screenId()});
-  var editOn = false;
-  document.addEventListener('dblclick', function (e) {    // 크게 보기에서 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸 — 선택(V)만(R52, HD.textEdit.dbl 'modal' · 손 = 화면 체험)
-    if (!picking || inEdit(e)) return;
-    block(e);                                          // 고르는 중엔 화면 스크립트로 새지 않게(예전 block 목록의 dblclick)
-    if (!editOn || pickMode !== 'select' || !window.parent || window.parent === window) return;
-    var el = leafOf(e.target); if (!el || el === document.body || el === document.documentElement) return;
-    e.preventDefault(); e.stopPropagation();
-    sendHit(el, true, 'hd-dbl');
-  }, true);
+  var editOn = false;                                   // 크게 보기(hd-edit) — 두 번 누르기 고치기·오른쪽 메뉴·스크롤 알림
   document.addEventListener('contextmenu', function (e) {   // 크게 보기 오른쪽 클릭 → 캔버스 요소 메뉴(task 49a)
     if (!editOn || !window.parent || window.parent === window) return;
     e.preventDefault(); e.stopPropagation();

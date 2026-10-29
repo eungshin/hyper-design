@@ -7,7 +7,7 @@
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
 | `modules/tools.js` | ViewModel | 도구 규칙: 메모 한 칸(`memo`, 키 M · 보조 P) · `MEMO` 두 모드(`el` P · `screen` M) · `modeOfKey`·`memoMode`(모르는 값 = `el`) · `memoTarget(mode, inPhone)` · `hoverOf(tool, {mode, edge})` · 이름표 `elLabel`·`screenLabel` · 칸 꼬리말 `memoTip`. 상태 없음 — unit `test_canvas_unit_memo_tool.py` |
-| `modules/view-memo-tool.js` | View | 칸 모습(귀퉁이 `.tmode` 요소/화면 · `data-tip`·`data-key`·`data-mode`·`aria-label`) · 판 커서(`t-annotate` 요소 · `t-memo` 화면) · P·M 키를 capture 에서 먼저 읽어 모드만. 상태 = `mode`(저장 안 함 — 새로 열면 요소). ctx `{$, pane, tool(), typing(e)}`. `HD.viewMemoTool.mount(ctx) → {mode(), set(m), paint()}` — 셸 `MT` |
+| `modules/view-memo-tool.js` | View | 칸 모습(아이콘만 — 칸 아래 모드 글 없음 · `data-tip`·`data-key`·`data-mode`·`aria-label`) · 판 커서(`t-annotate` 요소 · `t-memo` 화면) · P·M 키를 capture 에서 먼저 읽어 모드만. 상태 = `mode`(저장 안 함 — 새로 열면 요소). ctx `{$, pane, tool(), typing(e)}`. `HD.viewMemoTool.mount(ctx) → {mode(), set(m), paint()}` — 셸 `MT` |
 | 셸 | — | `setTool` 이 `MT.paint()` · 판 클릭이 `memoTarget` 로 `MP.card`/`MP.addCard`(화면) 또는 `FA.hit` → `MP.element`/`MP.addElement`(요소) · 크게 보기 `setMode('memo')` = 요소 모드면 고르기(picking), 화면 모드면 `MP.card(mscreen)` · `EB` ctx `mode()` |
 
 ## 규칙
