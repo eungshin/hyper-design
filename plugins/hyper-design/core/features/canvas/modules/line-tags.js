@@ -5,12 +5,13 @@
    anchor(r, end) → [x, y] | null   길(HD.route 결과 {pts}) 의 그 태그 쪽 끝 점(end 0 = 첫 점 = 출발 카드, 1 = 끝 점 = 양방향의 다른 쪽 출발)
    from(r, end) → 점 목록(태그 쪽 끝에서 바깥으로) | null
    walk(pts, d) → {x, y, dir: 'h'|'v'}   꺾은선 위 d 만큼 간 점(0..길이로 자름)과 그 마디 방향
-   seat(items, o) → [{x, y, d, free, side} | null]   보이는 태그 자리(화면 px, 태그 가운데) — items = [{pts(화면 px, 태그 쪽 끝에서 바깥으로), w, h}] 차례대로.
+   seat(items, o) → [{x, y, d, free, side, hidden?} | null]   보이는 태그 자리(화면 px, 태그 가운데) — items = [{pts(화면 px, 태그 쪽 끝에서 바깥으로), w, h}] 차례대로.
      태그는 제 선에 붙는다: 선 옆, 가장자리가 선에 닿게(가로 마디는 아래, 세로 마디는 오른쪽 — 선을 가리지 않음). 시작 = 카드 가장자리에서 태그 반 칸 + 2px(제 카드를 덮지 않게).
      앞서 놓인 태그와 겹치면(틈 gap) 제 선을 따라 step 씩 바깥으로 — 다른 선으로 건너가지도, 목록처럼 쌓이지도 않는다.
      그 쪽에 빈 자리가 없으면 같은 길이를 다시 반대 옆(side 1)으로, 그다음 선 위 가운데(side 2)로 — 짧은 양방향 선의 두 태그가 위·아래로 갈린다.
      한도 = min(o.max, 선 길이 × o.share)(짧은 선도 시작 자리 한 칸은): 그 안에 빈 자리가 없으면 시작 자리 그대로(겹침, free:false). 깨진 항목은 null(View 가 그 태그는 기본 자리)
-     o.avoid = [{l, t, r, b}] 비킬 화면 px 상자(떠 있는 카드 막대 등 — 늘 피한다: 빈 자리가 없을 때도 막대만 피한 첫 자리, 깨진 상자는 건너뜀)
+     o.avoid = [{l, t, r, b}] 비킬 화면 px 상자(떠 있는 카드 막대·줄 제목·[보기] 등 — 늘 피한다: 빈 자리가 없을 때도 막대만 피한 첫 자리, 한도 안이 다 막대면 선 끝까지,
+       선 전체가 막대 밑이면 hidden:true(View 가 숨김) · 깨진 상자는 건너뜀)
    HD.lineTags = {MORE, GAP, STEP, MAX, SHARE, text, anchor, from, walk, seat} */
 (function () {
 'use strict';
@@ -81,10 +82,23 @@ function seat(items, o) {
         if (clear(r, placed)) pick = {x: c.x, y: c.y, d: d, free: true, side: pass, r: r};
       }
     }
-    // 한도 안에 빈 자리가 없으면: 막대만 피한 첫 자리(다른 태그와는 겹침) → 그것도 없으면 시작 자리
+    // 한도 안에 빈 자리가 없으면: 막대만 피한 첫 자리(다른 태그와는 겹침) → 한도 안이 다 막대면 선 끝까지 막대 없는 첫 자리
+    // → 선 전체가 막대 밑이면 시작 자리 + hidden(View 가 숨긴다 — 줄 제목·[보기] 누르기를 가로막지 않게)
+    if (!pick && !soft) {
+      var len = length(it.pts);
+      for (var q = 0; q < 3 && !soft; q++) {
+        for (var e = lim + step; e <= len + 1e-6 && !soft; e += step) {
+          var pe = walk(it.pts, e), oe = off(pe, q), ce = {x: pe.x + oe[0], y: pe.y + oe[1]}, re = rectAt(ce, it.w, it.h);
+          if (clear(re, bars)) soft = {x: ce.x, y: ce.y, d: e, free: false, side: q, r: re};
+        }
+      }
+    }
+    var hidden = !pick && !soft;
     if (!pick) pick = soft || (function () { var s = walk(it.pts, d0), o2 = off(s, 0), c = {x: s.x + o2[0], y: s.y + o2[1]}; return {x: c.x, y: c.y, d: d0, free: false, r: rectAt(c, it.w, it.h)}; })();
-    placed.push(pick.r);
-    return {x: pick.x, y: pick.y, d: pick.d, free: pick.free, side: pick.side || 0};
+    if (!hidden) placed.push(pick.r);
+    var res = {x: pick.x, y: pick.y, d: pick.d, free: pick.free, side: pick.side || 0};
+    if (hidden) res.hidden = true;
+    return res;
   });
 }
 

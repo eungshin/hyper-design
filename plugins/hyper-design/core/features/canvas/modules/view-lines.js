@@ -214,6 +214,7 @@ function mount(ctx) {
         var n = lbEls[shown[j]], x = ((s.x - view.x) / view.z).toFixed(1) + 'px', y = ((s.y - view.y) / view.z).toFixed(1) + 'px';
         if (n.style.left !== x) n.style.left = x;
         if (n.style.top !== y) n.style.top = y;
+        n.classList.toggle('ltag-hid', !!s.hidden);    // 선 전체가 줄 제목·막대 밑 — 숨겨서 그 누르기를 가로막지 않는다
       });
     }
     if (pop.tag) placePop();

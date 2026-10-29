@@ -57,6 +57,10 @@ const bi = [[0, 100], [72, 100]];
 out.seatBi = T.seat([{pts: bi, w: 70, h: 16}, {pts: bi.slice().reverse(), w: 51, h: 16}]);
 // 막대(avoid) 밑에는 놓지 않는다
 out.seatAvoid = T.seat([{pts: down, w: 60, h: 16}], {avoid: [{l: 0, t: 0, r: 300, b: 60}, {l: 'x'}]});
+// 한도 안이 다 막대(줄 제목 등)면 한도를 넘어 제 선 위 막대 없는 첫 자리 · 선 전체가 막대 밑이면 숨김(hidden — 누르기를 가로막지 않게)
+const tall = [[0, 0], [0, 300]];
+out.seatPastCap = T.seat([{pts: tall, w: 60, h: 16}], {avoid: [{l: -100, t: -10, r: 100, b: 150}]});
+out.seatHidden = T.seat([{pts: tall, w: 60, h: 16}], {avoid: [{l: -100, t: -10, r: 100, b: 310}]});
 out.seatBad = T.seat([null, {pts: [[0, 0]], w: 1, h: 1}, {pts: down, w: NaN, h: 1}]);
 process.stdout.write(JSON.stringify(out));
 """
@@ -132,3 +136,13 @@ def test_seat_avoids_floating_bars_and_skips_bad_items(out):
     s = out["seatAvoid"][0]
     assert s["y"] - 8 >= 60 + 3, ("막대 밑에 놓지 않는다", s)
     assert out["seatBad"] == [None, None, None]
+
+
+def test_seat_leaves_the_cap_to_clear_a_heading_and_hides_when_the_whole_line_is_covered(out):
+    """R46 회귀(전체 실행 4904741): 줄 제목 옆을 지나는 짧은 선의 태그가 제목을 덮어 제목 두 번 누르기·[보기]를 가로막았다."""
+    s = out["seatPastCap"][0]
+    assert s["y"] - 8 >= 150 + 3, ("한도 안이 다 막대면 한도 밖 막대 없는 자리", s)
+    assert touches(s, [[0, 0], [0, 300]]) and not s.get("hidden"), s
+    h = out["seatHidden"][0]
+    assert h["hidden"] is True and h["free"] is False, ("선 전체가 막대 밑 = 숨김", h)
+    assert "hidden" not in out["seatOne"][0], "보이는 태그에는 hidden 칸이 없다(예전 출력 그대로)"

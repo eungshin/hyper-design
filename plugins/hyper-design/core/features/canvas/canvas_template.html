@@ -604,7 +604,7 @@ function pendingFor(from) { return HD.edits.pendingFor(NS.list(), from); }   // 
 var LN = HD.viewLines.mount({rowsEl: rowsEl, svg: $('#ar'), $: $, $$: $$, esc: esc, circled: circled, CARD: CARD, sizeOf: sizeOf, LEFT: LEFT, prefs: prefs, savePrefs: savePrefs, record: record,
                              names: names, redraw: function () { drawArrows(); }, title: function (id) { return titleOf(id); },
                              triggers: function (f, t) { return VL.triggers(f, t); }, hilite: function (f, t, p) { VL.hilite(f, t, p); },
-                             avoid: function () { return $$('#selbar, #elbar, #tools, #rows .card:not(.capfold-d)>.cbody').filter(function (b) { return !b.hidden && b.offsetWidth && getComputedStyle(b).display !== 'none'; }).map(function (b) { var r = b.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; }); },   // 선 태그 목록 창(R46): 고른 화면 안 트리거·표시
+                             avoid: function () { return $$('#selbar, #elbar, #tools, #rows .card:not(.capfold-d)>.cbody, #rows .flow>.glabel, #rows .card>.pres').filter(function (b) { return !b.hidden && b.offsetWidth && getComputedStyle(b).display !== 'none'; }).map(function (b) { var r = b.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; }); },   // 선 태그 목록 창(R46): 고른 화면 안 트리거·표시
                              graph: function () { return G; }, pending: function () { return HD.edits.overviewPending(NS.list()); }});   // 판의 선 — 체계 하나(E7·E20)
 var LP = HD.viewLinkPanel.mount({$: $, esc: esc, circled: circled, title: function (id) { return titleOf(id); }, names: names,   // 연결 패널: 줄마다 이름 · 휴지통(E13)
                                  cut: function (from, to) { ED.cutPairs([[from, to]], true); },
