@@ -1,5 +1,7 @@
 /* View — 판의 연결선 하나뿐인 체계(E20 A): 화면 쌍마다 선 하나, 출발 줄마다 한 색(D6b), 양방향 = 양쪽 화살촉(D6c), 반영 대기 = 점선(E14),
-   기획 갈래 = 얇은 회색 실선(D8, 글자 표시 없음). 선 태그 = 방향마다 하나(출발 카드 옆) — 번호 + 연결 이름(없으면 버튼 글).
+   기획 갈래 = 얇은 회색 실선(D8, 글자 표시 없음). 선 태그 = 방향마다 하나 — 번호 + 연결 이름(없으면 버튼 글, 트리거 여럿이면 "첫 글 외 N", R46).
+   태그 자리(R46, 규칙 HD.lineTags): 제 선이 출발 카드를 떠나는 점에서 선에 붙이고, 보이는 태그끼리 겹치면 제 선을 따라 바깥으로 비킨다(한도 안에서만).
+   목록 창(#ltpop, R46): 트리거가 둘 이상이거나 이름 붙인 태그 · 그 선에 마우스를 올리면 태그 옆에 트리거 목록, 줄에 올리면 화면 안 그 버튼 표시가 진해진다(ctx.hilite).
    번호는 출발 화면마다 1, 2, 3 …(mark(from, to)) — 화면 안 출발 버튼의 테두리·번호(view-links)가 같은 색·같은 번호를 쓴다.
    강조: 고른 카드 전부(focus(ids), E21) 또는 Ctrl+클릭한 쌍 하나(pair) → 그 선·태그 진하게, 나머지 흐리게. 마우스를 올린 카드도 진하게(D6c ②).
    화살촉(#286): 채운 marker 라 선의 stroke-opacity 가 닿지 않는다 — 색마다 투명도 단계(HD.lineTone.TONES)별 marker(hd-ln-<색>-<단계>, data-tone)를 두고
@@ -7,7 +9,9 @@
    쌍 목록은 HD.graph.overview(Model), 색은 HD.lineStyle.rowColor, 길은 HD.route.plan(지금 상자 자리 — 쪽·꺾는 곳·막혔을 때만 돌아가기). 표시 패널(보이기·투명도·굵기·색 프리셋)도 여기서.
    HD.viewLines.mount(ctx) → {render() → 가장 왼쪽 통로 x, apply(), focus(ids), pair(from, to), mark(from, to) → {n, color}|null, rename(from, to),
                               hits(stagePts, from) → 그은 선이 가로지른 path.ln[], openDropdown(), closeDropdown()}
-   ctx = {rowsEl, svg, $, $$, esc, circled(n), CARD, LEFT, graph(), pending(), prefs, savePrefs(), names:{get(from,to), set(from,to,text)}, redraw(), record?({label, undo(), redo()})} */
+   ctx = {rowsEl, svg, $, $$, esc, circled(n), CARD, LEFT, graph(), pending(), prefs, savePrefs(), names:{get(from,to), set(from,to,text)}, redraw(), record?({label, undo(), redo()}),
+          title?(id), triggers?(from, to) → [{text, path}]|null(고른 화면 안 링크 — 없으면 판 데이터 글), hilite?(from, to, path|null)(화면 안 그 버튼 표시 진하게 · null = 되돌림),
+          avoid?() → [{l, t, r, b}](태그가 비킬 떠 있는 막대 — 화면 px)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -16,7 +20,7 @@ var PLAN = '#B5B8B2';
 function mount(ctx) {
   var rowsEl = ctx.rowsEl, svg = ctx.svg, $ = ctx.$, $$ = ctx.$$, esc = ctx.esc, CARD = ctx.CARD, LEFT = ctx.LEFT, prefs = ctx.prefs;
   function dim(id) { return ctx.sizeOf ? ctx.sizeOf(id) : CARD; }   // 그 카드 크기(task 46 — 카드마다 크기, 없으면 프로젝트 카드)
-  var R = HD.route, S = HD.lineStyle, LT = HD.lineTone, hov = null, foc = {}, pairKey = null, marks = {};
+  var R = HD.route, S = HD.lineStyle, LT = HD.lineTone, T = HD.lineTags, hov = null, foc = {}, pairKey = null, marks = {};
 
   // 그리기: 쌍(from>to)마다 선 하나·방향마다 태그 하나를 열쇠로 기억한다. 쌍·색 목록이 그대로면 바뀐 d·자리만 고쳐 쓰고,
   // 달라지면(편집·숨기기·색 프리셋) 전부 새로 넣는다. 카드 자리를 먼저 모두 읽고 그다음 쓴다(읽기·쓰기 번갈아 하지 않게).
@@ -34,14 +38,13 @@ function mount(ctx) {
     }
     return full();
   }
-  // 태그 자리(ab = 선의 첫 점 쪽, ba = 끝 점 쪽): 왼·오른쪽으로 떠나는 선은 그 점 옆, 위·아래로 떠나는 선은 카드 오른쪽 틈의
-  // 위·아래 끝(줄 머리글 위에 얹히지 않게). 같은 카드·같은 쪽 태그는 44px 씩 쌓는다
-  function labelAt(r, end, n, f) {
-    var q = end ? r.pts[r.pts.length - 1] : r.pts[0], side = end ? r.to : r.from, dy = n * 44;
-    if (side === 'left') return {left: (q[0] - 10) + 'px', top: (q[1] + 8 + dy) + 'px', tf: 'translateX(-100%)'};
-    if (side === 'right') return {left: (q[0] + 10) + 'px', top: (q[1] + 8 + dy) + 'px', tf: ''};
-    if (side === 'bottom') return {left: (f.x + f.w + 10) + 'px', top: (f.y + f.h - 64 - dy) + 'px', tf: ''};
-    return {left: (f.x + f.w + 10) + 'px', top: (f.y + 24 + dy) + 'px', tf: ''};
+  // 태그 기본 자리(R46) = 제 선이 그 태그 쪽 카드를 떠나는 점(ab = 선의 첫 점, ba = 끝 점), 태그 가운데를 그 점에. 보이는 태그는 seat() 가 제 선에 붙여 옮긴다.
+  // (예전: 위·아래로 떠나는 선의 태그는 카드 오른쪽 틈에 44px 씩 쌓여 어느 선의 것인지 보이지 않았다)
+  var MID = 'translate(-50%,-50%)';
+  function labelAt(r, end) {
+    var q = T.anchor(r, end);
+    if (!q) { console.warn('[hd] 선 태그: 길이 없는 선 — 판 원점에 둠'); q = [0, 0]; }
+    return {left: q[0] + 'px', top: q[1] + 'px', tf: MID};
   }
   function full() {
     var box = {}, base = {}, rowOf = {}, rows = $$('.flow', rowsEl);
@@ -53,10 +56,10 @@ function mount(ctx) {
       rowOf[id] = rows.indexOf(c.closest('.flow'));
     });
     var pairs = HD.graph.overview(ctx.graph(), ctx.pending()).filter(function (p) { return box[p.a] && box[p.b]; });
-    var lab = {}, num = {}, cols = [], lns = [], lbs = [], minX = LEFT;
+    var num = {}, cols = [], lns = [], lbs = [], minX = LEFT;
     marks = {};
     pairs.forEach(function (p) {
-      if (!p.ab && p.ba) { var t = p.a; p.a = p.b; p.b = t; p.ab = true; p.ba = false; p.lab = {ab: p.lab.ba, ba: p.lab.ab}; }
+      if (!p.ab && p.ba) { var t = p.a; p.a = p.b; p.b = t; p.ab = true; p.ba = false; p.lab = {ab: p.lab.ba, ba: p.lab.ab}; p.n = {ab: p.n.ba, ba: p.n.ab}; }
     });
     var res = R.plan(box, pairs, {corridorX: LEFT - 56});
     pairs.forEach(function (p, i) {
@@ -66,15 +69,14 @@ function mount(ctx) {
       var ci = cols.indexOf(color); if (ci < 0) { ci = cols.length; cols.push(color); }
       lns.push({from: p.a, to: p.b, cls: 'ln' + (p.pend ? ' pd' : '') + (p.plan ? ' plan' : ''), both: p.ba ? 1 : 0, color: color, ci: ci, d: r.d});
       if (p.plan) return;
-      [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(선이 출발 카드를 떠나는 점 옆)
+      [['ab', p.a, p.b], ['ba', p.b, p.a]].forEach(function (x) {   // 방향마다 번호 하나 + 태그 하나(트리거가 여럿이어도 하나 — "첫 글 외 N")
         var from = x[1], to = x[2]; if (!p[x[0]]) return;
-        var end = x[0] === 'ba' ? 1 : 0, sk = from + '|' + (end ? r.to : r.from);
-        var k = num[from] = (num[from] || 0) + 1, li = lab[sk] || 0; lab[sk] = li + 1;
+        var end = x[0] === 'ba' ? 1 : 0, k = num[from] = (num[from] || 0) + 1;
         marks[from + '>' + to] = {n: k, color: color};
-        var nm = ctx.names ? ctx.names.get(from, to) : '', tx2 = nm || p.lab[x[0]].slice(0, 2).join(' · ') || (p.pend ? '반영 대기' : '');
-        var at = labelAt(r, end, li, box[from]);
-        lbs.push({from: from, to: to, pi: i, end: end, li: li, named: !!nm, left: at.left, top: at.top, tf: at.tf, color: color,
-                  html: esc(ctx.circled(k)) + (tx2 ? ' ' + esc(tx2) : '')});
+        var nm = ctx.names ? ctx.names.get(from, to) : '', tg = T.text({texts: p.lab[x[0]], n: p.n[x[0]], name: nm, pend: p.pend});
+        var at = labelAt(r, end);
+        lbs.push({from: from, to: to, pi: i, end: end, named: tg.named, more: tg.more, k: k, texts: p.lab[x[0]], left: at.left, top: at.top, tf: at.tf, color: color,
+                  html: esc(ctx.circled(k)) + (tg.text ? ' ' + esc(tg.text) : '')});
       });
     });
     var key = cols.join(',') + '|' + lns.map(function (l) { return l.from + '>' + l.to; }).join('\n') + '|' + lbs.map(function (l) { return l.from + '>' + l.to; }).join('\n');
@@ -82,8 +84,8 @@ function mount(ctx) {
       lnEls.every(function (n) { return n.isConnected; }) && lbEls.every(function (n) { return n.isConnected; });
     if (same) { lns.forEach(function (l, i) { patchLine(lnEls[i], l); }); lbs.forEach(function (l, i) { patchLabel(lbEls[i], l); }); }
     else { rebuild(cols, lns, lbs); shape = key; }
-    mark();
     last = {box: box, base: base, pairs: pairs, res: res, lns: lns, lbs: lbs, minX: minX, dragging: false};
+    mark();                                          // 태그 얹기(seat)가 지금 길(last.res)을 쓴다
     return minX;
   }
   function dragFrame(moving) {                       // 끄는 프레임: DOM 자리 읽기 없음 · 움직인 카드에 닿은 선·태그만 쓴다
@@ -102,12 +104,11 @@ function mount(ctx) {
     });
     last.lbs.forEach(function (l, i) {
       var p = last.pairs[l.pi]; if (!only[p.a] && !only[p.b]) return;
-      var at = labelAt(last.res[l.pi], l.end, l.li, last.box[l.from]), n = lbEls[i];
+      var at = labelAt(last.res[l.pi], l.end), n = lbEls[i];
       if (!n) return;
-      if (l.left !== at.left) n.style.left = l.left = at.left;
-      if (l.top !== at.top) n.style.top = l.top = at.top;
-      if (l.tf !== at.tf) n.style.transform = l.tf = at.tf;
+      n.style.left = l.left = at.left; n.style.top = l.top = at.top;
     });
+    seat(true);                                      // 보이는 태그(고른 카드의 것 몇 개)만 다시 붙인다 — 크기·판 자리는 지난번 잰 값
     return last.minX;
   }
   function rebuild(cols, lns, lbs) {                  // 처음·쌍 목록이나 색이 바뀌었을 때: 전부 지우고 새로
@@ -126,7 +127,7 @@ function mount(ctx) {
         '" stroke="' + l.color + '" d="' + l.d + '"/>';   // 화살촉은 mark() 가 단계에 맞춰 단다
     });
     lbs.forEach(function (l) {
-      labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" style="left:' + l.left + ';top:' + l.top + (l.tf ? ';transform:' + l.tf : '') +
+      labels += '<div class="alabel' + (l.named ? ' named' : '') + '" data-from="' + esc(l.from) + '" data-to="' + esc(l.to) + '" data-more="' + l.more + '" style="left:' + l.left + ';top:' + l.top + (l.tf ? ';transform:' + l.tf : '') +
         ';border-color:' + l.color + '" title="두 번 눌러 이름 바꾸기">' + l.html + '</div>';
     });
     $('defs', svg).insertAdjacentHTML('beforeend', defs);
@@ -152,6 +153,7 @@ function mount(ctx) {
     if (o.tf !== l.tf) n.style.transform = l.tf;
     if (o.color !== l.color) n.style.borderColor = l.color;
     if (o.named !== l.named) n.classList.toggle('named', l.named);
+    if (o.more !== l.more) n.setAttribute('data-more', String(l.more));
     if (editing) n.classList.remove('editing');
     if (o.html !== l.html || editing) n.innerHTML = l.html;
     n._hd = l;
@@ -187,21 +189,124 @@ function mount(ctx) {
       c.classList.toggle('hl', on && !!linked[c.dataset.id]);
       c.classList.toggle('focus', !!foc[c.dataset.id]);
     });
-    declutter();
+    seat();
   }
-  // R27 F08: 보이는 태그(고른·올린 카드의 것뿐)가 화면에서 겹치면 아래로 민다 — 화면 px 거리 --dy(태그 CSS 가 판 배율로 되돌림), 규칙 HD.labelScale.stack.
-  // 판 배율이 멈춘 뒤(document 'hd-label-scale')에도 다시 잰다(태그 크기는 화면에서 같지만 태그 사이 판 거리는 배율 따라 달라진다)
-  function declutter() {
+  // R46: 보이는 태그(고른·올린 카드의 것뿐)를 제 선에 붙인다(선 옆, 가장자리가 선에 닿게) — 화면 px 로 재서 HD.lineTags.seat(겹치면 제 선을 따라 비킴, 한도 안에서만)
+  // → 판 좌표로 되돌려 left/top. 판 배율이 멈춘 뒤(document 'hd-label-scale')에도 다시(태그는 화면 px 크기라 판 거리가 배율 따라 달라진다).
+  // cached = 끄는 프레임: 보이는지·태그 크기·판 자리를 다시 재지 않는다(지난번 값)
+  var view = null;
+  function seat(cached) {
+    if (!last) return;
     var shown = [];
-    lbEls.forEach(function (n) {
-      if (n.style.getPropertyValue('--dy')) n.style.removeProperty('--dy');
-      if (n.isConnected && getComputedStyle(n).display !== 'none') shown.push(n);
-    });
-    if (shown.length < 2 || !HD.labelScale) return;
-    var rs = shown.map(function (n) { var r = n.getBoundingClientRect(); return {l: r.left, t: r.top, r: r.right, b: r.bottom}; });
-    HD.labelScale.stack(rs, 3).forEach(function (dy, i) { if (dy > 0) shown[i].style.setProperty('--dy', dy.toFixed(1) + 'px'); });
+    lbEls.forEach(function (n, i) { if (n.isConnected && (cached ? n._seen : (n._seen = getComputedStyle(n).display !== 'none'))) shown.push(i); });
+    if (shown.length) {
+      if (!cached || !view) {
+        var rr = rowsEl.getBoundingClientRect(), z = rowsEl.offsetWidth ? rr.width / rowsEl.offsetWidth : 1;
+        view = {x: rr.left, y: rr.top, z: z || 1};
+      }
+      var items = shown.map(function (i) {
+        var n = lbEls[i], l = n._hd, pts = l && last.res[l.pi] ? T.from(last.res[l.pi], l.end) : null;
+        if (!cached || !n._sz) { var b = n.getBoundingClientRect(); n._sz = {w: b.width, h: b.height}; }
+        return pts ? {pts: pts.map(function (q) { return [view.x + q[0] * view.z, view.y + q[1] * view.z]; }), w: n._sz.w, h: n._sz.h} : null;
+      });
+      T.seat(items, {avoid: ctx.avoid ? ctx.avoid() : []}).forEach(function (s, j) {
+        if (!s) return;
+        var n = lbEls[shown[j]], x = ((s.x - view.x) / view.z).toFixed(1) + 'px', y = ((s.y - view.y) / view.z).toFixed(1) + 'px';
+        if (n.style.left !== x) n.style.left = x;
+        if (n.style.top !== y) n.style.top = y;
+      });
+    }
+    if (pop.tag) placePop();
   }
-  document.addEventListener('hd-label-scale', function () { if (rowsEl.classList.contains('focusing') || hov) declutter(); });
+  document.addEventListener('hd-label-scale', function () { if (rowsEl.classList.contains('focusing') || hov) seat(); });
+
+  // 목록 창(#ltpop, R46): 한 태그 = 한 선 — 트리거가 둘 이상(data-more > 0)이거나 이름을 붙여 버튼 글이 가려진 태그에 마우스를 올리면(태그 또는 그 선)
+  // 태그 옆에 그 선의 트리거(버튼 글)를 모두 보인다. 줄에 올리면 화면 안 그 버튼의 표시가 진해진다(ctx.hilite — 같은 번호 표시 길, palette.js hd-links-paint).
+  // 자리 = HD.popSide.beside(태그 옆 → 판 칸 → 창 전체). 트리거 하나뿐인 태그는 창 없이 태그에 올리면 그 버튼 표시만 진하게.
+  var pop = {el: null, tag: null, list: [], timer: 0, lit: null};
+  function popEl() {
+    if (pop.el) return pop.el;
+    var d = document.createElement('div');
+    d.id = 'ltpop'; d.className = 'ltpop'; d.hidden = true; d.setAttribute('role', 'tooltip');
+    document.body.appendChild(d);
+    d.addEventListener('mouseenter', keepPop);
+    d.addEventListener('mouseleave', function () { lite(null); laterClose(); });
+    d.addEventListener('mouseover', function (e) {
+      var r = e.target.closest ? e.target.closest('[data-i]') : null;
+      lite(r ? pop.list[+r.getAttribute('data-i')] || null : null);
+      $$('[data-i]', d).forEach(function (x) { x.classList.toggle('on', x === r); });
+    });
+    pop.el = d;
+    return d;
+  }
+  function triggersOf(n) {                           // 고른 화면이면 화면 안 링크(경로 있음 — 표시를 진하게 할 수 있다), 아니면 판 데이터의 버튼 글
+    var l = n._hd, live = ctx.triggers ? ctx.triggers(l.from, l.to) : null;
+    if (live && live.length) return live.map(function (t) { return {text: t.text, path: t.path || null}; });
+    return (l.texts || []).map(function (t) { return {text: t, path: null}; });
+  }
+  function lite(t) {                                 // 화면 안 그 버튼 표시 진하게(t = 트리거 | null)
+    var key = t && t.path && pop.from ? pop.from + '|' + pop.to + '|' + t.path : null;
+    if (key === pop.lit) return;
+    if (pop.lit && ctx.hilite) ctx.hilite(pop.lit.split('|')[0], pop.lit.split('|')[1], null);
+    pop.lit = key;
+    if (key && ctx.hilite) ctx.hilite(pop.from, pop.to, t.path);
+  }
+  function wantsPop(n) { return !!n && !!n._hd && !n.classList.contains('editing') && (+n.getAttribute('data-more') > 0 || n.classList.contains('named')); }
+  function openPop(n) {
+    keepPop();
+    if (pop.tag === n && pop.el && !pop.el.hidden) return;
+    closePop();
+    var l = n._hd, d = popEl(), list = triggersOf(n), name = ctx.title ? ctx.title(l.to) : l.to;
+    pop.tag = n; pop.from = l.from; pop.to = l.to; pop.list = list;
+    d.style.setProperty('--lc', l.color);
+    d.innerHTML = '<div class="lt-h"><span class="lt-n">' + esc(ctx.circled(l.k)) + '</span>' + esc(name || '') + '<span class="lt-c">버튼 ' + list.length + '개</span></div>' +
+      list.map(function (t, i) { return '<div class="lt-i" data-i="' + i + '">' + (t.text ? esc(t.text) : '<i>(글 없는 버튼)</i>') + '</div>'; }).join('');
+    d.hidden = false;
+    placePop();
+  }
+  function placePop() {
+    var d = pop.el, n = pop.tag;
+    if (!d || !n) return;
+    if (!n.isConnected || getComputedStyle(n).display === 'none') { closePop(); return; }
+    var r = n.getBoundingClientRect(), pane = $('#screens'), pr = pane ? pane.getBoundingClientRect() : null;
+    var areas = (pr ? [{x: pr.left, y: pr.top, w: pr.width, h: pr.height}] : []).concat([{x: 0, y: 0, w: innerWidth, h: innerHeight}]);
+    var at = HD.popSide.beside({x: r.left, y: r.top, w: r.width, h: r.height}, {w: d.offsetWidth, h: d.offsetHeight}, areas, 6);
+    d.style.left = at.x + 'px'; d.style.top = at.y + 'px';
+  }
+  function keepPop() { clearTimeout(pop.timer); pop.timer = 0; }
+  function laterClose() { keepPop(); pop.timer = setTimeout(closePop, 220); }
+  function closePop() {
+    keepPop(); lite(null);
+    if (pop.el) pop.el.hidden = true;
+    pop.tag = null; pop.from = pop.to = null; pop.list = [];
+  }
+  function tagOfLine(pth, e) {                       // 선에 올림 → 그 선의 보이는 태그(양방향이면 마우스에 가까운 쪽)
+    var f = pth.getAttribute('data-from'), t = pth.getAttribute('data-to'), best = null, bd = Infinity;
+    lbEls.forEach(function (n) {
+      var a = n.getAttribute('data-from'), b = n.getAttribute('data-to');
+      if (!((a === f && b === t) || (a === t && b === f)) || getComputedStyle(n).display === 'none') return;
+      var r = n.getBoundingClientRect(), dd = Math.hypot(r.left + r.width / 2 - e.clientX, r.top + r.height / 2 - e.clientY);
+      if (dd < bd) { bd = dd; best = n; }
+    });
+    return best;
+  }
+  rowsEl.addEventListener('mouseover', function (e) {
+    var n = e.target.closest ? e.target.closest('.alabel') : null, pth = !n && e.target.closest ? e.target.closest('path.ln:not(.plan)') : null;
+    if (pth) n = tagOfLine(pth, e);
+    if (!n || !n._hd) return;
+    if (wantsPop(n)) { openPop(n); return; }
+    var one = triggersOf(n);                         // 트리거 하나: 창 없이 그 버튼 표시만
+    pop.from = n._hd.from; pop.to = n._hd.to;
+    if (one.length === 1) lite(one[0]);
+  });
+  rowsEl.addEventListener('mouseout', function (e) {
+    var from = e.target.closest ? e.target.closest('.alabel, path.ln') : null;
+    if (!from) return;
+    var to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('.alabel, path.ln, #ltpop') : null;
+    if (to) return;
+    if (pop.tag) laterClose(); else { lite(null); pop.from = pop.to = null; }
+  });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape' && pop.tag) closePop(); });
   // 자르기: 그은 선(판 좌표 점, from 번째 마디부터)이 가로지른 선들(기획 갈래·숨긴 선 빼고)
   function segX(a, b, c, d) {
     function o(p, q, r) { return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]); }

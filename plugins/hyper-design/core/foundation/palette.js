@@ -5,7 +5,7 @@
    {type:'hd-hover', rect} / 클릭 시 {type:'hd-picked', screen, path, text, rect, add} 를 부모에게 보낸다(add = Shift 로 여러 개 고르기).
    연결 보기: {type:'hd-links', on:true} 를 받으면 다른 화면으로 가는 링크 목록을
    {type:'hd-links', screen, accent, docHeight, links:[{to, path, text, rect}]} 로 답하고(docHeight = 화면 전체 높이),
-   {type:'hd-links-paint', items:[{path, color, n}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움).
+   {type:'hd-links-paint', items:[{path, color, n, hi?}]} 로 그 요소들에 색 테두리·번호를 그린다(items:[] 이면 지움). hi = 그 하나만 진하게(2px 실선 + 옅은 색 바탕 — R46 선 태그 목록 창에서 고른 버튼).
    한 요소에 쌍이 여럿이면 테두리를 3px 간격 동심으로 겹친다.
    어디로 가나(Ctrl/Cmd+클릭): 링크 요소를 Ctrl/Cmd+클릭하면 이동하지 않고 {type:'hd-link-go', screen, to, path, rect} 를 보낸다.
    캔버스가 {type:'hd-link-at', x, y} 를 보내면 그 자리의 링크로 같은 답을 보낸다(링크가 없으면 to:null). 그냥 클릭은 그대로.
@@ -753,7 +753,8 @@
       d.setAttribute('data-hd-links', '');
       d.style.cssText = 'position:absolute;z-index:2147483646;pointer-events:none;border-radius:6px;box-sizing:border-box;' +
         'left:' + (r.left + scrollX - o) + 'px;top:' + (r.top + scrollY - o) + 'px;width:' + (r.width + 2 * o) + 'px;height:' + (r.height + 2 * o) + 'px;' +
-        'border:1px dashed ' + it.color + ';box-shadow:0 0 0 1px rgba(255,255,255,.6)';   // R27 F08: 화면 내용 위 표시는 얇은 점선 하나 — 디자인과 다투지 않게
+        (it.hi ? 'border:2px solid ' + it.color + ';box-shadow:0 0 0 3px rgba(255,255,255,.85),0 0 0 5px ' + it.color + '55;background:' + it.color + '1f'   // R46: 목록 창에서 고른 버튼
+               : 'border:1px dashed ' + it.color + ';box-shadow:0 0 0 1px rgba(255,255,255,.6)');   // R27 F08: 화면 내용 위 표시는 얇은 점선 하나 — 디자인과 다투지 않게
       if (it.n) {
         var b = document.createElement('span');
         b.textContent = it.n <= 20 ? String.fromCharCode(0x245F + it.n) : '(' + it.n + ')';
