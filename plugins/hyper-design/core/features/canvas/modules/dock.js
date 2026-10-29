@@ -1,6 +1,8 @@
 /* ViewModel — 오른쪽 패널 도크 배치(포토샵 오른쪽 창처럼). DOM·저장소·메시지를 쓰지 않는다.
    상태 = {v:1, w:220..560, collapsed:bool, groups:[{tabs:[패널…], active:패널, h:무게}], left:[묶음…](왼쪽 도크, S3), lw:220..560(왼쪽 너비),
-          floats:[{tabs, active, x, y, w, h}], closed:[패널…], tools:bool, chat:bool, bare:bool}
+          floats:[{tabs, active, x, y, w, h}], closed:[패널…], tools:bool, chat:bool, bare:bool, talk:{mode:'compact'|'expanded', auto:bool}}
+     talk = 대화 창 하나(R53, 규칙 HD.talkWindow): 떠 있을 때 접힘/펼침 · auto = 펼친 창 자리를 아직 고르지 않음(판 아래 가운데). 대화는 닫힌 패널이 되지 않는다 —
+       닫기 = 떠 있는 접힌 창 + 창 숨김(chat false, 창 메뉴 '대화창'으로 다시) · 예전에 닫아 둔 대화 = 떠 있는 접힌 창 · 도크에서 떠 있는 창으로 빼면 펼침.
      tools·chat = 창 메뉴의 도구 막대·하단 대화창 보이기(H4·S1b — 작업 공간 상태라 여기, §8-1). false 만 숨김(깨진 값 = 보임).
      bare = 패널 모두 숨기기(Tab) — 저장하지 않는다(새로 열면 늘 보임).
      묶음(group) = 도크 안에 위아래로 쌓인 창 하나, 머리에 탭이 여럿. h 는 묶음끼리 나누는 높이 무게(합은 상관없음).
@@ -15,21 +17,23 @@
                          to = 'float' → x·y 에 떠 있는 창으로 빼기(fi 가 있으면 그 떠 있는 창에 합치기)
      float{fi, x?, y?, w?, h?}  떠 있는 창 옮기기·크기(최소 200×120)
      width{w, side?} · heights{hs, side?} · collapse{on}(오른쪽만)
-     chrome{part: 'tools'|'chat', on} · bare{on} · reset(작업 영역 기본으로)
+     chrome{part: 'tools'|'chat', on} · bare{on} · reset(작업 영역 기본으로) · talk{mode?, auto?}(대화 창 접힘·펼침, R53)
    키 hd-dock(모든 캔버스 공용 — 작업 공간 배치라 화면 묶음과 상관없다). 저장소 함수는 밖에서 받는다.
    HD.dock = {KEY, PANELS, LABEL, defaults, normalize, reduce, visible, leftWidth, load, save} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, LW0 = 280,   // 왼쪽(대화) 기본 280 — 판이 주인공(R27 F02)
-    FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120;
+var KEY = 'hd-dock', V = 1, W_MIN = 220, W_MAX = 560, W0 = 300, LW0 = 360, LW_OLD = 280,   // 왼쪽(대화) 기본 360 — 280 에서는 입력창 아래 줄이 잘림(R53 사용자 승인, 예전 R27 F02 280)
+    FW = 280, FH = 320, FW_MIN = 200, FH_MIN = 120, TW = 440, TH = 640;   // TW·TH = 대화 창 펼친 크기(HD.talkWindow.BOX)
 var PANELS = ['links', 'align', 'notes', 'pending', 'history', 'layers', 'theme', 'talk'];   // 표시(선 색·굵기·투명도)는 도크 패널이 아니라 위쪽 줄 팝오버(R27 F02, view-show-pop) — 예전 저장 상태의 'show' 는 normalize 가 버린다
 var CLOSED0 = ['theme'];                          // 처음엔 닫힌 패널(창 메뉴로 켬)
 var SIDE = {talk: 'left'};                        // 집이 왼쪽인 패널(처음 자리 · 예전 저장 상태에 없을 때 · 닫았다 다시 열 때)                       // 나중에 생긴 패널: 예전 저장 상태에 없으면 이 패널 옆에(없으면 마지막 묶음)
 var LABEL = {links: '연결', notes: '메모', pending: '반영 대기', history: '기록', layers: '레이어', theme: '테마', align: '정렬', talk: '대화'};
 
+function talk0() { return {mode: 'compact', auto: true}; }
+function tcopy(t) { return t && typeof t === 'object' ? {mode: t.mode === 'expanded' ? 'expanded' : 'compact', auto: t.auto !== false} : talk0(); }
 function defaults() {
-  return {v: V, w: W0, lw: LW0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, chat: true, bare: false,
+  return {v: V, w: W0, lw: LW0, collapsed: false, closed: CLOSED0.slice(), floats: [], tools: true, chat: true, bare: false, talk: talk0(),
           left: [{tabs: ['talk'], active: 'talk', h: 1}],
           groups: [{tabs: ['links'], active: 'links', h: 1.4}, {tabs: ['align'], active: 'align', h: 0.6}, {tabs: ['notes', 'pending', 'history', 'layers'], active: 'notes', h: 1.2}]};   // 정렬은 자기 묶음 — 두 장 이상 골랐을 때만 그려진다(view-dock hidden, R27 F02)
 }
@@ -42,7 +46,7 @@ function fbox(f) {
           w: Math.max(FW_MIN, num(f.w, FW)), h: Math.max(FH_MIN, num(f.h, FH))};
 }
 function copy(s) {
-  return {v: V, w: s.w, lw: s.lw == null ? LW0 : s.lw, collapsed: s.collapsed, closed: s.closed.slice(), tools: s.tools !== false, chat: s.chat !== false, bare: !!s.bare,
+  return {v: V, w: s.w, lw: s.lw == null ? LW0 : s.lw, collapsed: s.collapsed, closed: s.closed.slice(), tools: s.tools !== false, chat: s.chat !== false, bare: !!s.bare, talk: tcopy(s.talk),
           groups: s.groups.map(gcopy), left: (s.left || []).map(gcopy),
           floats: (s.floats || []).map(fbox)};
 }
@@ -57,8 +61,9 @@ function tidy(s) {
 // 아무 객체 → 올바른 도크 상태(모르는 패널·겹친 패널은 버리고, 빠진 패널은 마지막 묶음에)
 function normalize(o) {
   if (!o || typeof o !== 'object' || !Array.isArray(o.groups)) return defaults();
-  var seen = {}, s = {v: V, w: clampW(o.w), lw: clampW(o.lw, LW0), collapsed: o.collapsed === true, groups: [], left: [], floats: [], closed: [],
-                      tools: o.tools !== false, chat: o.chat !== false, bare: false};
+  var lw = !o.talk && o.lw === LW_OLD ? LW0 : o.lw;   // R53 전 저장 상태의 예전 기본 280 → 새 기본 360(고른 폭은 그대로)
+  var seen = {}, s = {v: V, w: clampW(o.w), lw: clampW(lw, LW0), collapsed: o.collapsed === true, groups: [], left: [], floats: [], closed: [],
+                      tools: o.tools !== false, chat: o.chat !== false, bare: false, talk: tcopy(o.talk)};
   var take = function (p) { if (PANELS.indexOf(p) < 0 || seen[p]) return false; seen[p] = 1; return true; };
   var old = function (t) { return t.map(function (p) { return p === 'hidden' ? 'layers' : p; }); };   // 조각 4: 숨긴 화면 패널 → 레이어(H7)
   var side = function (src, into) {
@@ -74,7 +79,10 @@ function normalize(o) {
     var tabs = old(g.tabs).filter(take);
     if (tabs.length) s.floats.push(fbox({tabs: tabs, active: g.active, x: g.x, y: g.y, w: g.w, h: g.h}));
   });
-  old(Array.isArray(o.closed) ? o.closed : []).forEach(function (p) { if (take(p)) s.closed.push(p); });
+  old(Array.isArray(o.closed) ? o.closed : []).forEach(function (p) {
+    if (p === 'talk') { if (take(p)) { s.floats.push(fbox({tabs: ['talk'], active: 'talk', w: TW, h: TH})); s.talk = talk0(); } return; }   // 대화는 닫히지 않는다(R53) — 예전에 닫은 것 = 떠 있는 접힌 창
+    if (take(p)) s.closed.push(p);
+  });
   CLOSED0.forEach(function (p) { if (!seen[p]) { seen[p] = 1; s.closed.push(p); } });   // 새로 생긴 기본 닫힘 패널은 닫힌 채로
   Object.keys(SIDE).forEach(function (p) {          // 집이 왼쪽인 새 패널(대화, S3) — 예전 저장 상태엔 없다: 왼쪽 도크에(오른쪽 배치는 그대로)
     if (seen[p] || SIDE[p] !== 'left') return; seen[p] = 1;
@@ -108,6 +116,10 @@ function reduce(state, a) {
       s.bare = !!a.on; return s;
     case 'reset':
       return defaults();
+    case 'talk':
+      if (a.mode === 'compact' || a.mode === 'expanded') s.talk.mode = a.mode;
+      if (typeof a.auto === 'boolean') s.talk.auto = a.auto;
+      return s;
     case 'activate':
       f = find(s, a.id);
       if (!f) {                                      // 닫힌 패널 → 그 패널 집 쪽(SIDE, 기본 오른쪽)의 마지막 묶음에 다시(묶음이 없으면 새로)
@@ -122,6 +134,12 @@ function reduce(state, a) {
       return tidy(s);
     case 'close':
       f = find(s, a.id); if (!f) return state;
+      if (a.id === 'talk') {                         // 대화 창은 닫히지 않는다(R53) — 떠 있는 접힌 창으로 두고 창을 숨긴다
+        if (f.list !== s.floats) { pull(f.box, a.id); s.floats.push(fbox({tabs: ['talk'], active: 'talk', w: TW, h: TH})); s.talk = talk0(); }
+        else s.talk.mode = 'compact';
+        s.chat = false;
+        return tidy(s);
+      }
       pull(f.box, a.id); s.closed.push(a.id);
       return tidy(s);
     case 'move':
@@ -136,6 +154,7 @@ function reduce(state, a) {
         if (f.list === s.floats && src.tabs.length === 1) { src.x = num(a.x, src.x); src.y = num(a.y, src.y); return s; }   // 혼자 뜬 창 = 옮기기
         pull(src, a.id);
         s.floats.push(fbox({tabs: [a.id], active: a.id, x: a.x, y: a.y, w: a.w, h: a.h}));
+        if (a.id === 'talk') s.talk = {mode: 'expanded', auto: false};   // 도크에서 빼면 끈 자리에 펼친 창(R53)
         return tidy(s);
       }
       if (a.to === 'new') {
@@ -186,6 +205,6 @@ function save(s, setItem) {
   return o;
 }
 
-HD.dock = {KEY: KEY, PANELS: PANELS, LABEL: LABEL, W_MIN: W_MIN, W_MAX: W_MAX,
+HD.dock = {KEY: KEY, PANELS: PANELS, LABEL: LABEL, W_MIN: W_MIN, W_MAX: W_MAX, LW0: LW0,
            defaults: defaults, normalize: normalize, reduce: reduce, visible: visible, leftWidth: leftWidth, load: load, save: save};
 })();

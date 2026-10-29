@@ -1,7 +1,7 @@
 """왼쪽 도크(S3) — modules/dock.js 의 left 칸 단위 테스트(node). 브라우저 없음.
 
 대화(talk)는 처음에 왼쪽 · 예전 저장 상태(talk 없음)는 오른쪽 배치 그대로 + 대화만 왼쪽 · 왼쪽 ↔ 오른쪽 끌기 · 같은 쪽 혼자 떼기는 그대로 ·
-닫았다 다시 열면 집 쪽(왼쪽) · 너비·높이는 쪽마다 · 왼쪽 너비 0 = 비었거나 Tab · 저장 왕복.
+닫기 = 창 숨김(R53 — 대화는 닫힌 패널이 되지 않고 떠 있는 접힌 창으로, 창 메뉴 '대화창'으로 다시) · 너비·높이는 쪽마다 · 왼쪽 너비 0 = 비었거나 Tab · 저장 왕복.
 """
 import json, shutil, subprocess, tempfile
 from pathlib import Path
@@ -31,9 +31,9 @@ const both = R(s, {type: 'move', id: 'notes', to: 0, side: 'left'});
 out.merge = tabs(both.left);
 out.lh = R(R(both, {type: 'move', id: 'notes', to: 'new', side: 'left'}), {type: 'heights', hs: [3, 1], side: 'left'}).left.map(g => g.h);
 s = R(s, {type: 'close', id: 'talk'});
-out.closed = [s.left.length, s.closed.indexOf('talk') >= 0, K.leftWidth(s)];
-s = R(s, {type: 'activate', id: 'talk'});
-out.reopen = tabs(s.left);
+out.closed = [s.left.length, s.closed.indexOf('talk') >= 0, K.leftWidth(s), s.chat];
+s = R(s, {type: 'chrome', part: 'chat', on: true});
+out.reopen = [tabs(s.floats), s.chat];
 out.lw = [R(s, {type: 'width', w: 9999, side: 'left'}).lw, R(s, {type: 'width', w: 400, side: 'left'}).w, R(s, {type: 'width', w: 400}).lw];
 out.bare = K.leftWidth(R(d, {type: 'bare', on: true}));
 out.collapse = [K.leftWidth(R(d, {type: 'collapse', on: true})), K.visible(R(d, {type: 'collapse', on: true}))];
@@ -60,7 +60,7 @@ def out():
 
 
 def test_talk_starts_on_the_left(out):
-    assert out["def"] == ["talk:talk", 280, "links:links | align:align | notes+pending+history+layers:notes"], "대화 기본 280px(R27 F02) · 표시는 도크 패널이 아니다"
+    assert out["def"] == ["talk:talk", 360, "links:links | align:align | notes+pending+history+layers:notes"], "대화 기본 360px(R53 사용자 승인 — 280 에서는 입력창 아래 줄이 잘림) · 표시는 도크 패널이 아니다"
 
 
 def test_old_saved_layout_keeps_right_and_adds_talk_left(out):
@@ -75,17 +75,17 @@ def test_drag_between_sides(out):
     assert out["lh"] == [3, 1], "왼쪽 묶음 높이"
 
 
-def test_close_and_reopen_on_home_side(out):
-    assert out["closed"] == [0, True, 0]
-    assert out["reopen"] == "talk:talk", "다시 열면 집 쪽(왼쪽)"
+def test_close_hides_the_window(out):
+    assert out["closed"] == [0, False, 0, False], "닫기 = 왼쪽 도크에서 빠지고 창 숨김(닫힌 패널 아님, R53)"
+    assert out["reopen"] == ["talk:talk", True], "창 메뉴 '대화창'으로 다시 = 떠 있는 창"
 
 
 def test_widths_per_side(out):
-    assert out["lw"] == [560, 300, 280], "왼쪽 너비는 왼쪽만, 최대 560"
+    assert out["lw"] == [560, 300, 360], "왼쪽 너비는 왼쪽만, 최대 560"
     assert out["bare"] == 0, "Tab(패널 모두 숨기기)이면 왼쪽도 0"
-    assert out["collapse"] == [280, ["talk"]], "오른쪽 접기는 왼쪽에 닿지 않는다"
+    assert out["collapse"] == [360, ["talk"]], "오른쪽 접기는 왼쪽에 닿지 않는다"
 
 
 def test_save_round_trip_and_junk(out):
     assert out["round"] == ["", True, 300]
-    assert out["junk"] == [280, "talk:talk"], "깨진 값 = 기본, 모르는·겹친 패널은 버림"
+    assert out["junk"] == [360, "talk:talk"], "깨진 값 = 기본, 모르는·겹친 패널은 버림"

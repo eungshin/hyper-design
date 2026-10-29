@@ -165,7 +165,7 @@ def test_overflow_shows_arrows(served, ctx):
         pg.click("#ptabs .pt-arrow[data-dir='-1']")
         pg.wait_for_function("!document.querySelector('#ptabs .pt-arrow[data-dir=\"1\"]').disabled")
         box, chat, pane = (pg.locator(s).bounding_box() for s in ("#ptabs", "#hdchat", "#screens"))
-        if pg.evaluate("!!document.getElementById('hdchat').closest('#pTalk')"):   # 대화 패널(S3)이 열려 있으면 입력창은 패널 안 — 바는 판 폭 안까지
+        if not pg.evaluate("!!document.querySelector('#hdtalk.tw-compact')"):   # 대화 창(R53)이 붙었거나 펼쳐져 있으면 판 아래 자리가 없다 — 바는 판 폭 안까지
             assert box["x"] - pane["x"] <= 16 and box["x"] + box["width"] <= pane["x"] + pane["width"], "넘쳐도 바는 판 아래 왼쪽, 판 안"
         else:
             assert box["x"] - pane["x"] <= 16 and (box["x"] + box["width"] <= chat["x"] - 11 or box["y"] + box["height"] <= chat["y"]), \
