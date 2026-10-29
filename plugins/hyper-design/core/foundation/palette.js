@@ -18,7 +18,8 @@
    자식이 있으면 바꾸지 않는다 — hd-hit·hd-dbl 답의 textOk 가 그 판정(false = 글자만 바꿀 수 없음).
    예외 아이콘 + 글(R15): 자식 요소가 글이 없거나(svg·img·빈 i/span) 글 든 인라인만이면 글 조각만 바꾸고 아이콘은 그대로 — 바뀐 곳이 글 마디 하나 안이면 그 마디만(textMode 'icon', html_edit._icon_text_patch).
    불러올 때 {type:'hd-here', screen} 을 보낸다 — 크게 보기 안에서 다른 화면으로 넘어가도 캔버스가 지금 화면을 안다.
-   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 고르기(hd-pick mode 'select')일 때 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다(손 도구 = 보내지 않음, 화면 그대로).
+   글자 고치기(크게 보기): {type:'hd-edit', on} 을 받으면 두 번 누른 글자 요소를 {type:'hd-dbl', …hd-hit 과 같은 칸} 으로 보낸다 — 선택(hd-pick mode 'select') 도구만(R52 · 손 = 화면 체험이라 보내지 않음).
+    그 자리 고치기 중 선택 도구로 다른 곳 누르기(R52): 글자 = 그 글자를 hd-dbl 로(캔버스의 hd-inline 이 지금 것을 저장으로 끝낸다) · 글자 아님 = 저장하고 끝(hd-inline-done away:true).
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
     hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸, add?} 으로(Shift = add:true, 여러 요소 R19 · 없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'},
@@ -33,8 +34,9 @@
     hd-hit-at 에 deep:true = 그 자리 가장 안쪽 요소 그대로(Alt+클릭) · 크게 보기 고르기(select)에서 Alt+클릭도 가장 안쪽 요소.
   바로 반영(task 49c — 캔버스가 화면을 먼저 바꾸고 도우미 답이 실패면 되돌린다):
     {type:'hd-inline', path, tag} → 그 요소 하나만 contenteditable(글꼴·크기 그대로, 글 전체 선택) · {type:'hd-inline-on', tag, screen} 로 알림(없으면 캔버스는 예전 글 칸).
-      Enter = 저장 · Shift+Enter = 줄바꿈(br) · Esc = 취소(원래 글로) · 요소 밖으로 나가기(blur) = 저장. 끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?}
-      (ok:false = 취소·그대로·못 고침 — 원래 글 그대로. text = 글(br = \n, 공백 하나로) · 바뀐 글은 helper.py 글 바꾸기와 같은 모양(글 + br)으로 남기고 tag 로 되돌릴 수 있다)
+      Enter · Ctrl/Cmd+Enter · Esc = 저장하고 끝(R52 — 되돌리기는 캔버스 Ctrl+Z, 규칙 textKey = modules/text-edit.js key) · Shift+Enter = 줄바꿈(br) · 요소 밖으로 나가기(blur) = 저장.
+      끝나면 {type:'hd-inline-done', tag, ok, text, old, path, why?, away}(away = 다른 곳을 눌러 끝냄 — 캔버스가 이 요소를 다시 고르지 않는다)
+      (ok:false = 그대로·못 고침 — 원래 글 그대로. text = 글(br = \n, 공백 하나로) · 바뀐 글은 helper.py 글 바꾸기와 같은 모양(글 + br)으로 남기고 tag 로 되돌릴 수 있다)
     {type:'hd-opt', tag, items:[{path, text} | {path, dup:true, to?} | {path, move:'up'|'down', n?} | {path, to} | {path, remove:true}]} → 점선 없이 바로 바꾸고(되돌릴 것은 tag 로 기억) {type:'hd-opt-done', tag, ok, hit(바꾼 요소의 hd-hit 칸)|null}
       to(51-5) = 형제 요소(kids() 규칙 = helper.py SIB_SKIP + 캔버스가 넣은 것 뺌) 사이 자리 — {path, to} = 그 요소를 옮긴 뒤 자리 to(helper move op:to 와 같은 뜻) ·
       {path, dup:true, to} = 원본은 제자리, 복사본을 원래 형제 목록의 to 번째 앞(끝이면 맨 뒤)에(Alt 끌기) — hit 은 복사본
@@ -259,14 +261,25 @@
   }, true);
   function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
   function block(e) { if (!picking || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
-  ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit'].forEach(function (ev) { document.addEventListener(ev, block, true); });
-  document.addEventListener('dblclick', function (e) {   // 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸 — 크게 보기 고르기(V, select)일 때만(Figma).
+  ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit'].forEach(function (ev) { document.addEventListener(ev, block, true); });   // dblclick 은 아래 글자 고치기 리스너가 막고 받는다
+  var pressInl = false;                               // 그 자리 고치기 중 선택(V)으로 다른 곳을 누르기 시작함(pointerdown — 고르는 중엔 mousedown 이 막혀 blur 가 없다)
+  function retarget(e) {                              // 고치는 중 다른 곳 누르기(R52 — HD.textEdit.press 와 같은 뜻): 글자 = 캔버스에 hd-dbl(→ hd-inline 이 지금 것을 저장으로 끝내고 그 글자로) · 글자 아님 = 저장하고 끝(away)
+    var t = target(e), lf = t ? leafOf(t) : null;
+    if (lf && lf !== document.body && lf !== document.documentElement) {
+      e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      sendHit(lf, true, 'hd-dbl'); return true;
+    }
+    if (inl) inlineEnd(true, true);
+    return false;
+  }
+  document.addEventListener('dblclick', function (e) {   // 두 번 누른 글자 → 캔버스가 그 자리에 고치기 칸 — 크게 보기 고르기(V, select)일 때만(Figma, R52 HD.textEdit.dbl 'modal').
     if (!picking || inEdit(e)) return;                   // 손 도구(체험, picking 아님) = 화면 그대로 — 버튼을 빠르게 두 번 눌러도 고치기로 빠지지 않는다(사용자 10-29)
     block(e);
     if (pickMode !== 'select' || !editOn || !window.parent || window.parent === window) return;
     var el = leafOf(e.target); if (el) sendHit(el, true, 'hd-dbl');
   }, true);
   document.addEventListener('click', function (e) {
+    if (pressInl) { pressInl = false; if (!inEdit(e) && retarget(e)) return; }
     if (!picking || inEdit(e)) return;
     block(e);
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
@@ -576,11 +589,20 @@
     reBox();
     send({type: 'hd-opt-done', screen: screenId(), tag: tag || '', ok: ok, hit: first ? hitMsg(first, 'hd-opt-done') : null});
   }
+  /* hd-text-key — modules/text-edit.js 의 key 와 같은 규칙(화면 안이라 그 파일을 못 읽음 · test_canvas_unit_text_edit 이 같은 표로 견준다) */
+  function textKey(e) {                              // 'save'(Enter · Ctrl/Cmd+Enter · Esc = 저장하고 끝) | 'br'(Shift+Enter) | null
+    if (!e || e.isComposing || e.keyCode === 229) return null;   // 한글 조합 중 Enter = 조합 끝내기
+    if (e.key === 'Escape') return 'save';
+    if (e.key !== 'Enter') return null;
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey) return 'br';
+    return 'save';
+  }
+  /* /hd-text-key */
   function inlineKey(e) {
     e.stopPropagation();                               // 화면 스크립트의 단축키로 새지 않게
-    if (e.isComposing || e.keyCode === 229) return;    // 한글 조합 중 Enter = 조합 끝내기
-    if (e.key === 'Enter') { e.preventDefault(); if (e.shiftKey) document.execCommand('insertLineBreak'); else inlineEnd(true); }
-    else if (e.key === 'Escape') { e.preventDefault(); inlineEnd(false); }
+    var k = textKey(e); if (!k) return;
+    e.preventDefault();
+    if (k === 'br') document.execCommand('insertLineBreak'); else inlineEnd(true);
   }
   function inlinePaste(e) {                           // 붙여 넣기 = 글만(서식·요소 없이)
     var t = e.clipboardData && e.clipboardData.getData('text/plain');
@@ -614,7 +636,7 @@
     try { var r = document.createRange(); r.selectNodeContents(ed); var sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); } catch (e) { console.warn('[hd] 글 전체를 고르지 못함 — ' + e); }
     send({type: 'hd-inline-on', screen: screenId(), tag: tag, path: d.path});
   }
-  function inlineEnd(save) {
+  function inlineEnd(save, away) {                    // away = 다른 곳을 눌러 끝냄(R52) — 캔버스가 이 요소를 다시 고르지 않는다(누른 것이 골라진다)
     var q = inl; if (!q) return; inl = null;
     var el = q.el, ed = q.ed || el;
     ed.removeEventListener('keydown', inlineKey, true); ed.removeEventListener('paste', inlinePaste); ed.removeEventListener('blur', inlineBlur);
@@ -626,12 +648,12 @@
     var v = plainOf(ed), path = pathOf(el);
     if (!save || v === q.was) {                        // 취소·그대로 = 원래 마디로
       putKids(el, q.kids);
-      send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: false, why: save ? 'same' : 'cancel', path: path, text: q.was, old: q.was});
+      send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: false, why: save ? 'same' : 'cancel', path: path, text: q.was, old: q.was, away: !!away});
       return;
     }
     if (ed !== el) { putKids(el, q.kids); setIconText(el, v); } else setText(el, v);   // 아이콘 + 글: 원래 마디로 되돌린 뒤 글 조각만(도우미가 쓸 모양과 같게)
     optRec(q.tag, {el: el, kids: q.kids});
-    send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: true, path: path, text: v, old: q.was});
+    send({type: 'hd-inline-done', screen: screenId(), tag: q.tag, ok: true, path: path, text: v, old: q.was, away: !!away});
   }
   function kids(p) {                                 // 고를 수 있는 자식 요소(51-2) — 옮기기 sibsOf 와 같은 빼기
     return p ? Array.prototype.filter.call(p.children, function (c) {
@@ -657,6 +679,7 @@
   }
   addEventListener('pointerdown', function (e) {   // window 단계 = block() 보다 먼저 · 고른 요소를 눌러 끌기(크게 보기 고르기 도구) — 끼울 자리는 캔버스가 그린다
     grab = null;
+    pressInl = !!(inl && editOn && e.button === 0 && !inEdit(e) && picking && pickMode === 'select' && window.parent && window.parent !== window);   // 선택(V)만(HD.textEdit.press — 글자 도구는 누르면 원래 고치고, 손은 화면 체험)
     if (editOn && e.button === 0 && window.parent && window.parent !== window) send({type: 'hd-press', screen: screenId()});   // 캔버스 우클릭 메뉴 닫기
     if (!picking || pickMode !== 'select' || !selEl || !selEl.isConnected || inEdit(e) || e.button !== 0) return;
     if (!(e.target && e.target.nodeType === 1 && selEl.contains(e.target))) return;

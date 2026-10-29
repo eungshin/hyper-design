@@ -55,7 +55,7 @@ def test_figma_keys_walk_siblings_parent_child_and_enter_edits_text(ctx, out):
             pg.screenshot(path=os.path.join(SHOTS, "51-2-enter-edit.png"))
         pg.keyboard.press("Escape")
         fr.wait_for_function("!document.querySelector('h1.title').isContentEditable", timeout=3000)
-        _is(pg, "h1.title")                              # 취소 뒤에도 그 요소가 골라진 채(Figma F14)
+        _is(pg, "h1.title")                              # Esc(고친 것 없음) 뒤에도 그 요소가 골라진 채(Figma F14)
         if SHOTS:
             pg.screenshot(path=os.path.join(SHOTS, "51-2-after-edit.png"))
         pg.keyboard.press("Enter")                       # 저장해도 그대로(도우미가 쓰고 카드를 다시 실은 뒤에도)

@@ -6,7 +6,8 @@
    상태 = 진행 중 변경(HD.optimistic reduce) + 화면마다 '방금 낙관 반영함'(take 가 한 번 읽고 지움) + 열린 글자 고치기(tag 마다). 저장 없음.
    async apply(47-4b): 답이 async 면 받은 편집 id 를 빌드 확인까지 기억 — built(ids)(build.done) 가 지우고, reverted(ids, why)(build.failed) → 그 변경을 거두고(hd-opt-undo) 토스트,
      되돌린 것 중 내 것 id 목록을 돌려준다(셸이 그 화면을 다시 싣는다 — 파일은 도우미가 이미 되돌림).
-   HD.viewOptimistic.mount(ctx) → {built(ids), reverted(ids, why) → [id], inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where)(h.drop = {from, slot, copy} — 51-5), hold(screen), take(screen), typing(where)}
+   HD.viewOptimistic.mount(ctx) → {built(ids), reverted(ids, why) → [id], inline(screen, h, where, fallback) → bool, run(label, screen, notes, items, where), edit(label, screen, note, where) → Promise|null(항목은 HD.optimistic.item — 못 하면 null), moves(label, screen, h, dirs, where)(h.drop = {from, slot, copy} — 51-5), hold(screen), take(screen), typing(where),
+                                       away(where)(고치는 중 다른 곳을 누름 — 끝난 뒤 그 요소를 다시 고르지 않는다, R52)}
    ctx = {on() → 도우미로 바로 쓰나, write(label, list) → Promise<res>(view-sync write), queue(label, list, msg)(반영 대기로 — 도우미 없음·연결 끊김),
           frames(screen) → [{f: iframe, where: 'board'|'modal'}](실린 틀만), toast(msg, undoable, ms), picked(screen, hit, where)(고른 요소를 옮긴 자리로 · 그 자리 글자 고치기를 마치거나 취소한 뒤 그 요소를 다시 — 판·크게 보기, 51-2), warn(msg)} */
 (function () {
@@ -176,11 +177,11 @@ function mount(ctx) {
     var q = ins[d.tag]; if (!q) return;
     delete ins[d.tag]; clearTimeout(q.t); typingMark(q.f, false);
     q.f.setAttribute('data-hd-opt', '');
-    if (document.activeElement === q.f) q.f.blur();   // 키(도구 키·Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게
+    if (document.activeElement === q.f && !opened(q.where)) q.f.blur();   // 키(도구 키·Ctrl+Z·Esc)가 화면 iframe 이 아니라 캔버스로 오게 — 다른 글자로 전환 중이면(R52) 그 틀의 새 고치기를 끊지 않게 그대로
     if (!d.ok) {
       if (d.why === 'missing') { ctx.toast('고칠 요소를 화면에서 찾지 못했어요 — 다시 골라 주세요'); return; }
       if (d.why === 'text') ctx.toast('안에 다른 요소가 있어 글자만 바꿀 수 없어요 — 요소를 골라 주세요');
-      repick(q);                                       // 취소·그대로 = 그 요소가 골라진 채(Figma F14, 51-2)
+      repick(q, d);                                    // 그대로(Esc·Enter, 고친 것 없음 — 쓰기 없음) = 그 요소가 골라진 채(Figma F14, 51-2)
       return;
     }
     var v = String(d.text == null ? '' : d.text), n = E.note(q.screen, q.h, E.say.text(v));
@@ -189,19 +190,22 @@ function mount(ctx) {
     if (!ctx.on()) {                                   // 도우미 없음 = 예전처럼 반영 대기(미리보기 점선) — 그 자리 바꿈은 거두고 미리보기가 맡는다
       post(q.f, {type: 'hd-opt-undo', tag: q.tag});
       ctx.queue('글자 고치기', [n]);
-      repick(q);
+      repick(q, d);
       return;
     }
     each(q.screen, {type: 'hd-opt', tag: q.tag, items: [{path: q.h.path, text: v}]}, q.f);
-    repick(q);                                         // 고친 뒤에도 그 요소가 골라진 채(새 글 상자로)
+    repick(q, d);                                      // 고친 뒤에도 그 요소가 골라진 채(새 글 상자로 — Esc·Enter·Ctrl+Enter, R52)
     settle('글자 고치기', q.screen, q.tag, [mark(n)]).then(function (r) {
       if (!r.kept && !r.offline) ctx.toast(O.failText('글자 고치기', r.why), false, 6000);
     });
   }
 
   // 그 자리 고치기를 마친 뒤 그 요소 다시 고르기(51-2): 그 틀에 hd-find → hd-found(지금 상자) → ctx.picked
+  //   다시 고르지 않음(R52): 다른 곳을 눌러 끝냄(d.away — 누른 것이 골라진다) · 그사이 다른 글자 고치기가 열림(전환 — 답이 늦게 와도 고르지 않는다)
   var finds = {};
-  function repick(q) {
+  function opened(where) { return Object.keys(ins).some(function (k) { return ins[k].where === where; }); }
+  function repick(q, d) {
+    if ((d && d.away) || q.away || opened(q.where)) return;
     var tag = newTag('pk'); finds[tag] = q;
     post(q.f, {type: 'hd-find', path: q.h.path, tag: tag});
   }
@@ -209,7 +213,7 @@ function mount(ctx) {
     var d = e.data; if (!d || typeof d !== 'object' || typeof d.tag !== 'string') return;
     if (d.type === 'hd-found' && finds[d.tag]) {
       var fq = finds[d.tag]; delete finds[d.tag];
-      if (fq.f.contentWindow === e.source && d.path) ctx.picked(fq.screen, d, fq.where);
+      if (fq.f.contentWindow === e.source && d.path && !opened(fq.where)) ctx.picked(fq.screen, d, fq.where);
       return;
     }
     var q = ins[d.tag];
@@ -224,7 +228,9 @@ function mount(ctx) {
     }
   });
 
-  return {inline: inline, run: run, edit: edit, moves: moves, built: built, reverted: reverted,
+  function away(where) { Object.keys(ins).forEach(function (k) { if (ins[k].where === where) ins[k].away = true; }); }   // 판: 고치는 중 다른 곳을 누름(R52) — 그 끝(blur 저장)에 앞 요소를 다시 고르지 않는다
+
+  return {inline: inline, run: run, away: away, edit: edit, moves: moves, built: built, reverted: reverted,
           hold: function (screen) { return O.hold(st, screen); },
           take: function (screen) { var v = !!fresh[screen]; delete fresh[screen]; return v; },
           typing: function (where) { return Object.keys(ins).some(function (k) { return ins[k].on && (!where || ins[k].where === where); }); }};

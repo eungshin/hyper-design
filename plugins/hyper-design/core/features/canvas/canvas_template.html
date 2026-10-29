@@ -492,8 +492,9 @@ pane.addEventListener('click', function (e) {
   if (c && e.shiftKey) { e.preventDefault(); SL.dispatch({type: 'toggle', id: c.closest('.card').dataset.id}); return; }   // Shift+클릭 = 여러 장 고르기(더하기·빼기, E15)
   if (c) {                                         // 마우스 한 번 = 크게 보기 아님(판 위에서 고르고 고친다) · 두 번 · 키보드(Enter/Space, detail 0) = 크게 보기
     var cc = c.closest('.card');
-    if (e.detail === 1 && tool === 'move' && SL.ids().length === 1 && SL.has(cc.dataset.id) && !cc.classList.contains('draft')) { EB.pickAt(cc, e.clientX, e.clientY); return; }   // 고른 카드를 선택(V)으로 한 번 더 = 그 자리 요소 고르기 → 요소 막대(task 49a)
-    if (e.detail === 1) { SL.dispatch({type: 'only', id: cc.dataset.id}); return; }   // 한 번 = 그 카드 고르기 = 그 선 강조(E15·E20)
+    if (e.detail === 1 && tool === 'move' && SL.ids().length === 1 && SL.has(cc.dataset.id) && !cc.classList.contains('draft')) { EB.pickAt(cc, e.clientX, e.clientY); TE.click(cc, e); return; }   // 고른 카드를 선택(V)으로 한 번 더 = 그 자리 요소 고르기 → 요소 막대(task 49a) · 고치는 중이었으면 글자 = 전환(R52)
+    if (e.detail === 1) { SL.dispatch({type: 'only', id: cc.dataset.id}); TE.click(cc, e); return; }   // 한 번 = 그 카드 고르기 = 그 선 강조(E15·E20)
+    if (TE.dbl(cc, e)) return;                     // 선택(V) 두 번 = 그 글자 고치기, 글자 아니면 크게 보기(R52)
     openModal(c.dataset.file, c.dataset.title);
     return;
   }
@@ -1033,10 +1034,9 @@ function closeTedit(save) {
     ED.add('글자 고치기', [n]);
   }
 }
-$('textarea', tedit).addEventListener('keydown', function (e) {
+$('textarea', tedit).addEventListener('keydown', function (e) {   // 글 칸 키 = 그 자리 고치기와 같은 규칙(HD.textEdit.key, R52 — Esc 도 저장, Shift+Enter 는 칸의 줄바꿈 그대로)
   e.stopPropagation();
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closeTedit(true); }
-  else if (e.key === 'Escape') { e.preventDefault(); closeTedit(false); }
+  if (HD.textEdit.key({key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, composing: e.isComposing || e.keyCode === 229}) === 'save') { e.preventDefault(); closeTedit(true); }
 });
 $('textarea', tedit).addEventListener('blur', function () { closeTedit(true); });
 $('#tedel').addEventListener('mousedown', function (e) { e.preventDefault(); });   // 글 칸 blur(= 저장)보다 먼저 오지 않게
@@ -1278,6 +1278,10 @@ OP = HD.viewOptimistic ? HD.viewOptimistic.mount({on: function () { return VS.on
     if (where === 'modal') { if (BK && !modal.hidden && id === mscreen) { ML.pick(id, hit, false); BK.show(modalSel(id, hit)); } return; }
     var c = VL.cardEl(id); if (c && BK) EB.select(c, hit);
   }}) : null;
+// 판 글자 고치기 들어가기·옮기기(modules/view-text-edit.js · 규칙 text-edit.js, R52): V 두 번 누르기 = 글자 고치기 · 고치는 중 다른 글자 = 전환
+var TE = HD.viewTextEdit.mount({pane: pane, tool: function () { return tool; }, typing: function () { return !!(OP && OP.typing('board')); },
+  away: function () { if (OP) OP.away('board'); }, hit: FA.hit, edit: function (id, h) { editScreenText(id, h); },
+  open: function (c) { var b = $('.cover', c); if (b) openModal(b.dataset.file, b.dataset.title); }});
 // 바뀐 카드만 다시 싣기(교체 길) — 덮개 걷힘·AI 쓰기 알림·공용 ctx.reload 가 함께 쓴다. 셸 함수인 까닭: VL·swapCard·LC.schedule 를 잇기만 한다
 function reloadCards(ids) {
   var v = 'w' + Date.now();
