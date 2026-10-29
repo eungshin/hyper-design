@@ -63,6 +63,37 @@ def test_line_break_in_script_drawn_text_is_refused():
         edit(TOUR, "#pt-b-body", "2를 누르면\nGo", OLD)
 
 
+# 스크립트 안 HTML 조각(템플릿 문자열)이 그리는 글 — 파일 HTML 에 그 요소가 없고(경로 0개), 글 사이에 <b> 같은 서식이 낀다(10-29 탭 도구 말풍선)
+TOOLS = ('<main><div id="pt-bubble"><div id="pt-b-body"></div></div></main>\n<script>\n'
+         'const TOOLS_HTML = `<ul class="pt-tools">\n'
+         '    <li data-k="lr"><kbd>‹ ›</kbd><span><b>왼쪽으로 · 오른쪽으로</b> — 탭 순서를 바꿔요. 숫자 키 순서도 같이 바뀌어요.</span></li>\n'
+         '    <li data-k="m"><kbd>⋯</kbd><span><b>옵션</b> — 이름 바꾸기 · 접두어 &amp; 접미어 · 되돌리기</span></li></ul>`;\n'
+         "$('pt-b-body').innerHTML = TOOLS_HTML;\n</script>")
+LR = "왼쪽으로 · 오른쪽으로 — 탭 순서를 바꿔요. 숫자 키 순서도 같이 바뀌어요."
+
+
+def test_script_markup_text_keeps_bold_and_changes_only_the_edited_words():
+    out = edit(TOOLS, "li:nth-of-type(1) > span:nth-of-type(1)", "왼쪽으로 · 오른쪽으로 — 탭 차례를 바꿔요. 숫자 키 순서도 같이 바뀌어요.", LR)
+    assert "<span><b>왼쪽으로 · 오른쪽으로</b> — 탭 차례를 바꿔요. 숫자 키 순서도 같이 바뀌어요.</span>" in out
+    assert "탭 순서를" not in out
+
+
+def test_script_markup_edit_inside_the_bold_part_stays_bold():
+    out = edit(TOOLS, "li:nth-of-type(1) > span:nth-of-type(1)", "왼쪽 · 오른쪽 — 탭 순서를 바꿔요. 숫자 키 순서도 같이 바뀌어요.", LR)
+    assert "<span><b>왼쪽 · 오른쪽</b> — 탭 순서를 바꿔요." in out
+
+
+def test_script_markup_keeps_entities_and_escapes_new_ones():
+    old = "옵션 — 이름 바꾸기 · 접두어 & 접미어 · 되돌리기"
+    out = edit(TOOLS, "li:nth-of-type(2) > span:nth-of-type(1)", "옵션 — 이름 바꾸기 · 접두어 & 접미어 · 기본값 <되돌리기>", old)
+    assert "<span><b>옵션</b> — 이름 바꾸기 · 접두어 &amp; 접미어 · 기본값 &lt;되돌리기&gt;</span>" in out
+
+
+def test_script_markup_edit_across_bold_boundary_rewrites_that_element_plainly():
+    out = edit(TOOLS, "li:nth-of-type(1) > span:nth-of-type(1)", "새 설명 한 줄", LR)
+    assert "<span>새 설명 한 줄</span>" in out
+
+
 # ---------------------------------------------------------------- apply_edits: 캔버스가 보낸 old 가 화면 파일까지
 @pytest.fixture()
 def out(tmp_path, monkeypatch):

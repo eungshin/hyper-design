@@ -455,6 +455,10 @@ def _script_text_patch(src, old, value, path):
             i = body.find(old)
             while i >= 0:
                 hits.append((at + i, m.group(0)[0])); i = body.find(old, i + 1)
+    if not hits:                                     # 글 사이에 <b> 같은 서식이 끼면 문자열에 그대로 없다 — 스크립트 안 HTML 조각에서 그 글의 요소를 찾는다
+        mk = _script_markup_patch(src, old, value)
+        if mk:
+            return mk
     if len(hits) != 1:
         raise ValueError(SCRIPT_REASON + " — 스크립트에서 그 글을 %s 찾아 파일에 쓰지 않았어요(AI에게 맡겨 주세요): %s"
                          % ("못" if not hits else "%d곳에서" % len(hits), path))
@@ -463,6 +467,86 @@ def _script_text_patch(src, old, value, path):
     if q == "`":
         v = v.replace("${", "\\${")
     return a, a + len(old), v
+
+
+TAG_RX = re.compile(r"<[^>]*>")
+
+
+def _segments(frag):                                 # 조각 원문 → 글 조각 [(원문 시작, 원문 끝, 풀린 글)] — 태그 사이 글만(엔티티 풀고)
+    out, at = [], 0
+    for m in list(TAG_RX.finditer(frag)) + [None]:
+        end = m.start() if m else len(frag)
+        if end > at:
+            out.append((at, end, html.unescape(frag[at:end])))
+        if m:
+            at = m.end()
+    return out
+
+
+def _js_quote(v, q):                                 # 새 글 → 그 문자열 따옴표(q) 안에 넣을 원문
+    v = v.replace("\\", "\\\\").replace(q, "\\" + q)
+    return v.replace("${", "\\${") if q == "`" else v
+
+
+def _markup_edit(frag, old, value):
+    """서식 낀 조각 원문(frag) 안 글을 old → value 로 — 바뀐 부분이 글 조각 하나 안이면 그 조각만(굵게 등 서식 그대로),
+    여러 조각에 걸치면 조각 전체를 그냥 글로. (조각 안 상대 시작, 끝, 새 원문)."""
+    segs = _segments(frag)
+    plain = "".join(t for _, _, t in segs)
+    if _squash(plain) != old:
+        return None
+    i = 0
+    while i < min(len(plain), len(value)) and plain[i] == value[i]:
+        i += 1
+    j = 0
+    while j < min(len(plain), len(value)) - i and plain[-1 - j] == value[-1 - j]:
+        j += 1
+    a, b, mid = i, len(plain) - j, value[i:len(value) - j]
+    pos = 0
+    for s0, s1, t in segs:                           # 바뀐 [a, b) 를 다 품는 글 조각 하나
+        if pos <= a and b <= pos + len(t):
+            nt = t[:a - pos] + mid + t[b - pos:]
+            return s0, s1, html.escape(nt, quote=False)
+        pos += len(t)
+    return 0, len(frag), html.escape(value, quote=False)
+
+
+def _script_markup_patch(src, old, value):
+    """<script> 문자열이 HTML 조각이면(템플릿 등) 그 안에서 보인 글(old)이 맞는 가장 안쪽 요소 하나 → 그 안 글만 고친 패치 | None."""
+    hits = []
+    for n in Tree(src).walk():
+        if n.tag != "script" or n.close is None or n.attrs.get("src"):
+            continue
+        for m in JS_STR.finditer(src, n.open_end, n.close[0]):
+            body, at, q = m.group(0)[1:-1], m.start() + 1, m.group(0)[0]
+            if "<" not in body or "\\" in body:
+                continue
+            try:
+                els = list(Tree(body).walk())
+            except Exception:
+                continue
+            match = [e for e in els if e.tag not in ("#root", "script", "style") and e.close is not None
+                     and _squash(_plain(body, e)) == old]
+            match = [e for e in match if not any(o is not e and _inside(o, e) for o in match)]   # 가장 안쪽만
+            hits += [(at, body, e, q) for e in match]
+    if len(hits) != 1:
+        return None
+    at, body, e, q = hits[0]
+    frag = body[e.open_end:e.close[0]]
+    r = _markup_edit(frag, old, value)
+    if r is None:
+        return None
+    a = at + e.open_end
+    return a + r[0], a + r[1], _js_quote(r[2], q)
+
+
+def _inside(inner, outer):
+    p = inner.parent
+    while p is not None:
+        if p is outer:
+            return True
+        p = p.parent
+    return False
 
 
 def _op_patch(src, el, op, value, path):
@@ -501,10 +585,25 @@ def _after(src, el, op, value, p):
     return p[0] if op in ("move", "replace") else el.start
 
 
+def _select_or_script(tree, path, op, value):      # 경로 → 요소 | None(요소 0개인데 글 고치기에 old 가 있음 = 스크립트가 그린 요소 — 10-29 탭 도구 말풍선)
+    try:
+        return select(tree, path)
+    except ValueError as e:
+        if op == "text" and isinstance(value, dict) and value.get("old") and str(e).startswith("경로에 맞는 요소 0개"):
+            return None
+        raise
+
+
+def _script_only(src, value, path):
+    return _script_text_patch(src, _squash(str(value.get("old") or "")), str(value.get("value", "")), path)
+
+
 def edit_one(src, path, op, value):
     """편집 하나 → (새 원문, 그 요소의 새 경로 | None) — 경로 = 태그:nth-of-type 사슬(palette.js find 도 읽음). 쓴 뒤 캔버스가 같은 요소를 다시 고른다."""
     tree = Tree(src)
-    el = select(tree, path)
+    el = _select_or_script(tree, path, op, value)
+    if el is None:                                   # 파일 HTML 에 없는 요소 = 스크립트가 만든 요소 → 스크립트 안 글만
+        return _patch(src, [_script_only(src, value, path)]), path
     p = _op_patch(src, el, op, value, path)
     new = _patch(src, [p])
     at = _after(src, el, op, value, p)
@@ -521,8 +620,8 @@ def edit_html(src, edits):
     원문 위치 기준으로 뒤에서부터 바꾼다. 같은 자리 두 편집 = 나중 것, 겹치는 자리(안팎) = ValueError."""
     tree, spans = Tree(src), {}
     for path, op, value in edits:
-        el = select(tree, path)
-        p = _op_patch(src, el, op, value, path)
+        el = _select_or_script(tree, path, op, value)
+        p = _script_only(src, value, path) if el is None else _op_patch(src, el, op, value, path)
         spans[(p[0], p[1])] = p                       # 같은 자리 = 나중 것
     patches = sorted(spans.values(), key=lambda p: (p[0], p[1]))
     for x, y in zip(patches, patches[1:]):
