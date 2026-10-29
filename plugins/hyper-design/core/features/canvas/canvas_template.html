@@ -335,6 +335,7 @@ pane.addEventListener('wheel', function (e) { if (drag && drag.trig && drag.move
 var tool = 'hand';
 function setTool(t) {
   if (!modal.hidden) { if (MODAL_TOOLS[t]) setMode(t); return; }   // 크게 보기: 손 = 눌러 보기 · 이동 = 요소 고르기(막대) · 주석 = 메모 · 글자 = 고치기(G5·G6, task 49a)
+  if (t !== tool && MP.isOpen() && !MP.typed()) MP.close();   // 도구를 바꾸면 빈 메모 창은 닫힘 · 쓴 글이 있으면 남김(Figma 댓글 모드, R52)
   tool = t;
   $$('#tools [data-tool]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tool === t)); });
   pane.classList.toggle('t-move', t === 'move');
@@ -1151,7 +1152,9 @@ var MODAL_TOOLS = {hand: 1, move: 1, annotate: 1, text: 1}, mmode = 'hand';
 function sendPick() { try { if (mframe.contentWindow) mframe.contentWindow.postMessage({type: 'hd-pick', on: mmode !== 'hand', mode: mmode === 'text' ? 'text' : mmode === 'move' ? 'select' : ''}, '*'); } catch (e) {} }
 function setPick(on) { setMode(on ? 'annotate' : 'hand'); }
 function setMode(m) {
+  var was = mmode;
   mmode = !modal.hidden && MODAL_TOOLS[m] ? m : 'hand';
+  if (mmode !== was && MP.isOpen() && !MP.typed()) MP.close();   // 크게 보기도 같은 규칙(R52)
   picking = mmode === 'annotate';
   if (mmode !== 'move' && BK) BK.hide('modal');
   if (mmode !== 'move' && ML) ML.clear();
