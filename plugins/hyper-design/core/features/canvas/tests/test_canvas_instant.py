@@ -1,6 +1,7 @@
 """49c 바로 반영 편집 — 브라우저(도우미 있음, 크게 보기).
 
-- 글자(T): 고른 요소 하나만 그 자리에서 contenteditable(글꼴·크기 그대로, 글 칸 #tedit 없음) · Esc = 원래 글 · Shift+Enter = 줄바꿈 · Enter = 저장 → 화면은 바로, 파일은 뒤에서.
+- 글자(T): 고른 요소 하나만 그 자리에서 contenteditable(글꼴·크기 그대로, 글 칸 #tedit 없음) · Shift+Enter = 줄바꿈 · Enter = 저장 → 화면은 바로, 파일은 뒤에서.
+  (Esc 는 R52 부터 저장하고 끝 — test_canvas_text_edit.py)
   쓴 뒤 크게 보기 틀은 다시 싣지 않는다(같은 내용 — 두 번 깜빡임 없음).
 - 끌어서 순서 바꾸기: 막대 손잡이 [⠿] 를 끌면 끼울 선 #eldrop · 놓으면 화면 순서가 바로, 파일은 도우미 move op:to 한 번(기록 한 줄, 되돌리기 한 번 — 51-5).
 - Alt 끌기(51-5): 끄는 중 '+' 배지 · 놓으면 복사본이 그 자리에(원본은 제자리), 파일도 같게.
@@ -89,13 +90,7 @@ def test_text_tool_edits_in_place_and_writes_without_reloading_the_view(ctx, out
         assert pg.is_hidden("#tedit"), "글 칸(팝업)이 뜨지 않는다"
         assert mf.evaluate("[...document.querySelectorAll('[contenteditable]')].length") == 1, "그 요소 하나만 고칠 수 있다(화면 전체 아님)"
         assert mf.evaluate("(s) => getComputedStyle(document.querySelector(s)).font", H1) == font0, "글꼴·크기 그대로"
-        pg.keyboard.type("버릴 글")
-        pg.keyboard.press("Escape")
-        mf.wait_for_function("(s) => !document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
-        assert mf.text_content(H1).strip() == "하는 일이 무엇인가요?", "Esc = 원래 글"
-        mf.click(H1)
-        mf.wait_for_function("(s) => document.querySelector(s).isContentEditable", arg=H1, timeout=3000)
-        pg.keyboard.type("바로 고친")
+        pg.keyboard.type("바로 고친")                    # 들어갈 때 글 전체가 골라져 있다 = 바꿔 쓰기
         pg.keyboard.press("Shift+Enter")
         pg.keyboard.type("제목")
         shot(pg, "inline-editing.png")

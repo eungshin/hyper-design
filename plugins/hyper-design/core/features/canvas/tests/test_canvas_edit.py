@@ -1012,7 +1012,7 @@ def test_element_menu_edit_text(dpage):
     fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 1", timeout=3000)
     dpage.keyboard.press("Escape")
     fr.wait_for_function("[...document.querySelectorAll('[contenteditable]')].length === 0", timeout=3000)
-    assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc 는 고치기를 취소"
+    assert dpage.evaluate("document.getElementById('tedit').hidden"), "Esc = 고치기 끝(고친 것 없음 — 글 칸 없음, R52)"
     dpage.keyboard.press("Escape"); dpage.keyboard.press("Escape"); dpage.keyboard.press("h")
 
 

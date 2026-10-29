@@ -16,7 +16,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 var ACTS = ['parent', 'text', 'attr', 'remove', 'dup', 'up', 'down', 'swap', 'insert', 'memo'];
 var SPEC = {
   parent: {label: '상위', title: '감싼 요소 고르기 ([ · Shift+Enter)'},
-  text:   {label: '글자', title: '글자 고치기 (T · 크게 보기에서 더블클릭)'},
+  text:   {label: '글자', title: '글자 고치기 (T · 더블클릭)'},
   attr:   {label: '속성', title: '이미지 주소·대체 글 · 링크 주소 · 안내 글 고치기'},
   remove: {label: '지우기', title: '요소 지우기 (Del)'},
   dup:    {label: '복제', title: '요소 복제 — 바로 뒤에 (Ctrl+D)'},
@@ -152,7 +152,7 @@ var MENU_MAX = 10;                                   // 셸의 연결 항목(o.l
 var KEY = {parent: 'Shift+Enter', dup: 'Ctrl+D', remove: 'Del', up: 'Alt+↑', down: 'Alt+↓', addr: 'Ctrl+L'};   // keyAct 와 같은 키 · addr = view-address 가 듣는 키
 function keyOf(act, h, where) {
   if (act === 'inner') return enterOf(h) === 'down' ? 'Enter' : '';
-  if (act === 'text') return where === 'modal' ? '더블클릭' : enterOf(h) === 'text' ? 'Enter' : '';
+  if (act === 'text') return where === 'modal' ? '더블클릭' : enterOf(h) === 'text' ? 'Enter' : '';   // 크게 보기 손·선택 두 번 누르기(R52 — 판도 V 두 번 누르기지만 고른 요소에는 Enter 가 가깝다)
   return KEY[act] || '';
 }
 function menu(h, o) {
