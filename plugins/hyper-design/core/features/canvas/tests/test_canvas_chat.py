@@ -173,10 +173,8 @@ def test_card_chip_send_makes_memo_and_forwards(live):
     text = queued(pg)
     assert "1. screen=pay · path=body · no=1" in text and "요청: 버튼을 더 크게" in text and "범위: 이 화면 전체" in text, text
     assert pg.input_value("#hdchat textarea") == "", "보내면 입력창을 비운다"
-    pg.wait_for_function("(() => { const l = document.querySelector('#hdchat .ch-line'); return l && !l.hidden && /보냄|대기열/.test(l.textContent); })()", timeout=5000)
-    line = pg.text_content("#hdchat .ch-line")
-    assert pg.evaluate("document.querySelector('#hdchat .ch-line').classList.contains('pulse')"), "새 줄 = 맥박 한 번"
-    assert "버튼을 더 크게" in line and ("보냄" in line or "대기열" in line), line
+    pg.wait_for_timeout(300)
+    assert pg.locator("#hdchat .ch-line").count() == 0, "입력창 위 상태 한 줄은 없다(R53 — 창을 펼치면 기록 맨 아래 턴이 보인다)"
     assert pg.evaluate("document.querySelector('.card[data-id=\"pay\"]').classList.contains('picked')"), "보낸 뒤에도 고른 카드·캔버스 그대로"
     # 칩 빼기 = 모든 화면으로 넓어짐(칩 줄이 사라지고 안내 글이 범위를 말한다)
     pg.click("#hdchat .ch-chip button")
@@ -277,17 +275,17 @@ def test_chat_centred_without_tabs(hub_notabs, width):
 
 @pytest.mark.parametrize("width", [1280, 2880])
 def test_hide_chat_button_and_window_menu_persist(hub, width):
-    """S1b: 대화창 숨기기 단추 · 창 메뉴 '대화창' 체크(보이기/숨기기) · 새로고침 뒤에도 그대로 · 숨기면 자리를 차지하지 않는다.
+    """S1b → R53: 숨기기는 창 메뉴 '대화창' 체크만(창에 닫기·숨김 단추 없음) · 새로고침 뒤에도 그대로 · 숨기면 자리를 차지하지 않는다.
     Tab(패널 모두 숨기기)은 대화창도 숨기고 다시 Tab 이면 돌아온다 — 대화창 설정은 그대로."""
     pg = hub
     _size(pg, width)
     pg.wait_for_selector("#ptabs .pt-tab")
     narrow = _rect(pg, "#ptabs")
-    assert pg.is_visible("#hdchat .ch-hide")
-    pg.click("#hdchat .ch-hide")
-    pg.wait_for_selector("#hdchat", state="hidden")
-    assert _rect(pg, "#hdchat") is None, "숨기면 자리도 없다"
+    assert pg.locator("#hdchat .ch-hide").count() == 0, "창에는 숨김 단추가 없다(R53)"
     pg.click("#wbtn")
+    pg.click('#wmenu [data-w="chat"]')
+    pg.wait_for_selector("#hdchat", state="hidden")
+    assert _rect(pg, "#hdchat") is None and _rect(pg, "#hdtalk") is None, "숨기면 자리도 없다"
     row = pg.locator('#wmenu [data-w="chat"]')
     assert row.get_attribute("aria-checked") == "false" and "대화창" in row.text_content()
     assert pg.locator('#wmenu [data-w="hint"]').count() == 0, "판 아래 안내 항목은 없다(지웠다)"
@@ -350,13 +348,13 @@ GEOM = """() => { const q = s => document.querySelector(s), r = s => q(s).getBou
   return {box: box.getBoundingClientRect().height, inner: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
           ta: r('#hdchat textarea'), send: r('#hdchat .ch-send'), agent: q('#hdchat .ch-agent').hidden ? null : r('#hdchat .ch-agent'),
           sbw: tcs.scrollbarWidth, ovy: tcs.overflowY, chipsShown: !!q('#hdchat .ch-chips').getClientRects().length,
-          hide: +getComputedStyle(q('#hdchat .ch-hide')).opacity, label: q('#hdchat .ch-send').getAttribute('aria-label'), dis: q('#hdchat .ch-send').disabled}; }"""
+          exp: q('#hdtalk .tw-expand') ? q('#hdtalk .tw-expand').getClientRects().length > 0 : false, label: q('#hdchat .ch-send').getAttribute('aria-label'), dis: q('#hdchat .ch-send').disabled}; }"""
 
 
 @pytest.mark.parametrize("width", [1280, 2880])
 def test_composer_is_one_card_textarea_full_width_toolbar_below(hub, width):
     """빈 입력창 = 카드 한 장 82px(8+32+6+28+8): 칩 줄 없음, 입력칸은 카드 안쪽 폭 전체 한 줄, 그 아래 도구 줄(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽).
-    입력칸 스크롤바는 얇게(▲▼ 없음). 세 줄 쓰면 줄마다 +20, 200px 뒤 스크롤. 숨김 ⌄ 는 올렸을 때만."""
+    입력칸 스크롤바는 얇게(▲▼ 없음). 세 줄 쓰면 줄마다 +20, 200px 뒤 스크롤. 오른쪽 위 = 창 펼치기(R53 — 숨김 ⌄ 대신, 늘 보임)."""
     pg = hub
     _size(pg, width)
     pg.wait_for_selector("#hdchat .ch-agent:not([hidden])")
@@ -370,13 +368,9 @@ def test_composer_is_one_card_textarea_full_width_toolbar_below(hub, width):
     assert g["send"]["top"] >= g["ta"]["bottom"] - 0.5, "보내기는 입력칸 아래 줄"
     assert g["agent"] and g["agent"]["top"] >= g["ta"]["bottom"] - 0.5 and g["agent"]["right"] < g["send"]["left"], "받는 곳 알약 = 아래 줄 왼쪽"
     assert abs(g["send"]["width"] - 28) <= 1 and abs(g["send"]["height"] - 28) <= 1 and g["label"] == "보내기" and g["dis"], "28 원 보내기, 비면 꺼짐"
-    assert g["hide"] == 0, "숨김 ⌄ 는 평소 안 보임"
+    assert g["exp"], "오른쪽 위 = 펼치기(R53)"
     assert pg.get_attribute("#hdchat textarea", "placeholder") == ALL_PH
     shot1c(pg, f"s1c-empty-{width}.png")
-    pg.hover("#hdchat .ch-box")
-    pg.wait_for_timeout(250)
-    assert pg.evaluate(GEOM)["hide"] == 1, "카드에 올리면 숨김 ⌄"
-    shot1c(pg, f"s1c-hide-hover-{width}.png")
     pg.click("#hdchat textarea")
     pg.keyboard.type("버튼을 더 크게"); pg.keyboard.press("Shift+Enter")
     pg.keyboard.type("색은 그대로"); pg.keyboard.press("Shift+Enter")
@@ -427,23 +421,23 @@ def test_five_picked_chips_fold_to_two_and_more(hub5, width):
 
 
 @pytest.mark.parametrize("width", [1280, 2880])
-def test_progress_line_sits_above_card(hub, width):
-    """상태 줄 = 카드 위 한 줄(말이 있을 때만). 보내기 → 이벤트(claim) → 'AI 작업 중 · 결제'."""
+def test_no_status_line_above_card(hub, width):
+    """R53: 입력창 위 상태 한 줄은 없앴다(기록 맨 아래 턴이 같은 것을 보인다) — 보내고 진행 이벤트가 와도 카드 위에 줄이 생기지 않는다."""
     pg = hub
     _size(pg, width)
-    assert pg.is_hidden("#hdchat .ch-line"), "말 없으면 숨김"
     pg.keyboard.press("v")
     card_click(pg, "pay")
     pg.wait_for_selector("#hdchat .ch-chip[data-key]")
     pg.click("#hdchat textarea")
     pg.keyboard.type("버튼을 더 크게")
     pg.keyboard.press("Enter")
-    pg.wait_for_selector("#hdchat .ch-line:not([hidden])", timeout=8000)
+    pg.wait_for_function("document.querySelector('#hdchat textarea').value === ''", timeout=8000)
     pg.evaluate("document.dispatchEvent(new CustomEvent('hd-event', {detail: {type: 'claim', screen: 'pay'}}))")
-    pg.wait_for_function("document.querySelector('#hdchat .ch-line').textContent.includes('AI 작업 중 · 결제')")
-    l, b = _rect(pg, "#hdchat .ch-line"), _rect(pg, "#hdchat .ch-box")
-    assert l["b"] <= b["t"] and b["t"] - l["b"] <= 8, f"줄은 카드 바로 위 {l} {b}"
-    assert abs((l["b"] - l["t"]) - 20) <= 2, f"상태 줄 20px {l}"
+    pg.wait_for_timeout(300)
+    assert pg.locator("#hdchat .ch-line").count() == 0, "상태 줄 없음"
+    w = _rect(pg, "#hdtalk")
+    b = _rect(pg, "#hdchat .ch-box")
+    assert abs(w["t"] - b["t"]) <= 1 and abs(w["b"] - b["b"]) <= 1, f"접힌 창 = 입력 카드 한 장 {w} {b}"
     pg.mouse.move(5, 300)
     pg.wait_for_timeout(700)
     shot1c(pg, f"s1c-progress-{width}.png")

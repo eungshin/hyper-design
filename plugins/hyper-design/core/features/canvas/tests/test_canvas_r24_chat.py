@@ -145,7 +145,7 @@ def test_caption_edit_box_is_moved_clear_of_the_floating_dock(plain, ctx):
     try:
         pg.goto((plain / "index.html").resolve().as_uri())
         pg.wait_for_function("window.__hdReady !== undefined")
-        pg.wait_for_selector("#hdchat:not(.docked) .ch-box")
+        pg.wait_for_selector("#hdtalk.tw-compact .ch-box")   # 도우미 없음 = 기록 없이 접힌 대화 창(입력창만, R53)
         dock = pg.locator("#hdchat").bounding_box()
         # 판을 끌어 카드 아래 이름이 떠 있는 입력창 아래에 오게(손 도구)
         pg.keyboard.press("h")

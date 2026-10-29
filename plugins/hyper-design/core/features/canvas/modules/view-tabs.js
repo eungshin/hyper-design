@@ -77,6 +77,8 @@ function mount(ctx) {
     nav.dataset.need = Math.ceil(strip.scrollWidth + 34);   // 다 보이는 데 드는 폭(탭들 + '+' 26 + 안쪽 여백 6 + 사이 2) — 대화창이 읽고 폭을 줄여 준다
     var pane = $('#screens'), chat = $('#hdchat');
     var pr = pane && pane.getClientRects().length ? pane.getBoundingClientRect() : {left: 0, right: innerWidth};
+    var tw = $('#hdtalk.tw-compact');                 // 대화 창(R53)이 접혀 판 아래에 떠 있으면 그 창 — 펼치거나 붙으면 판 아래 자리가 없다
+    if (tw) chat = tw; else if ($('#hdtalk.tw')) chat = null;
     var cl = chat && !chat.classList.contains('docked') && chat.getClientRects().length ? chat.getBoundingClientRect().left : null;   // 숨긴 대화창(display:none)·대화 패널 안 대화창(S3)은 판 아래 자리가 없다
     var p = T.place(pr, cl);
     nav.style.maxWidth = p.max + 'px';
@@ -280,7 +282,7 @@ function mount(ctx) {
   addEventListener('resize', place);
   if (window.ResizeObserver) {                       // 도크 폭·대화창 크기·보이기가 바뀌면 다시 놓는다
     var ro = new ResizeObserver(function () { place(); });
-    ['#screens', '#hdchat'].forEach(function (sel) { var el = $(sel); if (el) ro.observe(el); });
+    ['#screens', '#hdchat', '#hdtalk'].forEach(function (sel) { var el = $(sel); if (el) ro.observe(el); });
   }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);   // 글꼴이 늦게 오면 탭 글 폭이 바뀐다
   prevB.addEventListener('click', function () { strip.scrollLeft -= Math.max(80, strip.clientWidth * 0.6); arrows(); });

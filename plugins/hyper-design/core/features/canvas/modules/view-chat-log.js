@@ -6,7 +6,7 @@
      턴 되돌리기 성공 → POST /api/chat undone.
    턴 누르기 = 닿은 카드 잠깐 강조(.card.tk-hl) + ctx.focus(ids)(셸: 그 카드들로 판 옮기기, 지금보다 크게는 안 함).
    [되돌리기](끝난 턴, AI 쓰기가 있을 때) = 48c 되살리기(POST /api/restore, HD.aiUndo.body/outcome) 를 stamp 마다 새것부터 — 거절되면 이유 토스트, 되살린 카드는 ctx.reload.
-   입력창 자리(S3): 패널이 보이면(도크·떠 있는 창 어디든) 의도 'hd-composer' {host: 패널 아래 칸} → view-chat 이 같은 #hdchat 을 그리로 옮긴다, 안 보이면 {host:null} = 판 아래로.
+   담는 창(R53): 이 파일은 기록만 그린다 — 어느 창·도크에 들었는지 모른다(창 틀 view-talk-window 가 #pTalk 를 담고 입력창을 그 아래에 둔다). 보이게 되면 맨 아래로.
    터미널 대화(S3b 계약): 받는 곳(window.__hdAgent)이 있으면 GET /api/agents/transcript?agent=&since=<cursor> + 이벤트 agent.transcript — 턴과 시간 차례로 섞는다.
      user = '터미널에서' 오른쪽 말풍선 · assistant = 에이전트 답 · tool = 회색 머리 줄 '도구 · <첫 줄>' + 아래 부른 입력 전체(늘 펼침). 같은 요청은 한 번(HD.chatLog.echo). 없음·못 읽음 = 조용한 한 줄.
    늘 전문(R24 · login#7): 말풍선·진행·답·실패 이유·터미널 줄을 다 그린다 — 접기·펼치기 단추 없음, 줄바꿈 그대로, 긴 낱말·경로는 줄 안에서 꺾고
@@ -33,8 +33,6 @@ var CSS =
   '#pTalk .tk-wrap{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}' +
   '#pTalk .tk-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin:0;padding:10px 12px 4px;list-style:none;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;-webkit-user-select:text;user-select:text;cursor:auto}' +
   '#pTalk .tk-empty{margin:auto 0;padding:24px 8px;color:var(--ui-muted,#8a8a85);font-size:12.5px;text-align:center;line-height:1.5}' +
-  '#pTalk .tk-foot{flex:none;padding:0 8px 8px}' +
-  '#pTalk .tk-foot:empty{display:none}' +
   '#pTalk.tk-in{animation:tkIn .4s cubic-bezier(0.34,0.88,0.34,1)}' +
   '@keyframes tkIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}' +
   '#pTalk .tk-turn{display:flex;flex-direction:column;gap:6px;min-width:0;border-radius:10px;padding:2px;cursor:pointer;outline:none}' +
@@ -75,7 +73,7 @@ var CSS =
   '#pTalk .tk-copy{display:block;margin:4px 0 0 auto;padding:1px 7px;border:1px solid var(--ui-line,#ddd);border-radius:6px;background:#fff;color:#6b6b66;font:500 11px system-ui,sans-serif;cursor:pointer;opacity:0;transition:opacity .12s;-webkit-user-select:none;user-select:none}' +
   '#pTalk .tk-copy:focus-visible,#pTalk .tk-term:hover .tk-copy,#pTalk .tk-l:hover .tk-copy{opacity:1}#pTalk .tk-copy:hover{background:#F2F2EF;color:#2b2b29}' +
   '#pTalk .tk-detail{margin-top:6px}' +
-  /* R50 맨 아래로 단추 — 목록 칸(.tk-wrap) 오른쪽 아래, 입력창(.tk-foot) 위 */
+  /* R50 맨 아래로 단추 — 목록 칸(.tk-wrap) 오른쪽 아래 — 입력창(창 틀이 목록 아래에 둠)은 덮지 않는다 */
   '#pTalk .tk-jump{position:absolute;right:12px;bottom:10px;z-index:2;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid rgba(0,0,0,.08);' +
     'background:rgba(255,255,255,.82);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.14);color:#3a3a37;' +
     'display:grid;place-items:center;cursor:pointer;animation:tkJump .16s ease-out;-webkit-user-select:none;user-select:none}' +
@@ -99,8 +97,8 @@ function mount(ctx) {
   host.innerHTML = '<div class="tk-wrap"><ol class="tk-list" aria-label="대화"></ol>' +
     '<button type="button" class="tk-jump" hidden aria-label="최신 메시지로" title="최신 메시지로">' +
     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>' +
-    '<span class="tk-dot" hidden></span></button></div><div class="tk-foot"></div>';
-  var list = host.querySelector('.tk-list'), foot = host.querySelector('.tk-foot'), jumpBtn = host.querySelector('.tk-jump'), jumpDot = host.querySelector('.tk-dot');
+    '<span class="tk-dot" hidden></span></button></div>';
+  var list = host.querySelector('.tk-list'), jumpBtn = host.querySelector('.tk-jump'), jumpDot = host.querySelector('.tk-dot');
   var jumpSt = {show: false, unseen: false};
   var on = !!(ctx.api && ctx.api.on), records = [], seq = null, seen = null, sig = null, warned = {};
   var term = {agent: null, entries: [], cursor: null, source: null, failed: false}, undoing = {};
@@ -314,21 +312,17 @@ function mount(ctx) {
     }
   });
 
-  /* ---------- 입력창 자리: 패널이 보이면 패널 아래로(S3) ---------- */
-  function placeComposer() {
+  /* ---------- 보이게 되면(창을 펼치거나 붙임) 맨 아래로 + 나타남 ---------- */
+  function onShown() {
     var vis = shown();
-    if (vis && !shownNow) { host.classList.remove('tk-in'); void host.offsetWidth; host.classList.add('tk-in'); list.scrollTop = list.scrollHeight; }
+    if (vis && !shownNow) { host.classList.remove('tk-in'); void host.offsetWidth; host.classList.add('tk-in'); list.scrollTop = list.scrollHeight; fetchLog(); }
     shownNow = vis;
-    var d = {host: vis ? foot : null, done: false};
-    document.dispatchEvent(new CustomEvent('hd-composer', {detail: d}));
-    if (!d.done) warnOnce('composer', '대화창(view-chat)이 붙지 않아 입력창을 패널로 옮기지 못했어요');
   }
-  if (window.ResizeObserver) new ResizeObserver(function () { if (shown() !== shownNow) placeComposer(); syncJump(false); }).observe(host);   // 칸 높이가 바뀌면 맨 아래인지 다시
-  else warnOnce('ro', 'ResizeObserver 가 없어 입력창 자리를 1초마다 봐요');
-  setTimeout(placeComposer, 0);                              // view-chat 이 붙은 뒤(등록 차례가 이 파일 다음)
+  if (window.ResizeObserver) new ResizeObserver(function () { if (shown() !== shownNow) onShown(); syncJump(false); }).observe(host);   // 칸 높이가 바뀌면 맨 아래인지 다시
+  else warnOnce('ro', 'ResizeObserver 가 없어 보임을 4초마다 봐요');
 
   setInterval(function () {
-    if (!window.ResizeObserver && shown() !== shownNow) placeComposer();
+    if (!window.ResizeObserver && shown() !== shownNow) onShown();
     if (document.hidden || !shown()) return;
     fetchLog(); fetchTerm(); render();                      // 상태(10분 조용함)는 시간으로도 바뀐다
   }, EVERY);

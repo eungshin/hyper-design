@@ -2,8 +2,8 @@
 (에이전트 = 테스트의 HTTP hello/progress/reply, Paseo = 없는 경로, HD_HOME = 임시, 터미널 대화 = 테스트가 끼운 가짜 주소·이벤트).
 
 (a) 대화창으로 보냄 → 패널(왼쪽 도크)에 내 요청 · 보냄 · 진행 · AI 반영 · 답 · 끝 ✓ 차례로, 새로고침 뒤에도 그대로 · 턴 누르기 = 카드 강조 · [되돌리기]
-(b) 대화 탭을 오른쪽 도크로 끌고 다시 왼쪽으로 — 새로고침해도 그 쪽
-(c) 패널이 열려 있으면 입력창은 패널 아래, 닫으면 판 아래 떠 있는 입력창 · 창 메뉴 '대화'로 다시
+(b) 대화 창 하나(R53): 머리 줄을 끌어 판 끝 40px 안에 놓으면 붙고(왼쪽 360px), 끝에서 떼면 펼친 창으로 뜨고, 새로고침해도 그 배치
+(c) 접힘(입력창만) ↔ 펼침(기록 + 입력창) ↔ 붙음 단추 · 입력창은 늘 창 맨 아래 · 창 메뉴 '대화창' 한 줄로 숨기기·보이기
 (d) 받는 곳 터미널의 대화(S3b 모양): 시간 차례로 섞기 · '터미널에서' · 도구 줄 전문(접지 않음) · 같은 요청 한 번 · 못 읽으면 조용한 한 줄
 규칙(턴·상태·줄·섞기)은 test_canvas_unit_chat_log.py, 서버 기록은 test_canvas_unit_chat_log_py.py(unit).
 """
@@ -97,10 +97,10 @@ def test_send_shows_whole_turn_and_survives_reload(served, ctx):
     pg, errors = open_page(ctx, srv)
     try:
         lb, sc = pg.locator("#ldock").bounding_box(), pg.locator("#screens").bounding_box()
-        assert lb and lb["x"] == 0 and lb["width"] == 280, "대화 패널은 처음에 왼쪽 도크(280px — R27 F02)"
-        assert abs(sc["x"] - 280) <= 1, "판은 왼쪽 도크 옆에서 시작"
-        assert pg.evaluate("!!document.getElementById('hdchat').closest('#pTalk')"), "입력창은 패널 아래"
-        assert pg.locator("#tools").bounding_box()["x"] > 280, "도구 막대는 판 안 — 패널에 가리지 않는다"
+        assert lb and lb["x"] == 0 and lb["width"] == 360, "대화 창은 처음에 왼쪽에 붙은 펼친 창(360px — R53 사용자 승인)"
+        assert abs(sc["x"] - 360) <= 1, "판은 왼쪽 도크 옆에서 시작"
+        assert pg.evaluate("!!document.getElementById('hdchat').closest('#hdtalk.tw-docked')"), "입력창은 같은 창 맨 아래"
+        assert pg.locator("#tools").bounding_box()["x"] > 360, "도구 막대는 판 안 — 창에 가리지 않는다"
         pg.click("#hdchat textarea")
         pg.keyboard.type("결제 버튼을 더 크게")
         pg.keyboard.press("Enter")
@@ -167,67 +167,131 @@ def test_send_shows_whole_turn_and_survives_reload(served, ctx):
     assert not errors, errors
 
 
-def drag(pg, src, dst_xy):
-    b = pg.locator(src).bounding_box()
-    pg.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+def head_drag(pg, dst_xy, sel="#hdtalk .tw-head"):
+    b = pg.locator(sel).bounding_box()
+    x0, y0 = b["x"] + min(60, b["width"] / 2), b["y"] + b["height"] / 2
+    pg.mouse.move(x0, y0)
     pg.mouse.down()
-    pg.mouse.move(b["x"] + 20, b["y"] + 30, steps=4)
-    pg.mouse.move(dst_xy[0], dst_xy[1], steps=8)
-    pg.mouse.up()
+    pg.mouse.move(x0 + 20, y0 + 20, steps=4)
+    pg.mouse.move(dst_xy[0], dst_xy[1], steps=10)
+    return lambda: pg.mouse.up()
 
 
-def test_drag_panel_between_sides_and_reload(served, ctx):
+def frame(pg):
+    return pg.evaluate("""() => { const f = document.getElementById('hdtalk'), r = f.getBoundingClientRect(), c = document.getElementById('hdchat').getBoundingClientRect();
+      return {cls: f.className, x: r.x, y: r.y, w: r.width, h: r.height, b: r.bottom, chatB: c.bottom,
+              inDock: f.closest('#ldock') ? 'left' : f.closest('#dock') ? 'right' : null}; }""")
+
+
+def saved_side(pg):
+    st = json.loads(pg.evaluate("localStorage.getItem('hd-dock')"))
+    if any("talk" in g["tabs"] for g in st.get("left", [])):
+        return "left"
+    if any("talk" in g["tabs"] for g in st["groups"]):
+        return "right"
+    return "float"
+
+
+def test_drag_header_docks_at_edges_and_undocks_and_reload(served, ctx):
+    """R53 happy path: 붙은 창 머리 줄을 끌어 떼면 펼친 창 → 판 왼쪽 끝 40px 안 = '놓으면 왼쪽에 붙어요' 미리보기 → 놓으면 왼쪽 360px ·
+    오른쪽 끝 = 오른쪽 도크 · 새로고침해도 그 배치."""
     out, srv = served
     pg, errors = open_page(ctx, srv)
     try:
-        g0 = pg.locator("#dock .dk-g[data-g='0'] .dk-tabs").bounding_box()
-        drag(pg, "#ldock .dk-tab[data-p='talk']", (g0["x"] + g0["width"] - 30, g0["y"] + g0["height"] / 2))
-        pg.wait_for_selector("#dock .dk-tab[data-p='talk']")
-        assert pg.evaluate("document.getElementById('ldock').classList.contains('empty')"), "왼쪽 도크는 비면 자리를 차지하지 않는다"
-        assert pg.locator("#screens").bounding_box()["x"] == 0
-        assert pg.evaluate("!!document.getElementById('hdchat').closest('#dock')"), "오른쪽에서도 입력창은 패널 아래"
-        shot(pg, "s3-panel-moved-right.png")
+        f = frame(pg)
+        assert f["inDock"] == "left" and "tw-docked" in f["cls"] and abs(f["w"] - 360) <= 1, f
+        assert pg.locator("#ldock .dk-tabs").first.is_hidden(), "혼자 붙은 창 = 탭 줄 대신 창 머리 줄"
+        assert abs(pg.locator("#hdtalk .tw-head").bounding_box()["height"] - 36) <= 1, "머리 줄 36px"
+        # 떼기 — 판 가운데로 끌면 펼친 창이 따라온다
+        up = head_drag(pg, (760, 300))
+        assert "tw-expanded" in frame(pg)["cls"] and pg.evaluate("document.getElementById('ldock').classList.contains('empty')"), "떨어지면 왼쪽 도크 자리 없어짐"
+        assert pg.is_hidden(".tw-hint"), "가운데 = 붙지 않음"
+        up()
+        pg.wait_for_timeout(200)
+        f = frame(pg)
+        assert "tw-expanded" in f["cls"] and f["inDock"] is None and pg.locator("#screens").bounding_box()["x"] == 0, f
+        assert abs(f["chatB"] - f["b"]) <= 12, "입력창은 창 맨 아래"
+        assert saved_side(pg) == "float"
+        shot(pg, "r53-undocked.png")
         pg.reload()
-        pg.wait_for_selector("#dock .dk-tab[data-p='talk']")
-        assert pg.locator("#ldock .dk-tab").count() == 0, "새로고침해도 오른쪽"
-        # 다시 왼쪽으로 — 끄는 동안만 왼쪽 끝에 놓을 자리
-        b = pg.locator("#dock .dk-tab[data-p='talk']").bounding_box()
-        pg.mouse.move(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
-        pg.mouse.down()
-        pg.mouse.move(b["x"] - 40, b["y"] + 40, steps=4)
-        assert pg.evaluate("document.body.classList.contains('dk-dragging')") and pg.is_visible("#ldock")
-        pg.mouse.move(10, 400, steps=10)
-        pg.mouse.up()
-        pg.wait_for_selector("#ldock .dk-tab[data-p='talk']")
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_selector("#hdtalk.tw-expanded")
+        g = frame(pg)
+        assert abs(g["x"] - f["x"]) <= 2 and abs(g["y"] - f["y"]) <= 2 and abs(g["w"] - f["w"]) <= 2, ("새로고침해도 그 자리", f, g)
+        # 왼쪽 끝 40px 안 = 미리보기 → 놓으면 왼쪽 360
+        up = head_drag(pg, (20, 400))
+        assert pg.evaluate("document.body.classList.contains('tw-snap-left')") and pg.is_visible(".tw-hint")
+        assert pg.text_content(".tw-hint") == "놓으면 왼쪽에 붙어요"
+        z = pg.locator("#ldock").bounding_box()
+        assert z and z["x"] == 0 and abs(z["width"] - 360) <= 2, ("미리보기 = 붙을 자리 360px", z)
+        shot(pg, "r53-drag-to-dock.png")
+        up()
+        pg.wait_for_selector("#ldock #hdtalk.tw-docked")
+        assert abs(pg.locator("#ldock").bounding_box()["width"] - 360) <= 1 and pg.is_hidden(".tw-hint")
+        # 오른쪽 끝 = 오른쪽 도크
+        sc = pg.locator("#screens").bounding_box()
+        up = head_drag(pg, (sc["x"] + sc["width"] - 10, 400))
+        assert pg.evaluate("document.body.classList.contains('tw-snap-right')") and pg.text_content(".tw-hint") == "놓으면 오른쪽에 붙어요"
+        up()
+        pg.wait_for_selector("#dock #hdtalk.tw-docked")
+        assert pg.evaluate("document.getElementById('ldock').classList.contains('empty')")
         pg.reload()
-        pg.wait_for_selector("#ldock .dk-tab[data-p='talk']")
-        assert pg.evaluate("JSON.parse(localStorage.getItem('hd-dock')).left[0].tabs") == ["talk"]
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.wait_for_selector("#dock #hdtalk.tw-docked")
+        assert saved_side(pg) == "right"
     finally:
         pg.close()
     assert not errors, errors
 
 
-def test_composer_moves_with_panel(served, ctx):
+def test_compact_expanded_docked_buttons_and_window_menu(served, ctx):
+    """R53: 붙은 창 접기 = 판 아래 가운데 접힌 창(입력창만 + 알약 + 펼치기) · 펼치기 = 기록 + 입력창 떠 있는 창 · 붙이기 = 왼쪽 ·
+    입력창 위 상태 줄·숨김 단추 없음 · 창 메뉴는 '대화창' 한 줄(대화 패널 줄 없음)로 숨기기·보이기."""
     out, srv = served
     pg, errors = open_page(ctx, srv)
     try:
-        assert pg.evaluate("!!document.getElementById('hdchat').closest('#pTalk')")
-        box, panel = pg.locator("#hdchat").bounding_box(), pg.locator("#ldock").bounding_box()
-        assert box["x"] >= panel["x"] and box["x"] + box["width"] <= panel["x"] + panel["width"] + 1, "입력창은 패널 폭 안"
-        assert abs((box["y"] + box["height"]) - (panel["y"] + panel["height"])) < 16, "패널 맨 아래"
-        assert pg.is_hidden("#hdchat .ch-line") and pg.is_hidden("#hdchat .ch-hide")
-        shot(pg, "s3-composer-in-panel.png")
-        pg.hover("#ldock .dk-tab[data-p='talk']")
-        pg.click("#ldock .dk-tab[data-p='talk'] .dk-x")
-        pg.wait_for_function("document.getElementById('hdchat').parentNode === document.body")
-        b2, sc = pg.locator("#hdchat").bounding_box(), pg.locator("#screens").bounding_box()
-        assert abs((b2["x"] + b2["width"] / 2) - (sc["x"] + sc["width"] / 2)) < 2 and b2["y"] > 700, "닫으면 판 아래 가운데"
+        assert pg.locator("#hdchat .ch-line").count() == 0 and pg.locator("#hdchat .ch-hide").count() == 0
+        assert pg.is_visible("#hdtalk .tw-head .tw-dock") and pg.locator("#hdtalk .tw-head button").count() == 2, "머리 줄 단추 = 떼기·접기(닫기 없음)"
+        pg.click("#hdtalk .tw-fold")
+        pg.wait_for_selector("#hdtalk.tw-compact")
+        f, sc = frame(pg), pg.locator("#screens").bounding_box()
+        assert abs((f["x"] + f["w"] / 2) - (sc["x"] + sc["width"] / 2)) < 2 and f["b"] > 820, ("접힘 = 판 아래 가운데", f, sc)
+        assert pg.is_hidden("#pTalk") and pg.is_visible("#hdtalk .tw-pill") and pg.is_visible("#hdtalk .tw-expand"), "접힘 = 입력창만 + 알약 + 펼치기"
+        assert abs(f["chatB"] - f["b"]) <= 1
+        shot(pg, "r53-compact.png")
+        pg.click("#hdtalk .tw-expand")
+        pg.wait_for_selector("#hdtalk.tw-expanded")
+        f = frame(pg)
+        assert pg.is_visible("#pTalk .tk-list") and f["h"] > 300 and abs(f["chatB"] - f["b"]) <= 12, ("펼침 = 기록 + 입력창", f)
+        assert pg.evaluate("getComputedStyle(document.querySelector('#hdtalk')).position") == "fixed"
+        pg.click("#hdtalk .tw-fold")
+        pg.wait_for_selector("#hdtalk.tw-compact")
+        pg.click("#hdtalk .tw-pill")                     # 알약 누르기 = 펼치기
+        pg.wait_for_selector("#hdtalk.tw-expanded")
+        pg.click("#hdtalk .tw-dock")                     # 붙이기 = 왼쪽
+        pg.wait_for_selector("#ldock #hdtalk.tw-docked")
         pg.click("#wbtn")
-        assert pg.is_enabled("#wmenu .wm-row[data-w='chat']"), "패널을 닫으면 '대화창' 설정이 다시 쓰인다"
-        pg.click("#wmenu .wm-row[data-w='talk']")
-        pg.wait_for_function("!!document.getElementById('hdchat').closest('#pTalk')")
-        assert pg.is_disabled("#wmenu .wm-row[data-w='chat']"), "패널이 열려 있으면 '대화창' 줄은 꺼짐"
-        assert pg.locator("#ldock .dk-tab[data-p='talk']").count() == 1, "다시 열면 집 쪽(왼쪽)"
+        assert pg.locator("#wmenu .wm-row[data-w='talk']").count() == 0, "대화 패널 줄은 없다 — '대화창' 한 줄"
+        pg.click("#wmenu .wm-row[data-w='chat']")
+        pg.wait_for_selector("#hdtalk", state="hidden")
+        assert pg.evaluate("document.getElementById('ldock').classList.contains('empty')") and pg.locator("#screens").bounding_box()["x"] == 0, "숨기면 자리도 없다"
+        pg.click("#wmenu .wm-row[data-w='chat']")
+        pg.wait_for_selector("#ldock #hdtalk.tw-docked")
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
+def test_narrow_window_hides_model_name(served, ctx):
+    """R53: 창 폭 ~460px 아래면 입력창 아래 줄이 좁은 줄(모델 이름 글은 view-agent-info 의 440px 컨테이너 규칙으로 감춤)."""
+    out, srv = served
+    pg, errors = open_page(ctx, srv)
+    try:
+        q = "(() => { const t = document.querySelector('#hdchat .ch-tools'); return t ? t.getBoundingClientRect().width : 0; })()"
+        assert pg.evaluate(q) <= 440, "붙은 360px 창 = 좁은 줄"
+        pg.click("#hdtalk .tw-fold")
+        pg.wait_for_selector("#hdtalk.tw-compact")
+        assert pg.evaluate(q) > 440, "접힌 640px 창 = 넓은 줄"
     finally:
         pg.close()
     assert not errors, errors
@@ -305,7 +369,7 @@ def test_jump_to_latest_button_when_scrolled_up(served, ctx, monkeypatch):
         assert pg.is_hidden("#pTalk .tk-jump"), "맨 아래 = 단추 없음"
         pg.evaluate("document.querySelector('#pTalk .tk-list').scrollTop = 0")
         pg.wait_for_selector("#pTalk .tk-jump", state="visible", timeout=3000)
-        b, lst, foot = (pg.locator(x).bounding_box() for x in ("#pTalk .tk-jump", "#pTalk .tk-list", "#pTalk .tk-foot"))
+        b, lst, foot = (pg.locator(x).bounding_box() for x in ("#pTalk .tk-jump", "#pTalk .tk-list", "#hdchat"))
         assert abs(b["width"] - b["height"]) < 1 and b["width"] >= 28, ("둥근 단추", b)
         assert b["x"] + b["width"] <= lst["x"] + lst["width"] and b["x"] > lst["x"] + lst["width"] / 2, ("목록 오른쪽", b, lst)
         assert b["y"] + b["height"] <= foot["y"], ("입력창을 덮지 않음", b, foot)
@@ -327,7 +391,7 @@ def test_jump_to_latest_button_when_scrolled_up(served, ctx, monkeypatch):
 
 
 def test_without_helper_the_panel_is_absent(served, ctx):
-    """file:// 로 연 캔버스(도우미 없음) — 대화 기록·진행이 없으니 대화 패널은 이 페이지에 없다(저장 배치는 그대로), 입력창은 판 아래(S1)."""
+    """file:// 로 연 캔버스(도우미 없음) — 대화 기록·진행이 없으니 대화 창은 접힌 창(입력창만, 펼치기·알약 없음)으로만, 저장 배치는 그대로."""
     out, srv = served
     pg = ctx.new_page()
     pg.set_viewport_size({"width": 1440, "height": 900})
@@ -340,9 +404,10 @@ def test_without_helper_the_panel_is_absent(served, ctx):
         pg.wait_for_function("window.__hdReady !== undefined")
         pg.wait_for_timeout(300)
         assert pg.evaluate("document.getElementById('ldock').classList.contains('empty')") and pg.locator("#screens").bounding_box()["x"] == 0
-        assert pg.evaluate("document.getElementById('hdchat').parentNode === document.body"), "입력창은 판 아래"
+        assert pg.evaluate("!!document.querySelector('body > #hdtalk.tw-compact.tw-nolog #hdchat')"), "입력창은 판 아래 접힌 창"
+        assert pg.is_hidden("#hdtalk .tw-expand") and pg.is_hidden("#hdtalk .tw-pill") and pg.is_hidden("#pTalk"), "기록이 없으니 펼치기 없음"
         pg.click("#wbtn")
-        assert pg.is_disabled("#wmenu .wm-row[data-w='talk']") and pg.is_enabled("#wmenu .wm-row[data-w='chat']")
+        assert pg.locator("#wmenu .wm-row[data-w='talk']").count() == 0 and pg.is_enabled("#wmenu .wm-row[data-w='chat']")
         pg.click("#wmenu .wm-row[data-w='tools']")          # 다른 창 설정을 바꿔 저장해도
         assert json.loads(pg.evaluate("localStorage.getItem('hd-dock')"))["left"][0]["tabs"] == ["talk"], "저장 배치의 대화 자리는 그대로(도우미로 열면 왼쪽에)"
     finally:

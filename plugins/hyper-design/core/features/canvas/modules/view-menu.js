@@ -1,7 +1,7 @@
 /* View — 위쪽 줄 메뉴 둘(조각 3, H1·H2·H4·H11).
    보기 메뉴 = 화면 아이콘 단추(#vbtn) 또는 배율 칩 `72% ▾`(#zoom)을 누르면 글자 줄(오른쪽 단축키, R27 F14): 전체 보기(0) · 100%(1) · 확대(+) · 축소(-) · 고른 화면에 맞추기,
    그 아래 창 나누기 줄(하나 · 좌우 2분할, 조각 6) + 동시 스크롤(나눴을 때만). 나누기 상태의 주인은 modules/viewport.js.
-   창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 대화창(S1b — 판 아래 입력창, 대화 패널이 보이면 꺼진 줄) · 패널마다 켜짐 체크(대화 = S3 대화 패널)(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
+   창 메뉴 = [창 ▾](#wbtn): 도구 막대 · 대화창(R53 — 기록 + 입력창 창 하나 보이기) · 패널마다 켜짐 체크(대화는 패널 줄이 없다)(아이콘 + 짧은 이름 — H8 의 예외), 작업 영역 되돌리기, 패널 모두 숨기기(Tab).
    창 상태의 주인은 modules/dock.js(도크와 같은 곳) — 여기는 의도만 보낸다(ctx.dock.dispatch).
    대화창의 숨기기 단추는 document 에 의도 'hd-chrome' {part:'chat', on} 을 보내고 여기서 받는다(View 끼리 부르지 않음 — detail.done = true 로 받았음을 알린다).
    HD.viewMenu.mount(ctx) → {sync(dockState)}
@@ -49,12 +49,8 @@ function mount(ctx) {
   function renderWin() {
     var st = ctx.dock.state();
     var gone = ctx.dock.absent ? ctx.dock.absent() : [];   // 이 페이지에 없는 패널(S3: 도우미 없이 연 캔버스의 대화)
-    var inPanel = HD.dock.visible(st).indexOf('talk') >= 0 && gone.indexOf('talk') < 0;   // 대화 패널(S3)이 보이면 입력창은 패널 안 — '대화창'(판 아래 떠 있는 입력창) 설정은 패널을 닫았을 때 쓰인다
-    wmenu.innerHTML = CHROME.map(function (c) {
-      var r = row(c.w, c.name, svg(c.svg), st[c.w] !== false);
-      return c.w === 'chat' && inPanel ? r.replace('<button ', '<button disabled title="대화 패널이 열려 있으면 입력창은 패널 아래에 있어요" ') : r;
-    }).join('') +
-      '<hr>' + HD.dock.PANELS.map(function (p) {
+    wmenu.innerHTML = CHROME.map(function (c) { return row(c.w, c.name, svg(c.svg), st[c.w] !== false); }).join('') +   // '대화창' = 대화 창 하나(R53 — 기록 + 입력창) 보이기
+      '<hr>' + HD.dock.PANELS.filter(function (p) { return p !== 'talk'; }).map(function (p) {   // 대화는 패널 줄이 아니라 위 '대화창' 한 줄(R53)
         var r = row(p, HD.dock.LABEL[p], ctx.icons[p] || '', st.closed.indexOf(p) < 0 && gone.indexOf(p) < 0);
         return gone.indexOf(p) >= 0 ? r.replace('<button ', '<button disabled title="도우미로 열면 쓸 수 있어요" ') : r;
       }).join('') +

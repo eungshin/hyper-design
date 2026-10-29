@@ -3,7 +3,7 @@
    ctx = {$, $$, root: #dock(오른쪽 도크 자리), lroot: #ldock(왼쪽 도크 자리 — 없으면 왼쪽 묶음은 그리지 않고 [hd] 경고), layer: 떠 있는 창을 놓을 판 위 층, panels: {id: 패널 요소}, icons: {id: svg},
           hold: 안 보이는 패널 보관함(#dkhold), narrow: 좁은 화면이면 접힌 채로 시작,
           absent: 이 페이지에 없는 패널 id 들(S3: 도우미 없이 연 캔버스의 대화 — 그리지 않을 뿐 저장된 배치는 그대로, 끌기 번호는 저장 배치로 옮겨 보낸다),
-          hidden?() → 지금 그리지 않을 패널 id 들(absent 와 같은 뜻이지만 바뀐다 — 정렬 = 두 장 이상 골랐을 때만, R27 F02. 바뀌면 셸이 render()),
+          hidden?(state) → 지금 그리지 않을 패널 id 들(absent 와 같은 뜻이지만 바뀐다 — 정렬 = 두 장 이상 골랐을 때만, R27 F02 · 대화 창이 떠 있거나 숨김이면 talk = 창 틀이 그린다, R53. 바뀌면 셸이 render()),
           title(id) → 탭에 붙일 수(숫자) · 이름, getItem/setItem(저장소), onLayout(state)(배치가 바뀐 뒤 — 판 너비 다시 재기 등)}
    패널 요소는 옮겨 붙이기만 한다(id·이벤트 그대로 — 기존 기능이 그대로 동작). 안 보이는 패널은 숨김 보관함(ctx.hold)으로.
    왼쪽 도크(S3): 같은 묶음·탭 규칙, 너비 끌기 = 오른쪽 가장자리, 접기·닫은 패널 단추는 오른쪽 도크에만. 비어 있으면 자리를 차지하지 않고,
@@ -21,7 +21,7 @@ function mount(ctx) {
   var absent = (ctx.absent || []).filter(function (p) { return K.PANELS.indexOf(p) >= 0; });
   // 보이는 배치(view) = 저장 배치에서 없는 패널을 뺀 것 + 보이는 번호 → 저장 번호(끌기·크기 의도를 저장 배치로 옮길 때)
   function gone() {                                  // 지금 그리지 않을 패널 = 이 페이지에 없는 것 + 지금 숨길 것(ctx.hidden — 정렬은 두 장 이상 골랐을 때만, R27 F02)
-    var h = ctx.hidden ? ctx.hidden() || [] : [];
+    var h = ctx.hidden ? ctx.hidden(st) || [] : [];
     return h.length ? absent.concat(h.filter(function (p) { return K.PANELS.indexOf(p) >= 0 && absent.indexOf(p) < 0; })) : absent;
   }
   function view() {

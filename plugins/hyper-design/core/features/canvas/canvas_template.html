@@ -95,7 +95,8 @@
   <div class="dkp" id="pLayers" data-panel="layers"></div>
   <div class="dkp" id="pTheme" data-panel="theme"></div>
   <div class="dkp" id="pAlign" data-panel="align"></div>
-  <div class="dkp" id="pTalk" data-panel="talk"></div>
+  <div class="dkp" id="pTalk"></div>
+  <div id="hdtalk" data-panel="talk"></div>
 </div>
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="box" id="mwin">
@@ -650,16 +651,17 @@ var DOCK_ICON = {
   align: '<svg viewBox="0 0 24 24"><path d="M4 3v18"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="7" height="4" rx="1"/></svg>',
   theme: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.4-.7-2.3 0-1 .8-1.6 1.7-1.6H17a4 4 0 004-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg>',
   talk: '<svg viewBox="0 0 24 24"><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 4v-4H6a2 2 0 01-2-2z"/><path d="M8 9h8M8 12h5"/></svg>'};
-var VD = null, VMN = null, VP = null;
+var VD = null, VMN = null, VP = null, TW = null;
 var EP = HD.viewEdgePan.mount({pane: pane, pan: function (dx, dy, x, y) { tx += dx; ty += dy; apply(); drawGhost(x, y); }});   // 끄는 중 가장자리 = 판 밀기(E6)
 VD = HD.viewDock.mount({$: $, $$: $$, root: $('#dock'), lroot: $('#ldock'), layer: $('#dklayer'), hold: $('#dkhold'), icons: DOCK_ICON, narrow: innerWidth < 760,
                         absent: !!window.__hdHelper && /^https?:$/.test(location.protocol) ? [] : ['talk'],   // 대화 패널(S3)은 도우미로 열 때만 — 기록·진행이 도우미에 있다(VS.on 과 같은 규칙, VS 는 아래에서 붙음)
-                        hidden: function () { return VA && SL && CP.boxes(SL.ids()).boxes.length >= 2 ? [] : ['align']; },   // 정렬은 두 장 이상 골랐을 때만(R27 F02) — 고르기가 바뀌면 VD.render()
-                        panels: {links: $('#pLinks'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign'), talk: $('#pTalk')},
+                        hidden: function (st) { return (VA && SL && CP.boxes(SL.ids()).boxes.length >= 2 ? [] : ['align']).concat(HD.talkWindow.skip(st)); },   // 정렬은 두 장 이상 골랐을 때만(R27 F02) — 고르기가 바뀌면 VD.render() · 떠 있거나 숨긴 대화 창은 창 틀(view-talk-window)이 그린다(R53)
+                        panels: {links: $('#pLinks'), notes: $('#pNotes'), pending: $('#pPending'), history: $('#pHistory'), layers: $('#pLayers'), theme: $('#pTheme'), align: $('#pAlign'), talk: $('#hdtalk')},
                         title: function (id) { var sp = HD.edits.split(NS.list()); return {count: id === 'notes' ? sp.memos.length : id === 'pending' ? sp.pending.length : 0}; },
                         getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); },
                         onLayout: function (st) {
                           if (VMN) VMN.sync(st);
+                          if (TW) TW.layout();   // 대화 창 틀(R53) — 붙음·떠 있음이 바뀌었을 수 있다
                           var w = st.bare ? 0 : st.collapsed || !st.groups.length ? 44 : st.w, lw = HD.dock.leftWidth(st);   // 왼쪽 도크(S3) — 비면 0
                           if (document.body.style.getPropertyValue('--dockw') === w + 'px' && document.body.style.getPropertyValue('--dockl') === lw + 'px') return;
                           document.body.style.setProperty('--dockw', w + 'px'); document.body.style.setProperty('--dockl', lw + 'px');
@@ -1341,7 +1343,8 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   frameLoaded: frameLoaded,
   selected: function () { return SL.ids(); },
   modalScreen: function () { return modal.hidden ? null : mscreen; },   // 크게 보기로 연 화면 — 대화창 칩(10-29)
-  focus: function (ids) { fitCards(ids, z); },     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
+  focus: function (ids) { fitCards(ids, z); },
+  dock: {state: function () { return VD.state(); }, dispatch: function (a, quiet) { VD.dispatch(a, quiet); }, absent: function () { return VD.absent(); }, render: function () { VD.render(); }},   // 도크 배치(대화 창 붙이기·떼기, R53 — 의도만)     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
   view: {get: function () { return {z: z, tx: tx, ty: ty}; }, set: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }, pane: pane},   // 카메라(S5 만드는 중 틀 따라가기)
   refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)
   picked: function () { var s = BK && BK.sel(); return s ? {screen: s.screen, h: s.h, app: s.app} : null; },
@@ -1360,6 +1363,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });
   }}});
 PP = FT.popPlace || null;
+TW = FT.talkWindow || null;                    // 대화 창 틀(R53) — 도크 배치가 바뀌면 onLayout 이 layout() 을 부른다
 AD = FT.address || null; if (AD) AD.attach({copy: function (t) { return SN.copy(t); }});   // 주소 복사(R30) — 클립보드는 보내기와 같은 길
 // 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
 BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },

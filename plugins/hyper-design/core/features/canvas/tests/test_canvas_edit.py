@@ -2079,7 +2079,7 @@ def test_view_and_window_menus(dpage):
     keys = [r[0] for r in rows]
     assert keys[:2] == ["tools", "chat"] and set(["links", "notes", "pending", "history", "layers"]) <= set(keys) and "show" not in keys, rows   # 표시는 위쪽 줄 팝오버(R27 F02)
     assert all(r[2] for r in rows), "줄마다 짧은 이름(H11)"
-    assert all(r[1] == ("false" if r[0] in ("theme", "talk") else "true") for r in rows), "체크 = 실제로 켜져 있는지(테마 패널은 처음엔 꺼짐 · 대화는 도우미 없이는 없음)"
+    assert all(r[1] == ("false" if r[0] == "theme" else "true") for r in rows), "체크 = 실제로 켜져 있는지(테마 패널은 처음엔 꺼짐)"
     dpage.click('#wmenu [data-w="tools"]')
     assert dpage.is_hidden("#tools")
     dpage.click('#wmenu [data-w="history"]')
@@ -2087,7 +2087,7 @@ def test_view_and_window_menus(dpage):
     assert dpage.get_attribute('#wmenu [data-w="history"]', "aria-checked") == "false"
     dpage.click('#wmenu [data-w="history"]')
     assert dpage.locator('#dock .dk-tab[data-p="history"]').count() == 1, "다시 켜면 그 패널이 열린다"
-    assert dpage.is_disabled('#wmenu [data-w="talk"]'), "도우미 없이 연 캔버스에는 대화 패널(S3)이 없다 — 꺼진 줄"
+    assert dpage.locator('#wmenu [data-w="talk"]').count() == 0, "대화는 패널 줄이 없다 — '대화창' 한 줄이 창 하나(R53)"
     dpage.click('#wmenu [data-w="chat"]')
     assert dpage.is_hidden("#hdchat")
     dpage.click('#wmenu [data-act="reset"]')

@@ -105,14 +105,15 @@ def test_pick_connected_agent_send_progress_reply(served, ctx):
         pg.click("#hdchat textarea")
         pg.keyboard.type("결제 버튼을 더 크게")
         pg.keyboard.press("Enter")
-        pg.wait_for_function("document.querySelector('#hdchat .ch-line').textContent.includes('보냄 · 클로드 작업자 (실시간)')", timeout=15000)
+        TL = "[...document.querySelectorAll('#pTalk .tk-l')].some(l => l.innerText.includes(%s))"   # 진행은 대화 창 기록(R53 — 입력창 위 상태 줄은 없앴다)
+        pg.wait_for_function(TL % "'보냄 · 클로드 작업자 (실시간)'", timeout=15000)
         assert not list((out / ".hd-queue").glob("*.sent")), "이벤트로 받았다 — 어댑터(paseo·claude)를 부르지 않음"
         pg.wait_for_function("document.getElementById('nmsg').textContent.indexOf('보냈어요') >= 0")
         assert "실시간" in pg.text_content("#nmsg") and "보내지 못해" not in pg.text_content("#nmsg"), "접속한 에이전트가 받은 것 — 대기열이라고 하지 않는다"
         assert pg.get_attribute(".card[data-id='pay'] .busy", "data-kind") == "working", "카드 덮개 = AI 수정 중"
 
         assert call(srv, "POST", "/api/progress", {"agent": "ag-here", "text": "결제 버튼 키우는 중", "screen": "pay"})[0] == 200
-        pg.wait_for_function("document.querySelector('#hdchat .ch-line').textContent.includes('AI 작업 중 · 결제 버튼 키우는 중')")
+        pg.wait_for_function(TL % "'결제 버튼 키우는 중'", timeout=15000)
         pg.wait_for_function("document.getElementById('aistate').textContent === '결제 버튼 키우는 중'")
         pg.mouse.move(640, 300)
         shot(pg, "progress-mid-run.png")
@@ -125,7 +126,7 @@ def test_pick_connected_agent_send_progress_reply(served, ctx):
             pg.wait_for_timeout(200)
         code, res = call(srv, "POST", "/api/reply", {"note": nid, "reply": {"kind": "반영됨", "what": "버튼을 키웠어요", "screens": ["pay"], "captured": False, "by": "ag-here"}})
         assert code == 200, res
-        pg.wait_for_function("document.querySelector('#hdchat .ch-line').textContent.includes('답 옴')", timeout=15000)
+        pg.wait_for_function(TL % "'버튼을 키웠어요'", timeout=15000)
         assert call(srv, "POST", "/api/bye", {"id": "ag-here"})[0] == 200
         pg.wait_for_function("document.getElementById('aistate').textContent === '자리 비움'", timeout=10000)
         assert pg.get_attribute("#hdchat .ch-agent", "data-state") == "away", "알약 점도 회색"
