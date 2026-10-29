@@ -2,7 +2,8 @@
    [⋯] = 전체 요소 메뉴(오른쪽 클릭과 같은 것 — 셸이 onMenu(fn) 의 fn(sel, {x, y}) 로 막대 아래에 연다). 메뉴의 상위·안쪽·속성·부품은 셸이 그 요소를 고른 뒤 fire(act) 로 같은 길.
    규칙(아이콘·켜짐·앱 = AI 요청·상위 고르기·속성 허용 목록·부품 요청 글)은 HD.blocks(Model), 막대 자리는 HD.barPlace(Model, t51-7a — 고른 요소·꼬리표·다른 막대를 덮지 않고 둘레 내용을 비킴).
    둘레 내용 = 고른 요소의 형제 상자(hd-sibs — 어느 출처 화면이든) + 같은 출처 화면의 글·그림 상자(못 읽으면 형제만).
-   상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형, label?() → 꼬리표 사각형|null}
+   상태 = 지금 고른 요소 하나 {screen, h, app, where:'board'|'modal', anchor() → 화면 좌표 사각형|null, frame() → 그 화면 iframe|null, view?() → 보이는 칸, avoid?() → 비킬 사각형, label?() → 꼬리표 사각형|null,
+     pointer?() → 요소를 누른 자리 {x, y}|null(R51 — 클릭으로 고를 때만, 큰 요소면 막대가 그 가까이 · 상위·Tab 으로 고른 요소는 없음)}
      + 따라갈 요소 하나 follow {screen, path, v, where}(쓴 뒤 다시 실린 화면에서 찾을 것, 15초) — 막대가 그 주인, 저장하지 않음.
    편집 자체는 셸이 한다 — 단추는 onAct(fn) 로 받은 fn(act, sel) 하나로만 나간다(sel.attrs = 바꿀 속성 {이름: 값} · sel.part = 고른 부품 {key, title, ok}|null).
    상위·따라가기로 새 요소를 고르면 onPick(fn) 의 fn({screen, h, where}) — 셸이 그 자리 테두리·막대를 다시 그린다(View 끼리 부르지 않음).
@@ -149,9 +150,10 @@ function mount(ctx) {
     var bars = [cur.avoid ? cur.avoid() : sb && !sb.hidden ? rectOf(sb.getBoundingClientRect()) : null,   // 다른 막대(절대): 크게 보기 = 창 제목 막대 · 판 = 카드 선택 막대 · 왼쪽 도구 막대 — 둘레 내용은 무르게
                 tl && !tl.hidden && tl.offsetWidth ? rectOf(tl.getBoundingClientRect()) : null];
     var os = null; try { os = others(v); } catch (e) { console.warn('[hd] 요소 막대: 둘레 글 상자를 읽지 못했어요 — ' + (e && e.message || e)); }
-    var p = P.place({anchor: a, label: cur.label ? cur.label() : null, size: {w: bar.offsetWidth, h: bar.offsetHeight}, view: v, bars: bars, content: nearRects().concat(os || [])});
+    var p = P.place({anchor: a, label: cur.label ? cur.label() : null, size: {w: bar.offsetWidth, h: bar.offsetHeight}, view: v, bars: bars, content: nearRects().concat(os || []),
+                       pointer: cur.pointer ? cur.pointer() : null});
     bar.style.left = p.x + 'px'; bar.style.top = p.y + 'px';
-    bar.dataset.side = p.side;
+    bar.dataset.side = p.side; if (p.near) bar.dataset.near = '1'; else delete bar.dataset.near;
     if (!pop.hidden) placePop();
   }
   function placePop() {                               // 막대 바로 아래(막대가 요소 아래면 막대 위가 아니라 그 아래 그대로) — 창 안
@@ -214,7 +216,7 @@ function mount(ctx) {
   }
   function step(a) { if (NAV[a]) nav(a); else fire(a); }
   function pickThen(sel) { var q = navQ; pick(sel); navQ = q; var a = navQ.shift(); if (a && cur) step(a); }   // 셸이 다시 그리며 막대를 걷었다 붙인다(hide 가 줄을 비움) — 줄은 이어 간다
-  function pick(sel) { if (picked) picked(sel); else show(Object.assign({}, cur || {}, sel)); }
+  function pick(sel) { if (picked) picked(sel); else show(Object.assign({}, cur || {}, sel, {pointer: null})); }   // 상위·Tab = 누른 자리 없음(R51)
 
   // ---- 속성 칸(허용 목록만)
   function openAttr() {

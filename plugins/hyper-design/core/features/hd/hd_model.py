@@ -45,7 +45,7 @@ def check_reply(reply, intent, agent=True, known_screens=None):
     if agent and kind in USER_KINDS:
         return ["kind: %s 은 사람만 캔버스에서 달아요" % kind]
     errs = []
-    if kind == "답변" and intent != "question":
+    if kind == "답변" and intent not in ("question", "chat"):   # chat = 대화창 글(받는 AI 가 질문·바꾸기를 정함)
         errs.append("kind: 답변은 질문 메모에만")
     spec, opt = FIELDS[kind], OPTIONAL.get(kind, {})
     for name in sorted(set(reply) - COMMON - set(spec) - set(opt)):

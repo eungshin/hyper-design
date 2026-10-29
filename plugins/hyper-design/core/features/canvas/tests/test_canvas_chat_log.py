@@ -4,7 +4,7 @@
 (a) 대화창으로 보냄 → 패널(왼쪽 도크)에 내 요청 · 보냄 · 진행 · AI 반영 · 답 · 끝 ✓ 차례로, 새로고침 뒤에도 그대로 · 턴 누르기 = 카드 강조 · [되돌리기]
 (b) 대화 탭을 오른쪽 도크로 끌고 다시 왼쪽으로 — 새로고침해도 그 쪽
 (c) 패널이 열려 있으면 입력창은 패널 아래, 닫으면 판 아래 떠 있는 입력창 · 창 메뉴 '대화'로 다시
-(d) 받는 곳 터미널의 대화(S3b 모양): 시간 차례로 섞기 · '터미널에서' · 도구 줄 접힘 · 같은 요청 한 번 · 못 읽으면 조용한 한 줄
+(d) 받는 곳 터미널의 대화(S3b 모양): 시간 차례로 섞기 · '터미널에서' · 도구 줄 전문(접지 않음) · 같은 요청 한 번 · 못 읽으면 조용한 한 줄
 규칙(턴·상태·줄·섞기)은 test_canvas_unit_chat_log.py, 서버 기록은 test_canvas_unit_chat_log_py.py(unit).
 """
 import json, os, shutil, subprocess, sys, tempfile, threading, time, urllib.request
@@ -245,6 +245,7 @@ def test_terminal_transcript_merges_into_timeline(served, ctx, monkeypatch):
         return 200, {"entries": [
             {"id": "e1", "role": "user", "text": "터미널에서 직접 물어본 것", "at": now - 60000},
             {"id": "e2", "role": "tool", "text": "Read screens/pay.html\n(120 lines)", "at": now - 59000},
+            {"id": "e2b", "role": "tool", "text": "Bash " + "C:/very/long/path/" * 20 + "\ncommand: " + "x" * 600, "at": now - 58500},
             {"id": "e3", "role": "assistant", "text": "결제 화면을 읽었어요", "at": now - 58000}], "cursor": "c1", "source": "claude"}
     monkeypatch.setitem(router.ROUTES["GET"], "/api/agents/transcript", fake)
     assert call(srv, "POST", "/api/hello", {"agent": {"id": "ag-1", "name": "클로드", "kind": "claude"}, "lease": 300})[0] == 200
@@ -253,10 +254,11 @@ def test_terminal_transcript_merges_into_timeline(served, ctx, monkeypatch):
     try:
         pg.wait_for_selector("#pTalk .tk-term[data-id='e3']", timeout=15000)
         assert pg.text_content("#pTalk .tk-term[data-role='user'] .tk-who") == "터미널에서"
-        assert pg.evaluate("!document.querySelector('#pTalk .tk-term[data-role=\"tool\"] details').open"), "도구 줄은 접혀 있다"
-        assert pg.text_content("#pTalk .tk-term[data-role='tool'] summary").startswith("도구 · Read screens/pay.html")
-        pg.click("#pTalk .tk-term[data-role='tool'] summary")
-        assert pg.is_visible("#pTalk .tk-term[data-role='tool'] pre")
+        assert pg.locator("#pTalk .tk-term[data-role='tool'] details").count() == 0, "도구 줄은 접지 않는다(login#7 — 늘 전문)"
+        assert pg.text_content("#pTalk .tk-term[data-role='tool'] .tk-tool-h") == "도구 · Read screens/pay.html"
+        assert pg.is_visible("#pTalk .tk-term[data-role='tool'] pre") and pg.text_content("#pTalk .tk-term[data-role='tool'] pre") == "(120 lines)", "입력 전체가 처음부터 보인다"
+        assert ("x" * 600) in pg.text_content("#pTalk .tk-term[data-id='e2b'] pre"), "긴 도구 입력도 끝까지"
+        assert pg.evaluate("(() => { const l = document.querySelector('#pTalk .tk-list'); return l.scrollWidth <= l.clientWidth + 1; })()"), "긴 경로·글은 줄 안에서 꺾여 가로로 넘치지 않는다"
         # 캔버스에서 보낸 요청 — 터미널에도 찍혀 오면 한 번만
         pg.click("#hdchat textarea"); pg.keyboard.type("결제 버튼 키우기"); pg.keyboard.press("Enter")
         pg.wait_for_selector("#pTalk .tk-turn", timeout=15000)
@@ -268,7 +270,7 @@ def test_terminal_transcript_merges_into_timeline(served, ctx, monkeypatch):
         assert pg.locator("#pTalk .tk-term[data-id='e4']").count() == 0, "같은 요청은 턴 하나로"
         order = pg.eval_on_selector_all("#pTalk .tk-list > li", "els => els.map(e => e.dataset.id || ('t' + e.dataset.turn))")
         assert order.index("e1") < order.index("e3") < order.index([x for x in order if x.startswith("t")][0]) < order.index("e5"), order
-        assert pg.is_visible("#pTalk .tk-term[data-role='tool'] pre"), "다시 그려도 펼친 도구 줄은 펼친 채"
+        assert pg.is_visible("#pTalk .tk-term[data-role='tool'] pre"), "다시 그려도 도구 줄 전문은 그대로"
         shot(pg, "s3-terminal-transcript.png")
         # 가져올 수 없는 터미널 = 조용한 한 줄
         assert call(srv, "POST", "/api/hello", {"agent": {"id": "ag-none", "name": "없음", "kind": "paseo"}, "lease": 300})[0] == 200
@@ -281,6 +283,47 @@ def test_terminal_transcript_merges_into_timeline(served, ctx, monkeypatch):
         pg.close()
     assert not errors, errors
     assert asked and asked[0][0] == "ag-1"
+
+
+def test_jump_to_latest_button_when_scrolled_up(served, ctx, monkeypatch):
+    """R50 — 올려 읽는 중이면 목록 오른쪽 아래(입력창 위)에 둥근 ↓ 단추, 새 줄은 당기지 않고 점, 누르면 맨 아래로 가고 단추는 숨는다."""
+    out, srv = served
+
+    def fake(s, q, b):
+        now = int(time.time() * 1000)
+        return 200, {"entries": [{"id": "a%d" % i, "role": "assistant", "text": ("답 %d — " % i) + "긴 줄 " * 40, "at": now - 90000 + i}
+                                 for i in range(14)], "cursor": "c1", "source": "claude"}
+    monkeypatch.setitem(router.ROUTES["GET"], "/api/agents/transcript", fake)
+    assert call(srv, "POST", "/api/hello", {"agent": {"id": "ag-1", "name": "클로드", "kind": "claude"}, "lease": 300})[0] == 200
+    assert call(srv, "POST", "/api/attach", {"agent": "ag-1"})[0] == 200
+    pg, errors = open_page(ctx, srv)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    gap = "(() => { const l = document.querySelector('#pTalk .tk-list'); return l.scrollHeight - l.scrollTop - l.clientHeight; })()"
+    try:
+        pg.wait_for_selector("#pTalk .tk-term[data-id='a13']", timeout=15000)
+        pg.wait_for_function(gap + " <= 24", timeout=5000)
+        assert pg.is_hidden("#pTalk .tk-jump"), "맨 아래 = 단추 없음"
+        pg.evaluate("document.querySelector('#pTalk .tk-list').scrollTop = 0")
+        pg.wait_for_selector("#pTalk .tk-jump", state="visible", timeout=3000)
+        b, lst, foot = (pg.locator(x).bounding_box() for x in ("#pTalk .tk-jump", "#pTalk .tk-list", "#pTalk .tk-foot"))
+        assert abs(b["width"] - b["height"]) < 1 and b["width"] >= 28, ("둥근 단추", b)
+        assert b["x"] + b["width"] <= lst["x"] + lst["width"] and b["x"] > lst["x"] + lst["width"] / 2, ("목록 오른쪽", b, lst)
+        assert b["y"] + b["height"] <= foot["y"], ("입력창을 덮지 않음", b, foot)
+        assert pg.evaluate("getComputedStyle(document.querySelector('#pTalk .tk-jump')).borderRadius") == "50%"
+        assert pg.is_hidden("#pTalk .tk-dot"), "아직 새 줄 없음 = 점 없음"
+        now = int(time.time() * 1000)
+        srv.session.events.publish("agent.transcript", agent="ag-1", entries=[{"id": "a99", "role": "assistant", "text": "새 답 — 끝", "at": now}])
+        pg.wait_for_selector("#pTalk .tk-term[data-id='a99']", state="attached", timeout=15000)
+        assert pg.evaluate("document.querySelector('#pTalk .tk-list').scrollTop") == 0, "올려 읽는 중 = 새 줄이 와도 당기지 않는다"
+        pg.wait_for_selector("#pTalk .tk-dot", state="visible", timeout=3000)
+        shot(pg, "r50-jump-button-unseen.png")
+        pg.click("#pTalk .tk-jump")
+        pg.wait_for_function(gap + " <= 24", timeout=5000)
+        pg.wait_for_selector("#pTalk .tk-jump", state="hidden", timeout=3000)
+        assert pg.is_hidden("#pTalk .tk-dot") and pg.is_visible("#pTalk .tk-term[data-id='a99']"), "맨 아래 = 새 답이 보이고 단추·점은 꺼짐"
+    finally:
+        pg.close()
+    assert not errors, errors
 
 
 def test_without_helper_the_panel_is_absent(served, ctx):

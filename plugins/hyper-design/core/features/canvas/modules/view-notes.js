@@ -35,8 +35,9 @@ function mount(ctx) {
     edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
     del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>',
     change: '<svg viewBox="0 0 24 24"><path d="M4 8h13l-3.5-3.5"/><path d="M20 16H7l3.5 3.5"/></svg>',          // 의도 아이콘(F10) — 바꾸기 = 오가는 화살표
-    question: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2v.1"/></svg>'};
-  var INTENT = {change: '바꾸기', question: '질문'};
+    question: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2v.1"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>'};          // 대화창 글 — 받는 AI 가 질문·바꾸기를 정한다
+  var INTENT = {change: '바꾸기', question: '질문', chat: '대화'};
   var sbtn = document.createElement('button');        // 보낸 메모 보기 — 메모 막대(템플릿 .ntool)의 #ndec 앞
   sbtn.type = 'button'; sbtn.className = 'nib'; sbtn.id = 'nsent'; sbtn.setAttribute('aria-pressed', 'false'); sbtn.disabled = true;
   sbtn.innerHTML = ICON.eye + '<span class="ncb" data-n="0" hidden>0</span>';

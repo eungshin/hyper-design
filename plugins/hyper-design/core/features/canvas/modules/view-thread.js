@@ -15,7 +15,7 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var INTENT = {change: '바꾸기', question: '질문'};
+var INTENT = {change: '바꾸기', question: '질문', chat: '대화'};
 var ICON = {                                         // 줄·머리 아이콘(R26) — 연필·휴지통은 메모 패널(view-notes)과 같은 그림
   edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   del: '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/></svg>',

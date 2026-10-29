@@ -513,3 +513,74 @@ def test_memo_click_title_is_whole_screen_and_shift_adds_screens(apage):
     mine = [n for n in notes_of(pg) if n["note"] == "두 화면 모두"]
     assert sorted(n["screen"] for n in mine) == ["done", "pay"] and all(n["path"] == "body" for n in mine), mine
     pg.keyboard.press("h")
+
+
+def _open_board_memo(pg, ph, fr):
+    pg.keyboard.press("p")
+    pg.mouse.click(*el_point(pg, ph, fr, "button.pay"))
+    pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+
+
+@pytest.mark.area("notes", "tools")
+def test_leaving_memo_tool_closes_an_empty_memo_popup(apage):
+    """R52: 메모 요소 모드(P)로 요소를 눌러 연 빈 메모 창 → 다른 도구(키·도구 막대 단추) = 창이 닫힌다(Figma 댓글 모드와 같게) · 고른 요소 테두리도.
+    글을 이미 썼으면 창이 그대로 남는다(쓴 글을 조용히 버리지 않는다) — 추가하거나 ×/Esc 로 직접 닫는다."""
+    pg = apage
+    fit_view(pg)
+    ph = zoom_to(pg, "pay", 420)
+    fr = frame_of(pg, "pay")
+    _open_board_memo(pg, ph, fr)
+    pg.mouse.move(5, 500)                                      # 글 칸 밖(키가 도구로 가게) — 창은 열려 있다
+    pg.evaluate("document.activeElement && document.activeElement.blur()")
+    pg.keyboard.press("v")
+    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
+    assert pg.locator(".npsel").count() == 0, "창을 닫으면 고른 요소 테두리도"
+    _open_board_memo(pg, ph, fr)
+    pg.click('#tools [data-tool="hand"]')
+    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
+    _open_board_memo(pg, ph, fr)
+    pg.fill("#pnote", "쓰던 글")
+    pg.click('#tools [data-tool="move"]')
+    pg.wait_for_timeout(200)
+    assert not pg.is_hidden("#pop") and pg.input_value("#pnote") == "쓰던 글", "쓴 글은 남는다"
+    pg.fill("#pnote", "")                                     # 다 지우면 다시 빈 창 = 도구를 바꾸면 닫힘
+    pg.click('#tools [data-tool="hand"]')
+    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
+
+
+@pytest.mark.area("notes", "modal")
+def test_leaving_memo_tool_in_large_view_closes_an_empty_memo_popup(apage):
+    """R52: 크게 보기도 같은 규칙 — 메모 요소 모드(P)로 고른 요소의 빈 메모 창은 손(H)·이동 단추로 바꾸면 닫히고, 쓴 글이 있으면 남는다."""
+    pg = apage
+    fit_view(pg)
+    pg.keyboard.press("h")
+    pg.dblclick('.card[data-id="pay"] .cover')
+    pg.wait_for_selector("#modal:not([hidden])", timeout=5000)
+    mf = None
+    for _ in range(100):
+        mf = pg.query_selector("#mframe").content_frame()
+        if mf and mf.query_selector("button.pay"):
+            break
+        pg.wait_for_timeout(100)
+
+    def open_memo():
+        pg.keyboard.press("p")
+        pg.wait_for_function("document.querySelector('#tools [data-tool=\"memo\"]').getAttribute('aria-pressed') === 'true'", timeout=3000)
+        mf.click("button.pay")
+        pg.wait_for_selector("#pop:not([hidden])", timeout=3000)
+        pg.evaluate("document.activeElement && document.activeElement.blur()")
+
+    open_memo()
+    pg.keyboard.press("h")
+    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
+    open_memo()
+    pg.click('#tools [data-tool="move"]')
+    pg.wait_for_selector("#pop", state="hidden", timeout=3000)
+    open_memo()
+    pg.fill("#pnote", "크게 보기 글")
+    pg.click('#tools [data-tool="hand"]')
+    pg.wait_for_timeout(200)
+    assert not pg.is_hidden("#pop") and pg.input_value("#pnote") == "크게 보기 글", "쓴 글은 남는다"
+    pg.click("#pcancel")
+    pg.keyboard.press("Escape")
+    pg.wait_for_selector("#modal", state="hidden", timeout=3000)

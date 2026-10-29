@@ -87,7 +87,7 @@ function field(errs, name, v, spec) {
   }
 }
 // 답 하나 검사 → {ok, why(실패한 칸마다 한 줄을 '; ' 로 이음), errors}
-// intent 를 주면 답변은 질문 메모에만 · agent=true 면 사람 답(확인·다시) 거절(캔버스에서 다는 답은 사람 것이라 보통 주지 않는다)
+// intent 를 주면 답변은 질문·대화창(chat) 메모에만 · agent=true 면 사람 답(확인·다시) 거절(캔버스에서 다는 답은 사람 것이라 보통 주지 않는다)
 function validReply(r, intent, agent) {
   var errs = [];
   if (!r || typeof r !== 'object' || Array.isArray(r)) errs.push('reply: 객체가 아니에요');
@@ -95,7 +95,7 @@ function validReply(r, intent, agent) {
   else if (agent && USER.indexOf(r.kind) >= 0) errs.push('kind: ' + r.kind + ' 은 사람만 캔버스에서 달아요');
   else {
     var spec = FIELDS[r.kind], opt = OPTIONAL[r.kind] || {};
-    if (r.kind === '답변' && intent != null && intent !== 'question') errs.push('kind: 답변은 질문 메모에만');
+    if (r.kind === '답변' && intent != null && intent !== 'question' && intent !== 'chat') errs.push('kind: 답변은 질문 메모에만');
     Object.keys(r).filter(function (k) { return !COMMON[k] && !has(spec, k) && !has(opt, k); }).sort()
       .forEach(function (k) { errs.push(k + ': ' + r.kind + ' 에 없는 칸'); });
     Object.keys(spec).forEach(function (k) { if (!has(r, k)) errs.push(k + ': 없어요'); else field(errs, k, r[k], spec[k]); });

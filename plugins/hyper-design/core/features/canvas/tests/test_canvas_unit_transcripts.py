@@ -49,7 +49,8 @@ def test_claude_parser_keeps_user_assistant_tool_only():
     got, used = TP.parse_claude(data)
     assert used == len(data)
     assert [(e["role"], e["text"]) for e in got] == [
-        ("user", "홈 화면 버튼을 키워줘"), ("assistant", "고칠게요."), ("tool", "Edit screens/home.html"), ("user", "/hd list")]
+        ("user", "홈 화면 버튼을 키워줘"), ("assistant", "고칠게요."),
+        ("tool", "Edit screens/home.html\nfile_path: C:\\p\\out\\screens\\home.html\nold_string: x"), ("user", "/hd list")]   # 도구 = 요약 + 입력 전체(login#7)
     assert got[0] == {"id": "u1:0", "role": "user", "text": "홈 화면 버튼을 키워줘", "at": "2026-10-25T01:00:00.000Z"}
 
 
@@ -90,7 +91,7 @@ def test_paseo_parser_tolerates_shapes():
              {"type": "assistant_message", "content": [{"type": "thinking", "text": "x"}, {"type": "text", "text": "네"}], "timestamp": "2026-10-25T01:00:01Z", "id": "e2"},
              {"type": "tool_call", "name": "Edit", "input": {"file_path": "a/b/c.html"}, "timestamp": "2026-10-25T01:00:02Z", "id": "e3"},
              {"type": "reasoning", "text": "숨김"}, {"type": "error", "message": "x"}, "junk"]
-    want = [("user", "안녕"), ("assistant", "네"), ("tool", "Edit b/c.html")]
+    want = [("user", "안녕"), ("assistant", "네"), ("tool", "Edit b/c.html\nfile_path: a/b/c.html")]
     assert [(e["role"], e["text"]) for e in TP.parse_paseo(json.dumps(items))] == want
     assert [(e["role"], e["text"]) for e in TP.parse_paseo(json.dumps({"entries": items}))] == want
     jl = "\n".join(json.dumps(i) for i in items) + "\n{broken"

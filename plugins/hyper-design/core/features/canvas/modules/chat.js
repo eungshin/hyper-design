@@ -31,6 +31,7 @@ var PLACEHOLDER = '모든 화면에 대해 무엇을 바꾸거나 만들까요?'
 var PLACEHOLDER_PICKED = '무엇을 바꿀까요?';
 var FOLD_AT = 3, FOLD_KEEP = 2;                          // 칩이 3개를 넘으면 앞 2개 + 외 N개
 var ALL = '모든 화면';
+var CHAT = 'chat';                                     // 대화창 글의 의도 — 질문인지 바꾸기인지는 받는 AI 가 읽고 정한다(fix 스킬 · hd reply 가 답변·반영됨 둘 다 받음)
 var CUT = 20;                                            // 요소 칩 글 최대 글자(넘으면 …)
 var STAGES = ['sending', 'unsent', 'decide', 'working', 'queued', 'sent', 'partial', 'answered', 'applied'];   // 여럿이면 앞의 것이 줄을 맡는다
 var SAY = {
@@ -125,7 +126,7 @@ function elMemo(id, c, note) {
   var h = c.h, t = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null};
   if (h.quote) t.quote = h.quote;                        // 다시 찾을 글(task 11)
   if (h.src) t.src = h.src;                              // 앱 소스 위치 → 요청문 '소스:' 줄(task 27)
-  return {id: id, screen: c.screen, targets: [t], path: t.path, text: t.text, rect: t.rect, note: note, intent: 'change', sent: false};
+  return {id: id, screen: c.screen, targets: [t], path: t.path, text: t.text, rect: t.rect, note: note, intent: CHAT, sent: false};
 }
 function noteText(notes) {                               // 판 노트 → 요청 글 끝 '노트:' 줄들(R25)
   if (!notes || !notes.length) return '';
@@ -147,12 +148,12 @@ function build(list, text, opt, mkId) {
   if (!note) return {memos: [], why: '무엇을 바꿀지 적어 주세요'};
   if (!list.length) {
     if (opt.first == null || opt.first === '') return {memos: [], why: '보낼 화면이 없어요'};
-    return {memos: B.build(B.draft([opt.first], opt.titleOf), {note: note, intent: 'change', scope: 'all'}, mkId), why: ''};
+    return {memos: B.build(B.draft([opt.first], opt.titleOf), {note: note, intent: CHAT, scope: 'all'}, mkId), why: ''};
   }
   var els = list.filter(function (c) { return c.kind === 'el'; }), covered = {};
   var memos = els.map(function (c) { covered[c.screen] = 1; return elMemo(mkId(), c, note); });
   var rest = list.filter(function (c) { return c.kind === 'screen' && !covered[c.screen]; }).map(function (c) { return c.screen; });
-  if (rest.length) memos = memos.concat(B.build(B.draft(rest, opt.titleOf), {note: note, intent: 'change', scope: 'screen'}, mkId));
+  if (rest.length) memos = memos.concat(B.build(B.draft(rest, opt.titleOf), {note: note, intent: CHAT, scope: 'screen'}, mkId));
   return {memos: memos, why: ''};
 }
 

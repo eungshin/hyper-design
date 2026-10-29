@@ -6,32 +6,34 @@
    turns(records, now) → [{id, at, lastAt, ask:{text, chips, screens, agent, fromRequest}|null, lines:[{seq, kind, text, tone}], state, screens, stamps, undoable}]
      차례 = 처음 나온 차례(오래된 것 위). state(아래 차례로 처음 맞는 것): undone(되돌림) · failed(마지막 빌드 실패 뒤 쓰기·빌드·답이 없음) ·
      decide/done(답이 있음 — 마지막 답 상태 decide = decide) · done(마지막 턴이 아님 · IDLE_MS 동안 조용함) · queued(via queue 이고 진행·쓰기 없음) · running.
-     built 줄은 그 턴에 AI 쓰기가 앞서 있을 때만(사람 편집의 빌드는 보이지 않음). ask 가 없으면 요청문 첫 줄로 말풍선(fromRequest).
+     built 줄은 그 턴에 AI 쓰기가 앞서 있을 때만(사람 편집의 빌드는 보이지 않음). ask 가 없으면 요청문 전체로 말풍선(fromRequest).
      undoable = 되돌릴 stamp 가 있고 running·queued·undone 이 아님 · stamps = AI 쓰기 stamp(새것 먼저, 한 번씩).
    stick(top, height, client) → 맨 아래 근처(STICK px)인가 — 위로 올려 읽는 중이면 새 줄이 와도 자동 스크롤하지 않는다.
+   jump(prev, {top, height, client, grew}) → {show, unseen} — '맨 아래로' 단추(R50, Slack·ChatGPT·Claude.ai 의 scroll-to-bottom):
+     맨 아래(stick)가 아니면 보임 · 올려 읽는 중에 새 줄이 오면(grew) unseen(점) — 맨 아래로 오면 둘 다 꺼짐. 숫자가 아닌 값 = 숨김(맨 아래로 침).
+     보이는 문턱 = 따라가기 문턱(STICK) 하나 — 자동으로 따라가지 않는 동안은 늘 단추가 있다(사이 틈에서 새 줄을 놓치지 않게).
    터미널 대화(S3b 계약 — 공급자 모름, 모양만): parseTranscript(body) → {entries, cursor, source} | null · mergeEntries(have, new) → id 하나씩, at 차례 ·
      echo(entries, turns) → 캔버스 요청이 터미널에도 찍힌 user 줄 빼기(요청 글 또는 요청문 앞부분이 들어 있으면 같은 것) ·
-     timeline(turns, entries) → [{type:'turn', turn} | {type:'term', entry}] 시간(at) 차례 · entryView(e) → {role, label, text, short}(tool = '도구 · <짧게>').
-   답 전체(R24): 답 줄(reply)·터미널 답(assistant)은 자르지 않고 줄바꿈 그대로(진행·도구 요약만 한 줄). 그리기 나누기 —
+     timeline(turns, entries) → [{type:'turn', turn} | {type:'term', entry}] 시간(at) 차례 · entryView(e) → {role, label, text, short}(short = 첫 줄 · tool label = '도구 · <첫 줄>').
+   늘 전문(R24 · login#7): 보낸 글 · 요청문 말풍선 · 진행 · 답 · 빌드 실패 이유 · 터미널 줄(도구 = 첫 줄 요약 + 부른 입력 전체)을 자르거나 접지 않고
+     줄바꿈 그대로(앞뒤 공백만 걷음). 그리기 나누기 —
      blocks(text) → [{type:'text', text} | {type:'code', lang, text}] (``` 울타리 코드 덩이, 닫히지 않으면 끝까지 코드) · spans(text) → [{code, text}] (`인라인 코드`, 짝 없는 ` 는 글).
    메모의 답 설명(옛 기록 보충): 옛 reply 기록(42f8c85 전 · 옛 도우미)은 요약 칸만 있다 — memoDetail(rec, note) → 그 메모(.replies)에서 같은 답
      (종류 rkind + 요약 칸 글 — 답변 text · 반영됨 what · 일부 done · 질문 question, 안 맞으면 마지막 AI 답)의 detail | ''(없음 · 기록이 이미 detail 을 담음).
-     turns(records, now, {note: id → 메모|null}) 이면 답 줄에 detail 칸. fold(text) → {fold, head, lines} — FOLD 줄을 넘으면 앞 FOLD 줄만 보이고 '전체 보기'.
-   HD.chatLog = {IDLE_MS, STICK, FOLD, parse, merge, turns, state, stick, parseTranscript, mergeEntries, echo, timeline, entryView, blocks, spans, memoDetail, fold} */
+     turns(records, now, {note: id → 메모|null}) 이면 답 줄에 detail 칸(전체 — 접지 않음).
+   HD.chatLog = {IDLE_MS, STICK, parse, merge, turns, state, stick, jump, parseTranscript, mergeEntries, echo, timeline, entryView, blocks, spans, memoDetail} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
 var IDLE_MS = 10 * 60 * 1000;                            // 마지막 턴이 이만큼 조용하면 끝난 것으로(답을 안 하는 에이전트)
 var STICK = 24;
-var ASK_CUT = 160, SHORT_CUT = 60, ECHO_MIN = 4, ECHO_HEAD = 80;
+var ECHO_MIN = 4, ECHO_HEAD = 80;
 var VIA0 = {event: '실시간', paseo: 'Paseo', claude: 'Claude', queue: '대기열'};
-var FOLD = 12;                                           // 메모 detail 이 이 줄 수를 넘으면 접어서(전체 보기)
 var HEADS = {'답변': 'text', '반영됨': 'what', '일부': 'done', '질문': 'question'};   // 답 종류 → 요약 칸(annotation.js FIELDS · chat_log.reply_text)
 var KINDS = ['ask', 'sent', 'progress', 'reply', 'write', 'built', 'failed', 'undone'];
 
 function flat(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
-function cut(s, n) { s = flat(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 function whole(s) { return String(s == null ? '' : s).replace(/\r\n?/g, '\n').replace(/^\s*\n/, '').replace(/\s+$/, '').replace(/^[ \t]+/, ''); }   // 답 글 = 앞뒤만 걷기(줄바꿈·들여쓰기 그대로, R24)
 function int(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
 function okRec(r) { return !!r && typeof r === 'object' && int(r.seq) && int(r.at) && int(r.turn) && KINDS.indexOf(r.kind) >= 0; }
@@ -50,10 +52,6 @@ function via(v) { var V = HD.chat && HD.chat.VIA || VIA0; return V[v] || null; }
 function sentText(r, ask) {
   if (r.via === 'queue' || !via(r.via)) return '보냄 · 대기열 — 읽는 에이전트를 기다려요';
   return '보냄 · ' + (ask && ask.agent || r.to || 'AI') + ' (' + via(r.via) + ')';
-}
-function firstLine(t) {
-  var ls = String(t || '').split('\n').map(flat).filter(function (x) { return x && !/^[#>\-=*]+$/.test(x); });
-  return ls.length ? cut(ls[0].replace(/^#+\s*/, ''), ASK_CUT) : '';
 }
 
 function state(t, isLast, now) {
@@ -84,15 +82,11 @@ function memoDetail(rec, note) {
   if (!d || d === text || text.indexOf(d) >= 0) return '';   // 기록이 이미 detail 을 담음(42f8c85 뒤 기록) = 두 번 보이지 않게
   return d;
 }
-function fold(text) {
-  var s = String(text == null ? '' : text), ls = s.split('\n');
-  return ls.length > FOLD ? {fold: true, head: ls.slice(0, FOLD).join('\n'), lines: ls.length} : {fold: false, head: s, lines: ls.length};
-}
 
 function lineOf(r, t, wrote, opts) {
   switch (r.kind) {
     case 'sent': return {seq: r.seq, kind: 'sent', text: sentText(r, t.ask), tone: 'muted'};
-    case 'progress': return {seq: r.seq, kind: 'progress', text: flat(r.text), tone: 'muted'};
+    case 'progress': return {seq: r.seq, kind: 'progress', text: whole(r.text), tone: 'muted'};
     case 'reply':
       var l = {seq: r.seq, kind: 'reply', text: (r.status === 'decide' ? '결정 필요 · ' : '') + (whole(r.text) || flat(r.rkind) || '답했어요'), tone: r.status === 'decide' ? 'accent' : ''};
       var d = opts && typeof opts.note === 'function' && r.note ? memoDetail(r, opts.note(r.note)) : '';
@@ -100,7 +94,7 @@ function lineOf(r, t, wrote, opts) {
       return l;
     case 'write': return {seq: r.seq, kind: 'write', text: flat(r.label) || 'AI 반영 · ' + (r.screen || ''), tone: 'ok'};
     case 'built': return wrote ? {seq: r.seq, kind: 'built', text: '빌드 완료', tone: 'muted'} : null;
-    case 'failed': return {seq: r.seq, kind: 'failed', text: '빌드 실패' + (flat(r.reason) ? ' — ' + cut(r.reason, 160) : ''), tone: 'red'};
+    case 'failed': return {seq: r.seq, kind: 'failed', text: '빌드 실패' + (whole(r.reason) ? ' — ' + whole(r.reason) : ''), tone: 'red'};
     case 'undone': return {seq: r.seq, kind: 'undone', text: '되돌렸어요', tone: 'muted'};
   }
   return null;
@@ -116,8 +110,8 @@ function turns(records, now, opts) {
   });
   return order.map(function (t, i) {
     var ask = t.recs.filter(function (r) { return r.kind === 'ask'; })[0], sent = t.recs.filter(function (r) { return r.kind === 'sent'; })[0];
-    t.ask = ask ? {text: flat(ask.text), chips: (ask.chips || []).slice(), screens: (ask.screens || []).slice(), agent: ask.agent || null, fromRequest: false}
-      : sent && firstLine(sent.text) ? {text: firstLine(sent.text), chips: [], screens: [], agent: null, fromRequest: true} : null;
+    t.ask = ask ? {text: whole(ask.text), chips: (ask.chips || []).slice(), screens: (ask.screens || []).slice(), agent: ask.agent || null, fromRequest: false}
+      : sent && whole(sent.text) ? {text: whole(sent.text), chips: [], screens: [], agent: null, fromRequest: true} : null;   // ask 가 없으면 요청문 전체(login#7)
     var wrote = false;
     t.lines = [];
     t.recs.forEach(function (r) { if (r.kind === 'write') wrote = true; var l = lineOf(r, t, wrote, opts); if (l && l.text) t.lines.push(l); });
@@ -134,6 +128,12 @@ function turns(records, now, opts) {
 }
 
 function stick(top, height, client) { return height - top - client <= STICK; }
+function jump(prev, m) {
+  m = m || {};
+  if (![m.top, m.height, m.client].every(function (v) { return typeof v === 'number' && isFinite(v); })) return {show: false, unseen: false};
+  var at = stick(m.top, m.height, m.client);
+  return {show: !at, unseen: !at && (!!(prev && prev.unseen) || !!m.grew)};
+}
 
 /* ---------- 터미널 대화(S3b 계약) ---------- */
 var ROLES = ['user', 'assistant', 'tool'];
@@ -167,7 +167,7 @@ function timeline(ts, entries) {
   return items.map(function (x) { return x.type === 'turn' ? {type: 'turn', turn: x.turn} : {type: 'term', entry: x.entry}; });
 }
 function entryView(e) {
-  var text = whole(e.text), short = cut(text.split('\n')[0], SHORT_CUT);
+  var text = whole(e.text), short = flat(text.split('\n')[0]);
   if (e.role === 'tool') return {role: 'tool', label: '도구 · ' + (short || '…'), text: text, short: short};
   if (e.role === 'user') return {role: 'user', label: '터미널에서', text: text, short: short};
   return {role: 'assistant', label: '', text: text, short: short};
@@ -202,6 +202,6 @@ function spans(text) {
   return out;
 }
 
-HD.chatLog = {IDLE_MS: IDLE_MS, STICK: STICK, FOLD: FOLD, parse: parse, merge: merge, turns: turns, state: state, stick: stick,
-              parseTranscript: parseTranscript, mergeEntries: mergeEntries, echo: echo, timeline: timeline, entryView: entryView, blocks: blocks, spans: spans, memoDetail: memoDetail, fold: fold};
+HD.chatLog = {IDLE_MS: IDLE_MS, STICK: STICK, parse: parse, merge: merge, turns: turns, state: state, stick: stick, jump: jump,
+              parseTranscript: parseTranscript, mergeEntries: mergeEntries, echo: echo, timeline: timeline, entryView: entryView, blocks: blocks, spans: spans, memoDetail: memoDetail};
 })();

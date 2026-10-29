@@ -1,16 +1,17 @@
 """Model(순수) — 터미널 대화 기록(transcript) 한 형식씩 읽기(S3b): 바이트·글 → 대화 줄(entry). 파일·하위 프로세스·시계를 모른다(unit).
 
-entry = {id: 바뀌지 않는 글, role: 'user'|'assistant'|'tool', text: 글(tool = 한 줄 요약 'Edit screens/home.html'), at: ISO-8601 | ''}
+entry = {id: 바뀌지 않는 글, role: 'user'|'assistant'|'tool', text: 글(tool = 첫 줄 요약 'Edit screens/home.html' + 줄마다 부른 입력 전체 — login#7), at: ISO-8601 | ''}
   parse_claude(data, max_entries)  Claude Code 세션 jsonl 조각 → (entries, 먹은 바이트). 끝의 덜 쓴 줄(줄바꿈 없음)은 먹지 않는다 — 다음에 다시
   parse_paseo(text)                `paseo logs <id> --json` 출력 → entries(모양을 너그럽게 읽는다 — contract/transcripts.md '빚')
-  tool_summary(name, input)        도구 부르기 → 한 줄 요약
+  tool_summary(name, input)        도구 부르기 → 한 줄 요약(머리 줄)
+  tool_text(name, input)           도구 줄 글 = 요약 + 부른 입력 전체(칸마다 '이름: 값', 여러 줄 값은 다음 줄부터 그대로)
   claude_cursor / paseo_cursor      불투명 커서 글 ↔ 값(깨진 커서 = ValueError — 부르는 쪽이 400)
 상태 없음. 쓰는 곳 = transcripts.py(ClaudeTranscript · PaseoTranscript).
 """
 import datetime, hashlib, json, re
 
 TEXT_MAX = 200_000                                   # 줄 하나의 글 최대(넘으면 자르고 '…') — 답은 다 보인다(R24, 예전 4000 은 긴 답을 잘랐다). 이 한도는 터무니없는 줄만 막는다
-TOOL_MAX = 120                                       # 도구 요약 한 줄 최대
+TOOL_MAX = 120                                       # 도구 요약(머리 줄) 최대 — 도구 줄 글 전체는 TEXT_MAX(입력 전체가 아래 줄에, login#7)
 ENTRIES_MAX = 100                                    # read() 한 번에 내는 줄 최대
 ROLES = ("user", "assistant", "tool")
 
@@ -31,7 +32,7 @@ def cap(text, limit=TEXT_MAX):
 def entry(id_, role, text, at):
     """대화 줄 하나(모양 하나 — 모든 형식이 이것으로 낸다)."""
     assert role in ROLES, role
-    return {"id": str(id_), "role": role, "text": cap(text, TOOL_MAX if role == "tool" else TEXT_MAX), "at": at or ""}
+    return {"id": str(id_), "role": role, "text": cap(text, TEXT_MAX), "at": at or ""}
 
 
 def _one_line(s):
@@ -50,6 +51,19 @@ def tool_summary(name, inp):
         if isinstance(inp.get(key), str) and inp[key].strip():
             return cap(_one_line("%s %s" % (name, inp[key].strip().splitlines()[0])), TOOL_MAX)
     return cap(name, TOOL_MAX)
+
+
+def tool_text(name, inp):
+    """도구 줄 글(대화 패널은 늘 전문, login#7) = 첫 줄 요약(tool_summary) + 부른 입력 칸마다 한 덩이.
+    글 값 한 줄 = '이름: 값' · 여러 줄 = '이름:' 다음 줄부터 그대로 · 그 밖 = '이름: <JSON>'. 입력이 없으면 요약 한 줄."""
+    lines = [tool_summary(name, inp)]
+    for k, v in (inp.items() if isinstance(inp, dict) else ()):
+        if isinstance(v, str):
+            v = v.rstrip()
+            lines.append("%s:\n%s" % (k, v) if "\n" in v else "%s: %s" % (k, v))
+        else:
+            lines.append("%s: %s" % (k, json.dumps(v, ensure_ascii=False)))
+    return "\n".join(lines)
 
 
 def _user_text(text):
@@ -94,7 +108,7 @@ def claude_entries(d, line_id):
         if b.get("type") == "text" and isinstance(b.get("text"), str) and b["text"].strip():
             out.append(entry("%s:%d" % (base, i), "assistant", b["text"].strip(), at))
         elif b.get("type") == "tool_use":
-            out.append(entry("%s:%d" % (base, i), "tool", tool_summary(b.get("name"), b.get("input")), at))
+            out.append(entry("%s:%d" % (base, i), "tool", tool_text(b.get("name"), b.get("input")), at))
     return out
 
 
@@ -174,7 +188,7 @@ def paseo_item(it):
         call = it.get("call") if isinstance(it.get("call"), dict) else it
         name = next((call[k] for k in ("name", "tool", "toolName", "tool_name") if isinstance(call.get(k), str)), None)
         inp = next((call[k] for k in ("input", "args", "arguments", "params") if isinstance(call.get(k), dict)), None)
-        text = tool_summary(name, inp)
+        text = tool_text(name, inp)
     else:
         text = next((_text_of(it[k]) for k in _TEXT_KEYS if k in it), "").strip()
         if not text:

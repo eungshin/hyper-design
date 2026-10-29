@@ -296,6 +296,21 @@
   "reason": "text"
  },
  {
+  "name": "답변 on chat memo",
+  "note_intent": "chat",
+  "sent": true,
+  "from": "agent",
+  "replies": [
+   {
+    "kind": "답변",
+    "text": "네, 넘어갔어요"
+   }
+  ],
+  "valid": true,
+  "status": "done",
+  "says": "답변 — 네, 넘어갔어요"
+ },
+ {
   "name": "답변 on change memo",
   "note_intent": "change",
   "sent": true,

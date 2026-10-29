@@ -2,7 +2,7 @@
 
 옛 기록(.hd-chat.jsonl, 42f8c85 전 · 또는 옛 도우미가 쓴 것)의 reply 줄은 요약 칸만 있고 detail 이 없다. 메모(.hd-canvas.json)의 답에는 detail 이 있다.
 패널 Model(HD.chatLog)은 reply 기록이 이름 대는 메모(note)에서 같은 답(종류 + 요약 칸 글, 없으면 마지막 AI 답)의 detail 을 찾아 답 줄에 붙인다.
-기록이 이미 detail 을 가진 경우 두 번 보이지 않는다. 길면(FOLD 줄 넘음) 앞 FOLD 줄만 + '전체 보기' — 접기 규칙도 Model(fold).
+기록이 이미 detail 을 가진 경우 두 번 보이지 않는다. 길어도 전체(접지 않음 — login#7, test_canvas_unit_chat_full.py).
 """
 import json, shutil, subprocess, tempfile
 from pathlib import Path
@@ -39,12 +39,6 @@ const recs = [{seq: 1, at: 1, turn: 1, kind: 'sent', via: 'event', notes: ['n1']
 out.line = L.turns(recs, 3, {note: find})[0].lines.filter(l => l.kind === 'reply')[0];
 out.lineNoFind = L.turns(recs, 3)[0].lines.filter(l => l.kind === 'reply')[0];
 out.lineWhole = L.turns([recs[0], rec('요약용 추가 토큰은 없습니다(상세 참고).\n\n' + D)], 3, {note: find})[0].lines.filter(l => l.kind === 'reply')[0];
-// 7) 접기 규칙
-const many = Array.from({length: 30}, (_, i) => '줄 ' + (i + 1)).join('\n');
-out.foldMany = L.fold(many);
-out.foldFew = L.fold('하나\n둘\n셋');
-out.foldEdge = L.fold(Array.from({length: L.FOLD}, (_, i) => 'x' + i).join('\n'));
-out.FOLD = L.FOLD;
 console.log(JSON.stringify(out));
 """
 
@@ -85,12 +79,3 @@ def test_turns_attach_memo_detail_to_reply_line(out):
     assert out["line"]["text"] == "결정 필요 · 요약용 추가 토큰은 없습니다(상세 참고).", "답 줄 글은 그대로"
     assert out["line"]["detail"] == D
     assert out["lineNoFind"].get("detail", "") == "", "메모 찾기가 없으면 detail 없음(옛 부르기 그대로)"
-
-
-def test_fold_rule(out):
-    n = out["FOLD"]
-    assert n == 12
-    m = out["foldMany"]
-    assert m["fold"] is True and m["head"] == "\n".join("줄 %d" % i for i in range(1, n + 1)) and m["lines"] == 30
-    assert out["foldFew"] == {"fold": False, "head": "하나\n둘\n셋", "lines": 3}
-    assert out["foldEdge"]["fold"] is False, "딱 FOLD 줄이면 접지 않는다"

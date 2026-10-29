@@ -3,7 +3,9 @@
    묻기 = ctx.ask·chain(view-frame-ask), 부모 고르기 = HD.blocks.parentPick, 색·꼬리표 = HD.blocks.tone · HD.tools.LABEL.
    여러 요소(R19): 고른 요소는 목록(규칙 HD.elPick) — 모두 테두리 고정, 소켓·부모 점선·요소 막대는 주인(마지막 것)만. Shift+누르기 = 더하기·빼기(셸이 add 로 부른다).
    HD.viewElbox.mount(ctx) → {clear()(미리 그린 테두리 걷기), selected() → 주인 {card, h}|null, all() → 고른 요소 모두 [{card, h}](고른 차례),
-     select(card, h)(그 하나만), toggle(card, h)(더하기·빼기), unselect()(모두), keep(ok(cardId))(ok 인 카드의 것만 남김), pickAt(card, x, y, deep?, add?)}
+     select(card, h, pt?)(그 하나만), toggle(card, h, pt?)(더하기·빼기), unselect()(모두), keep(ok(cardId))(ok 인 카드의 것만 남김), pickAt(card, x, y, deep?, add?)}
+   누른 자리(R51): pickAt(클릭)으로 고르면 그 자리를 카드 화면(.phone) 안 비율 pt {fx, fy} 로 고른 항목에 두고, 요소 막대에 pointer() → 지금 화면 좌표로 건넨다
+     (판을 옮기거나 확대해도 따라감 — 막대 자리 규칙 HD.barPlace 가 큰 요소면 누른 자리 가까이). 메뉴·키보드·쓴 뒤 다시 고르기(select 에 pt 없음) = pointer 없음.
    ctx = {$, $$, rowsEl, pane, wOf(card), tagScale(), zoom(), app(id) → 앱 카드인가, title(id), toast(msg), ask(card, x, y, quiet, cb, leaf, deep), chain(frame, h, cb),
           lastFrame(card), blocks() → 요소 막대(BK)|null, tool() → 지금 도구, mode() → 메모 모드('el'|'screen'), only(id) → 그 카드만 골랐나, busy() → 끄는 중·도착 고르는 중} */
 (function () {
@@ -60,22 +62,30 @@ function mount(ctx) {
     if (!outline(pr.card, pr.h, true)) { if (BK) BK.hide('board'); return; }
     var card = pr.card, h = pr.h;
     drawParent(card, h);
+    var pt = pr.pt;
     if (BK) BK.show({screen: card.dataset.id, h: h, app: ctx.app(card.dataset.id), where: 'board',   // 요소 막대(task 49a) — 고른 테두리 옆, 판이 움직이면 placeSelbar 가 다시 놓는다
+                     pointer: pt ? function () { var ph = card.isConnected && $('.phone', card); if (!ph) return null; var r = ph.getBoundingClientRect(); return {x: r.left + pt.fx * r.width, y: r.top + pt.fy * r.height}; } : null,   // 누른 자리(R51)
                      frame: function () { var fs = $$('.phone iframe', card); return fs[fs.length - 1] || null; }, view: function () { return rectOf(pane); },   // 상위 묻기 · 판 칸 안에(task 49b)
-                     anchor: function () { var bx = $('.elbox.sel.pri', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; }});   // lb = 테두리 위 종류 꼬리표를 덮지 않게
+                     anchor: function () { var bx = $('.elbox.sel.pri', card); if (!bx || !card.isConnected) return null; var r = bx.getBoundingClientRect(), lb = bx.classList.contains('in') ? 0 : 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: r.height + lb}; },   // lb = 테두리 위 종류 꼬리표를 덮지 않게
+                     label: function () { var bx = $('.elbox.sel.pri', card); if (!bx || !card.isConnected || bx.classList.contains('in')) return null; var r = bx.getBoundingClientRect(), lb = 17 * ctx.tagScale() * ctx.zoom(); return {x: r.left, y: r.top - lb, w: r.width, h: lb}; }});   // 꼬리표 띠(anchor 안 — 작은 요소 자리는 그대로, 누른 자리 가까이 둘 때 덮지 않게)
   }
-  function select(card, h) { sels = P.only({card: card, h: h}); paint(); }
-  function toggle(card, h) { sels = P.toggle(sels, {card: card, h: h}, keyOf); paint(); }
+  function select(card, h, pt) { sels = P.only({card: card, h: h, pt: pt || null}); paint(); }
+  function toggle(card, h, pt) { sels = P.toggle(sels, {card: card, h: h, pt: pt || null}, keyOf); paint(); }
+  function ptOf(card, x, y) {                        // 누른 자리 → 카드 화면 안 비율(판이 움직여도 따라가게) · 화면이 없거나 크기 0 = null
+    var ph = $('.phone', card), r = ph && ph.getBoundingClientRect();
+    return r && r.width > 0 && r.height > 0 && isFinite(x) && isFinite(y) ? {fx: (x - r.left) / r.width, fy: (y - r.top) / r.height} : null;
+  }
   function keep(ok) {
     var n = P.keep(sels, function (s) { return ok(s.card.dataset.id); });
     if (n.length === sels.length) return;
     sels = n; paint();
   }
   function pickAt(card, x, y, deep, add) {           // 선택(V)으로 고른 카드를 한 번 더 = 그 자리 요소 고르기(누를 수 있는 요소 → 그 요소, 트리거 도구와 같은 규칙) · deep = 가장 안쪽 요소(Alt+클릭, 51-2) · add = Shift(더하기·빼기, R19)
+    var pt = ptOf(card, x, y);
     ctx.ask(card, x, y, false, function (h) {
       if (!h) return;
       if (h.none) { ctx.toast('여기에는 고를 요소가 없어요'); return; }
-      if (add) toggle(card, h); else select(card, h);
+      if (add) toggle(card, h, pt); else select(card, h, pt);
     }, false, deep);
   }
   function hoverMode(card, edge) {                    // 그 카드 위에서 미리 그릴 방식(tools.hoverOf) — 선택(V)은 그 카드만 골랐을 때(다음 클릭 = 요소 고르기, 51-3) · edge = .phone 밖
