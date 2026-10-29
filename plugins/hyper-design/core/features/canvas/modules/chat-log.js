@@ -9,6 +9,9 @@
      built 줄은 그 턴에 AI 쓰기가 앞서 있을 때만(사람 편집의 빌드는 보이지 않음). ask 가 없으면 요청문 첫 줄로 말풍선(fromRequest).
      undoable = 되돌릴 stamp 가 있고 running·queued·undone 이 아님 · stamps = AI 쓰기 stamp(새것 먼저, 한 번씩).
    stick(top, height, client) → 맨 아래 근처(STICK px)인가 — 위로 올려 읽는 중이면 새 줄이 와도 자동 스크롤하지 않는다.
+   jump(prev, {top, height, client, grew}) → {show, unseen} — '맨 아래로' 단추(R50, Slack·ChatGPT·Claude.ai 의 scroll-to-bottom):
+     맨 아래(stick)가 아니면 보임 · 올려 읽는 중에 새 줄이 오면(grew) unseen(점) — 맨 아래로 오면 둘 다 꺼짐. 숫자가 아닌 값 = 숨김(맨 아래로 침).
+     보이는 문턱 = 따라가기 문턱(STICK) 하나 — 자동으로 따라가지 않는 동안은 늘 단추가 있다(사이 틈에서 새 줄을 놓치지 않게).
    터미널 대화(S3b 계약 — 공급자 모름, 모양만): parseTranscript(body) → {entries, cursor, source} | null · mergeEntries(have, new) → id 하나씩, at 차례 ·
      echo(entries, turns) → 캔버스 요청이 터미널에도 찍힌 user 줄 빼기(요청 글 또는 요청문 앞부분이 들어 있으면 같은 것) ·
      timeline(turns, entries) → [{type:'turn', turn} | {type:'term', entry}] 시간(at) 차례 · entryView(e) → {role, label, text, short}(tool = '도구 · <짧게>').
@@ -17,7 +20,7 @@
    메모의 답 설명(옛 기록 보충): 옛 reply 기록(42f8c85 전 · 옛 도우미)은 요약 칸만 있다 — memoDetail(rec, note) → 그 메모(.replies)에서 같은 답
      (종류 rkind + 요약 칸 글 — 답변 text · 반영됨 what · 일부 done · 질문 question, 안 맞으면 마지막 AI 답)의 detail | ''(없음 · 기록이 이미 detail 을 담음).
      turns(records, now, {note: id → 메모|null}) 이면 답 줄에 detail 칸. fold(text) → {fold, head, lines} — FOLD 줄을 넘으면 앞 FOLD 줄만 보이고 '전체 보기'.
-   HD.chatLog = {IDLE_MS, STICK, FOLD, parse, merge, turns, state, stick, parseTranscript, mergeEntries, echo, timeline, entryView, blocks, spans, memoDetail, fold} */
+   HD.chatLog = {IDLE_MS, STICK, FOLD, parse, merge, turns, state, stick, jump, parseTranscript, mergeEntries, echo, timeline, entryView, blocks, spans, memoDetail, fold} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -134,6 +137,12 @@ function turns(records, now, opts) {
 }
 
 function stick(top, height, client) { return height - top - client <= STICK; }
+function jump(prev, m) {
+  m = m || {};
+  if (![m.top, m.height, m.client].every(function (v) { return typeof v === 'number' && isFinite(v); })) return {show: false, unseen: false};
+  var at = stick(m.top, m.height, m.client);
+  return {show: !at, unseen: !at && (!!(prev && prev.unseen) || !!m.grew)};
+}
 
 /* ---------- 터미널 대화(S3b 계약) ---------- */
 var ROLES = ['user', 'assistant', 'tool'];
@@ -202,6 +211,6 @@ function spans(text) {
   return out;
 }
 
-HD.chatLog = {IDLE_MS: IDLE_MS, STICK: STICK, FOLD: FOLD, parse: parse, merge: merge, turns: turns, state: state, stick: stick,
+HD.chatLog = {IDLE_MS: IDLE_MS, STICK: STICK, FOLD: FOLD, parse: parse, merge: merge, turns: turns, state: state, stick: stick, jump: jump,
               parseTranscript: parseTranscript, mergeEntries: mergeEntries, echo: echo, timeline: timeline, entryView: entryView, blocks: blocks, spans: spans, memoDetail: memoDetail, fold: fold};
 })();

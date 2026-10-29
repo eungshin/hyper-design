@@ -52,6 +52,11 @@ out.undoRunning = L.turns([r(1, 'sent', {via: 'event'}), r(1, 'write', {stamp: '
 out.parse = [L.parse({seq: 3, records: [{seq: 1, at: 1, turn: 1, kind: 'ask'}, {seq: 'x'}, {seq: 2, at: 1, turn: 1, kind: 'zzz'}]}), L.parse({records: []}), L.parse(null)];
 out.merge = L.merge([{seq: 2, at: 1, turn: 1, kind: 'ask'}], [{seq: 1, at: 1, turn: 1, kind: 'sent'}, {seq: 2, at: 1, turn: 1, kind: 'ask', text: 'new'}]).map(x => x.seq + (x.text || ''));
 out.stick = [L.stick(500, 1000, 480), L.stick(400, 1000, 480), L.stick(0, 100, 480)];
+// 맨 아래로 단추(R50): 맨 아래(24px 안) = 숨김 · 올려 읽는 중 = 보임 · 그 사이 새 줄 = 점, 맨 아래로 가면 점도 꺼짐
+const J0 = {show: false, unseen: false}, up = {top: 400, height: 1000, client: 480}, bot = {top: 500, height: 1000, client: 480};
+const j1 = L.jump(J0, up), j2 = L.jump(j1, Object.assign({grew: true}, up)), j3 = L.jump(j2, up), j4 = L.jump(j3, bot);
+out.jump = [j1, j2, j3, j4, L.jump(J0, Object.assign({grew: true}, bot)), L.jump(J0, {top: 476, height: 1000, client: 500}),
+            L.jump(J0, {top: 475, height: 1000, client: 500}), L.jump(J0, {top: 0, height: 100, client: 480}), L.jump(null, {top: 'x', height: 1, client: 1}), L.jump(j2, {})];
 // 터미널 대화(S3b)
 const E = (id, role, text, at) => ({id, role, text, at});
 out.pt = [L.parseTranscript({entries: [E('a', 'user', 'hi', 5), E('b', 'bot', 'x', 6), {id: 'c'}], cursor: 'k', source: 'claude'}), L.parseTranscript({}), L.parseTranscript({entries: []}).source];
@@ -114,6 +119,17 @@ def test_parse_merge_stick(out):
     assert ok == {"seq": 3, "records": [{"seq": 1, "at": 1, "turn": 1, "kind": "ask"}], "reset": False} and none1 is None and none2 is None
     assert out["merge"] == ["1", "2new"], "같은 seq 는 뒤의 것 하나"
     assert out["stick"] == [True, False, True], "맨 아래 24px 안이면 따라감, 올려 읽는 중이면 그대로"
+
+
+def test_jump_to_latest_button_rule(out):
+    j = [(x["show"], x["unseen"]) for x in out["jump"]]
+    assert j[0] == (True, False), "올려 읽는 중 = 단추 보임"
+    assert j[1] == (True, True) and j[2] == (True, True), "그 사이 새 줄 = 점, 맨 아래로 가기 전까지 남음"
+    assert j[3] == (False, False), "맨 아래로 오면 단추·점 모두 꺼짐"
+    assert j[4] == (False, False), "맨 아래에서 새 줄 = 따라가므로 단추 없음"
+    assert j[5] == (False, False) and j[6] == (True, False), "문턱 = 따라가기 문턱(24px) 그대로 — 24px 은 맨 아래, 25px 은 위"
+    assert j[7] == (False, False), "목록이 칸보다 짧음 = 늘 맨 아래"
+    assert j[8] == (False, False) and j[9] == (False, False), "깨진 숫자 = 숨김"
 
 
 def test_transcript_shape_and_merge(out):
