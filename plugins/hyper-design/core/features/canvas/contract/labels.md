@@ -8,8 +8,8 @@
 - 배율 값: `view-label-scale`(View, 등록부 기능 `labelScale`)이 `#stage` 의 `data-zoom` 을 보고 `#rows` 에 `--lz = 1/z` 를 쓴다(규칙 `HD.labelScale`, Model). 확대 중엔 한 프레임에 한 번 3% 넘게 바뀔 때만, 멈춘 뒤 150ms 에 정확한 값 + document `hd-label-scale` {lz}
 - 판 배치는 배율과 상관없다: 이름표는 `transform`/`scale` 로만 크기를 바꾸고 자리 상자(판 px)는 그대로 — 카드 높이(제목 자리 46px)·줄 제목 자리(145px)는 예전과 같다. 그래서 카드·줄 자리는 어느 배율에서 재도 같다(`test_canvas_labels.py`)
 - 작게 볼 때(배율 < `HD.labelScale.FAR` 0.35): `#rows[data-lz-far]` — 펼친 카드 설명(`.cbody`)은 `visibility:hidden`(18px 글이 6px 아래라 읽히지 않고, 화면 px 제목을 덮는다). 크기는 남아 줄 사이 계산(`view-rows` `space`)은 배율과 상관없다. 카드 제목은 z-index 없음(펼친 설명·교체 알약이 위)
-- 선 태그(F08): 고른·올린 카드의 것만 보이고(예전 그대로), 보이는 태그끼리 화면에서 겹치면 아래로 민다 — `HD.labelScale.stack`(위·왼쪽 먼저, 3px 틈) 의 화면 px 거리를 `--dy` 로. 판 배율이 멈춘 뒤에도 다시 잰다
-- 화면 안 출발 버튼 표시(`palette.js` 의 `hd-links-paint`, F08): 1px 점선(선 색) + 16px 번호 — 고른 카드에만(예전 그대로, E20 A)
+- 선 태그(F08 → R46): 고른·올린 카드의 것만 보이고(예전 그대로), 자리·겹침은 `line-tags.md`(제 선에 붙고 겹치면 제 선을 따라 비킴 — 아래로 쌓던 `HD.labelScale.stack`·`--dy` 는 R46 부터 쓰지 않는다). 판 배율이 멈춘 뒤에도 다시 잰다
+- 화면 안 출발 버튼 표시(`palette.js` 의 `hd-links-paint`, F08): 1px 점선(선 색) + 16px 번호 — 고른 카드에만(예전 그대로, E20 A) · 선 태그 목록 창에서 올린 버튼 하나만 `hi` = 2px 실선 + 옅은 색 바탕(R46)
 - AI 수정 중 칩(F12): 글 = 에이전트 이름(`hd-agent` {agent, name} 으로 모은 것) > 사람이 쓴 `by` > "AI". 날 id(agent-9·ag-fake·uuid)는 title 에만(`HD.busy.look(item, names)`). 고른 카드·이어진 카드에서도 강조 테두리가 먼저 보인다. 화면을 덮는 메타는 없다: 제목 · 칩 · 배지가 화면 밑 한 줄(제목은 그 앞에서 말줄임), 화면 안 요소 메모 핀(`.npin`)만 화면 위
 
 ## 고치면 돌릴 것

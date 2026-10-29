@@ -1,6 +1,7 @@
 /* View — 화면 안 연결: 고른 카드마다 그 화면의 링크(palette.js hd-links)를 받아 출발 버튼에 그 선과 같은 색 테두리 + 번호(hd-links-paint),
    소켓, 연결 패널 줄 목록(ctx.rows → 셸 → view-link-panel), 긴 화면 펼치기. 선·선 태그·강조는 view-lines 하나가 그린다(E20 A) — 색·번호는 ctx.mark(from, to).
-   HD.viewLinks.mount(ctx) → {set(ids), paint(), refresh(), cardEl(id), item(from, i), linksOf(id, cb(items|null)), model(id), demoExpand(id)}
+   HD.viewLinks.mount(ctx) → {set(ids), paint(), refresh(), cardEl(id), item(from, i), linksOf(id, cb(items|null)), model(id), demoExpand(id),
+                              triggers(from, to) → [{text, path}]|null(고른 화면만), hilite(from, to, path|null)(그 버튼 표시 진하게 — R46 선 태그 목록 창)}
    소켓(.sock): 연결 출발 요소마다 출발 카드 위 점 — 보이기는 CSS(트리거 도구), 끌기는 캔버스가 받는다
    ctx = {rowsEl, CARD, sizeOf?(id) → {w, h}, $, $$, title(id), mark(from, to) → {n, color}|null, tagScale(), rows(rows, title),
           isHidden?(id) — 숨긴·삭제 대기 화면은 연결 대상에서 뺀다,
@@ -55,19 +56,37 @@ function mount(ctx) {
   function paintOne(id) {
     var m = models[id], c = cardEl(id); if (!m || !c) return;
     $$('.sock:not(.selsock)', c).forEach(function (n) { n.remove(); });   // 화면 안 표시는 아래 한 번의 hd-links-paint 가 통째로 바꾼다(지우기 메시지를 따로 보내지 않음)
-    var ph = $('.phone', c), sc = ph.offsetWidth / dim(id).w, ts = ctx.tagScale ? ctx.tagScale() : 1, sk = 16 * ts, items = [];
+    var ph = $('.phone', c), sc = ph.offsetWidth / dim(id).w, ts = ctx.tagScale ? ctx.tagScale() : 1, sk = 16 * ts;
     m.items.forEach(function (it, i) {
       var mk = ctx.mark(id, it.to), color = mk ? mk.color : GREY, q = it.rect, b = document.createElement('span');
-      items.push({path: it.path, color: color, n: mk ? mk.n : undefined});
       b.className = 'sock'; b.setAttribute('data-from', id); b.setAttribute('data-i', i); b.setAttribute('data-to', it.to);
       b.style.left = ((q.x + q.w) * sc) + 'px'; b.style.top = ((q.y + q.h / 2) * sc) + 'px'; b.style.background = color;
       b.style.width = b.style.height = sk + 'px'; b.style.margin = (-sk / 2) + 'px 0 0 ' + (-sk / 2) + 'px'; b.style.borderWidth = (2 * ts) + 'px';
       b.title = '끌어서 도착 바꾸기 (지금 → ' + title(it.to) + ')';
       ph.appendChild(b);
     });
-    postTo(id, {type: 'hd-links-paint', items: items});
+    postTo(id, {type: 'hd-links-paint', items: paintItems(id)});
   }
   function paint() { ids.forEach(paintOne); renderLegend(); }
+  // R46: 선 태그 목록 창이 읽는 그 선의 트리거(고른 화면만 — 화면 안 표시가 있는 곳) · 줄에 올린 트리거 표시 진하게(hi, 같은 hd-links-paint 한 번)
+  var lit = {};
+  function triggers(from, to) {
+    var m = models[from]; if (!m) return null;
+    return m.items.filter(function (it) { return it.to === to; }).map(function (it) { return {text: it.text, path: it.path}; });
+  }
+  function hilite(from, to, path) {
+    var was = lit[from] || null, now = path && models[from] && models[from].items.some(function (it) { return it.to === to && it.path === path; }) ? path : null;
+    if (path && !now) console.warn('[hd] 선 태그: 화면 안에 없는 트리거 — 표시하지 않음', from, path);
+    if (was === now) return;
+    if (now) lit[from] = now; else delete lit[from];
+    if (models[from]) postTo(from, {type: 'hd-links-paint', items: paintItems(from)});
+  }
+  function paintItems(id) {                          // 화면 안 표시 목록: 버튼마다 그 선의 색·번호 · 진하게(hi) 하나
+    return models[id].items.map(function (it) {
+      var mk = ctx.mark(id, it.to);
+      return {path: it.path, color: mk ? mk.color : GREY, n: mk ? mk.n : undefined, hi: lit[id] === it.path || undefined};
+    });
+  }
   // 연결 패널 줄: 고른 화면의 연결을 도착마다 하나(선과 같은 색·번호) → 셸이 패널(view-link-panel)에 넘긴다
   function renderLegend() {
     var rows = [];
@@ -107,7 +126,7 @@ function mount(ctx) {
     prev.forEach(function (id) {
       if (ids.indexOf(id) >= 0) return;
       if (!waiters[id]) postTo(id, {type: 'hd-links', on: false});
-      clear(id); delete models[id];
+      clear(id); delete models[id]; delete lit[id];
     });
     if (xpId && (ids.length !== 1 || ids[0] !== xpId)) collapse(xpId);
     rowsEl.classList.toggle('lkwait', ids.some(function (id) { return !models[id]; }));
@@ -154,7 +173,7 @@ function mount(ctx) {
     var d = e.detail || {}; if (d.phase !== 'done' || ids.indexOf(d.id) < 0) return;
     delete models[d.id]; request(d.id);
   });
-  return {set: set, paint: paint, refresh: refresh, cardEl: cardEl, item: item, linksOf: linksOf, demoExpand: demoExpand,
+  return {set: set, paint: paint, refresh: refresh, cardEl: cardEl, item: item, linksOf: linksOf, demoExpand: demoExpand, triggers: triggers, hilite: hilite,
           model: function (id) { return models[id] || null; }};
 }
 
