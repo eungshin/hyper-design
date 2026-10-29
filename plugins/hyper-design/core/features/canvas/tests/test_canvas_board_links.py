@@ -9,6 +9,7 @@ from test_canvas_v2 import browser, ctx, reload  # noqa: F401
 from test_canvas_board_text import out, _helper  # noqa: F401
 from test_canvas_edit import fit_view
 from test_canvas_board_notes import _state, _until, _rows, _seed
+from test_canvas_chat_log import served  # noqa: F401
 
 SHOT = os.environ.get("HD_R47_SHOT")                 # 눈으로 볼 때만: 스크린숏 폴더
 
@@ -19,6 +20,7 @@ LINE_MID = """(id) => { const p = document.querySelector('#blk-h g.blk-e[data-id
 CARD_PT = """() => { for (const c of document.querySelectorAll('#rows .card')) { const p = c.querySelector('.phone'); if (!p) continue;
   const b = p.getBoundingClientRect(), x = b.left + 40, y = b.top + Math.min(b.height / 2, 200);
   const e = document.elementFromPoint(x, y); if (e && e.closest('.card') === c) return {x, y, id: c.dataset.id}; } return null; }"""
+CACHE = "() => Object.keys(JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => k.indexOf('hd-board-links:') === 0)) || '{}'))"
 DRAWN = "() => [...document.querySelectorAll('#blk-l path.blk:not(.blk-tmp)')].map(p => p.dataset.id)"
 
 
@@ -162,15 +164,17 @@ def test_deleting_a_note_takes_its_links_and_undo_brings_both_back(ctx, out):
         rows = _rows(pg)
         pg.keyboard.press("Delete")
         assert pg.locator('.bnote[data-id="na"]').count() == 0
-        assert _until(lambda: sorted(_links(out)) == ["l3"]), "지운 메모에 닿은 선을 거둔다(없는 끝 선은 남김)"
+        assert sorted(pg.evaluate(CACHE)) == ["l3"], "지운 메모에 닿은 선을 바로 거둔다(없는 끝 선은 남김)"
+        assert _until(lambda: sorted(_links(out)) == ["l3"], 25), "파일에도(같은 PUT — 이 고정본 도우미는 PUT 이 10초쯤 걸릴 때가 있다)"
         assert pg.evaluate(DRAWN) == [] or _until(lambda: pg.evaluate(DRAWN) == [])
         assert _rows(pg) == rows + 1, "메모 지우기 한 줄(선 거두기는 줄을 더하지 않는다)"
         pg.keyboard.press("Control+z")
         assert pg.locator('.bnote[data-id="na"]').count() == 1
-        assert _until(lambda: sorted(_links(out)) == ["l1", "l2", "l3"]), "되돌리면 선도 돌아온다"
+        assert _until(lambda: sorted(pg.evaluate(CACHE)) == ["l1", "l2", "l3"]), "되돌리면 선도 돌아온다"
         assert _until(lambda: sorted(pg.evaluate(DRAWN)) == ["l1", "l2"])
         pg.keyboard.press("Control+Shift+z")
-        assert _until(lambda: sorted(_links(out)) == ["l3"]), "다시 하기 = 다시 거둔다"
+        assert _until(lambda: sorted(pg.evaluate(CACHE)) == ["l3"]), "다시 하기 = 다시 거둔다"
+        assert _until(lambda: sorted(_links(out)) == ["l3"], 25)
     finally:
         srv.shutdown(); srv.server_close()
     assert not errors, errors
@@ -190,11 +194,11 @@ def test_renaming_a_row_folder_keeps_its_links_and_undo_follows_back_and_reader_
     try:
         assert pg.evaluate(DRAWN) == ["l1"], "줄 제목 끝 선이 그려진다"
         pg.evaluate("([a, b]) => document.dispatchEvent(new CustomEvent('hd-row-rename', {detail: {from: a, to: b}}))", [group, group + " 새 이름"])
-        assert _until(lambda: _links(out).get("l1", {}).get("to") == "folder:" + group + " 새 이름"), "줄 이름을 바꾸면 선 끝이 따라간다"
+        assert _until(lambda: _links(out).get("l1", {}).get("to") == "folder:" + group + " 새 이름", 25), "줄 이름을 바꾸면 선 끝이 따라간다"
         assert _until(lambda: pg.evaluate(DRAWN) == ["l1"]), "새 이름 줄 제목에 그대로 그려진다"
         pg.wait_for_timeout(300)
         pg.keyboard.press("Control+z")
-        assert _until(lambda: _links(out).get("l1", {}).get("to") == "folder:" + group), "줄 이름 되돌리기 = 선 끝도 옛 이름으로"
+        assert _until(lambda: _links(out).get("l1", {}).get("to") == "folder:" + group, 25), "줄 이름 되돌리기 = 선 끝도 옛 이름으로"
 
         pg.evaluate("document.documentElement.dataset.hdTab = 'reader'")
         _close(pg)
@@ -209,3 +213,57 @@ def test_renaming_a_row_folder_keeps_its_links_and_undo_follows_back_and_reader_
         srv.shutdown(); srv.server_close()
     assert not errors, errors
     pg.close()
+
+
+PAY_PT = """(id) => { const c = document.querySelector('#rows .card[data-id="' + id + '"]'), p = c && c.querySelector('.phone'); if (!p) return null;
+  const b = p.getBoundingClientRect(), x = b.left + 40, y = b.top + Math.min(b.height / 2, 200), e = document.elementFromPoint(x, y);
+  return e && e.closest('.card') === c ? {x, y} : null; }"""
+
+
+@pytest.mark.area("chat", "notes", "tools")
+def test_linking_a_note_to_a_screen_shows_the_card_badge_at_once_and_send_carries_the_card_block(served, ctx):
+    """통합(R47 A+B): 판에서 끌어 이은 선 = 정보 카드의 진실 원천(BL.map) — 레이어 배지가 바로 '카드 1', 보낸 요청문에 그 화면 카드 한 번."""
+    from test_canvas_chat_log import call, open_page
+    from test_canvas_chat_memo import memo
+    out, srv = served
+    rev = call(srv, "GET", "/api/state")[1].get("rev", 0)
+    seed = [memo("m1", "pay", 1, "결제 버튼을 더 크게"), memo("m2", "done", 1, "완료 문구를 짧게")]
+    board = {"a": {"x": -420, "y": 0, "w": 240, "text": "결제 버튼은 화면에 하나만\n\n이 문단은 빠진다", "at": 1}}
+    assert call(srv, "PUT", "/api/state", {"rev": rev, "state": {"notes": seed, "board-notes": board}})[0] == 200
+    pg, errors = open_page(ctx, srv)
+    try:
+        pg.set_viewport_size({"width": 1440, "height": 1000})
+        pg.keyboard.press("v")
+        assert pg.locator("[data-ly='pay'] .ly-card").count() == 0, "선이 없으면 배지 없음"
+        _close(pg, "a")
+        to = pg.evaluate(PAY_PT, "pay")
+        assert to, "pay 카드가 보이지 않음"
+        _drag_dot(pg, "a", "right", to)
+        assert _until(lambda: [v["to"] for v in (_state(out).get("board-links") or {}).values()] == ["screen:pay"]), _state(out).get("board-links")
+        pg.wait_for_function("document.querySelector('[data-ly=\"pay\"] .ly-card')", timeout=5000)
+        assert pg.inner_text("[data-ly='pay'] .ly-card") == "카드 1", "잇자마자 레이어 배지(새로고침 없이)"
+        assert pg.locator("[data-ly='done'] .ly-card").count() == 0
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(100)
+        pg.keyboard.press("Control+z")                  # 선 잇기 되돌리기 = 선만 바뀜(메모는 그대로)
+        assert _until(lambda: not _state(out).get("board-links")), "되돌리면 선이 빠진다"
+        pg.wait_for_function("!document.querySelector('[data-ly=\"pay\"] .ly-card')", timeout=5000)   # 선만 바뀌어도 배지가 따라온다
+        pg.keyboard.press("Control+Shift+z")
+        pg.wait_for_function("document.querySelector('[data-ly=\"pay\"] .ly-card')", timeout=5000)
+        assert pg.inner_text("[data-ly='pay'] .ly-card") == "카드 1"
+
+        ta = "#hdchat textarea"
+        pg.click(ta); pg.keyboard.type("/me")
+        pg.wait_for_selector("#hdchat .ch-cmds li[data-cmd='memo'][aria-selected='true']", timeout=5000)
+        pg.keyboard.press("Enter")
+        pg.wait_for_selector("#hdchat .ch-chip.memos", timeout=5000)
+        pg.click(ta); pg.keyboard.type("같이 반영해 줘"); pg.keyboard.press("Enter")
+        pg.wait_for_function("window.__hdLastHelper && window.__hdLastHelper.forward", timeout=20000)
+        req = pg.evaluate("window.__hdLastSend")
+        assert req.count("유의(정보 카드):") == 1, req
+        lines = req.split("\n")
+        i = lines.index("   유의(정보 카드):")
+        assert " screen=pay " in lines[i - 1], "pay 항목 머리 바로 아래"
+        assert lines[i + 1] == "   - 결제 버튼은 화면에 하나만" and "이 문단은 빠진다" not in req, req
+    finally:
+        pg.close()
+    assert not errors, errors

@@ -17,7 +17,7 @@
 | `modules/edits.js` | Model | `request(notes, out, sizes?, context?)` — 화면마다 첫 항목 머리 바로 아래 줄마다 세 칸 들여 한 번. 제공자가 없거나 빈 글 = 예전과 한 글자도 같은 요청문 |
 | `modules/view-send.js` | View | 보낼 때 `ctx.cardData()` 를 한 번 읽어 제공자를 만든다(`HD.infoCard.forScreen`). 칸이 없으면 카드 없이, 제공자가 던지면 `[hd]` 경고 + 그 화면은 카드 없이 |
 | `modules/layers.js` · `view-layers.js` | Model · View | `build(…, cards)` → 화면 줄·줄(묶음) 줄에 `card: N` · View 가 이름 뒤 '카드 N' 배지(`.ly-card`, 회색 테두리 알약). 칸이 없으면 배지 없이 |
-| 셸 | — | `cardData()` → `{notes: BN.map(), links: 상태 이름 board-links 저장값({} = 아직 없음 · 깨짐 = [hd] 경고 + {}), groups: {화면 id: 카드의 줄 제목}}` 를 `viewSend`·`viewLayers` 에 `cardData` 칸으로(붙이는 줄만, `// ---- R47` 묶음) |
+| 셸 | — | `cardData()` → `{notes: BN.map(), links: BL.map()(view-board-links — 상태 이름 board-links 의 주인, 없으면 {}), groups: {화면 id: 카드의 줄 제목}}` 를 `viewSend`·`viewLayers` 에 `cardData` 칸으로(붙이는 줄만, `// ---- R47` 묶음) |
 | `hd/hd_info_card.py` | Model(Python) | 같은 규칙 미러 + `cards_for(state, groups, screens)`. `hd notes`·`hd wait` 사람용 글에 화면마다 첫 메모 아래 네 칸 들여 한 번(`hd_sdk/text.notes(ns, cards)`), `--json` 모양은 그대로. 줄 = screens.json `group`(`Project.groups`) |
 
 ## 규칙

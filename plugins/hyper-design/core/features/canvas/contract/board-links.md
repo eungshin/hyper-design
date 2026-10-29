@@ -7,8 +7,8 @@
 | 모듈 | 층 | 맡은 일 · 가진 상태 · 받는 것 · 내보내는 것 |
 |---|---|---|
 | `modules/board-links.js` | Model | 선 모양·잇기(`add` — 메모에서만, 자기 자신·같은 방향 같은 쌍 거절)·끊기(`remove`)·이름(`rename`)·저장값 거르기(`parse`)·지운 메모의 선(`touching` `prune`)·이름 바뀐 끝 따라가기(`retarget`)·그릴 선(`live`)·409 합치기(`merge`)·선 경로(`anchor` `nearSide` `path` `mid`). 상태 없음. 메모 id 는 글자로만 안다(board-notes 를 부르지 않음). `HD.boardLinks = {NAME, LABEL_MAX, SIDES, KINDS, parse, end, newId, add, remove, rename, touching, prune, retarget, live, merge, anchor, nearSide, path, mid}` |
-| `modules/view-board-links.js` | View | 상태 이름 `board-links`(`hd-board-links:<hash>`)의 주인: `#stage` 안 보이는 선 `svg#blk-l`(카드 아래) · 누르는 띠와 이름 `svg#blk-h`(카드 위, 카드 상자를 뚫은 clip) · 변의 점 `#blk-dots`. 상태 = 선 map · 고른 선 · 끄는 중 · 거둔 선(메모 id 마다, 메모리만). 등록부 `boardLinks`(needs `$`·`$$`·`store`·`key`·`record`·`toast`·`warn`·`view`·`rowsEl`·`boardNotes`) → `{attach({tool()}), reload(), map(), notesChanged(), selected(), schedule()}` · 의도 받음 document `hd-rows-changed` {renamed: {from, to}}(view-rows) |
-| 셸 | — | `BL = FT.boardLinks.attach({tool})` · `adoptState` 의 `has('board-links')` → `BL.reload()` · `BN` 의 `changed` → `BL.notesChanged()`(메모 바뀜 신호 — view-board-notes 는 선을 모른다) · ctx `boardLinks()` = `BL.map()`(없으면 `{}`, 정보 카드가 읽기만) (붙이는 줄만) |
+| `modules/view-board-links.js` | View | 상태 이름 `board-links`(`hd-board-links:<hash>`)의 주인: `#stage` 안 보이는 선 `svg#blk-l`(카드 아래) · 누르는 띠와 이름 `svg#blk-h`(카드 위, 카드 상자를 뚫은 clip) · 변의 점 `#blk-dots`. 상태 = 선 map · 고른 선 · 끄는 중 · 거둔 선(메모 id 마다, 메모리만). 등록부 `boardLinks`(needs `$`·`$$`·`store`·`key`·`record`·`toast`·`warn`·`view`·`rowsEl`·`boardNotes`) → `{attach({tool(), changed()?}), reload(), map(), notesChanged(), selected(), schedule()}` · 의도 받음 document `hd-rows-changed` {renamed: {from, to}}(view-rows) |
+| 셸 | — | `BL = FT.boardLinks.attach({tool, changed → LY.render})`(선이 바뀌면 레이어 '카드 N' 배지) · 정보 카드 `cardData().links` = `BL.map()` · `adoptState` 의 `has('board-links')` → `BL.reload()` · `BN` 의 `changed` → `BL.notesChanged()`(메모 바뀜 신호 — view-board-notes 는 선을 모른다) · ctx `boardLinks()` = `BL.map()`(없으면 `{}`, 정보 카드가 읽기만) (붙이는 줄만) |
 | `state-file` · `history` · `save-merge` | Model·ViewModel | `NAMES`·`TRACK` 에 `board-links` · 409 = `HD.boardLinks.merge`(선마다, 같은 선을 둘 다 바꾸면 잃은 변경) · 이름표 '판 메모 선' |
 
 의존 방향: `board-notes` ← `board-links`(메모 id 글자만) ← `info-card`(둘을 평범한 데이터로) ← 보내기·대화창·CLI(제공 함수만 받음).
@@ -25,7 +25,7 @@
 - 줄 이름 바꾸기(R31): `hd-rows-changed` {renamed} → `retarget('folder:<옛>', 'folder:<새>')`(기록 없이 — 그 줄의 되돌리기가 다시 이름을 바꿔 따라온다). 바꾸면 같은 쌍이 되는 선은 하나만 남긴다. 화면 id 가 바뀌는 신호는 아직 없다(그 선은 남고 그려지지 않음)
 - 읽기만인 탭(`html[data-hd-tab=reader]`): 점 없음 · 끊기(토스트)·이름 안 됨 · 고르기만
 - 쉬는 동안 하는 일 없음: 선이 없으면 그리지 않는다. 메모·카드 자리(MutationObserver)·배율이 바뀌면 한 프레임에 한 번 다시
-- 선은 아직 아무것도 보내지 않는다(단계 A) — 정보 카드로 요청에 싣는 것은 단계 B
+- 이은 선은 정보 카드(`contract/info-card.md`)로 보내기 요청문에 화면마다 '유의(정보 카드):' 로 실린다 — 셸 `cardData()` 가 `BL.map()` 을 읽는다(진실 원천 하나)
 
 ## 고치면 돌릴 것
 

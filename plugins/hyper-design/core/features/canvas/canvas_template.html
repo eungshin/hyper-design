@@ -690,12 +690,10 @@ var FKEY = 'hd-folders:' + hashStr(KEYPATH), folders = HD.folders.load(ST.getIte
 function setFolders(n) { if (n === folders) return; folders = n; HD.folders.save(folders, ST.setItem, FKEY); }
 function pruneFolders() { setFolders(HD.folders.reduce(folders, {type: 'prune', live: $$('.card', rowsEl).map(function (c) { return c.dataset.id; })})); }
 // ---- R47 정보 카드 읽기(modules/info-card.js 가 쓰는 그냥 데이터) — 보내기(view-send)·레이어 배지(view-layers) 둘이 같은 칸. 주인: 판 메모 = view-board-notes(BN) ·
-//      연결 = 상태 이름 board-links(r47 phase A — 아직 없으면 {}) · 줄 = 판의 묶음 이름(screens.json group = 카드의 줄 제목)
+//      연결 = view-board-links(BL — 상태 이름 board-links 의 주인, 없으면 {}) · 줄 = 판의 묶음 이름(screens.json group = 카드의 줄 제목)
 function cardData() {
-  var links = {}, t = ST.getItem('hd-board-links:' + hashStr(KEYPATH));
-  if (t) { try { links = JSON.parse(t); } catch (e) { console.warn('[hd] board-links 저장값이 깨졌어요 — 정보 카드 없이'); } }
   var groups = {}; $$('.card', rowsEl).forEach(function (c) { groups[c.dataset.id] = CP.group(c); });
-  return {notes: BN ? BN.map() : {}, links: links && typeof links === 'object' && !Array.isArray(links) ? links : {}, groups: groups};
+  return {notes: BN ? BN.map() : {}, links: BL ? BL.map() : {}, groups: groups};
 }
 // ---- R47 끝
 // 레이어 패널 View(modules/view-layers.js · 나무 modules/layers.js, 조각 4) — 숨김·잠금·고르기 주인은 셸
@@ -1379,7 +1377,7 @@ AB = FT.artboard ? FT.artboard.attach({
   guard: function (ids) { if (LF.guard(ids)) ids = ids.filter(function (id) { return !LF.isLocked(id); }); return ids; }}) : null;
 BN = FT.boardNotes ? FT.boardNotes.attach({tool: function () { return tool; }, setTool: setTool,
   changed: function () { if (LY) LY.render(); if (BL) BL.notesChanged(); }, clear: function () { SL.dispatch({type: 'clear'}); }}) : null;   // 판 메모(R23) · R47 메모 바뀜 = 선 거두기: T 로 빈 판 누르기·V 두 번 누르기 = 만들기
-BL = FT.boardLinks ? FT.boardLinks.attach({tool: function () { return tool; }}) : null;   // R47 판 메모 선(점 끌어 잇기 — 선택(V)에서만)
+BL = FT.boardLinks ? FT.boardLinks.attach({tool: function () { return tool; }, changed: function () { if (LY) LY.render(); }}) : null;   // changed = 선이 바뀜 → 레이어 '카드 N' 배지   // R47 판 메모 선(점 끌어 잇기 — 선택(V)에서만)
 // 빈 레이아웃 승격(modules/view-promote.js, #241 R2) — 카드 자리·폴더의 주인은 셸이라 읽기/쓰기만 넘긴다. 붙지 못했으면 승격 없이(빈 카드가 남음, [hd] 알림)
 var PR = FT.promote ? FT.promote.attach({group: function (id) { var c = VL.cardEl(id); return c ? CP.group(c) : ''; },
   pos: {get: CP.map, set: function (m) { CP.replace(m); drawArrows(); }},

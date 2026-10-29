@@ -8,7 +8,7 @@
    화면 id 가 바뀌는 신호는 아직 없다 — 그런 화면 끝은 저장에 남고 그리지 않는다.
    쉬는 동안 하는 일 없음: 선이 없으면 그리지 않는다. 메모·카드 자리·배율이 바뀌면(MutationObserver) 한 프레임에 한 번 다시.
    등록부 기능 'boardLinks'(needs $ · $$ · store · key · record · toast · warn · view · rowsEl · boardNotes) → {attach(A), reload(), map(), notesChanged(), selected(), schedule()}
-     A(셸이 attach 로 건넴) = {tool() → 지금 도구}. 셸은 adoptState 의 'board-links' 에서 reload(), 메모 바뀜(BN changed)에서 notesChanged() 를 부른다. ctx.boardLinks() = map() */
+     A(셸이 attach 로 건넴) = {tool() → 지금 도구, changed()?(선 map 이 바뀜 — 레이어 배지)}. 셸은 adoptState 의 'board-links' 에서 reload(), 메모 바뀜(BN changed)에서 notesChanged() 를 부른다. ctx.boardLinks() = map() */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -60,7 +60,8 @@ function mount(ctx) {
     try { ctx.store.setItem(KEY, JSON.stringify(map)); }
     catch (e) { ctx.toast('판 메모 선을 저장하지 못했어요'); ctx.warn('[hd] 판 메모 선 저장 실패: ' + (e && e.message || e)); }
   }
-  function put(m) { map = m; if (sel && !map[sel]) sel = null; write(); schedule(); }
+  function tell() { if (A && A.changed) A.changed(); }   // 선이 바뀜(셸 = 레이어 '카드 N' 배지 다시)
+  function put(m) { map = m; if (sel && !map[sel]) sel = null; write(); schedule(); tell(); }
   function commit(after, before, label) { put(after); ctx.record({label: label, undo: function () { put(before); }, redo: function () { put(after); }}); }
 
   // ------------------------------------------------ 자리(판 좌표)
@@ -247,7 +248,7 @@ function mount(ctx) {
   load();
   return {
     attach: function (a) { A = a; watch(); notesChanged(); return this; },
-    reload: function () { load(); schedule(); },      // 기록 줄 오가기·다른 곳에서 바뀐 상태 파일
+    reload: function () { load(); schedule(); tell(); },      // 기록 줄 오가기·다른 곳에서 바뀐 상태 파일
     map: function () { return JSON.parse(JSON.stringify(map)); },
     notesChanged: notesChanged,
     selected: function () { return sel; },
