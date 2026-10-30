@@ -89,9 +89,40 @@ def test_script_markup_keeps_entities_and_escapes_new_ones():
     assert "<span><b>옵션</b> — 이름 바꾸기 · 접두어 &amp; 접미어 · 기본값 &lt;되돌리기&gt;</span>" in out
 
 
-def test_script_markup_edit_across_bold_boundary_rewrites_that_element_plainly():
-    out = edit(TOOLS, "li:nth-of-type(1) > span:nth-of-type(1)", "새 설명 한 줄", LR)
-    assert "<span>새 설명 한 줄</span>" in out
+def test_script_markup_edit_across_bold_boundary_puts_new_text_in_the_first_part():
+    out = edit(TOOLS, "li:nth-of-type(1) > span:nth-of-type(1)", "새 설명 한 줄", LR)   # 다 바꿈 = 첫 글자의 서식(굵게)으로 — 10-30 Figma 관례
+    assert "<span><b>새 설명 한 줄</b></span>" in out
+
+
+# 파일 HTML 에 그대로 있는 서식 섞인 글(10-30): 바뀐 부분만 — 새로 친 글자는 바로 앞 글자의 서식을 따른다(Figma·포토샵 관례),
+# 서식 경계에 걸친 고치기 = 새 글은 첫 조각 서식으로, 나머지 조각은 남은 글만(서식 태그는 그대로)
+P = '<main>\n  <p class="lead">\n    <b>왼쪽으로</b> — 탭  순서를 <em>바꿔요</em>.\n  </p>\n</main>'
+P_OLD = "왼쪽으로 — 탭 순서를 바꿔요."
+
+
+@pytest.mark.parametrize("old", [P_OLD, None])        # old 가 없어도(옛 메모) 파일 글로 견준다
+def test_static_formatted_text_changes_only_the_edited_words(old):
+    out = edit(P, "p", "왼쪽으로 — 탭 차례를 바꿔요.", old)
+    assert '<p class="lead">\n    <b>왼쪽으로</b> — 탭  차례를 <em>바꿔요</em>.\n  </p>' in out
+
+
+def test_static_typing_at_a_format_boundary_takes_the_previous_character_style():
+    assert "<b>왼쪽으로만</b> — 탭" in edit(P, "p", "왼쪽으로만 — 탭 순서를 바꿔요.", P_OLD)
+
+
+def test_static_edit_across_formats_keeps_the_tags_and_puts_new_text_in_the_first_part():
+    out = edit(P, "p", "왼쪽 이동 바꿔요.", P_OLD)
+    assert "<b>왼쪽 이동</b> <em>바꿔요</em>." in out
+
+
+def test_static_emptied_format_tag_is_removed_so_the_next_edit_still_works():
+    out = edit(P, "p", "왼쪽으로 — 탭 순서를.", P_OLD)            # <em>바꿔요</em> 가 비면 태그째 빠진다
+    assert "<em>" not in out and "탭  순서를." in out
+    assert "<em></em>" not in edit(out, "p", "왼쪽으로 — 탭 순서", "왼쪽으로 — 탭 순서를.")
+
+
+def test_static_line_break_keeps_the_old_whole_rewrite():
+    assert "<p class=\"lead\">\n    첫 줄<br>둘째 줄\n  </p>" in edit(P, "p", "첫 줄\n둘째 줄", P_OLD)
 
 
 # ---------------------------------------------------------------- apply_edits: 캔버스가 보낸 old 가 화면 파일까지

@@ -282,7 +282,7 @@ def _icon_text_patch(src, el, value):
     return a, b, "".join(out)
 
 
-def _text_patch(src, el, value, path):
+def _text_patch(src, el, value, path, old=None):
     if el.void or el.close is None:
         raise ValueError("글자를 넣을 수 없는 요소예요(닫는 태그 없음): " + path)
     if not _inline_only(el):
@@ -291,6 +291,10 @@ def _text_patch(src, el, value, path):
         raise ValueError(BLOCK_REASON)
     a, b = el.open_end, el.close[0]
     inner = src[a:b]
+    if "\n" not in value and not re.search(r"<br\b", inner, re.I) and el.children:   # 서식 섞인 글 = 바뀐 부분만(10-30)
+        r = _markup_edit(inner, old if old is not None else _plain(src, el), value)
+        if r is not None:
+            return a + r[0], a + r[1], r[2]
     lead = inner[: len(inner) - len(inner.lstrip())]
     trail = inner[len(inner.rstrip()):] if inner.strip() else ""
     return a, b, lead + html.escape(value, quote=False).replace("\n", "<br>") + trail
@@ -470,6 +474,7 @@ def _script_text_patch(src, old, value, path):
 
 
 TAG_RX = re.compile(r"<[^>]*>")
+EMPTY_INLINE = re.compile(r"<(b|strong|i|em|u|s|small|mark|span|code|sub|sup)\b[^>]*></\1>", re.I)
 
 
 def _segments(frag):                                 # 조각 원문 → 글 조각 [(원문 시작, 원문 끝, 풀린 글)] — 태그 사이 글만(엔티티 풀고)
@@ -489,26 +494,69 @@ def _js_quote(v, q):                                 # 새 글 → 그 문자열
 
 
 def _markup_edit(frag, old, value):
-    """서식 낀 조각 원문(frag) 안 글을 old → value 로 — 바뀐 부분이 글 조각 하나 안이면 그 조각만(굵게 등 서식 그대로),
-    여러 조각에 걸치면 조각 전체를 그냥 글로. (조각 안 상대 시작, 끝, 새 원문)."""
+    """서식 낀 조각 원문(frag) 안 보인 글을 old → value 로, 바뀐 부분만(Figma·포토샵 관례) → (조각 안 상대 시작, 끝, 새 원문) | None(글이 다름).
+    보인 글 = 태그 사이 글을 엔티티 풀고 공백 하나로 · 앞뒤 공백 빼고(innerText 처럼). 새로 친 글자는 바로 앞 글자의 조각(서식)에 —
+    서식 경계에 걸치면 새 글은 첫 조각에, 걸친 나머지 조각은 남은 글만(태그는 그대로). 원문의 공백·줄바꿈은 바뀐 곳 밖이면 그대로."""
     segs = _segments(frag)
-    plain = "".join(t for _, _, t in segs)
-    if _squash(plain) != old:
+    raw = "".join(t for _, _, t in segs)
+    vis, at = [], []                                 # 보인 글자 하나마다 raw 의 자리(공백 덩어리 = 첫 칸)
+    for k, ch in enumerate(raw):
+        if ch.isspace():
+            if vis and vis[-1] != " ":
+                vis.append(" "); at.append(k)
+        else:
+            vis.append(ch); at.append(k)
+    if vis and vis[-1] == " ":
+        vis.pop(); at.pop()
+    vis = "".join(vis)
+    if vis != old:
         return None
+    n = min(len(vis), len(value))
     i = 0
-    while i < min(len(plain), len(value)) and plain[i] == value[i]:
+    while i < n and vis[i] == value[i]:
         i += 1
     j = 0
-    while j < min(len(plain), len(value)) - i and plain[-1 - j] == value[-1 - j]:
+    while j < n - i and vis[-1 - j] == value[-1 - j]:
         j += 1
-    a, b, mid = i, len(plain) - j, value[i:len(value) - j]
-    pos = 0
-    for s0, s1, t in segs:                           # 바뀐 [a, b) 를 다 품는 글 조각 하나
-        if pos <= a and b <= pos + len(t):
-            nt = t[:a - pos] + mid + t[b - pos:]
-            return s0, s1, html.escape(nt, quote=False)
+    a, b, mid = i, len(vis) - j, value[i:len(value) - j]
+    if a == b and not mid:
+        return 0, 0, ""
+    def end_of(k):                                   # 보인 글자 k 의 raw 끝(공백 덩어리면 덩어리 끝까지)
+        e = at[k] + 1
+        if vis[k] == " ":
+            while e < len(raw) and raw[e].isspace():
+                e += 1
+        return e
+    ra = at[a] if a < len(vis) else (end_of(len(vis) - 1) if vis else 0)
+    rb = end_of(b - 1) if b > a else ra
+    if a == b and a > 0:                             # 끼워 넣기 = 바로 앞 글자 뒤(그 글자 서식)
+        ra = rb = end_of(a - 1) if vis[a - 1] != " " else at[a - 1] + 1
+    out, pos, first, lo, hi = {}, 0, True, None, None
+    for idx, (s0, s1, t) in enumerate(segs):
+        x, y = max(ra, pos), min(rb, pos + len(t))
+        touch = x < y or (ra == rb and pos <= ra <= pos + len(t) and first and (ra < pos + len(t) or ra == pos + len(t)))
+        if touch and (x < y or first):
+            nt = t[:max(0, x - pos)] + (mid if first else "") + t[max(0, y - pos):]
+            out[idx] = nt; first = False
+            lo = s0 if lo is None else lo; hi = s1
         pos += len(t)
-    return 0, len(frag), html.escape(value, quote=False)
+    if lo is None:
+        return None
+    piece, cur = [], lo
+    for idx, (s0, s1, t) in enumerate(segs):
+        if s0 < lo or s1 > hi:
+            continue
+        piece.append(frag[cur:s0]); cur = s1
+        piece.append(html.escape(out[idx], quote=False) if idx in out else frag[s0:s1])
+    piece.append(frag[cur:hi])
+    piece = frag[:lo] + "".join(piece) + frag[hi:]      # 요소 안 전체에서 — 빈 태그의 여닫는 짝은 바뀐 글 조각 밖에 있다
+    lo, hi = 0, len(frag)
+    while True:                                      # 글이 다 빠진 서식 태그는 지운다 — 빈 <b></b> 가 남으면 다음 고치기에서 블록으로 읽힌다
+        q = EMPTY_INLINE.sub("", piece)
+        if q == piece:
+            break
+        piece = q
+    return lo, hi, piece
 
 
 def _script_markup_patch(src, old, value):
@@ -555,6 +603,7 @@ def _op_patch(src, el, op, value, path):
             old, value = _squash(str(value.get("old") or "")), str(value.get("value", ""))
             if old and old not in _plain(src, el):
                 return _script_text_patch(src, old, value, path)
+            return _text_patch(src, el, value, path, old or None)
         return _text_patch(src, el, value, path)
     if op == "remove":
         return _remove_patch(el, path)
