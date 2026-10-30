@@ -1185,6 +1185,34 @@
         "test_canvas_ai_undo.py::test_history_row_undo_puts_old_file_back_and_card_swaps"
       ],
       "note": "고리는 모르면 숨김(0% 아님). 모델 바꾸기는 CLI 가 없어 보기만"
+    },
+    {
+      "slice": "R50 요소 막대에 기능 고정하기(메뉴 줄 핀 · 막대 오른쪽 클릭 '막대에서 빼기' · prefs elbarPins · 최대 6)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 15
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "옛 '글자' 숨김 테스트가 새 규칙(꺼진 아이콘)에서 깨짐 — 뜻을 읽고 다시 씀"
+        },
+        {
+          "by": "browser",
+          "what": "꺼진 핀(aria-disabled)은 playwright 가 누르지 않음 — force 로 '눌러도 고정 안 됨'을 확인"
+        }
+      ],
+      "waste": "head 주석의 'HD.blocks = {' 를 끝 표지로 잘못 잡아 blocks.js 를 한 번 되돌림",
+      "flaky": [],
+      "note": "핀은 줄 단추 밖 span[role=button] — '#cmenu button' 목록을 쓰는 옛 테스트를 건드리지 않게"
     }
   ]
 }

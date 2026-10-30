@@ -6,8 +6,10 @@ HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 �
                 askText(act, h) → 요청 글(앱 카드), chainOf(h, chain) → '고르기 ▸' 목록(그 요소 + 조상, 같은 상자 감싸기는 건너뜀, 51-3),
                 tone(h, o) → 'app'|''(요소 상자 색 — 앱 카드 = 요청으로만, Figma 인스턴스 보라 자리, 51-3), parentPick(h, chain) → 고를 상위 hit|null,
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글,
-                R17 시안 A: icons(h, o) → 막대 아이콘 [{act, label, key, ask}](메모 · 글자(글을 바꿀 수 있을 때만) · AI · 전체 메뉴 ⋯),
-                menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title, sub?:[같은 모양]}]}](sub = 옆 목록 '부품 ▸'), keyOf(act, h, where) → 실제로 듣는 키 힌트|''}
+                R17 시안 A · R50: icons(h, o) → 막대 아이콘 [{act, label, key, ask, on, title}](o.pins = 고정 목록, 없으면 메모·글자·AI — 차례 그대로 + 전체 메뉴 ⋯ 맨 끝, 못 쓰는 동작 = on:false + 까닭 title),
+                menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title, pinned?, pinOk?, pinWhy?, sub?:[같은 모양]}]}](sub = 옆 목록 '부품 ▸', pin 칸 = 실제 동작 줄만), keyOf(act, h, where) → 실제로 듣는 키 힌트|'',
+                R50 고정: PIN_MAX(6) · PINS_DEFAULT · pins(raw) → {list, warn}(없음 = 기본 · 배열 아님 = 기본 + 경고 · 모르는 act 버림 + 경고 · 중복 제거 · 6개 자르기) ·
+                pin(list, act) → {pins} | {why}(토글 — 새로 고정 = 끝에, 6개면 거절) · pinState(list, act) → {on, ok, why}(메뉴 줄 핀)}
    o.links = 셸이 '연결' 묶음으로 덧붙일 항목 수 — 메뉴 전체가 MENU_MAX(10) 를 넘으면 '주소 복사'(R30, Ctrl+L 로도 됨)만 뺀다(안전줄 — '부품 ▸' 로 합친 뒤로는 넘지 않음) */
 (function () {
 'use strict';
@@ -159,7 +161,12 @@ function menu(h, o) {
   h = h || {}; o = o || {};
   var by = {};
   bar(h, o).forEach(function (b) { by[b.act] = b; });
-  function item(act) {
+  function withPin(it) {                             // R50: 실제 동작 줄 = 핀 칸(pinned·pinOk), 묶음 머리·고르기 목록은 없음
+    if (!it || it.sub || PINNABLE.indexOf(it.act) < 0) return it;
+    var ps = pinState(o.pins, it.act); it.pinned = ps.on; it.pinOk = ps.ok; it.pinWhy = ps.why; return it;
+  }
+  function item(act) { return withPin(item0(act)); }
+  function item0(act) {
     if (PICK_ONLY[act]) return {act: act, label: MENU[act], key: keyOf(act, h, o.where), on: true, ask: false, title: ''};
     if (SUB[act]) {
       var sub = SUB[act].map(item).filter(Boolean);
@@ -174,15 +181,53 @@ function menu(h, o) {
   if (n > MENU_MAX) gs.forEach(function (g) { g.items = g.items.filter(function (it) { return it.act !== 'addr'; }); });
   return gs.filter(function (g) { return g.items.length; });
 }
+// ---- R50 막대에 고정하기(Chrome 확장 메뉴의 줄마다 핀 · Office 빠른 실행 '막대에서 빼기'): 고정 목록 = prefs.elbarPins(정리는 여기, 저장은 View)
+//   고정할 수 있는 것 = 메뉴의 실제 동작 줄(옆 목록 '부품 ▸' 안 항목 포함 — 묶음 머리 chain·part 는 아님) + 기본 막대의 AI(메뉴에는 없음, R27 F05)
+var PINNABLE = ['memo', 'text', 'ai', 'attr', 'dup', 'remove', 'insert', 'swap', 'addr'];
+var PINS_DEFAULT = ['memo', 'text', 'ai'];            // 칸 없음 = 지금 막대 그대로
+var PIN_MAX = 6;
+var PIN_FULL = '막대에는 ' + PIN_MAX + '개까지 — 하나를 빼고 고정해 주세요';
+var PIN_NO = '이 동작은 막대에 고정할 수 없어요';
+var NO_ATTR = '이 요소에는 고칠 속성이 없어요';
+function pins(raw) {                                 // 저장값 → {list, warn}(warn = '[hd] …' 한 줄 | '' — 콘솔에 남기는 일은 View)
+  if (raw === undefined || raw === null) return {list: PINS_DEFAULT.slice(), warn: ''};
+  if (!Array.isArray(raw)) return {list: PINS_DEFAULT.slice(), warn: '[hd] 요소 막대 고정 목록이 깨졌어요(배열 아님) — 기본 막대로 보여요'};
+  var list = [], bad = [];
+  raw.forEach(function (a) {
+    if (typeof a !== 'string' || PINNABLE.indexOf(a) < 0) { bad.push(String(a)); return; }
+    if (list.indexOf(a) < 0) list.push(a);
+  });
+  var cut = list.length > PIN_MAX;
+  list = list.slice(0, PIN_MAX);
+  var warn = bad.length ? '[hd] 요소 막대 고정 목록에서 모르는 동작을 뺐어요: ' + bad.join(', ') : cut ? '[hd] 요소 막대 고정 목록이 ' + PIN_MAX + '개를 넘어 뒤를 잘랐어요' : '';
+  return {list: list, warn: warn};
+}
+function pinState(list, act) {                       // 메뉴 줄 핀: on = 고정됨 · ok = 누를 수 있음 · why = 못 누르는 까닭
+  var l = pins(list).list, on = l.indexOf(act) >= 0;
+  if (PINNABLE.indexOf(act) < 0) return {on: false, ok: false, why: PIN_NO};
+  if (!on && l.length >= PIN_MAX) return {on: false, ok: false, why: PIN_FULL};
+  return {on: on, ok: true, why: ''};
+}
+function pin(list, act) {                            // 토글 → {pins: 새 목록} | {why: 거절 까닭} — 새로 고정 = 끝에
+  var l = pins(list).list, st = pinState(l, act);
+  if (!st.ok) return {why: st.why};
+  return {pins: st.on ? l.filter(function (a) { return a !== act; }) : l.concat([act])};
+}
+// 막대 아이콘 = 고정 차례 그대로 + ⋯(손잡이 맨 앞은 View) · 그 요소에 못 쓰는 동작은 숨기지 않고 꺼짐 + 까닭(막대 모양이 요소마다 흔들리지 않게 — '글자' 숨김도 이 규칙으로)
 function icons(h, o) {
   h = h || {}; o = o || {};
-  var out = [{act: 'memo', label: MENU.memo, key: '', ask: false}];
-  var t = bar(h, o).filter(function (b) { return b.act === 'text'; })[0];
-  if (t && t.on) out.push({act: 'text', label: MENU.text + (t.ask ? ' — AI에게 요청' : ''), key: t.ask ? '' : keyOf('text', h, o.where), ask: t.ask});
-  out.push({act: 'ai', label: MENU.ai, key: '', ask: false}, {act: 'more', label: '전체 메뉴', key: '오른쪽 클릭', ask: false});
+  var by = {};
+  bar(h, o).forEach(function (b) { by[b.act] = b; });
+  var out = pins(o.pins).list.map(function (act) {
+    if (PICK_ONLY[act] || act === 'memo') return {act: act, label: MENU[act], key: keyOf(act, h, o.where), ask: false, on: true, title: ''};
+    var b = by[act];
+    if (!b) return {act: act, label: MENU[act], key: '', ask: false, on: false, title: act === 'attr' ? NO_ATTR : PIN_NO};
+    return {act: act, label: MENU[act] + (b.ask ? ' — AI에게 요청' : ''), key: b.ask || !b.on ? '' : keyOf(act, h, o.where), ask: b.ask, on: b.on, title: b.on ? '' : b.title};
+  });
+  out.push({act: 'more', label: '전체 메뉴', key: '오른쪽 클릭', ask: false, on: true, title: ''});
   return out;
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, bar: bar, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, PIN_MAX: PIN_MAX, PINS_DEFAULT: PINS_DEFAULT, pins: pins, pin: pin, pinState: pinState, bar: bar, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
              attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, icons: icons, menu: menu, keyOf: keyOf};
 })();

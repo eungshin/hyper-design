@@ -13,7 +13,10 @@
      → 놓으면 fn('reorder', sel + {dirs, from, to, h: sel.h + {drop: {from, slot, copy}}}) — 같은 부모 안만. Esc = 끌기 취소
      Alt(51-5): 놓을 때 Alt 를 누르고 있으면 복제해 놓기(원본은 제자리) — 끄는 중 Alt = 커서 copy + 끼울 선 옆 '+' 배지 #eldrop-copy. 도우미 없으면 거절(토스트).
        셸은 아직 OP.moves(…, h, dirs) 만 넘기므로 놓기 계획은 h.drop 에 싣는다(dirs 는 셸의 빈 목록 거르기를 지나게 — 51-3 이 셸을 h.drop 으로 바꿀 때까지)
-   HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl']}) → {show(sel), hide(where?), place(), sel(), fire(act), onAct(fn), onPick(fn), onMenu(fn), wrote(res, list)} */
+   R50 막대에 고정: 막대 아이콘 = 손잡이 + 고정 목록(ctx.prefs().elbarPins — 정리·차례·꺼짐·까닭은 HD.blocks.pins·icons) + ⋯. 이 모듈이 고정 목록의 주인(저장 = ctx.savePrefs(), 실패 = 토스트,
+     깨진 값 = 기본 + [hd] 경고 한 번). 메뉴 줄 핀은 셸이 pinState(act)·pin(act) 로 잇는다. 막대 아이콘 오른쪽 클릭 = 작은 메뉴 #elunpin '막대에서 빼기'(⋯·손잡이는 없음).
+   HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl', 'prefs', 'savePrefs']}) → {show(sel), hide(where?), place(), sel(), fire(act), onAct(fn), onPick(fn), onMenu(fn), wrote(res, list),
+     pins() → 고정 목록, pinState(act) → {on, ok, why}, pin(act) → 바뀌었나(토글 — 거절·저장 실패는 토스트)} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -48,13 +51,21 @@ var CSS =
   '#elpop .ep-list{display:flex;flex-wrap:wrap;gap:6px}' +
   '#elpop .ep-part.ask{border-style:dashed;color:#8a5a00}' +
   '#elpop .ep-note{margin:8px 0 0;color:#777;font-size:12px}' +
-  'html[data-hd-tab="reader"] #elbar button{opacity:.35;cursor:not-allowed}';
+  'html[data-hd-tab="reader"] #elbar button{opacity:.35;cursor:not-allowed}' +
+  '#elunpin{min-width:0}';
 var ICON = {                                         // 막대 아이콘(R17 시안 A) — 이름·단축키는 꼬리말·aria-label(blocks.icons)
   grip: '<svg viewBox="0 0 12 16"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>',
   memo: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H10l-6 4z"/></svg>',
   text: '<svg viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg>',
   ai: '<svg viewBox="0 0 24 24"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z"/><path d="M18.5 14.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z"/></svg>',
-  more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>'
+  more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>',
+  // R50 고정할 수 있는 동작의 선 아이콘(같은 15px · stroke 1.8)
+  attr: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
+  dup: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
+  remove: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 4h4M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
+  insert: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="1.5"/><path d="M12 14v6M9 17h6"/></svg>',
+  swap: '<svg viewBox="0 0 24 24"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg>',
+  addr: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
 };
 var RO = '이 탭은 읽기만 해요 — 위쪽 "여기서 편집하기"를 누르면 여기서 편집할 수 있어요';
 var FOLLOW_MS = 15000;
@@ -72,10 +83,30 @@ function mount(ctx) {
   copyBadge.id = 'eldrop-copy'; copyBadge.hidden = true; copyBadge.textContent = '+'; copyBadge.setAttribute('aria-hidden', 'true');
   var tip = document.createElement('div');
   tip.id = 'eltip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
-  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine); document.body.appendChild(copyBadge); document.body.appendChild(tip);
+  var unpin = document.createElement('div');           // R50 막대 아이콘 오른쪽 클릭 = 한 줄 메뉴(우클릭 메뉴와 같은 모양 .cm)
+  unpin.id = 'elunpin'; unpin.className = 'cm'; unpin.setAttribute('role', 'menu'); unpin.setAttribute('aria-label', '막대 아이콘'); unpin.hidden = true;
+  document.body.appendChild(bar); document.body.appendChild(pop); document.body.appendChild(dropLine); document.body.appendChild(copyBadge); document.body.appendChild(tip); document.body.appendChild(unpin);
 
   function reader() { return document.documentElement.dataset.hdTab === 'reader'; }
   function items() { return B.bar(cur.h, {app: cur.app}); }
+  // ---- R50 고정 목록(주인 = 이 모듈, 저장 = 셸 prefs 의 elbarPins)
+  var pinWarned = '';
+  function pinList() {
+    var r = B.pins((ctx.prefs() || {}).elbarPins);
+    if (r.warn && r.warn !== pinWarned) { pinWarned = r.warn; console.warn(r.warn); }   // 깨진 값 = 기본 + 경고 한 번
+    return r.list;
+  }
+  function pinState(a) { return B.pinState(pinList(), a); }
+  function pin(a) {                                   // 토글 — 새로 고정 = 끝에 · 6개면 거절(토스트) · 막대는 바로 다시 그림
+    var r = B.pin(pinList(), a);
+    if (r.why) { ctx.toast(r.why); return false; }
+    var p = ctx.prefs();
+    if (!p) { ctx.toast('막대 고정을 저장하지 못했어요'); console.error('[hd] 요소 막대: 설정(prefs)이 없어요'); return false; }
+    p.elbarPins = r.pins;
+    if (ctx.savePrefs() === null) ctx.toast('막대 고정을 저장하지 못했어요 — 새로고침하면 사라져요');
+    if (cur) { paint(); place(); }
+    return true;
+  }
   function btn(act, label, key, extra) {              // 아이콘 단추 하나 — 이름·단축키는 꼬리말(data-tip·data-key)과 aria-label
     return '<button type="button" data-act="' + act + '" data-tip="' + ctx.esc(label) + '" data-key="' + ctx.esc(key || '') + '" aria-label="' + ctx.esc(label + (key ? ' (' + key + ')' : '')) + '"' + (extra || '') + '>' + ICON[act] + '</button>';
   }
@@ -83,9 +114,10 @@ function mount(ctx) {
     var g = B.grip(cur.h, {app: cur.app});
     hideTip();
     bar.innerHTML = btn('grip', g.title, '', ' class="eb-grip" data-grip="1"' + (g.on ? '' : ' aria-disabled="true"')) +
-      B.icons(cur.h, {app: cur.app, where: cur.where}).map(function (it) {
+      B.icons(cur.h, {app: cur.app, where: cur.where, pins: pinList()}).map(function (it) {   // 고정 차례 그대로 — 못 쓰는 동작 = 꺼진 아이콘 + 까닭(꼬리말)
         return (it.act === 'more' ? '<span class="eb-sep"></span>' : '') +
-          btn(it.act, it.label, it.key, (it.ask ? ' class="ask" data-ask="1"' : '') + (it.act === 'more' ? ' aria-haspopup="menu"' : ''));
+          btn(it.act, it.on ? it.label : it.label + ' — ' + it.title, it.key, (it.ask ? ' class="ask" data-ask="1"' : '') + (it.act === 'more' ? ' aria-haspopup="menu"' : '') +
+              (it.on ? '' : ' aria-disabled="true" data-why="' + ctx.esc(it.title) + '"'));
       }).join('');
     bar.dataset.screen = cur.screen; bar.dataset.path = cur.h.path; bar.dataset.where = cur.where; bar.dataset.app = cur.app ? '1' : '';
   }
@@ -174,7 +206,7 @@ function mount(ctx) {
   }
   function hide(where) {
     if (where && cur && cur.where !== where) return;
-    cur = null; near = null; bar.hidden = true; hideTip(); closePop(); upWait = null; hopWait = null; navQ = []; dragStop();
+    cur = null; near = null; bar.hidden = true; hideTip(); closePop(); closeUnpin(); upWait = null; hopWait = null; navQ = []; dragStop();
   }
   function run(a, extra) {
     var s = Object.assign({}, cur, extra || {});
@@ -186,6 +218,7 @@ function mount(ctx) {
     if (a === 'more') { openMenu(); return; }
     if (a === 'inner') { hop('hd-down'); return; }        // 안쪽 고르기(R17 메뉴) = Enter 의 첫 자식 길
     if (a === 'ai') { if (reader()) { ctx.toast(RO); return; } closePop(); run('ai', {ask: false}); return; }   // AI에게 바꿔 달라기 = 메모 창(바꾸기)에 요청 글
+    if (a === 'addr') { closePop(); run('addr', {ask: false}); return; }   // 주소 복사(R50 고정 아이콘) — 읽기만이라 읽기 탭에서도 · 셸이 view-address 로
     var it = items().filter(function (x) { return x.act === a; })[0];
     if (!it) return;
     if (reader() && a !== 'parent') { ctx.toast(RO); return; }
@@ -405,8 +438,35 @@ function mount(ctx) {
       if (reader()) ctx.toast(RO); else if (gp.getAttribute('aria-disabled') === 'true') ctx.toast(B.grip(cur.h, {app: cur.app}).title);
       return;
     }
-    var b = e.target.closest('button[data-act]'); if (b) fire(b.dataset.act);
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    if (b.getAttribute('aria-disabled') === 'true' && b.dataset.why) { ctx.toast(reader() ? RO : b.dataset.why); return; }   // 꺼진 고정 아이콘 = 까닭
+    fire(b.dataset.act);
   });
+  // ---- R50 막대 아이콘 오른쪽 클릭 → '막대에서 빼기'(⋯·손잡이는 없음)
+  function closeUnpin() { unpin.hidden = true; unpin.innerHTML = ''; delete unpin.dataset.act; }
+  bar.addEventListener('contextmenu', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    var b = e.target.closest && e.target.closest('button[data-act]'), a = b && b.dataset.act;
+    if (!a || a === 'more' || a === 'grip') { closeUnpin(); return; }
+    hideTip();
+    unpin.dataset.act = a;
+    unpin.innerHTML = '<button type="button" role="menuitem" data-act="unpin">막대에서 빼기</button>';
+    unpin.hidden = false;
+    unpin.style.left = Math.max(8, Math.min(innerWidth - unpin.offsetWidth - 8, e.clientX)) + 'px';
+    unpin.style.top = Math.max(8, Math.min(innerHeight - unpin.offsetHeight - 8, e.clientY + 4)) + 'px';
+    unpin.querySelector('button').focus({preventScroll: true});
+  });
+  unpin.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var b = e.target.closest('button[data-act="unpin"]'), a = unpin.dataset.act;
+    if (!b || !a) return;
+    closeUnpin();
+    var st = pinState(a);
+    if (st.on) pin(a); else console.warn('[hd] 막대에서 빼기: 이미 고정되지 않은 동작이에요 — ' + a);
+  });
+  unpin.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeUnpin(); } });
+  document.addEventListener('pointerdown', function (e) { if (!unpin.hidden && !(e.target.closest && e.target.closest('#elunpin'))) closeUnpin(); }, true);
+  addEventListener('message', function (e) { if (!unpin.hidden && e.data && e.data.type === 'hd-press') closeUnpin(); });   // 크게 보기 틀 안 누름(palette.js hd-press)
   pop.addEventListener('click', function (e) {
     e.stopPropagation();
     var b = e.target.closest('button'); if (!b || !cur) return;
@@ -434,11 +494,13 @@ function mount(ctx) {
     step(a);
   }, true);
   addEventListener('resize', place);
+  addEventListener('resize', closeUnpin);
   return {show: show, hide: hide, place: place, sel: function () { return cur; }, wrote: wrote, fire: fire,
+          pins: pinList, pinState: pinState, pin: pin,
           onMenu: function (fn) { menuFn = typeof fn === 'function' ? fn : null; },
           onAct: function (fn) { act = typeof fn === 'function' ? fn : null; },
           onPick: function (fn) { picked = typeof fn === 'function' ? fn : null; }};
 }
 
-HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl'], mount: mount});
+HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl', 'prefs', 'savePrefs'], mount: mount});
 })();
