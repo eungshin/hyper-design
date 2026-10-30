@@ -4,7 +4,7 @@
    혼자 있는 묶음이면 탭 줄 대신 이 머리 줄), 떠 있으면 이 파일이 몸(body)에 둔다.
    모양: 접힘 = 입력창만, 판 아래 가운데(예전 대화창 자리 규칙 — 탭 바 자리) + 위 끝 손잡이 알약 + 오른쪽 위 펼치기(작업 중인 턴이 있으면 점) ·
      펼침 = 머리 줄 36px(손잡이 · 대화 · 받는 곳 이름 흐리게 · 붙이기/떼기 · 접기 — 닫기 없음, 숨기기는 창 메뉴 '대화창') + 기록 + 입력창, 끌어 옮기기·크기 ·
-     붙음 = 도크 높이 전체, 늘 펼침. 크게 보기(모달)가 열리면 그동안 접힌 창으로 덮개 위에 뜬다(크게 보기 칩·sizeModal 은 view-chat·셸 그대로).
+     붙음 = 도크 높이 전체, 늘 펼침 — 크게 보기·Foundation·Components 탭에서도 그대로. 떠 있는 창은 크게 보기가 열리면 그동안 접힌 창으로 덮개 위에 뜬다(크게 보기 칩·sizeModal 은 view-chat·셸 그대로).
    끌기: 머리 줄(접힘이면 알약)을 끌면 따라오고, 판 왼쪽·오른쪽 끝 40px 안이면 그 쪽 도크 자리를 미리 보이고(#ldock.empty·#dock + '놓으면 왼쪽에 붙어요'),
      놓으면 붙는다. 붙은 창의 머리 줄을 끌면 떨어져 펼친 창으로 따라온다. 접힌 창은 끝이 아닌 곳에 놓으면 제자리(판 아래 가운데)로. 알약 누르기 = 펼치기.
    상태(주인 이 파일, 저장 안 함): 끄는 중인 것. 저장되는 배치는 모두 도크 상태(접힘/펼침·떠 있는 자리·크기·붙은 쪽·폭).
@@ -25,7 +25,7 @@ var IC = {
 
 var CSS =
   '#hdtalk{box-sizing:border-box;display:flex;flex-direction:column;min-height:0;font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
-  '#hdtalk[hidden],body.no-chat #hdtalk,body.bare #hdtalk,body:not([data-tab="screens"]) #hdtalk,html[data-hd-tab="reader"] #hdtalk{display:none}' +
+  '#hdtalk[hidden],body.no-chat #hdtalk,body.bare #hdtalk,html[data-hd-tab="reader"] #hdtalk{display:none}' +
   '#hdtalk .tw-head{flex:none;display:flex;align-items:center;gap:6px;box-sizing:border-box;height:36px;padding:0 6px 0 8px;border-bottom:1px solid #ECECE8;cursor:move;-webkit-user-select:none;user-select:none;touch-action:none}' +
   '#hdtalk .tw-grip{flex:none;width:10px;height:14px;color:#b5b5b0;display:grid;place-items:center}#hdtalk .tw-grip svg{width:8px;height:12px}' +
   '#hdtalk .tw-head b{flex:none;font-weight:600;font-size:13px}' +
@@ -102,7 +102,7 @@ function mount(ctx) {
     var s = state();
     if (!s || absent()) return {m: 'compact', float: true};
     var m = T.mode(s);
-    if (modal()) return {m: 'compact', float: true};
+    if (modal() && m !== 'docked') return {m: 'compact', float: true};   // 붙은 창은 크게 보기 옆에 그대로(10-30)
     return {m: m, float: m !== 'docked'};
   }
   function act(list, quiet) { if (dock) list.forEach(function (a) { dock.dispatch(a, quiet); }); }

@@ -413,3 +413,59 @@ def test_without_helper_the_panel_is_absent(served, ctx):
     finally:
         pg.close()
     assert not errors, errors
+
+
+def test_docked_window_stays_docked_in_large_view(served, ctx):
+    """왼쪽에 붙인 대화 창은 크게 보기를 열어도 그 자리에 붙은 채 기록을 보여 준다(접혀 덮개 위로 뜨지 않음 — 10-30 사용자 승인).
+    크게 보기는 붙은 창 옆에서 시작하고, 입력은 연 화면이 대상(칩 = 연 화면)."""
+    out, srv = served
+    pg, errors = open_page(ctx, srv)
+    try:
+        pg.keyboard.press("0")
+        pg.keyboard.press("h")
+        pg.dblclick('.card[data-id="pay"] .cover')
+        pg.wait_for_selector("#modal:not([hidden])", timeout=5000)
+        pg.wait_for_timeout(200)
+        f = pg.evaluate("""() => { const f = document.getElementById('hdtalk'), r = f.getBoundingClientRect();
+          return {cls: f.className, inLeft: !!f.closest('#ldock'), x: r.x, w: r.width, log: !!document.querySelector('#pTalk') && document.querySelector('#pTalk').getClientRects().length > 0}; }""")
+        assert f["inLeft"] and "tw-docked" in f["cls"] and f["x"] == 0 and abs(f["w"] - 360) <= 1 and f["log"], ("붙은 채 기록까지", f)
+        mb = pg.locator("#modal .box").bounding_box()
+        assert mb["x"] >= 360, ("크게 보기 화면은 붙은 창을 가리지 않는다", mb)
+        free = pg.evaluate("innerHeight") - (mb["y"] + mb["height"])
+        assert free < 100, ("입력창이 덮개 위에 없으니 화면 아래를 그 높이만큼 비우지 않는다", mb, free)
+        pg.wait_for_function("document.querySelector('#hdchat .ch-chip') && document.querySelector('#hdchat .ch-chip').textContent.startsWith('결제')", timeout=3000)
+        b = pg.locator("#hdchat textarea").bounding_box()
+        assert pg.evaluate("([x, y]) => !!document.elementFromPoint(x, y).closest('#hdchat')", [b["x"] + b["width"] / 2, b["y"] + b["height"] / 2]), "입력창은 덮개에 가리지 않는다"
+        shot(pg, "talk-docked-large-view.png")
+        pg.keyboard.press("Escape")
+        pg.wait_for_selector("#modal", state="hidden", timeout=3000)
+        assert pg.evaluate("!!document.querySelector('#ldock #hdtalk.tw-docked')"), "닫아도 그대로 붙어 있다"
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
+def test_other_tabs_keep_talk_window_and_top_bar(served, ctx):
+    """Foundation·Components 탭에서도 붙은 대화 창이 그대로 보이고(흰 빈 칸이 아님), 위 막대의 단추도 그대로 보인다.
+    판에만 쓰는 보기·배율 단추는 보이되 눌리지 않는다."""
+    out, srv = served
+    pg, errors = open_page(ctx, srv)
+    try:
+        bar = "() => [...document.querySelectorAll('.hd .view > button:not([hidden])')].map(b => [b.id, getComputedStyle(b).visibility, b.disabled])"
+        before = {i: v for i, v, d in pg.evaluate(bar)}
+        for tab in ("foundation", "components"):
+            pg.click('.tab[data-tab="%s"]' % tab)
+            pg.wait_for_selector("#%s:not([hidden])" % tab)
+            r = pg.locator("#hdtalk").bounding_box()
+            assert r and r["x"] == 0 and abs(r["width"] - 360) <= 1 and r["height"] > 300, (tab, "붙은 대화 창이 보인다", r)
+            assert pg.is_visible("#hdtalk .tw-head") and pg.is_visible("#hdchat textarea"), (tab, "머리 줄·입력창")
+            now = pg.evaluate(bar)
+            assert {i: v for i, v, d in now} == before, (tab, "위 막대 단추가 그대로 보인다", now)
+            dis = {i for i, v, d in now if d}
+            assert {"vbtn", "zoom"} <= dis, (tab, "판 전용 보기·배율은 눌리지 않는다", now)
+            shot(pg, "talk-tab-%s.png" % tab)
+        pg.click('.tab[data-tab="screens"]')
+        assert pg.is_enabled("#vbtn") and pg.is_enabled("#zoom"), "판으로 돌아오면 다시 눌린다"
+    finally:
+        pg.close()
+    assert not errors, errors

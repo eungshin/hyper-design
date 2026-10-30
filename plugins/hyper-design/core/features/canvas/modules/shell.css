@@ -38,8 +38,6 @@ button{font:inherit;color:inherit}
 .vbtn:hover{background:#F5F5F2}
 .zoom{min-width:64px;font-variant-numeric:tabular-nums;color:#555}
 .hd .zoom{min-width:52px;justify-content:center;color:#3a3a37}
-body:not([data-tab="screens"]) .view{visibility:hidden}
-body:not([data-tab="screens"]) .view #wbtn{visibility:visible}   /* 창 메뉴(테마 패널 켜기)는 어느 탭에서든 */
 @media (max-width:760px){
   .hd{height:auto;min-height:32px;flex-wrap:wrap;padding:4px 8px;gap:4px}
   .hd .hdname{flex:1 1 0;order:1}

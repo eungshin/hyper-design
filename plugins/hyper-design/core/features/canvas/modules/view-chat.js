@@ -32,7 +32,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 
 var CSS =
   '#hdchat{position:fixed;bottom:12px;left:50%;z-index:24;width:640px;max-width:calc(100vw - 32px);transform:translateX(-50%);font:13px system-ui,sans-serif;color:var(--ui-primary,#2b2b29)}' +
-  '#hdchat[hidden],body.no-chat #hdchat:not(.docked),body.bare #hdchat,body:not([data-tab="screens"]) #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
+  '#hdchat[hidden],body.no-chat #hdchat:not(.docked),body.bare #hdchat,html[data-hd-tab="reader"] #hdchat{display:none}' +
   '@media (prefers-reduced-motion: reduce){#hdchat .ch-box{transition:none}}' +
   // 카드 한 장(S1c): 칩 줄(고른 것이 있을 때만) · 입력칸(카드 폭 전체) · 도구 줄 28px(받는 곳 알약 왼쪽 · 둥근 보내기 오른쪽). 빈 높이 8+32+6+28+8 = 82
   '#hdchat .ch-box{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px;background:var(--ui-surface,#fff);border-radius:16px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.08);transition:box-shadow .15s}' +
