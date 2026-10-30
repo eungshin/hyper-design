@@ -30,6 +30,7 @@ API (모두 POST, JSON, 머리글 X-HD-Token 필수 · Host 는 127.0.0.1/localh
   /api/data    {}                                             → board_data.index_data (index.html 의 hd-data 와 같은 객체)
   /api/forward {text}                                         → {via:'paseo'|'queue', agent?, path?}
   /api/watch   {files:[relpath]}                              → {mtimes:{relpath: mtime|null}} (없거나 out 밖이면 null)
+  /api/token   {name, value}                                  → {name, value, old, stamp} — tokens.css 첫 :root 의 선언 하나만(token_edit 규칙, 원본 남김 → /api/restore) · 400 {error, reason:'invalid'} · 404(tokens.css 없음)
   GET /api/state[?since=rev]                                  → {rev, state} (<out>/.hd-canvas.json, 없으면 rev 0) · since == rev 면 {rev, unchanged:true}(#273)
   PUT /api/state {rev, state:{이름: 값|null}}                 → {rev} | 409 {rev, state}(rev 가 다름) · 400(JSON 아님) · 413 {error: 크기 + "완료 메모를 보관으로 옮기세요"}
   POST /api/archive {notes:[…]}                               → {ok:true, count} — <out>/.hd-notes-archive.jsonl 에 메모마다 한 줄(임시 파일 + os.replace, 자물쇠 안) · 400

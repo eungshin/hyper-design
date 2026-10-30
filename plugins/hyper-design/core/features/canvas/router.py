@@ -102,6 +102,7 @@ ROUTES = {
         "/api/group-rename": _obj(lambda s, q, b: s.history.group_rename(b.get("from"), b.get("to"))),   # 줄 = 섹션(51-4)
         "/api/group-dissolve": _obj(lambda s, q, b: s.history.group_dissolve(b.get("name"))),
         "/api/group-move": _obj(lambda s, q, b: s.history.group_move(b.get("ids"), b.get("to"))),      # R31 다른 줄(폴더)로 옮기기
+        "/api/token": _obj(lambda s, q, b: s.history.token(b.get("name"), b.get("value"))),   # R55 Foundation 토큰 하나 — tokens.css 쓰기 한 번
         "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""), keep=b.get("keep") is True, notify=b.get("notify") is True)),
         "/api/reply": lambda s, q, b: s.queue.reply(b),
         "/api/claim": lambda s, q, b: s.busy.claim(b),

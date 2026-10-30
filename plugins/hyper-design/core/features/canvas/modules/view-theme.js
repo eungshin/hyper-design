@@ -2,6 +2,8 @@
    목록: 색 점 + 이름, 기본 테마는 자물쇠(복제만), 내 테마는 마우스를 올리면 이름 바꾸기·복제·삭제(되돌리기 됨).
    '+ 새 테마' = 지금 테마 복제. 내 테마를 고르면 색 네 칸(주 색·글자·바탕·강조): 색 고르기 + HEX, 판의 화면에 바로, 글자 대비 4.5:1 미만 경고.
    팔레트 적용(셸 C10): 고른 테마 = #tokens 를 tokens-<slug>.css 로 + 모든 iframe 에 hd-palette·hd-theme-vars + 'hd-palette' 키 — 새로 실린 iframe 에는 send(frame)
+   프로젝트 색(R55): 목록 끝 '프로젝트 색 · tokens.css'(id '@project' = HD.dsEdit.PROJECT) = 바탕 팔레트 없이 프로젝트 tokens.css 그대로(#tokens = data-base).
+     의도 'hd-theme-project'(Foundation 토큰 저장 뒤 — view-ds-inspect) → 다른 팔레트·내 테마 색을 미리 보던 중이면 프로젝트 색으로 바꾸고 detail.changed = true.
    HD.viewTheme.mount(ctx) → {render(), send(frame)(지금 팔레트·내 테마 색을 그 틀에 — 아직 고르지 않았으면 아무것도)}
    ctx = {$, $$, esc, root, bases: [{slug, name, brand}], readColors() → {brand, text, bg, accent}(지금 판 색),
           record({label, undo, redo}), getItem, setItem} */
@@ -18,7 +20,7 @@ var I = {
 
 function mount(ctx) {
   var T = HD.theme, $ = ctx.$, esc = ctx.esc, root = ctx.root, bases = ctx.bases || [];
-  var st = T.load(ctx.getItem), cur = null, curVars = {};
+  var PROJECT = '@project', st = T.load(ctx.getItem), cur = null, curVars = {};
   function send(f) {                                  // 바탕 토큰 파일 + 내 테마 색 덮어쓰기(없으면 지움)
     if (!cur) return;
     try { f.contentWindow.postMessage({type: 'hd-palette', slug: cur}, '*'); f.contentWindow.postMessage({type: 'hd-theme-vars', vars: curVars}, '*'); } catch (e) {}   // 아직 문서가 없는 틀 — 실리면 다시 보낸다
@@ -27,7 +29,7 @@ function mount(ctx) {
     cur = slug;
     var l = $('#tokens'), b = l.getAttribute('data-base') || l.getAttribute('href');
     l.setAttribute('data-base', b);
-    l.setAttribute('href', b.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));
+    l.setAttribute('href', slug === PROJECT ? b : b.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));   // 프로젝트 색 = tokens.css 그대로(R55)
     ctx.$$('iframe').forEach(send);
   }
   function apply(slug, vars) { if (!slug) return; curVars = vars || {}; setPalette(slug); try { ctx.setItem('hd-palette', slug); } catch (e) {} }   // 저장 실패 = 다음에 기본 테마(이번 화면은 그대로)
@@ -42,7 +44,7 @@ function mount(ctx) {
 
   function base(slug) { return bases.filter(function (b) { return b.slug === slug; })[0] || bases[0] || {slug: ''}; }
   function mineOf(id) { return st.mine.filter(function (t) { return t.id === id; })[0] || null; }
-  function curId() { return mineOf(st.cur) || bases.some(function (b) { return b.slug === st.cur; }) ? st.cur : (bases[0] || {}).slug; }
+  function curId() { return mineOf(st.cur) || st.cur === PROJECT || bases.some(function (b) { return b.slug === st.cur; }) ? st.cur : (bases[0] || {}).slug; }
   function applyCur() {
     var t = mineOf(curId());
     if (t) apply(base(t.base).slug, T.vars(t)); else apply(curId(), {});
@@ -61,7 +63,8 @@ function mount(ctx) {
   function render() {
     var cur = curId();
     list.innerHTML = bases.map(function (b) { return row(b.slug, b.name, b.brand, false, b.slug === cur); }).join('') +
-      st.mine.map(function (t) { return row(t.id, t.name, t.c.brand, true, t.id === cur); }).join('');
+      st.mine.map(function (t) { return row(t.id, t.name, t.c.brand, true, t.id === cur); }).join('') +
+      (bases.length ? row(PROJECT, '프로젝트 색 · tokens.css', 'transparent', false, cur === PROJECT) : '');   // R55 — Foundation 에서 고친 토큰 그대로
     var t = mineOf(cur);
     edit.hidden = !t; $('#thNote').hidden = !!t;
     if (!t) return;
@@ -122,6 +125,12 @@ function mount(ctx) {
   edit.addEventListener('keydown', function (e) {
     e.stopPropagation();                                  // 판 단축키와 겹치지 않게
     if (e.key === 'Enter' && e.target.classList.contains('th-hex')) { e.preventDefault(); setColor(e.target.closest('[data-role]').dataset.role, e.target.value); }
+  });
+
+  document.addEventListener('hd-theme-project', function (e) {   // R55 토큰 저장 뒤: 미리 보던 팔레트·내 테마 색을 걷고 프로젝트 tokens.css 로
+    if (cur === PROJECT || (!bases.length && !st.mine.length)) return;   // 이미 프로젝트 색 · 고를 팔레트가 없음 = tokens.css 그대로
+    dispatch({type: 'pick', id: PROJECT});
+    if (e.detail) e.detail.changed = true;
   });
 
   render(); applyCur();

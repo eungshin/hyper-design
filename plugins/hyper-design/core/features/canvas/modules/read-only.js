@@ -1,6 +1,7 @@
 /* ViewModel — 읽기만인 탭(#274)에서 처음부터 막을 편집 규칙: 막을 조작부 선택자 · 막을 키 · 편집 도구. DOM·저장소를 쓰지 않는다.
    받아 놓고 버리지 않는다 — 저장하는 순간(추가·Enter·보내기·되돌리기)과 편집 도구를 막고, 글 쓰기 자체는 막지 않아 쓴 글이 칸에 남는다.
-   HD.readOnly = {CONTROLS: [선택자], editTool(tool) → bool, key({key, ctrl, meta, shift, alt, typing, field}) → 막나}
+   HD.readOnly = {CONTROLS: [선택자], PICK, editTool(tool) → bool, key({key, ctrl, meta, shift, alt, typing, field, doc}) → 막나}
+     doc = Foundation·Components 탭(R55): 선택(V)은 토큰 고르기라 막지 않는다(PICK = 그 단추 — 저장만 막는다, view-ds-inspect)
      field = 입력 중인 칸 id('pnote' 메모 칸 · 'tedit' 글자 고치기 · 그 밖) */
 (function () {
 'use strict';
@@ -11,6 +12,8 @@ var CONTROLS = [
   '#selbar button', '#undo', '#redo', '#nsend', '#nclear', '#padd', '#tedel',
   '#thread button[data-act]', '#nlist button[data-act]', '#lyBar button', '.ly-eye', '.ly-lock', '.ly-hov'
 ];
+
+var PICK = '#tools [data-tool="move"]';            // 문서 탭에서는 고르기만 하는 선택(V) 단추(R55)
 
 function editTool(t) { return !!t && t !== 'hand' && !!(HD.tools && HD.tools.SPEC[t]); }
 
@@ -26,8 +29,10 @@ function key(e) {
   if (mod) return !e.alt && ['z', 'y', 'x', 'v', 'd'].indexOf(low) >= 0;   // 되돌리기·다시·잘라내기·붙이기·복제
   if (e.alt) return false;
   if (k === 'Delete' || k === 'Backspace') return true;
-  return editTool(HD.tools && HD.tools.byKey(low));
+  var t = HD.tools && HD.tools.byKey(low);
+  if (e.doc && t === 'move') return false;          // 문서 탭 V = 토큰 고르기(저장은 view-ds-inspect 가 막는다)
+  return editTool(t);
 }
 
-HD.readOnly = {CONTROLS: CONTROLS, editTool: editTool, key: key};
+HD.readOnly = {CONTROLS: CONTROLS, PICK: PICK, editTool: editTool, key: key};
 })();

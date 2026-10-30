@@ -14,6 +14,7 @@ function mount(ctx) {
   var R = HD.readOnly, root = document.documentElement, SEL = R.CONTROLS.join(','), role = root.dataset.hdTab || 'writer', mo = null, raf = 0, lastNudge = 0;
   var css = document.createElement('style');
   css.textContent = R.CONTROLS.map(function (s) { return 'html.hd-ro ' + s; }).join(',') + '{opacity:.35!important;cursor:not-allowed!important;pointer-events:auto!important}\n' +
+    ['foundation', 'components'].map(function (t) { return 'html.hd-ro body[data-tab="' + t + '"] ' + R.PICK; }).join(',') + '{opacity:1!important;cursor:pointer!important}\n' +   // 문서 탭 V = 고르기(R55)
     '#hd-tab-lock.hd-nudge{animation:hdRoNudge .5s ease 2}@keyframes hdRoNudge{50%{transform:translateX(-50%) scale(1.08)}}';
   document.head.appendChild(css);
 
@@ -54,10 +55,11 @@ function mount(ctx) {
   }
   function block(e) { e.preventDefault(); e.stopImmediatePropagation(); nudge(); }
   function inside(e, q) { var t = e.target; return !!(t && t.closest && t.closest(q)); }
+  function docTab() { var t = document.body.dataset.tab; return t === 'foundation' || t === 'components'; }   // 고르기만 하는 탭(R55)
   function pointer(e) {
     if (!reader()) return;
     if (inside(e, '#hd-tab-lock')) return;
-    if (inside(e, SEL)) return block(e);
+    if (inside(e, SEL) && !(docTab() && inside(e, R.PICK))) return block(e);
     var right = e.button === 2 && (e.type === 'pointerdown' || e.type === 'mousedown');
     if (right && inside(e, '#screens') && !inside(e, '#tools')) return block(e);   // 오른쪽 끌기 = 선 자르기
   }
@@ -69,7 +71,7 @@ function mount(ctx) {
     if (!reader()) return;
     var t = e.target, typing = !!(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')));
     var field = typing ? (t.id || (t.closest && t.closest('#tedit') ? 'tedit' : '')) : null;
-    if (R.key({key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey, typing: typing, field: field})) block(e);
+    if (R.key({key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey, typing: typing, field: field, doc: docTab()})) block(e);
   }, true);
   document.addEventListener('hd-tab-role', function (e) { apply(e.detail && e.detail.role || 'writer'); });
   if (reader()) apply(role);

@@ -223,7 +223,30 @@ def apply_edits(out, edits, stamp=None, build=None):
 
 
 
-def _parts_html(out):                                # 이 프로젝트의 부품 견본(Components 탭 = out/components.html) 글 | None
+def apply_token(out, name, value, stamp=None, build=None):
+    """POST /api/token(R55) — out/tokens.css 첫 :root 의 선언 하나만 바꾼다(규칙 token_edit). 쓰기 한 번 = .hd-history 원본 + manifest → restore 로 되돌림.
+    → {name, value(정리한 값), old, stamp, changed:[]} | {error, reason:'invalid'|'missing'}(쓰지 않음) | {error: BUILD_FAIL…}(되돌림)."""
+    import token_edit as TE                          # 순수 Model(R55) — 이 함수만 쓴다
+    out = pathlib.Path(out).resolve()
+    f = out / "tokens.css"
+    if not f.is_file():
+        return {"error": "tokens.css 가 없어요", "reason": "missing"}
+    raw = f.read_bytes().decode("utf-8")
+    have = TE.decls(raw)
+    v, why = TE.check(name, value, list(have))
+    if why:
+        return {"error": why, "reason": "invalid"}
+    w = _Writes(out, stamp, build)
+    w.keep(f)
+    f.write_bytes(TE.rewrite(raw, name, v).encode("utf-8"))   # 줄 끝·인코딩 그대로(바이트로)
+    err = w.commit([])
+    if err:
+        return {"error": err}
+    return {"name": name, "value": v, "old": have[name], "stamp": w.stamp, "changed": [], "history": str(w.hist)}
+
+
+
+def _parts_html(out):                              # 이 프로젝트의 부품 견본(Components 탭 = out/components.html) 글 | None
     f = pathlib.Path(out) / "components.html"
     return f.read_text(encoding="utf-8") if f.is_file() else None
 

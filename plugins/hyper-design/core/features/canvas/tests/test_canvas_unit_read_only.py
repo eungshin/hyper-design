@@ -28,8 +28,10 @@ out.keys = {
   pnoteEnter: k({key: 'Enter', typing: true, field: 'pnote'}), pnoteCtrlEnter: k({key: 'Enter', ctrl: true, typing: true, field: 'pnote'}),
   teditEnter: k({key: 'Enter', typing: true, field: 'tedit'}), teditShiftEnter: k({key: 'Enter', shift: true, typing: true, field: 'tedit'}),
   otherEnter: k({key: 'Enter', typing: true, field: 'lyQ'}),
-  none: [R.key(null), R.key({})]
+  none: [R.key(null), R.key({})],
+  docV: k({key: 'v', doc: true}), docT: k({key: 't', doc: true}), docUndo: k({key: 'z', ctrl: true, doc: true})
 };
+out.pick = R.PICK;
 console.log(JSON.stringify(out));
 """
 
@@ -75,3 +77,10 @@ def test_typing_keeps_text_but_blocks_save(out):
     assert k["pnoteCtrlEnter"] and not k["pnoteEnter"], "메모 칸: Ctrl+Enter(추가)만"
     assert k["teditEnter"] and not k["teditShiftEnter"], "글자 고치기: Enter(저장)만, Shift+Enter 줄바꿈은 그대로"
     assert not k["otherEnter"], "찾기 칸 등은 그대로"
+
+
+def test_doc_tab_v_is_picking_not_editing(out):
+    """R55: Foundation·Components 탭의 선택(V) = 토큰 고르기 — 막지 않는다(저장은 view-ds-inspect 가 막음). 다른 편집 키·Ctrl+Z 는 그대로 막는다."""
+    assert out["keys"]["docV"] is False and out["keys"]["v"] is True
+    assert out["keys"]["docT"] is True and out["keys"]["docUndo"] is True
+    assert out["pick"] == '#tools [data-tool="move"]'
