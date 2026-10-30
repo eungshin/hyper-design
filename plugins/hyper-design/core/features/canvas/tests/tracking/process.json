@@ -1213,6 +1213,38 @@
       "waste": "head 주석의 'HD.blocks = {' 를 끝 표지로 잘못 잡아 blocks.js 를 한 번 되돌림",
       "flaky": [],
       "note": "핀은 줄 단추 밖 span[role=button] — '#cmenu button' 목록을 쓰는 옛 테스트를 건드리지 않게"
+    },
+    {
+      "slice": "R55 phase F: Foundation 토큰 고르기·고치기(문서 탭 손·선택, 속성 창, POST /api/token, 되돌리기, 모든 틀 다시 읽기)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 11
+      },
+      "gate": {
+        "checks": 0,
+        "sec": 0,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "browser",
+          "what": "손으로 문서를 누른 뒤 V 키가 iframe 에 먹힘 — palette.js 가 hd-key 로 넘기게"
+        },
+        {
+          "by": "browser",
+          "what": "view-read-only CSS 글에 날 줄바꿈이 들어가 셸 스크립트 문법 오류(pageerror)"
+        },
+        {
+          "by": "eye",
+          "what": "도구 막대가 Foundation 견본을 가림 · 글자 줄 속성 창이 오른쪽 도크 밑으로 — 문서 칸 기준 자리로"
+        }
+      ],
+      "waste": "테마 미리 보기가 늘 팔레트 파일(tokens-<slug>.css)이라 tokens.css 저장이 안 보이는 것을 늦게 알아챔 — '@project' 를 더함",
+      "flaky": [],
+      "note": "phase C(컴포넌트)는 readPick·fields 의 종류로 더한다"
     }
   ]
 }

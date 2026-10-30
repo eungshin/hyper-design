@@ -34,6 +34,7 @@ AREAS = {
     "dock": "패널 도크(오른쪽·왼쪽 S3): 묶음·탭 합치기/떼기·떠 있는 창·크기·접기·저장",
     "chat": "하단 대화창: 고른 카드·요소 칩·보내기(S1) · 대화 패널(S3)",
     "dscard": "판 위 디자인 시스템 카드(S6)",
+    "dsedit": "Foundation 탭 토큰 고르기·고치기(R55): 문서 탭 도구·속성 창·저장·되돌리기",
 }
 
 
@@ -45,7 +46,8 @@ SURFACES = {
                "test_canvas_blocks_place.py", "test_canvas_instant.py", "test_canvas_text_remove.py",
                "test_canvas_claim_watch.py", "test_canvas_replies_live.py", "test_canvas_helper.py", "test_canvas_figma_keys.py",
                "test_canvas_cues.py", "test_canvas_blocks_clear.py", "test_canvas_icon_text.py", "test_canvas_memo_scroll.py",
-               "test_canvas_el_multi.py", "test_canvas_attach.py", "test_canvas_text_edit.py")),
+               "test_canvas_el_multi.py", "test_canvas_attach.py", "test_canvas_text_edit.py",
+               "test_canvas_ds_edit.py")),
     "board": ("판 위 줄 배치·겹침(판 글·DS 카드·화면 줄·하단 대화창·탭·카메라 첫 자리)",
               ("test_canvas_ds_card.py", "test_canvas_chat.py", "test_canvas_busy_app.py", "test_canvas_layer_flags.py",
                "test_canvas_artboard.py", "test_canvas_tabs.py", "test_canvas_rows.py",

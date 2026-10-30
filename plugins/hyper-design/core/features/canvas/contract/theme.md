@@ -13,6 +13,7 @@
 ## 규칙
 
 - 고르기 전(`cur` 없음)에는 보내지 않는다 · 아직 문서가 없는 틀에 보내기 실패 = 조용히(실리면 다시 보낸다)
+- 프로젝트 색(R55, `ds-edit.md`): 목록 끝 '프로젝트 색 · tokens.css'(`@project`) = 바탕 팔레트 없이 tokens.css 그대로. 의도 `hd-theme-project`(토큰 저장 뒤)가 오면 다른 팔레트·내 테마를 미리 보던 중일 때만 그리로 바꾸고 `detail.changed = true`
 - 메시지 이름·`hd-palette` 키는 `foundation/palette.js`·DS 카드(`view-ds-card`)가 읽으므로 그대로
 
 ## 고치면 돌릴 것

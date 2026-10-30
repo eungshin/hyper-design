@@ -50,7 +50,12 @@
    소스 위치(앱 카드, Svelte 개발 서버): 요소나 그 조상에 __svelte_meta.loc 이 있으면 hd-picked·hd-hit·hd-dbl 답과 hd-located 항목에
    src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다.
    판 모드(?hd-mode=board — 캔버스 판 위 카드만, 크게 보기는 아님): 화면 스크립트보다 먼저 reduced-motion 을 켜고 움직임을 멈춘다
-   (유한 = 끝 상태, 무한 = 한 번 뒤 멈춤 · load 뒤 WAAPI 도). contract/board-motion.md */
+   (유한 = 끝 상태, 무한 = 한 번 뒤 멈춤 · load 뒤 WAAPI 도). contract/board-motion.md
+   토큰 고르기(R55, Foundation 탭 — contract/ds-edit.md): hd-pick 에 doc:true 면 {type:'hd-pick-on', on, tokens: [data-var] 수} 로 답한다.
+     고르기(select) 중 [data-var] 안을 누르면 그 견본(closest)으로 hd-sel + token('--이름')·tokenKind·label(견본이 보이는 이름)·vars(그 토큰과 글자 줄 짝 --fw/--lh 의 지금 값),
+     견본에 고른 테두리(스크롤을 따라감) · 캔버스로 초점(H·V·Ctrl+Z 가 캔버스로). {type:'hd-unpick'} = 테두리 걷기. 토큰을 고른 동안 스크롤 = hd-scroll.
+     문서 탭(doc:true 를 받은 뒤)에서 H·V·Esc·Ctrl/Cmd+Z/Y 는 {type:'hd-key', key, ctrl, meta, shift} 로 캔버스에 넘긴다(입력 칸 안은 아님).
+     {type:'hd-tokens-reload', v} = #tokens 를 지금 팔레트 주소 + ?v= 로 다시 읽는다(저장 뒤). hd-palette 의 slug '@project' = 프로젝트 tokens.css 그대로 */
 (function () {
   if (new URLSearchParams(location.search).get('hd-mode') !== 'board') return;
   var mm = window.matchMedia;
@@ -73,10 +78,20 @@
 })();
 (function () {
   var KEY = 'hd-palette';
+  var curSlug = '', tokV = 0;                        // 지금 바탕 팔레트('' · '@project' = 프로젝트 tokens.css) · 다시 읽기 표(R55)
+  function tokHref(base) {                            // modules/ds-edit.js href 와 같은 규칙
+    var b = String(base).split('?')[0], h = curSlug && curSlug !== '@project' ? b.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + curSlug + '.css') : b;
+    return tokV ? h + '?v=' + tokV : h;
+  }
   function apply(slug) {
     var l = document.getElementById('tokens'); if (!l || !slug) return;
     var base = l.getAttribute('data-base') || l.getAttribute('href'); l.setAttribute('data-base', base);
-    l.setAttribute('href', base.replace(/tokens(-[^/]*)?\.css$/, 'tokens-' + slug + '.css'));
+    curSlug = String(slug); l.setAttribute('href', tokHref(base));
+  }
+  function reloadTokens(v) {
+    var l = document.getElementById('tokens'); if (!l) return;
+    var base = l.getAttribute('data-base') || l.getAttribute('href'); l.setAttribute('data-base', base);
+    tokV = String(v || Date.now()).replace(/[^\w-]/g, ''); l.setAttribute('href', tokHref(base));
   }
   var setVars = [];                                   // 캔버스 내 테마: 색 네 칸을 :root 변수로 덮어쓴다({} 이면 지움)
   function themeVars(v) {
@@ -256,7 +271,9 @@
   function target(e) { var t = e.target; return t && t.nodeType === 1 && t !== box ? t : null; }
   document.addEventListener('mousemove', function (e) {
     if (!picking || inEdit(e)) return;
-    var t = target(e); if (!t || t === last) return;
+    var t = target(e);
+    if (t && pickDoc) { t = t.closest ? t.closest('[data-var]') : null; if (!t) { last = null; if (box) box.style.display = 'none'; return; } }   // 문서 탭: 토큰 견본만 비춘다(R55)
+    if (!t || t === last) return;
     last = t; send({type: 'hd-hover', rect: showBox(t)});
   }, true);
   function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
@@ -285,8 +302,56 @@
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
+    if (pickMode === 'select' && pickDoc) { pickToken(t); return; }   // 문서 탭(R55) — 토큰 견본만 고른다
     if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey, e.shiftKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
+  }, true);
+
+  /* ---------- 토큰 고르기(R55, Foundation 탭) ---------- */
+  /* hd-token-kind — modules/ds-edit.js 의 kindOf 와 같은 규칙(화면 안이라 그 파일을 못 읽음 · test_canvas_unit_ds_edit 이 같은 표로 견준다) */
+  function tokenKind(name) {
+    var n = String(name || ''), pre = [['--c-', 'color'], ['--fs-', 'size'], ['--fw-', 'weight'], ['--lh-', 'line'], ['--r-', 'radius'], ['--shadow-', 'shadow'],
+                                       ['--stack-', 'space'], ['--space-', 'space'], ['--gap-', 'space'], ['--h-', 'size'], ['--w-', 'size']];
+    if (['--page-x', '--block-pad', '--block-gap', '--row-py'].indexOf(n) >= 0) return 'space';
+    for (var i = 0; i < pre.length; i++) if (n.indexOf(pre[i][0]) === 0) return pre[i][1];
+    return 'other';
+  }
+  /* /hd-token-kind */
+  var pickDoc = false, tokEl = null, tsel = null;
+  function tokVars(name) {                            // 그 토큰 + 글자 줄 짝(--fw-·--lh-)의 지금 값
+    var cs = getComputedStyle(document.documentElement), o = {}, names = [name];
+    if (name.indexOf('--fs-') === 0) names.push('--fw-' + name.slice(5), '--lh-' + name.slice(5));
+    names.forEach(function (n) { var v = cs.getPropertyValue(n).trim(); if (v) o[n] = v; });
+    return o;
+  }
+  function tselShow(el) {                             // 고른 견본 테두리 — 문서 좌표라 스크롤을 따라간다
+    if (!tsel) {
+      tsel = document.createElement('div'); tsel.setAttribute('data-hd-pick', '');
+      tsel.style.cssText = 'position:absolute;z-index:2147483646;pointer-events:none;border:2px solid #2563eb;border-radius:6px;box-sizing:border-box;display:none';
+      document.documentElement.appendChild(tsel);
+    }
+    var r = el.getBoundingClientRect();
+    tsel.style.left = (r.left + scrollX - 2) + 'px'; tsel.style.top = (r.top + scrollY - 2) + 'px';
+    tsel.style.width = (r.width + 4) + 'px'; tsel.style.height = (r.height + 4) + 'px'; tsel.style.display = 'block';
+  }
+  function unpick() { tokEl = null; if (tsel) tsel.style.display = 'none'; }
+  function pickToken(t) {
+    var el = t.closest ? t.closest('[data-var]') : null;
+    if (!el) { unpick(); send({type: 'hd-sel', screen: screenId(), path: null, doc: true}); return; }
+    var name = el.getAttribute('data-var'), lab = el.querySelector('.nm, .lb b, b');
+    tokEl = el; tselShow(el); if (box) box.style.display = 'none';
+    send({type: 'hd-sel', screen: screenId(), path: pathOf(el), doc: true, token: name, tokenKind: tokenKind(name),
+          label: lab ? lab.textContent.replace(/\s+/g, ' ').trim() : '', rect: rectOf(el), vars: tokVars(name)});
+    try { window.parent.focus(); } catch (e) { console.warn('[hd] 캔버스로 초점 돌리기 실패 — ' + e); }   // H·V·Ctrl+Z 가 캔버스로
+  }
+  addEventListener('scroll', function () { if (tokEl && window.parent && window.parent !== window) send({type: 'hd-scroll', screen: screenId(), doc: true}); }, true);
+  document.addEventListener('keydown', function (e) {  // 문서 탭(손·선택 모두): 캔버스 키(H·V·Esc·Ctrl+Z/Y)를 캔버스로 — 문서 안을 누른 뒤에도 도구 키가 듣게
+    if (!pickDoc || !window.parent || window.parent === window || e.isComposing) return;
+    var t = e.target; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+    var k = e.key || '', low = k.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if (!(mod && !e.altKey && (low === 'z' || low === 'y')) && !(!mod && !e.altKey && (low === 'h' || low === 'v' || k === 'Escape'))) return;
+    e.preventDefault();
+    send({type: 'hd-key', screen: screenId(), doc: true, key: k, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey});
   }, true);
 
   /* ---------- 연결 보기: 다른 화면으로 가는 링크 ---------- */
@@ -840,6 +905,10 @@
       picking = !!d.on; last = null; pickMode = picking && (d.mode === 'text' || d.mode === 'select') ? d.mode : '';
       if (!picking && box) box.style.display = 'none';
       document.documentElement.style.cursor = picking ? 'crosshair' : '';
+      pickDoc = !!d.doc;
+      if (d.doc) { if (!picking) unpick(); send({type: 'hd-pick-on', screen: screenId(), on: picking, tokens: document.querySelectorAll('[data-var]').length}); }
     }
+    else if (d.type === 'hd-unpick') unpick();
+    else if (d.type === 'hd-tokens-reload') reloadTokens(d.v);
   });
 })();
