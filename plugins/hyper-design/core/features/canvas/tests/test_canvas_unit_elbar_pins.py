@@ -48,6 +48,7 @@ out.icons = {
 const flat = (gs) => [].concat(...gs.map(g => g.items)).flatMap(i => [i].concat(i.sub || [])).map(i => [i.act, i.pinned === undefined ? null : i.pinned, i.pinOk === undefined ? null : i.pinOk]);
 out.menu = flat(B.menu(h, {pins: ['memo', 'dup']}));
 out.menuFull = flat(B.menu(h, {pins: six}));
+out.barMenu = typeof B.barMenu === 'function' ? {icon: B.barMenu(['memo', 'text', 'dup'], 'dup'), iconDef: B.barMenu(undefined, 'memo'), more: B.barMenu(['dup'], 'more'), moreDef: B.barMenu(['memo', 'text', 'ai'], 'more'), grip: B.barMenu([], 'grip')} : null;
 console.log(JSON.stringify(out));
 """
 
@@ -190,3 +191,15 @@ def test_prefs_keep_pins_and_leave_broken_value_for_the_bar_to_warn(pjs):
 
 def test_prefs_save_failure_is_reported(pjs):
     assert pjs["failed"] is None, "저장 실패 = null(막대가 토스트로 알린다)"
+
+
+def test_bar_right_click_menu_offers_unpin_and_reset_to_default(js):
+    """막대 오른쪽 클릭 메뉴(Office 빠른 실행 '초기화'): 고정 아이콘 = 빼기 + 기본으로 되돌리기 · ⋯·손잡이 = 되돌리기만(다 빼도 돌아올 길) ·
+    이미 기본이면 되돌리기 없음(빈 메뉴 = 띄우지 않음)."""
+    m = js["barMenu"]
+    assert m is not None, "HD.blocks.barMenu 가 없다"
+    assert m["icon"] == ["unpin", "reset"]
+    assert m["iconDef"] == ["unpin"]
+    assert m["more"] == ["reset"] and m["grip"] == ["reset"]
+    assert m["moreDef"] == []
+

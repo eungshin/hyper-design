@@ -64,17 +64,26 @@ def test_pin_from_menu_shows_on_bar_survives_reload_and_unpins_by_right_click(ct
         assert pg.evaluate(BAR) == ["grip", "memo", "text", "ai", "dup", "more"], "새로고침 뒤에도 고정 그대로"
 
         pg.click('#elbar [data-act="more"]', button="right")
-        assert pg.is_hidden("#elunpin"), "⋯ 는 오른쪽 클릭해도 빼기 메뉴 없음"
-        pg.click('#elbar [data-act="grip"]', button="right")
-        assert pg.is_hidden("#elunpin"), "손잡이도 빼기 메뉴 없음"
+        pg.wait_for_selector("#elunpin:not([hidden])", timeout=2000)
+        assert pg.locator("#elunpin button").all_inner_texts() == ["기본으로 되돌리기"], "⋯ 는 빼기 없이 되돌리기만"
+        pg.keyboard.press("Escape")
         pg.click('#elbar [data-act="dup"]', button="right")
         pg.wait_for_selector("#elunpin:not([hidden])", timeout=2000)
-        assert pg.inner_text("#elunpin").strip() == "막대에서 빼기"
+        assert pg.locator("#elunpin button").all_inner_texts() == ["막대에서 빼기", "기본으로 되돌리기"]
         pg.screenshot(path=str(SHOTS / "bar-unpin.png"))
         pg.click('#elunpin [data-act="unpin"]')
         assert pg.is_hidden("#elunpin")
         assert pg.evaluate(BAR) == ["grip", "memo", "text", "ai", "more"]
         assert pg.evaluate(PINS) == ["memo", "text", "ai"]
+        pg.click('#elbar [data-act="more"]', button="right")
+        assert pg.is_hidden("#elunpin"), "기본이면 ⋯ 오른쪽 클릭 메뉴 없음(빈 메뉴)"
+        for a in ("ai", "text", "memo"):                      # 다 빼도 ⋯ 로 돌아온다(R50 빈틈: AI 는 메뉴에 줄이 없다)
+            pg.click(f'#elbar [data-act="{a}"]', button="right")
+            pg.click('#elunpin [data-act="unpin"]')
+        assert pg.evaluate(BAR) == ["grip", "more"]
+        pg.click('#elbar [data-act="more"]', button="right")
+        pg.click('#elunpin [data-act="reset"]')
+        assert pg.evaluate(BAR) == ["grip", "memo", "text", "ai", "more"], "기본으로 되돌리기 = 지금 막대"
         assert not errors, errors
     finally:
         pg.close()

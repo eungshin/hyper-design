@@ -14,7 +14,7 @@
      Alt(51-5): 놓을 때 Alt 를 누르고 있으면 복제해 놓기(원본은 제자리) — 끄는 중 Alt = 커서 copy + 끼울 선 옆 '+' 배지 #eldrop-copy. 도우미 없으면 거절(토스트).
        셸은 아직 OP.moves(…, h, dirs) 만 넘기므로 놓기 계획은 h.drop 에 싣는다(dirs 는 셸의 빈 목록 거르기를 지나게 — 51-3 이 셸을 h.drop 으로 바꿀 때까지)
    R50 막대에 고정: 막대 아이콘 = 손잡이 + 고정 목록(ctx.prefs().elbarPins — 정리·차례·꺼짐·까닭은 HD.blocks.pins·icons) + ⋯. 이 모듈이 고정 목록의 주인(저장 = ctx.savePrefs(), 실패 = 토스트,
-     깨진 값 = 기본 + [hd] 경고 한 번). 메뉴 줄 핀은 셸이 pinState(act)·pin(act) 로 잇는다. 막대 아이콘 오른쪽 클릭 = 작은 메뉴 #elunpin '막대에서 빼기'(⋯·손잡이는 없음).
+     깨진 값 = 기본 + [hd] 경고 한 번). 메뉴 줄 핀은 셸이 pinState(act)·pin(act) 로 잇는다. 막대 오른쪽 클릭 = 작은 메뉴 #elunpin(HD.blocks.barMenu): 고정 아이콘 '막대에서 빼기' · 기본과 다르면 '기본으로 되돌리기'(⋯·손잡이에서도 — 다 빼도 돌아올 길) · 빈 메뉴면 안 띄움.
    HD.feature('blocks', {needs: ['$', 'toast', 'esc', 'api', 'cardEl', 'prefs', 'savePrefs']}) → {show(sel), hide(where?), place(), sel(), fire(act), onAct(fn), onPick(fn), onMenu(fn), wrote(res, list),
      pins() → 고정 목록, pinState(act) → {on, ok, why}, pin(act) → 바뀌었나(토글 — 거절·저장 실패는 토스트)} */
 (function () {
@@ -106,6 +106,13 @@ function mount(ctx) {
     if (ctx.savePrefs() === null) ctx.toast('막대 고정을 저장하지 못했어요 — 새로고침하면 사라져요');
     if (cur) { paint(); place(); }
     return true;
+  }
+  function resetPins() {                             // 기본으로 되돌리기 = 저장 칸을 지운다(없음 = 기본 막대)
+    var p = ctx.prefs();
+    if (!p) { ctx.toast('막대 고정을 저장하지 못했어요'); console.error('[hd] 요소 막대: 설정(prefs)이 없어요'); return; }
+    delete p.elbarPins;
+    if (ctx.savePrefs() === null) ctx.toast('막대 고정을 저장하지 못했어요 — 새로고침하면 사라져요');
+    if (cur) { paint(); place(); }
   }
   function btn(act, label, key, extra) {              // 아이콘 단추 하나 — 이름·단축키는 꼬리말(data-tip·data-key)과 aria-label
     return '<button type="button" data-act="' + act + '" data-tip="' + ctx.esc(label) + '" data-key="' + ctx.esc(key || '') + '" aria-label="' + ctx.esc(label + (key ? ' (' + key + ')' : '')) + '"' + (extra || '') + '>' + ICON[act] + '</button>';
@@ -443,14 +450,16 @@ function mount(ctx) {
     fire(b.dataset.act);
   });
   // ---- R50 막대 아이콘 오른쪽 클릭 → '막대에서 빼기'(⋯·손잡이는 없음)
+  var UNPIN_LABEL = {unpin: '막대에서 빼기', reset: '기본으로 되돌리기'};
   function closeUnpin() { unpin.hidden = true; unpin.innerHTML = ''; delete unpin.dataset.act; }
   bar.addEventListener('contextmenu', function (e) {
     e.preventDefault(); e.stopPropagation();
     var b = e.target.closest && e.target.closest('button[data-act]'), a = b && b.dataset.act;
-    if (!a || a === 'more' || a === 'grip') { closeUnpin(); return; }
+    var rows = a ? B.barMenu(pinList(), a) : [];
+    if (!rows.length) { closeUnpin(); return; }        // 기본 막대의 ⋯·손잡이 = 띄울 것 없음
     hideTip();
     unpin.dataset.act = a;
-    unpin.innerHTML = '<button type="button" role="menuitem" data-act="unpin">막대에서 빼기</button>';
+    unpin.innerHTML = rows.map(function (r) { return '<button type="button" role="menuitem" data-act="' + r + '">' + UNPIN_LABEL[r] + '</button>'; }).join('');
     unpin.hidden = false;
     unpin.style.left = Math.max(8, Math.min(innerWidth - unpin.offsetWidth - 8, e.clientX)) + 'px';
     unpin.style.top = Math.max(8, Math.min(innerHeight - unpin.offsetHeight - 8, e.clientY + 4)) + 'px';
@@ -458,9 +467,10 @@ function mount(ctx) {
   });
   unpin.addEventListener('click', function (e) {
     e.stopPropagation();
-    var b = e.target.closest('button[data-act="unpin"]'), a = unpin.dataset.act;
+    var b = e.target.closest('button[data-act]'), a = unpin.dataset.act;
     if (!b || !a) return;
     closeUnpin();
+    if (b.dataset.act === 'reset') { resetPins(); return; }
     var st = pinState(a);
     if (st.on) pin(a); else console.warn('[hd] 막대에서 빼기: 이미 고정되지 않은 동작이에요 — ' + a);
   });

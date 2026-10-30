@@ -8,7 +8,7 @@ HD.blocks = {ACTS, bar(h, o) → [{act, label, title, on, ask}](모든 동작 �
                 ATTRS, attrOk(tag, name), attrFields(h) → [{name, label, value}], partAsk(kind, title) → 부품 요청 글,
                 R17 시안 A · R50: icons(h, o) → 막대 아이콘 [{act, label, key, ask, on, title}](o.pins = 고정 목록, 없으면 메모·글자·AI — 차례 그대로 + 전체 메뉴 ⋯ 맨 끝, 못 쓰는 동작 = on:false + 까닭 title),
                 menu(h, o) → 요소 메뉴 묶음 [{head:'고르기'|'고치기'|'요청', items:[{act, label, key, on, ask, title, pinned?, pinOk?, pinWhy?, sub?:[같은 모양]}]}](sub = 옆 목록 '부품 ▸', pin 칸 = 실제 동작 줄만), keyOf(act, h, where) → 실제로 듣는 키 힌트|'',
-                R50 고정: PIN_MAX(6) · PINS_DEFAULT · pins(raw) → {list, warn}(없음 = 기본 · 배열 아님 = 기본 + 경고 · 모르는 act 버림 + 경고 · 중복 제거 · 6개 자르기) ·
+                R50 고정: PIN_MAX(6) · PINS_DEFAULT · barMenu(list, act) → ['unpin'?, 'reset'?](막대 오른쪽 클릭) · pins(raw) → {list, warn}(없음 = 기본 · 배열 아님 = 기본 + 경고 · 모르는 act 버림 + 경고 · 중복 제거 · 6개 자르기) ·
                 pin(list, act) → {pins} | {why}(토글 — 새로 고정 = 끝에, 6개면 거절) · pinState(list, act) → {on, ok, why}(메뉴 줄 핀)}
    o.links = 셸이 '연결' 묶음으로 덧붙일 항목 수 — 메뉴 전체가 MENU_MAX(10) 를 넘으면 '주소 복사'(R30, Ctrl+L 로도 됨)만 뺀다(안전줄 — '부품 ▸' 로 합친 뒤로는 넘지 않음) */
 (function () {
@@ -213,6 +213,12 @@ function pin(list, act) {                            // 토글 → {pins: 새 �
   if (!st.ok) return {why: st.why};
   return {pins: st.on ? l.filter(function (a) { return a !== act; }) : l.concat([act])};
 }
+function barMenu(list, act) {                        // 막대 오른쪽 클릭 메뉴 → ['unpin'?, 'reset'?] — 고정 아이콘 = 빼기 · 기본과 다르면 되돌리기(⋯·손잡이도 — 다 빼도 돌아올 길, Office 빠른 실행 '초기화') · [] = 띄우지 않음
+  var l = pins(list).list, out = [];
+  if (act !== 'more' && act !== 'grip' && l.indexOf(act) >= 0) out.push('unpin');
+  if (l.join() !== PINS_DEFAULT.join()) out.push('reset');
+  return out;
+}
 // 막대 아이콘 = 고정 차례 그대로 + ⋯(손잡이 맨 앞은 View) · 그 요소에 못 쓰는 동작은 숨기지 않고 꺼짐 + 까닭(막대 모양이 요소마다 흔들리지 않게 — '글자' 숨김도 이 규칙으로)
 function icons(h, o) {
   h = h || {}; o = o || {};
@@ -228,6 +234,6 @@ function icons(h, o) {
   return out;
 }
 
-HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, PIN_MAX: PIN_MAX, PINS_DEFAULT: PINS_DEFAULT, pins: pins, pin: pin, pinState: pinState, bar: bar, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
+HD.blocks = {ACTS: ACTS, ATTRS: ATTRS, PIN_MAX: PIN_MAX, PINS_DEFAULT: PINS_DEFAULT, pins: pins, pin: pin, pinState: pinState, barMenu: barMenu, bar: bar, grip: grip, isApp: isApp, keyAct: keyAct, enterOf: enterOf, askText: askText, parentPick: parentPick, chainOf: chainOf, tone: tone,
              attrOk: attrOk, attrFields: attrFields, partAsk: partAsk, icons: icons, menu: menu, keyOf: keyOf};
 })();
