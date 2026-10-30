@@ -1,7 +1,9 @@
 /* ViewModel — 캔버스 설정 하나(버전 붙음). 저장소 함수는 밖에서 받는다(getItem(key) / setItem(key, value)).
    키 hd-canvas-prefs = {v:3, lines:bool, op:0.15..1, preset:'calm'|'vivid'|'pastel'|'deep'|'random', rand:[hex…]|null,
-                         custom:{'src>dst':'#hex'}, width:1..6(.5 단위), motion:bool, tags:bool}
+                         custom:{'src>dst':'#hex'}, width:1..6(.5 단위), motion:bool, tags:bool, elbarPins?:[act…]}
      lines·op = 판에 늘 그리는 선 보이기·투명도(E7), width = 선 굵기(늘 그리는 선과 연결 보기 선 함께), tags = 선 태그 보이기(R46 — 끄면 고른 카드의 태그도 숨김)
+   elbarPins = 요소 막대 고정 목록(R50) — 칸이 있을 때만 그대로 싣는다(정리·깨진 값 경고는 HD.blocks.pins, 칸 없음 = 기본 막대)
+   save 는 쓴 값을 돌려주고, 저장소가 거절하면 null(알리는 일은 부른 쪽)
    v2 의 arrows(주요 흐름 점선, 지움 — D9)·v1 의 sat 는 버리고 나머지는 옮긴다. 더 예전 키(hd-arrows)는 읽지 않는다.
    잘못된 값은 기본값으로. 메모(hd-notes:*)·팔레트(hd-palette) 키는 여기서 다루지 않는다. */
 (function () {
@@ -33,6 +35,7 @@ function normalize(o) {
   if (okWidth(o.width)) p.width = Math.round(o.width * 2) / 2;
   if (typeof o.motion === 'boolean') p.motion = o.motion;
   if (typeof o.tags === 'boolean') p.tags = o.tags;
+  if (o.elbarPins !== undefined) p.elbarPins = Array.isArray(o.elbarPins) ? o.elbarPins.slice(0, 50) : o.elbarPins;   // 정리는 blocks.pins(깨진 값도 그대로 두어 막대가 경고)
   return p;
 }
 
@@ -45,7 +48,7 @@ function load(getItem) {
 
 function save(prefs, setItem) {
   var o = normalize(prefs);
-  try { setItem(KEY, JSON.stringify(o)); } catch (e) {}
+  try { setItem(KEY, JSON.stringify(o)); } catch (e) { return null; }   // 저장소 쓰기 실패(가득 참·막힘) — 부른 쪽이 알린다
   return o;
 }
 

@@ -598,7 +598,7 @@ $$('.tab').forEach(function (b) { b.addEventListener('click', function () { show
 // ── 판의 선(modules/view-lines.js) · 고른 화면 안 연결(modules/view-links.js) · 설정(modules/prefs.js)
 function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
 var prefs = HD.prefs.load(function (k) { return localStorage.getItem(k); });
-function savePrefs() { HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }
+function savePrefs() { return HD.prefs.save(prefs, function (k, v) { localStorage.setItem(k, v); }); }   // null = 저장 실패(R50 막대 고정이 알림)
 // 숨김·잠금·태그 이름 View(modules/view-layer-flags.js — 거르기 규칙은 HD.layerFlags) — 이 캔버스에서만, 화면 파일은 그대로. 별도 키, 없는 화면 id 는 버리고 정리한 목록을 다시 쓴다
 var LF = HD.viewLayerFlags.mount({$: $, $$: $$, rowsEl: rowsEl, cardEl: function (id) { return VL.cardEl(id); }, getItem: ST.getItem, setItem: function (k, v) { ST.setItem(k, v); }, hash: hashStr(KEYPATH),
   live: function () { return HD.layerFlags.live(D.rows, NS.list()).concat(HD.boardText.IDS); },
@@ -840,13 +840,14 @@ function openElemMenu(from, h, x, y, tail, inModal) {   // tail(카드 항목 �
   var fire = function (it) {                         // 한 동작 → 막대의 고르기·칸·목록 길(상위·안쪽·속성·부품) 또는 셸 편집 길
     return VIA_BAR[it.act] ? function () { elemFire(from, h, inModal, it.act); } : function () { blockAct(it.act, Object.assign({}, sel, {ask: it.ask})); };
   };
-  HD.blocks.menu(h, {app: app, where: where, links: links.length}).forEach(function (g) {   // links = 10개 한도 셈(R30 주소 복사가 넘치면 그것만 빠짐)
+  var pinOf = function (x) { return BK && x.pinOk !== undefined ? {state: function () { return BK.pinState(x.act); }, toggle: function () { BK.pin(x.act); }} : null; };   // R50 줄 끝 핀 → 요소 막대 고정 목록
+  HD.blocks.menu(h, {app: app, where: where, links: links.length, pins: BK ? BK.pins() : undefined}).forEach(function (g) {   // links = 10개 한도 셈(R30 주소 복사가 넘치면 그것만 빠짐)
     if (g.head === '요청') group('연결', links);
     group(g.head, g.items.filter(function (it) { return it.act !== 'addr' || AD; }).map(function (it) {
-      var o = {id: it.act, label: it.label, key: it.key, title: it.title};
+      var o = {id: it.act, label: it.label, key: it.key, title: it.title, pin: pinOf(it)};
       if (it.act === 'addr') o.act = function () { AD.element(from, h, inModal); };   // 주소 복사(R30, view-address)
       else if (it.act === 'chain') o.sub = function (put) { pickList(from, h, inModal, put); };   // Figma Select layer ▸(51-3)
-      else if (it.sub) { var kids = it.sub.map(function (x) { return {id: x.act, label: x.label, title: x.title, act: fire(x)}; }); o.sub = function (put) { put(kids); }; }   // 부품 ▸ = 아래에 넣기 · 다른 부품으로 바꾸기(R30)
+      else if (it.sub) { var kids = it.sub.map(function (x) { return {id: x.act, label: x.label, title: x.title, act: fire(x), pin: pinOf(x)}; }); o.sub = function (put) { put(kids); }; }   // 부품 ▸ = 아래에 넣기 · 다른 부품으로 바꾸기(R30)
       else o.act = fire(it);
       return o;
     }));
@@ -893,6 +894,7 @@ function blockAct(act, s) {
     var a = s.at || null, r = !a && s.anchor ? s.anchor() : null; if (r) a = {x: r.x + r.w, y: r.y};   // 메모 창 = 그 요소 오른쪽 위
     done(); MP.elem(id, h, s.ask || act === 'ai' ? HD.blocks.askText(act, h) : '', inModal, a); return;
   }   // 앱 카드 = 파일 대신 AI 에게(소스 줄) · AI에게 바꿔 달라기(R17) = 같은 메모 창(의도 = 바꾸기)에 요청 글
+  if (act === 'addr') { if (AD) AD.element(id, h, inModal); else toast('주소를 복사할 수 없어요'); return; }   // 막대에 고정한 주소 복사(R50) = 메뉴와 같은 view-address
   if (act === 'text') { done(); editScreenText(id, h, inModal); return; }   // 그 자리에서 고치기(49c) — 막대는 걷는다(글을 덮지 않게)
   if (act === 'swap' || act === 'insert') {          // 부품 바꾸기·넣기(task 49b) — 뼈대를 뽑을 수 있으면 도우미가 바로, 아니면 AI 요청 메모(견본 글은 넣지 않음)
     var pt = s.part || null;
@@ -1358,7 +1360,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   local: {getItem: function (k) { return localStorage.getItem(k); }, setItem: function (k, v) { localStorage.setItem(k, v); }, removeItem: function (k) { localStorage.removeItem(k); }},
   key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); }, record: function (op) { record(op); },
   reload: function (ids, opt) { if (LV) LV.reload(ids, opt); else reloadCards(ids); },   // 바뀐 카드 다시 싣기(교체 길, 47-4b) — opt {stamp, echo}: 같은 쓰기 알림·메아리는 한 번
-  prefs: function () { return prefs; }, savePrefs: function () { savePrefs(); },
+  prefs: function () { return prefs; }, savePrefs: function () { return savePrefs(); },
   api: {on: VS.on, call: function (method, path, body) {   // 로컬 도우미 부르기 → {status, body} (도우미 없으면 on=false — 부르기 전에 볼 것)
     return fetch(path, {method: method, headers: {'Content-Type': 'application/json', 'X-HD-Token': new URLSearchParams(location.search).get('hd') || ''},
       body: body === undefined ? undefined : JSON.stringify(body)}).then(function (r) { return r.json().then(function (j) { return {status: r.status, body: j}; }); });

@@ -1,6 +1,6 @@
 """R17 시안 A — 요소 막대 아이콘 · 요소 전체 메뉴(묶음 + 단축키 힌트) 규칙(modules/blocks.js, node).
 
-icons(h, o) = 막대에 보일 아이콘: 메모 달기 · 글자 고치기(글을 바꿀 수 있을 때만 — bar 의 글자 켜짐과 같은 규칙) · AI에게 바꿔 달라기 · 전체 메뉴(⋯).
+icons(h, o) = 막대에 보일 아이콘(고정 목록 없음 = 기본): 메모 달기 · 글자 고치기(글을 바꿀 수 없으면 꺼짐 + 까닭 — R50 부터 숨기지 않음) · AI에게 바꿔 달라기 · 전체 메뉴(⋯).
 menu(h, o) = 오른쪽 클릭·⋯ 메뉴 묶음 고르기 / 고치기 / 요청 — 꺼진 항목은 빼되 글자는 남긴다(누르면 까닭), 앱 카드 = 고치기는 AI 요청(힌트 없음).
 keyOf(act, h, where) = 실제로 듣는 키만 힌트: Shift+Enter 상위 · Enter = 글자면 글자 고치기, 아니면 안쪽 고르기 · 크게 보기 글자 = 더블클릭 · Ctrl+D · Del · Alt+↑/↓.
 askText('ai', h) = 메모 창에 미리 채울 바꿔 달라는 글."""
@@ -22,7 +22,7 @@ const h = {path: 'p', text: '뜻 보기', full: '뜻 보기', textOk: true, prev
 const box = Object.assign({}, h, {textOk: false, text: '', full: ''});
 const flat = (gs) => gs.map(g => [g.head, g.items.map(i => i.sub ? [i.act, i.label, i.key, i.sub.map(x => [x.act, x.label, x.key])] : [i.act, i.label, i.key])]);
 out.icons = B.icons(h, {}).map(i => [i.act, i.label, i.key]);
-out.iconsBox = B.icons(box, {}).map(i => i.act);
+out.iconsBox = B.icons(box, {}).map(i => [i.act, i.on, i.key]);
 out.iconsApp = B.icons(h, {app: true}).map(i => [i.act, !!i.ask, i.key]);
 out.menu = flat(B.menu(h, {where: 'board'}));
 out.menuBox = flat(B.menu(box, {where: 'board'}));
@@ -58,8 +58,9 @@ def test_bar_icons_memo_text_ai_then_more(js):
     assert js["icons"] == [["memo", "메모 달기", ""], ["text", "글자 고치기", "Enter"], ["ai", "AI에게 바꿔 달라기", ""], ["more", "전체 메뉴", "오른쪽 클릭"]]
 
 
-def test_text_icon_only_when_text_is_editable(js):
-    assert js["iconsBox"] == ["memo", "ai", "more"]
+def test_text_icon_is_off_not_hidden_when_text_is_not_editable(js):
+    """예전: 글을 못 고치는 요소면 '글자'를 숨김 → R50 결정 5: 막대 모양이 요소마다 흔들리지 않게 꺼진 아이콘(누르면 까닭). 지키는 뜻 = 못 고치는 글자를 켜 보이지 않는다."""
+    assert js["iconsBox"] == [["memo", True, ""], ["text", False, ""], ["ai", True, ""], ["more", True, "오른쪽 클릭"]], js["iconsBox"]
 
 
 def test_app_card_text_icon_is_an_ai_request_without_key(js):
