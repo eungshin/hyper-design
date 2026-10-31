@@ -189,7 +189,7 @@ var stateReload = false;                             // 409 로 다시 불러올
 var ST = HD.viewStateSync.mount({hash: hashStr(KEYPATH), on: !!window.__hdHelper && /^https?:$/.test(location.protocol), token: new URLSearchParams(location.search).get('hd') || '',
   snapshot: window.__hdState, storage: localStorage, toast: function (m) { toast(m, false, 4000); }, warn: function (m) { console.warn(m); },
   reload: function () { stateReload = true; setTimeout(function () { location.reload(); }, 1200); },
-  onExternal: function (names) { adoptExternal(names); }});   // AI 답(hd reply) 등 파일에서 바뀐 메모 — 새로고침 없이
+  onExternal: function (names) { adoptExternal(names); }});   // AI 답(hd reply)·밖에서 바뀐 카드 자리·크기 등(stateFile.LIVE) — 새로고침 없이
 (function () {                                       // 쓰기마다 기록(HI)에 알린다 — 기록 줄의 상태 차이를 잡는 기준(base)을 고르려고(view-history.js)
   var set = ST.setItem, rm = ST.removeItem;
   ST.setItem = function (k, v) { set(k, v); if (HI) HI.wrote(k); };
@@ -1139,7 +1139,8 @@ function saveNotes(fromFile) {                       // fromFile = 파일에서 
 // 파일에서 바뀐 notes·note-seq(view-state-sync 가 받음) → 같은 메모 객체에 칸만 바꿔 넣고(되돌리기 기록 유지) 닿은 카드만 다시 — 셸 함수인 까닭: NS·noteSeq·renderNotes 를 잇기만 한다
 function adoptExternal(names) {
   if (names.indexOf('busy') >= 0 && VB) VB.adopt();   // hd claim·release(#254) — 덮개만 다시 읽어 그린다
-  if (names.indexOf('card-size') >= 0 && AB) AB.reload();   // R57 다른 곳(hd add·다른 AI 세션)이 쓴 카드 크기 — 판을 다시 불러오지 않고 카드만(선·선택 막대·크게 보기는 AB changed 가)
+  var board = names.filter(function (n) { return n !== 'busy' && n !== 'notes' && n !== 'note-seq'; });
+  if (board.length) adoptState(board);               // R57 카드 크기 · W10 F1 카드 자리·숨김·폴더… — 다른 곳(hd add·다른 AI 세션)이 쓴 값만 다시 그림(카드 iframe·카메라 그대로)
   if (!names.some(function (n) { return n === 'notes' || n === 'note-seq'; })) return;
   if (names.indexOf('note-seq') >= 0) {
     try { var v = JSON.parse(ST.getItem(QKEY) || '{}'); if (v && typeof v === 'object' && !Array.isArray(v)) noteSeq = v; else console.warn('[hd] 파일의 note-seq 가 객체가 아니에요'); }

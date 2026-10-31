@@ -2,7 +2,7 @@
 
 다른 AI 세션이 캔버스가 열린 동안 화면을 더하며 card-size 를 쓰면(10-31: 1분에 22번) 판이 매번 다시 불러와지고
 '다른 곳에서 바뀌어 다시 불러왔어요' 토스트가 거듭 떴다. 이제 card-size 는 제자리에서(카드만 크기 바뀜) 받고,
-셸이 따로 들고 있는 자리·폴더 등이 함께 바뀌었을 때만 다시 불러온다."""
+W10 F1 부터 카드 자리·숨김·폴더 등도 같은 LIVE 목록(셸 adoptState) — edit-log·모르는 이름이 바뀌었을 때만 다시 불러온다."""
 import json, shutil, subprocess, tempfile
 from pathlib import Path
 
@@ -35,9 +35,9 @@ def out():
 
 
 def test_card_size_from_elsewhere_is_taken_in_place(out):
-    assert out["live"] == ["busy", "card-size", "note-seq", "notes"]
+    assert out["live"] == sorted(["busy", "card-size", "note-seq", "notes", "card-pos", "hidden", "locked", "link-names", "folders", "board-notes", "board-links"])   # W10 F1 이 자리·숨김·폴더… 를 같은 목록에
     assert out["inPlace"][:3] == [True, True, True], "card-size(메모·덮개와 함께여도) = 제자리"
 
 
-def test_other_names_still_reload_the_board(out):
-    assert out["inPlace"][3:] == [False, False, False], "자리·폴더·모르는 이름이 섞이면 다시 불러오기"
+def test_unknown_names_still_reload_the_board(out):
+    assert out["inPlace"][3:] == [True, True, False], "자리·폴더도 제자리(W10 F1) · 모르는 이름이 섞이면 다시 불러오기"
