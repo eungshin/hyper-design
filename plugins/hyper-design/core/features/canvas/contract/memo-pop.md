@@ -9,7 +9,7 @@
 | `modules/annotation.js` `make`·`makeId` | Model | 새 메모 모양 하나(첫 대상의 path·text·rect, targets 사본, `sent:false`, 범위는 element 가 아닐 때만) · 메모 id(시각 36진 + 난수 4자리, 부르는 쪽이 `Date.now()`·`Math.random()` 을 넘김). 메모 창·질문 답(`view-send`)이 같이 쓴다 |
 | `modules/view-memo-pop.js` | View | 메모 창 `#pop` 하나: 화면 전체(`card`, 배열 = 고른 화면마다) · 판 위 요소(`element`) · 요소 막대(`elem`, 크게 보기면 고른 요소 아래) · 크게 보기 `hd-picked`(메모 도구 요소 모드일 때, Shift = 묶음에 더하기·빼기) · 고치기 `edit` · 지우기 `del`(되돌리기 = 제자리) · 사람 답 `reply`(확인·다시). 범위 `#pscope`·의도 `#pintent`. 상태 = `draft`·`editing`. ctx `{$, $$, esc, notes, save, record, toast, title, modal() → {open, screen, scale, box, picking, frame}, setScreen(id), frame() → popPlace, cardEl, pins(), focusPin(id)}`. `HD.viewMemoPop.mount(ctx) → {card, addCard, element, addElement, elem, edit, del, reply, isOpen(), close(), draft()}` — 셸이 `VN` 앞에 직접 붙인다(`MP`) |
 | `modules/pop-side.js` | Model | 메모 창 자동 자리(R27 F09): `beside(target, size, areas, gap?) → {x, y, side}` — 대상 상자 오른쪽 → 왼쪽 → 아래 → 위 중 앞 area(판 자리 `#screens`)에 들어가는 첫 자리, 없으면 다음 area(화면), 어디에도 없으면 가장 넓은 쪽(안으로 자름). 깨진 값 = 첫 area 왼쪽 위(`side:'none'`). 상태 없음. `HD.popSide = {GAP, beside}` |
-| 셸 | — | Esc 사슬에서 `MP.isOpen()`/`MP.close()` · 크게 보기 닫기·넘어감에서 `MP.close()` · 핀 ctx `draft: MP.draft()` · 메모 패널·묶음(`VN`·`TH`)에 `MP.edit`·`del`·`reply`·`card` |
+| 셸 | — | 떠 있는 층 `MP.layer`(`float-stack.md` — Esc·바깥 누르기·다른 메뉴, 쓴 글이 있으면 남김) · ctx `feeds(t)`(메모 도구 누르기 = 여는 것) · 크게 보기 닫기·넘어감에서 `MP.close()` · 핀 ctx `draft: MP.draft()` · 메모 패널·묶음(`VN`·`TH`)에 `MP.edit`·`del`·`reply`·`card` |
 
 ## 규칙
 
@@ -20,6 +20,7 @@
 - 고치기·지우기에 없는 id = 토스트 '그 메모가 없어요 — 이미 지워졌어요'
 - 첨부 이미지(R22, `attach.md`): `#pop` = `[data-hd-attach]` 상자(칩 자리·클립 단추는 mount 가 만든다). 열 때 `hd-attach-set`(새 메모 = 비움 · 고치기 = 메모의 `attach`, 글 칸에는 경로 줄 없이) · 추가/저장 = 글 끝 경로 줄 + `attach` 칸 · 올리는 중이면 토스트 · 닫으면 비움
 - 막 단 메모의 카드는 핀을 바로 보인다(`focusPin`, 크게 보기 아닐 때)
+- 닫기(U1, `float-stack.md`): 빈 창(사람이 쓴 글 없음 — 고치기의 미리 채운 글은 쓴 것이 아님)은 바깥 누르기·다른 메뉴·도구 바꾸기로 닫힌다. 쓴 글이 있으면 남는다. Esc·×·크게 보기 닫기·탭 바꾸기로 닫으면 쓴 글을 대상 열쇠로 맡겨 두고 같은 메모·같은 대상을 다시 열면 되살린다(토스트 '쓰던 글을 되살렸어요')
 
 ## 고치면 돌릴 것
 

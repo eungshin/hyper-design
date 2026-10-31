@@ -3,7 +3,8 @@
      HD.memoState.plan 차례대로 'hd'(hd-goto → 화면 window.hdGoto) · 'replay'(카드·크게 보기 iframe 을 다시 읽고 hd-replay = 클릭 기록 다시 하기) — 한 가지가 끝나면
      그 메모 핀이 그려질 때까지(ARRIVE) 기다려 ctx.select(그 메모를 고른 상태 = 메모 묶음이 그 메모로) · 다 실패하면 토스트 HD.memoState.FAIL, 칩은 그대로.
    상태(저장하지 않음) = 가는 중인 메모 id 하나(busy) · 답 기다리는 tag 표(waits). 칩 줄 배치 규칙(위·아래, 한 줄 칩 수)은 Model HD.memoState.side·row.
-   HD.viewMemoState.mount(ctx) → {render(id?)}   id = 칩을 다시 그릴 화면(없으면 판 카드 전부 + 크게 보기) — 셸이 핀 답(PN changed)·크게 보기 다시 그리기 때 부른다
+   HD.viewMemoState.mount(ctx) → {render(id?), layer}   id = 칩을 다시 그릴 화면(없으면 판 카드 전부 + 크게 보기) — 셸이 핀 답(PN changed)·크게 보기 다시 그리기 때 부른다
+   layer = 떠 있는 층 'chiptip'(view-float-stack, U1): 미리보기(꼬리말)는 Esc 로 닫힌다(꼬리말 관례 — 누르기는 아래 층 몫, 칩에서 벗어나면 스스로 숨는다). 칩 줄은 늘 있는 상태 표시라 닫지 않는다
    ctx = {rowsEl, mbar(크게 보기 머리 줄), esc, away(id, modal) → [메모], cardEl(id), modal() → {open, screen, frame}, frameOf(id) → 카드 iframe|null,
           select(id, no, modal, pin), toast(msg)} */
 (function () {
@@ -152,7 +153,8 @@ function mount(ctx) {
   document.addEventListener('pointerover', function (e) { var b = chipOf(e); if (b) showTip(b); else if (!tip.hidden) hideTip(); });
   document.addEventListener('focusin', function (e) { var b = chipOf(e); if (b) showTip(b); else if (!tip.hidden) hideTip(); });
 
-  return {render: render};
+  var layer = {id: 'chiptip', escOnly: true, isOpen: function () { return !tip.hidden; }, close: hideTip, hit: function () { return 'ignore'; }};
+  return {render: render, layer: layer};
 }
 
 HD.viewMemoState = {mount: mount};

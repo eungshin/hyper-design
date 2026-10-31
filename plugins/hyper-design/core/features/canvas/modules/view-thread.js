@@ -2,14 +2,16 @@
    R26: 줄 동작은 메타 줄 오른쪽 끝 작은 아이콘(.thib — 연필·휴지통·체크 · 닫힌 메모는 되돌리기 화살표 = 다시 열기, 메모 패널 .nib 와 같은 모양), 평소엔 흐리고 줄에 올리거나 포커스면 진하게.
    이름은 aria-label + 꼬리말 #thtip(요소 막대 #eltip 과 같은 모양 — 올리기·키보드 포커스일 때). 글(.tht)이 가장 또렷하고 메타(번호·대상·상태·의도)는 작은 회색 한 줄.
    메모 나누기(배지 수와 같은 것)는 HD.edits.split(Model). 고치기·지우기·더하기는 셸이 메모 패널과 같은 함수를 건넨다(여기서 메모를 바꾸지 않는다).
-   상태 = 지금 연 화면 id 하나(저장하지 않음). 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc(셸이 close 를 부른다)·바깥 누르기 = 닫기.
+   상태 = 지금 연 화면 id 하나(저장하지 않음). 배지 누르기는 카드 고르기·끌기로 가지 않는다. Esc·바깥 누르기 = 닫기 — 떠 있는 층 목록(view-float-stack)이 layer 로 판단한다
+   (배지·핀 = 여는 것: 같은 배지 · 같은 핀을 다시 누르면 닫힘, 다른 핀이면 그 메모로).
    줄마다 번호 #n.no · 범위 말(이 요소가 아닐 때만, HD.annotation.scopeWord — R7) · 상태 말(HD.annotation.label — 받는 곳 없이 보낸 것 = '대기열', decide 만 강조색) · 답(답마다 회색 한 줄 HD.annotation.says, 마지막 것 펼침, 앞 것 접힘,
    답에 detail 이 있으면 그 줄 아래 전체(.thdet, R26), 반영됨 줄에 올리면 화면·캡처 · 사람 답은 작게 '완료함/다시 엶' + 시각) · 빈 레이아웃에서 옮겨 온 메모면 회색 한 줄(HD.promote.movedSay) · 기다리는 질문이면 고를 것 단추(누르기 = ctx.choose) · [완료](사람 답 '확인'). 닫힌 메모는 아래 접힌 '완료 N' 묶음에 [다시 열기].
    보낸 메모 숨기기(task 29): 줄은 HD.annotation.visible(n, 켜짐)인 메모만(켜짐 = ctx.showSent(), 주인 view-notes) — 꺼짐이면 AI 작업 중·완료 메모는 빠지고
    ('완료 N' 묶음도 켜졌을 때만) 숨긴 수를 회색 한 줄로. 켜짐이 바뀌면 셸이 refresh() 를 부른다(#263).
    다시 찾지 못한 대상(ctx.lost — 같은 요소가 여럿·없음)이 있고 닫히지 않은 메모 = "요소를 찾을 수 없음"(.thlost, title = 까닭, #285). 줄에 올리면 ctx.highlight(화면, no) — 그 핀·요소 테두리.
-   핀 누르기(셸이 open(id, 핀, no)) = 그 메모로 스크롤하고 펼침. 배지가 없어져도(열린 메모 0) 메모가 남아 있으면 그 자리에 둔다.
-   HD.viewThread.mount(ctx) → {open(id, anchorEl, no?), close() → 열려 있었나, refresh(), isOpen()}
+   핀 누르기(셸이 open(id, 핀, no)) = 그 메모로 스크롤하고 펼침. 연 자리(배지 · 핀)는 메모가 바뀌어도 그대로 — 핀으로 열었으면 배지로 옮겨 붙지 않고, 붙을 것이 없어지면 마지막 자리(F1b).
+   배지가 없어져도(열린 메모 0) 메모가 남아 있으면 그 자리에 둔다.
+   HD.viewThread.mount(ctx) → {open(id, anchorEl, no?), close() → 열려 있었나, refresh(), isOpen(), layer(떠 있는 층 — id 'thread')}
    ctx = {rowsEl, esc, list() → 메모 전부, title(id), edit(noteId), del(noteId), add(screenId), done(noteId), reopen(noteId), lost(n), highlight(id, no|null),
           choose(noteId, choice), queued() → 보내기가 대기열 파일에만 가나, showSent() → 보낸 메모 보기 켜짐} */
 (function () {
@@ -25,7 +27,7 @@ var ICON = {                                         // 줄·머리 아이콘(R2
 var NAME = {edit: '고치기', del: '지우기', done: '완료', reopen: '다시 열기', add: '메모 추가'};
 
 function mount(ctx) {
-  var esc = ctx.esc, cur = null, A = HD.annotation;  // cur = {id, badge, no, at(마지막 자리)}
+  var esc = ctx.esc, cur = null, A = HD.annotation;  // cur = {id, badge(연 것 — 배지 또는 핀), pin(핀으로 열었나), no, at(마지막 자리)}
   var box = document.createElement('div');
   box.id = 'thread'; box.className = 'thr'; box.hidden = true;
   box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '이 화면 메모');
@@ -113,8 +115,10 @@ function mount(ctx) {
     box.style.left = x + 'px'; box.style.top = y + 'px';
   }
   function open(id, badge, no) {
+    no = no == null ? null : no;
+    if (cur && cur.id === id && no != null && cur.no === no) { close(); return; }   // 같은 핀을 다시 누름 = 닫기(배지와 같은 규칙, F5)
     if (cur && cur.badge && cur.badge !== badge) cur.badge.setAttribute('aria-expanded', 'false');
-    cur = {id: id, badge: badge, no: no == null ? null : no};
+    cur = {id: id, badge: badge, pin: !(badge && badge.classList && badge.classList.contains('nbadge')), no: no};
     box.hidden = false; draw(); place();
     badge.setAttribute('aria-expanded', 'true');
     focusRow(cur.no);
@@ -131,7 +135,7 @@ function mount(ctx) {
     if (!memosOf(cur.id).length) { close(); return; }
     var card = null;
     Array.prototype.forEach.call(ctx.rowsEl.querySelectorAll('.card'), function (c) { if (c.dataset.id === cur.id) card = c; });
-    var badge = card ? card.querySelector('.nbadge') : null;
+    var badge = card && !cur.pin ? card.querySelector('.nbadge') : null;   // 배지로 연 것만 새 배지로 — 핀으로 열었으면 연 자리(마지막 자리) 그대로(F1b)
     if (badge) { cur.badge = badge; badge.setAttribute('aria-expanded', 'true'); }
     var y = box.querySelector('.thbody'), top = y ? y.scrollTop : 0;
     draw(); place();
@@ -154,9 +158,6 @@ function mount(ctx) {
     var b = hit(e); if (!b || (e.key !== 'Enter' && e.key !== ' ')) return;
     e.preventDefault(); e.stopPropagation(); toggle(b);
   });
-  document.addEventListener('pointerdown', function (e) {   // 바깥 누르기 = 닫기(배지 누르기는 위 click 이 정한다)
-    if (cur && !box.contains(e.target) && !hit(e)) close();
-  }, true);
   box.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-act]'); if (!b || !cur) return;
     var li = b.closest('li'), id = cur.id;
@@ -188,7 +189,13 @@ function mount(ctx) {
   box.addEventListener('focusout', function () { if (!box.matches(':hover')) hideTip(); });
   ['pointerdown', 'wheel', 'keydown', 'contextmenu'].forEach(function (n) { box.addEventListener(n, function (e) { if (n !== 'keydown' || e.key !== 'Escape') e.stopPropagation(); }); });
 
-  return {open: open, close: close, refresh: refresh, isOpen: function () { return !!cur; }};
+  var layer = {id: 'thread', isOpen: function () { return !!cur; }, close: close,   // 떠 있는 층(view-float-stack): 바깥 누르기·Esc 는 거기서
+    hit: function (t) {
+      if (!t || !t.closest) return 'outside';
+      if (box.contains(t) || tip.contains(t)) return 'inside';
+      return hit({target: t}) || t.closest('.npin, #mpins .pin') ? 'opener' : 'outside';   // 배지·핀 = 여는 것 — 그쪽 click 이 열기·닫기를 정한다
+    }};
+  return {open: open, close: close, refresh: refresh, isOpen: function () { return !!cur; }, layer: layer};
 }
 
 HD.viewThread = {mount: mount};
