@@ -254,7 +254,7 @@ function mount(ctx) {
     var same = !!(job && job.phase === 'ready' && L && L.old.hasAttribute('data-hd-opt')) && sameOf(L.old, L.next);   // 먼저 바뀐 틀(낙관 반영, view-optimistic 표시)만 — AI 쓰기는 예전처럼 겹치기·알약
     var step = S.next(job, {touching: S.touching(id, sig), reduced: reduced(), same: same, typing: sig.typing.indexOf(id) >= 0});
     if (step === 'wait') return;
-    if (step === 'defer') { pill(id); watch(true); return; }
+    if (step === 'defer' && L && L.old.isConnected) { pill(id); watch(true); return; }   // 옛 틀이 그새 빠졌으면(되돌리기·다시 그리기) 알약 대신 commit 의 옛 길
     commit(id, step === 'silent');
   }
   function recheck() {                                 // 만지기가 끝났나 — 미룬 카드만
