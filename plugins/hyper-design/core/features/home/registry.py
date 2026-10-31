@@ -17,6 +17,8 @@
 - 지금 도장 재기는 한 자리(보드 전환 S1): current_code(max_age) = 이 허브의 기억 하나(잰 시각 · 값) — STAMP_TTL(2초) 안이면 git 을 다시 부르지 않는다.
   열기(open) · 세션 페이지(page 의 code) · 옛 코드 칩(stale_info, STALE_TTL) 이 같은 기억을 쓴다 → 전환 한 번에 git rev-parse 한 번.
   커밋 뒤 2초 안 전환은 옛 도장으로 볼 수 있다(다음 전환에서 바로잡힘). 규칙은 stamp_fresh(순수 — 시계를 넘겨받는다).
+- 공용 셸 미리 만들기(1단계 P1a): current_code 가 git 으로 새로 잴 때마다 prebuild.want(도장) — 처음 보는 도장이면 뒤 스레드 하나가
+  그 도장의 셸을 만든다(canvas/shell_store.Prebuilder — 허브 make_hub 가 넘김 · 같은 도장 두 번 안 함). 뜰 때 · 커밋 뒤(열기·페이지 2초 · 옛 코드 칩 30초) 알아챈다.
 """
 import json, os, pathlib, sys, threading, time, urllib.parse
 from http.server import ThreadingHTTPServer
@@ -58,9 +60,10 @@ class _Alias(ThreadingHTTPServer):
 class ProjectRegistry:
     """열린 세션들(이름 → ProjectSession). hub_port()·hub_url() = 허브 주소, picker = 폴더 고르기, build = 다시 빌드(테스트가 바꿔 끼움)."""
 
-    def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None, restarter=None):
+    def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None, restarter=None, prebuild=None):
         self.hub_port, self.hub_url, self.picker, self.paseo = hub_port, hub_url, picker, paseo
         self.build, self.after_rows, self.restarter = build or ref_build, after_rows, restarter
+        self.prebuild = prebuild                     # 새 도장의 공용 셸을 뒤에서 만든다 — 허브(make_hub)가 SS.PREBUILD 를 넘김, 없으면 안 함(unit 은 I/O 없이)
         self.clock = time.monotonic                  # 도장 기억의 시계(테스트가 바꿔 끼움)
         self._probe, self._probe_lock = None, threading.Lock()   # (잰 때 clock, 지금 도장) — current_code 의 기억 하나
         self.code = self.current_code()              # 이 허브 프로세스가 뜬 코드 도장
@@ -98,9 +101,13 @@ class ProjectRegistry:
         자물쇠 안에서 잰다 — 같이 온 요청(열기 · 페이지)이 따로 재지 않게."""
         t = self.clock() if now is None else now
         with self._probe_lock:
-            if self._probe is None or not stamp_fresh(self._probe[0], t, max_age):
+            fresh = self._probe is not None and stamp_fresh(self._probe[0], t, max_age)
+            if not fresh:
                 self._probe = (t, C.code_stamp())
-            return self._probe[1]
+            stamp = self._probe[1]
+        if not fresh and self.prebuild is not None:
+            self.prebuild.want(stamp)                # 처음 보는 도장만 뒤에서 만든다(기다리지 않음)
+        return stamp
 
     def stale(self, current=None):
         """이 허브가 옛 코드로 떠 있나(지금 도장을 모르면 아니라고)."""

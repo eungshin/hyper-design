@@ -4,6 +4,7 @@
 - 페이지(`/` · `/index.html` · 허브 `/home.html`) · `/api/*` · 이벤트 흐름 · `/v1/…` · `/agents` · 모르는 종류(데이터 json 포함) = no-store(늘 새로)
 - out 의 정적 파일(js·css·이미지·글꼴·화면 html) = no-cache — 매번 묻고 같은 판이면 304(SessionHandler.send_head)
 - out 맨 위 셸 파일(hd-shell.js · hd-shell.css, S3)에 `?v=<도장>` = max-age=31536000, immutable — 도장이 바뀌면 주소가 바뀐다
+- 허브 공용 셸 `/v1/shell/<도장>/<파일>`(1단계 P1a, shell_store) = immutable — 주소에 도장이 든다(그 밖 `/v1/…` 은 no-store 그대로)
 - 허브 썸네일 `/thumb/…` = max-age=31536000(주소의 ?t= 가 바뀌면 새로 — 예전 그대로)
 - 200·304 가 아닌 답(301·403·404·500 …) = 늘 no-store(아직 없는 셸 파일의 404 가 1년 남지 않게)
 판 표 = ETag(mtime_ns·크기). Last-Modified 는 초 단위라 같은 초 안에 다시 쓴 화면 파일을 304 로 놓친다(10-31 확인) — 시각만 온 물음은 견주지 않는다.
@@ -19,6 +20,7 @@ PAGES = ("", "/", "/index.html", "/home.html")
 NEVER = ("/api/", "/v1/")                               # 이 아래는 늘 JSON·흐름·세션 주소
 EVENTS = ("/events", "/agents")
 SHELL = ("/hd-shell.js", "/hd-shell.css")
+SHARED_SHELL = "/v1/shell/"                             # 허브 공용 셸(도장이 주소에 듦 — 이름 검사는 shell_store.route)
 STATIC = frozenset((".js", ".mjs", ".css", ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico",
                     ".woff", ".woff2", ".ttf", ".otf"))
 CACHED = (200, 304)
@@ -30,6 +32,8 @@ def header(raw, status=200):
         return NO_STORE
     u = urllib.parse.urlsplit(raw or "")
     path = urllib.parse.unquote(u.path)
+    if path.startswith(SHARED_SHELL):
+        return IMMUTABLE
     if path in PAGES or path in EVENTS or path.startswith(NEVER):
         return NO_STORE
     if path.startswith("/thumb/"):
