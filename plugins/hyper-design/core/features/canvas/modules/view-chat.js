@@ -20,7 +20,7 @@
      지운 메모는 칩에서 빠지고, × 나 보내기 뒤에는 목록에서 뺀다(두 번 가지 않게).
      가까운 화면 = HD.chat.nearest(메모 상자, 카드 상자 — 둘 다 판 좌표, 메모 자리·크기가 바뀔 때만 다시 잼). 보내면 요청 글 끝 '노트:' 줄(HD.chat.build) — 글이 비어도 노트가 있으면 보낸다.
      ctx.boardNotes 가 없으면(옛 셸) [hd] 경고 한 번 + 노트 칩 없이.
-   '/' 명령(R29): 빈 입력칸에 '/' 를 치면 명령 목록(HD.chatCmd.match — 지금 /memo 하나, 새 명령 = 표 한 줄 + 아래 RUN 한 함수). 위·아래·Enter·Tab·누르기 = 고르기,
+   '/' 명령(R29): 입력칸 어디서든(글 첫머리·빈칸 뒤) '/' 를 치면 명령 목록(HD.chatCmd.match — 지금 /memo 하나, 새 명령 = 표 한 줄 + 아래 RUN 한 함수). 위·아래·Enter·Tab·누르기 = 고르기,
      Esc = 닫기(그 글은 그대로, '/' 로 다시 시작할 때까지 안 열림), 빈칸 등 맞지 않는 글 = 닫히고 보통 글. 고르면 친 '/…' 글은 지운다.
      /memo = 칩 [메모 N건 ×](보내기 전 메모 모두 — HD.chatCmd.drafts/memoChip, 올리거나 포커스면 툴팁 .ch-tip 에 화면 이름 + 첫 글). 0건 = 토스트 '보낼 메모가 없어요', 칩 없음.
      보내면 대화 글로 만든 메모 + 그때의 보내기 전 메모를 ctx.sendNotes 한 번에(위쪽 [보내기]와 같은 요청문·같은 상태 바뀜) — 칩은 보낸 뒤 빠진다. 보낸·완료 메모는 넣지 않는다.
@@ -312,8 +312,9 @@ function mount(ctx) {
     ta.setAttribute('aria-activedescendant', 'hdcmd-' + cmd.list[cmd.i].name);
   }
   function syncCmds() {
-    if (cmdOff && ta.value.charAt(0) !== '/') cmdOff = false;   // Esc 로 닫은 뒤 '/' 로 다시 시작하면 다시 연다
-    var list = cmdOff ? [] : CC.match(ta.value), keep = cmd.list[cmd.i];
+    var tok = CC.token(ta.value, ta.selectionStart);
+    if (cmdOff && !tok) cmdOff = false;                    // Esc 로 닫은 뒤 그 낱말을 벗어나 다시 '/' 를 치면 다시 연다
+    var list = cmdOff ? [] : CC.match(ta.value, ta.selectionStart), keep = cmd.list[cmd.i];
     var i = keep ? list.indexOf(keep) : -1;
     cmd = {list: list, i: list.length ? (i >= 0 ? i : 0) : -1};
     drawCmds();
@@ -321,7 +322,9 @@ function mount(ctx) {
   function runCmd(c) {
     if (!c) return;
     var fn = RUN[c.name];
-    ta.value = ''; hideCmds(); grow(); ta.focus();
+    var tok = CC.token(ta.value, ta.selectionStart), v = ta.value, at = tok ? tok.start : 0;   // 명령 낱말만 지운다 — 앞뒤 글은 그대로(글 도중 명령)
+    ta.value = tok ? (v.slice(0, tok.start) + v.slice(tok.end).replace(/^ (?= |$)/, '')) : v;
+    ta.setSelectionRange(at, at); hideCmds(); grow(); ta.focus();
     if (typeof fn !== 'function') { console.warn('[hd] 대화창: 실행할 수 없는 명령 /' + c.name); ctx.toast('그 명령은 아직 쓸 수 없어요'); return; }
     fn();
   }

@@ -1,5 +1,5 @@
 """R29 — 대화창 '/' 명령(unit — modules/chat-cmd.js + chat.js 의 메모 N건 칩).
-'/' 로 시작하는 빈칸 없는 글만 명령 목록, /memo = 보내기 전 메모만(보낸·완료·결정·일부·반영 대기 편집은 빠짐), 칩 '메모 N건' + 툴팁 줄(화면 이름 + 첫 글),
+커서 앞 낱말이 빈칸·줄 첫머리 뒤 '/' + 빈칸 없는 글자일 때만 명령 목록(글 도중에도), /memo = 보내기 전 메모만(보낸·완료·결정·일부·반영 대기 편집은 빠짐), 칩 '메모 N건' + 툴팁 줄(화면 이름 + 첫 글),
 메모 N건 칩은 범위를 정하지 않고 접히지 않으며 build 가 새 메모를 만들지 않는다. 브라우저 = test_canvas_chat_memo.py."""
 import json, shutil, subprocess, tempfile
 from pathlib import Path
@@ -16,6 +16,8 @@ for (const f of ['annotation.js', 'memo-batch.js', 'edits.js', 'chat.js', 'chat-
 const C = globalThis.HD.chat, K = globalThis.HD.chatCmd, out = {};
 const title = id => ({pay: '결제', done: '완료'})[id] || null;
 out.match = ['/', '/m', '/MEM', '/memo', '/memox', '/memo ', 'x/', '', ' /', '/m o', null].map(t => K.match(t).map(c => c.name));
+out.mid = [K.match('같이 고쳐 줘 /me'), K.match('같이 /me 고쳐 줘', 6), K.match('줄 바꿈\n/m'), K.match('a/b'), K.match('url http://x/m'), K.match('같이 /memo 줘', 8)].map(r => r.map(c => c.name));
+out.tok = [K.token('같이 고쳐 줘 /me'), K.token('같이 /me 고쳐 줘', 6), K.token('/memo'), K.token('a/b')];
 out.move = [K.move(-1, 1, 1), K.move(0, 3, 1), K.move(2, 3, 1), K.move(0, 3, -1), K.move(-1, 3, -1), K.move(0, 0, 1)];
 const list = [
   {id: 'a', screen: 'pay', note: '버튼을 화면 가운데로 옮기고 더 크게 해 주세요 부탁해요', sent: false},
@@ -57,7 +59,13 @@ def out():
 
 
 def test_slash_opens_list_only_for_a_bare_command_word(out):
-    assert out["match"] == [["memo"], ["memo"], ["memo"], ["memo"], [], [], [], [], [], [], []]
+    assert out["match"] == [["memo"], ["memo"], ["memo"], ["memo"], [], [], [], [], ["memo"], [], []]
+
+
+def test_slash_command_works_anywhere_after_a_space_or_line_start(out):
+    """GPT·Slack 처럼 글을 쓰다가 도중에도 — 커서 앞 낱말이 빈칸·줄 첫머리 뒤의 '/' 로 시작하면 명령. 'a/b'·주소 안의 '/' 는 아님."""
+    assert out["mid"] == [["memo"], ["memo"], ["memo"], [], [], ["memo"]]
+    assert out["tok"] == [{"start": 8, "end": 11, "q": "me"}, {"start": 3, "end": 6, "q": "me"}, {"start": 0, "end": 5, "q": "memo"}, None]
 
 
 def test_arrow_keys_wrap(out):
