@@ -28,7 +28,7 @@ def make_out(root, name):
         {"id": "home", "file": "screens/home.html", "title": name, "group": "g", "purpose": "", "policies": []}]}, ensure_ascii=False), encoding="utf-8")
     r = write_record.run_build(out)
     assert r.returncode == 0, r.stderr
-    (out / "hd-shell.js").write_text(SHELL, encoding="utf-8")   # S3 가 쓰는 셸 파일 자리 — 여기서는 머리글만 본다
+    (out / "hd-shell.js").write_text(SHELL, encoding="utf-8")   # 빌드가 쓴 셸 파일 — 여기서는 머리글만 본다
     return out
 
 
@@ -61,7 +61,7 @@ def check_static(port, base, out):
     assert st == 200, "판 표(ETag) 없이 시각만 오면 견주지 않고 새로 준다(초 단위 비교를 믿지 않음)"
 
 
-def check_rest(port, base, token):
+def check_rest(port, base, token, out):
     for p in (base + "/", base + "/index.html?hd=" + token):
         st, h, body = get(port, p)
         assert st == 200 and b"hd-data" in body and h.get_all("Cache-Control") == ["no-store"], (p, st, h.get_all("Cache-Control"))
@@ -70,7 +70,8 @@ def check_rest(port, base, token):
     assert st == 200 and h.get_all("Cache-Control") == ["no-store"]
     st, h, _ = get(port, base + "/hd-shell.js?v=abc")
     assert st == 200 and h.get_all("Cache-Control") == ["max-age=31536000, immutable"]
-    st, h, _ = get(port, base + "/hd-shell.css?v=abc")              # 아직 없는 셸 파일 — 404 가 1년 남지 않게
+    (out / "hd-shell.css").unlink()                                 # 없는 셸 파일 — 페이지를 준 뒤에 지운다(페이지가 다시 빌드하면 다시 생김)
+    st, h, _ = get(port, base + "/hd-shell.css?v=abc")              # 404 가 1년 남지 않게
     assert st == 404 and h.get_all("Cache-Control") == ["no-store"]
     st, h, _ = get(port, base + "/palette.js")
     assert st == 200 and h.get_all("Cache-Control") == ["no-cache"]
@@ -96,7 +97,7 @@ def test_helper_revalidates_static_and_keeps_page_fresh(tmp):
     try:
         port = srv.server_address[1]
         check_static(port, "", out)
-        check_rest(port, "", srv.token)
+        check_rest(port, "", srv.token, out)
     finally:
         srv.shutdown(); srv.server_close()
 
@@ -116,7 +117,7 @@ def test_hub_session_uses_the_same_rule(tmp):
             assert res.status == 200
         sess = srv.registry.get("alpha")
         check_static(port, "/v1/p/alpha", out)
-        check_rest(port, "/v1/p/alpha", sess.token)
+        check_rest(port, "/v1/p/alpha", sess.token, out)
         st, h, _ = get(port, "/")                                    # 홈 화면 · 허브 API = no-store, 홈 정적 파일 = no-cache
         assert st == 200 and h.get_all("Cache-Control") == ["no-store"]
         st, h, _ = get(port, "/api/projects", {"X-HD-Token": srv.token})
