@@ -3,14 +3,14 @@
 상태: 없음(기록은 write_record 의 .hd-history) — 이어 둔 것만: 자물쇠 · builder · 버스 · rebuilder(async apply 의 뒤 빌드, 47-4a).
 쓰기마다 screen.written(by human) · 쓰기 확인(builder.check — 데이터만, figma-lite 5)이 깨지면 되돌리고 build.failed. apply_async = 쓰기만 하고 바로 답, 확인은 rebuilder.
 index.html 은 쓰기 때 굽지 않는다 — 페이지를 줄 때 데이터 도장이 다르면 session.refresh_data 가.
-부르는 곳: session.ProjectSession(History · Rebuilder 의 revert = revert_writes) · router(/api/apply · /api/delete · /api/restore · /api/group-* · /api/token).
+부르는 곳: session.ProjectSession(History · Rebuilder 의 revert = revert_writes) · router(/api/apply · /api/delete · /api/restore · /api/group-* · /api/token · /api/component).
 오류 탐지: 답의 reason 을 상태 코드로(_code: changed-since 409 · missing 404 · invalid 400 · 그 밖 오류 500) · 뒤 빌드 실패로 못 되돌린 쓰기는 [hd] 한 줄.
 """
 import sys
 
 import events as EV  # 바뀐 것 알림(screen.written · build.failed)
 from board_rows import group_dissolve, group_move, group_rename
-from screen_edits import apply_edits, apply_token, delete_screens
+from screen_edits import apply_component, apply_edits, apply_token, delete_screens
 from write_record import BUILD_FAIL, NO_BUILD, prune, restore, tombstone
 
 
@@ -91,6 +91,9 @@ class History:
 
     def token(self, name, value):                    # Foundation 토큰 하나(R55) — tokens.css 쓰기 한 번, 되돌리기 = restore
         return self._write(lambda: apply_token(self.out, name, value, build=self.builder.check))
+
+    def component(self, selector, prop, index, frm, to):   # 부품 한 칸(R55 phase C) — components.css 쓰기 한 번(같은 묶음 토큰만), 되돌리기 = restore
+        return self._write(lambda: apply_component(self.out, selector, prop, index, frm, to, build=self.builder.check))
 
     def group_rename(self, frm, to):                 # 줄 이름 바꾸기(51-4) — screens.json 쓰기 한 번, 되돌리기 = restore
         return self._write(lambda: group_rename(self.out, frm, to, build=self.builder.check))

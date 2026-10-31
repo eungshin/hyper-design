@@ -1,0 +1,41 @@
+{
+  "_": "R55 phase C — 부품 칸에서 바꿔 끼울 수 있는 토큰 묶음(family). Python component_edit.family = JS HD.dsEdit.family 같은 표. null = 바꿀 수 없는 토큰(읽기만).",
+  "families": [
+    ["--c-brand", "color"],
+    ["--c-on-brand", "color"],
+    ["--c-accent", "color"],
+    ["--r-m", "radius"],
+    ["--r-pill", "radius"],
+    ["--stack-s", "space"],
+    ["--block-pad", "space"],
+    ["--page-x", "space"],
+    ["--row-py", "space"],
+    ["--gap-x", "space"],
+    ["--fs-strong", "font-size"],
+    ["--fs-sub", "font-size"],
+    ["--fw-strong", "weight"],
+    ["--lh-body", "line"],
+    ["--h-btn", "box"],
+    ["--h-btn-s", "box"],
+    ["--w-side", "box"],
+    ["--shadow-1", "shadow"],
+    ["--icon", null],
+    ["--font", null],
+    ["--tracking", null],
+    ["c-brand", null],
+    ["", null]
+  ],
+  "pairs": [
+    ["--c-brand", "--c-accent", true],
+    ["--c-brand", "--r-m", false],
+    ["--r-m", "--r-l", true],
+    ["--stack-s", "--block-pad", true],
+    ["--fs-strong", "--fs-sub", true],
+    ["--fs-strong", "--h-btn", false],
+    ["--h-btn", "--h-btn-s", true],
+    ["--h-btn", "--stack-l", false],
+    ["--shadow-1", "--shadow-2", true],
+    ["--icon", "--icon", false],
+    ["--fw-strong", "--lh-body", false]
+  ]
+}

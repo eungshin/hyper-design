@@ -246,6 +246,45 @@ def apply_token(out, name, value, stamp=None, build=None):
 
 
 
+def apply_component(out, selector, prop, index, frm, to, stamp=None, build=None):
+    """POST /api/component(R55 phase C) — out/components.css 그 규칙·속성·자리의 var(--from) 하나만 var(--to) 로(규칙 component_edit, 같은 묶음 토큰만).
+    쓰기 한 번 = .hd-history 원본 + manifest → restore 로 되돌림. → {selector, prop, index, from, to, stamp, changed:[]} | {error, reason:'invalid'|'missing'} | {error: BUILD_FAIL…}."""
+    import component_edit as CE                      # 순수 Model(R55 phase C)
+    import token_edit as TE
+    out = pathlib.Path(out).resolve()
+    f, tok = out / "components.css", out / "tokens.css"
+    if not f.is_file() or not tok.is_file():
+        return {"error": "components.css 또는 tokens.css 가 없어요", "reason": "missing"}
+    raw = f.read_bytes().decode("utf-8")
+    why = CE.check(raw, list(TE.decls(tok.read_text(encoding="utf-8"))), selector, prop, index, frm, to)
+    if why:
+        return {"error": why, "reason": "invalid"}
+    w = _Writes(out, stamp, build)
+    w.keep(f)
+    f.write_bytes(CE.rewrite(raw, selector, prop, index, frm, to).encode("utf-8"))   # 줄 끝·인코딩 그대로(바이트로)
+    err = w.commit([])
+    if err:
+        return {"error": err}
+    return {"selector": CE.norm(selector), "prop": prop, "index": index, "from": frm, "to": to, "stamp": w.stamp, "changed": [], "history": str(w.hist)}
+
+
+def component_slots(out, classes, tag=""):
+    """POST /api/component-slots(R55 phase C, 읽기만) — 고른 요소(클래스·태그)를 겨누는 components.css 규칙과 바꿀 칸 + 고를 수 있는 토큰
+    → {rules:[…component_edit.slots], tokens:{이름: {value, label, family}}} | {error, reason:'missing'|'invalid'}."""
+    import component_edit as CE
+    import token_edit as TE
+    out = pathlib.Path(out).resolve()
+    f, tok = out / "components.css", out / "tokens.css"
+    if not f.is_file() or not tok.is_file():
+        return {"error": "components.css 또는 tokens.css 가 없어요", "reason": "missing"}
+    if not isinstance(classes, list) or not all(isinstance(c, str) for c in classes) or len(classes) > 40:
+        return {"error": "classes 는 글 목록이에요", "reason": "invalid"}
+    html = _parts_html(out) or ""
+    rules = CE.slots(f.read_text(encoding="utf-8"), classes, str(tag or ""), CE.titles(html))
+    toks = {n: {"value": v, "label": TE.label(n), "family": CE.family(n)} for n, v in TE.decls(tok.read_text(encoding="utf-8")).items() if CE.family(n)}
+    return {"rules": rules, "tokens": toks}
+
+
 def _parts_html(out):                              # 이 프로젝트의 부품 견본(Components 탭 = out/components.html) 글 | None
     f = pathlib.Path(out) / "components.html"
     return f.read_text(encoding="utf-8") if f.is_file() else None

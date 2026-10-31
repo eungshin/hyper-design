@@ -69,6 +69,12 @@ def get_chat(s, q, body):                             # S3 대화 기록 — sin
     return 200, s.chat.get(since)
 
 
+def _slots(s, b):                                     # R55 phase C — 읽기만(쓰기 자물쇠 없음), 까닭은 상태 코드로
+    from screen_edits import component_slots
+    r = component_slots(s.history.out, b.get("classes"), b.get("tag") or "")
+    return ({"missing": 404, "invalid": 400}.get(r.get("reason"), 200) if r.get("error") else 200), r
+
+
 def _obj(fn):                                        # 본문이 JSON 객체여야 하는 주소 — 목록·글이면 400(47-2 2a: 전에는 body.get 에서 연결이 끊겼다)
     def call(s, q, b):
         if not isinstance(b, dict):
@@ -103,6 +109,8 @@ ROUTES = {
         "/api/group-dissolve": _obj(lambda s, q, b: s.history.group_dissolve(b.get("name"))),
         "/api/group-move": _obj(lambda s, q, b: s.history.group_move(b.get("ids"), b.get("to"))),      # R31 다른 줄(폴더)로 옮기기
         "/api/token": _obj(lambda s, q, b: s.history.token(b.get("name"), b.get("value"))),   # R55 Foundation 토큰 하나 — tokens.css 쓰기 한 번
+        "/api/component": _obj(lambda s, q, b: s.history.component(b.get("selector"), b.get("prop"), b.get("index"), b.get("from"), b.get("to"))),   # R55 phase C 부품 한 칸 — components.css 쓰기 한 번
+        "/api/component-slots": _obj(lambda s, q, b: _slots(s, b)),   # R55 phase C 고른 부품의 규칙·바꿀 칸(읽기만)
         "/api/restore": _obj(lambda s, q, b: s.history.restore(str(b.get("stamp") or ""), keep=b.get("keep") is True, notify=b.get("notify") is True)),
         "/api/reply": lambda s, q, b: s.queue.reply(b),
         "/api/claim": lambda s, q, b: s.busy.claim(b),
