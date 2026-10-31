@@ -15,7 +15,7 @@
 
 ## 규칙
 
-- **도구** — Foundation·Components 탭에서는 도구 막대(`#tools`)를 그 탭 칸으로 옮기고 손·선택(V)만 보인다(다른 도구·구분선·숨긴 것은 숨김). 문서 iframe 은 막대 자리(64px)를 비킨다. H·V 키. 위쪽 줄·대화창은 그대로, `#vbtn`·`#zoom` 은 쉰다(셸 그대로). Screens 로 돌아오면 막대는 판으로, 판 도구 눌림 그대로
+- **도구** — Foundation·Components 탭에서는 도구 막대(`#tools`)를 그 탭 칸으로 옮기고 손·선택(V)만 보인다(다른 도구·구분선·숨긴 것은 숨김). 문서 iframe 은 막대 자리(64px)를 비킨다. H·V 키. 위쪽 줄·대화창은 그대로, `#zoom`(보기·배율) 은 쉰다(셸 그대로). Screens 로 돌아오면 막대는 판으로, 판 도구 눌림 그대로
 - **고르기** — 선택이면 그 탭 `iframe.doc` 에 `hd-pick {on:true, mode:'select', doc:true}`, 손이면 `on:false`(손 = 그냥 보기, R52). palette.js 는 `[data-var]`(closest)를 누르면 `hd-sel` + `token`·`tokenKind`·`label`(견본이 보이는 이름)·`vars`(그 토큰 + 글자 줄 짝 `--fw-`·`--lh-` 의 지금 값)·`rect` 로 답하고 그 견본에 고른 테두리(스크롤을 따라감). 견본 밖 = `path:null`(창 닫기). 마우스 올림 테두리도 견본에만. 문서 안을 누른 뒤의 H·V·Esc·Ctrl+Z/Y 는 `hd-key` 로 캔버스에 넘긴다
 - **속성 창**(`#dsInsp`) — 견본 오른쪽 → 왼쪽 → 아래, 문서 칸 안으로(`HD.popPlace.clamp`, R58). 제목 = 견본 이름 + 토큰 이름. 색 = 색 판 + HEX · 크기·여백·모서리 = 숫자 + 지금 단위 · 굵기 = 100~900 · 줄 높이 = 숫자 · 그림자·그 밖 = 글. 글자 줄 = 크기·굵기·줄 높이 칸(있는 짝만) — 어느 칸을 고치나가 종류. Enter·change = 저장, Esc·×·밖 누르기 = 닫기. 틀린 값 = 그 칸을 원래 값으로 + 빨간 테두리 + 까닭 한 줄(쓰지 않음)
 - **값 규칙**(Python `token_edit.check` = JS `HD.dsEdit.check`, 표 `tests/fixtures/token-values.json`) — 있는 토큰 이름만(`없는 토큰: --x`), 200자 이하, `; { } < > \` · 제어 문자 · `url(` · `expression` · 주석 · `@import` 거절. 색 = `#hex`(3·4·6·8, 대문자로) · `rgb/rgba/hsl/hsla(숫자)` · 길이 = `0` 또는 숫자 + `px|rem|em|%|vw|vh`(음수 없음) · 굵기 = 100~900 정수 · 줄 높이 = 0.5~5 또는 길이 · 그림자 = `#·글자·숫자·공백·.,()%/-` 만

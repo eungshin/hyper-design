@@ -3,7 +3,11 @@
      target = {x, y, w, h}(화면 px — 카드·요소·누른 점) · size = {w, h}(창 크기) · areas = [{x, y, w, h}, …] 차례로(판 자리 → 화면 전체) · gap 기본 12
      · 앞 area 에 들어가는 옆자리가 있으면 그것, 없으면 다음 area · 어디에도 없으면 마지막 area 에서 가장 넓은 쪽(side = 그 쪽, 안으로 자름 — 대상을 덮을 수 있음)
      · 옆(오른쪽·왼쪽)은 대상 위쪽 끝에, 아래·위는 대상 왼쪽 끝에 맞추고 area 안으로 자른다. 깨진 값(숫자 아님) = 첫 area 왼쪽 위(side 'none')
-   HD.popSide = {GAP, beside} */
+   under(anchor, size, view, avoid?, gap?) → {x, y}   (F6 — 메모 묶음 창처럼 배지 아래에 붙는 창)
+     anchor = {left, right, top, bottom}(배지·핀 화면 px) · view = {x, y, w, h}(창이 들어갈 곳) · avoid = [{left, top, right, bottom}, …](덮으면 안 되는 상자 — 왼쪽 도구 막대)
+     · 배지 아래, 오른쪽 끝을 배지에 맞추고 view 안으로 · 아래 자리가 모자라면 배지 위 · 피할 상자와 겹치면 그 오른쪽(틈 gap), 안 들어가면 왼쪽, 둘 다 안 되면 그대로
+     · gap 기본 6 · 깨진 anchor·size = view 왼쪽 위(던지지 않음) · 깨진 피할 상자는 건너뜀
+   HD.popSide = {GAP, beside, under} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -40,5 +44,20 @@ function beside(target, size, areas, gap) {
 }
 function inside(p, s, a) { return p.x >= a.x && p.y >= a.y && p.x + s.w <= a.x + a.w && p.y + s.h <= a.y + a.h; }
 
-HD.popSide = {GAP: GAP, beside: beside};
+function edges(b) { return !!b && num(b.left) && num(b.right) && num(b.top) && num(b.bottom); }
+function under(anchor, size, view, avoid, gap) {
+  var g = num(gap) ? gap : 6, v = box(view) ? view : {x: 8, y: 8, w: 0, h: 0};
+  if (!edges(anchor) || !size || !num(size.w) || !num(size.h)) return {x: Math.round(v.x), y: Math.round(v.y)};
+  var R = v.x + v.w, B = v.y + v.h, w = size.w, h = size.h;
+  var x = clip(anchor.right - w, v.x, R - w), y = anchor.bottom + g;
+  if (y + h > B) y = Math.max(v.y, anchor.top - g - h);
+  (avoid || []).filter(edges).forEach(function (a) {
+    if (!(x < a.right && a.left < x + w && y < a.bottom && a.top < y + h)) return;   // 겹치지 않으면 그대로
+    if (a.right + g + w <= R) x = a.right + g;
+    else if (a.left - g - w >= v.x) x = a.left - g - w;
+  });
+  return {x: Math.round(x), y: Math.round(y)};
+}
+
+HD.popSide = {GAP: GAP, beside: beside, under: under};
 })();

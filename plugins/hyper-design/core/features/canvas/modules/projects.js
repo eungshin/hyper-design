@@ -3,7 +3,7 @@
      차례는 도우미(등록부)가 준 그대로. 모양이 틀린 줄은 빼고 bad 에 센다(View 가 [hd] 경고), 목록이 아니면 rows:[] · bad:'…'. 제목이 없으면 이름
    HD.projects.row(p, curOut) · key(path)(hd_projects.key 와 같은 비교) · when(iso) → 'MM-DD HH:MM' | '-' · WORD{state: 글}
    ago(iso, nowMs) → 방금 전·N분 전·N시간 전·어제·MM-DD · filter(rows, q) → 휴지통 뺀 검색 결과 · current(rows) → 지금 줄|null
-   newTitle(titles) → '새 프로젝트 N' · shown(manifestTitle, outPath) → 프로젝트 줄이 없을 때 머리 제목(옛 기본 문구는 쓰지 않음) */
+   initial(title) → 썸네일이 없을 때 자리 표시 글자(F20) · newTitle(titles) → '새 프로젝트 N' · shown(manifestTitle, outPath) → 프로젝트 줄이 없을 때 머리 제목(옛 기본 문구는 쓰지 않음) */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -89,5 +89,10 @@ function rows(body, curOut) {
   return {rows: good.map(function (p) { return row(p, curOut); }), bad: n ? '모양이 틀린 줄 ' + n + '개를 건너뜀' : null};
 }
 
-HD.projects = {WORD: WORD, key: key, when: when, row: row, rows: rows, ago: ago, filter: filter, current: current, newTitle: newTitle, shown: shown};
+function initial(title) {                           // 썸네일 자리 표시 글자(F20): 처음 나오는 글자·숫자(영문은 대문자) · 없으면 첫 글자 · 빈 글 = '?'
+  var t = typeof title === 'string' ? title.trim() : '', m = /[\p{L}\p{N}]/u.exec(t);
+  return m ? m[0].toUpperCase() : (Array.from(t)[0] || '?');
+}
+
+HD.projects = {initial: initial, WORD: WORD, key: key, when: when, row: row, rows: rows, ago: ago, filter: filter, current: current, newTitle: newTitle, shown: shown};
 })();

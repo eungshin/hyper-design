@@ -492,9 +492,14 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 .dk-ghost{position:fixed;z-index:60;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:8px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);font:700 13px system-ui,sans-serif;pointer-events:none;opacity:.94}
 .dk-menu button{gap:8px}
 /* ---- R27 F02 (chrome): 빈 패널은 머리 줄만 — 연결(화면을 안 골랐을 때)·메모 없음·반영 대기 없음은 몸통을 접고 남는 높이를 다른 묶음에 ---- */
-.dk-g:has(#legend[hidden]),.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
-.dk-g:has(#legend[hidden])>.dk-body,.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
+.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
+.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
 /* ---- /R27 F02 ---- */
+/* ---- U3 F7 (10-31): 연결 칸은 고르기 전·뒤 같은 높이 — 안 고르면 빈 상태 문구, 고르면 줄 목록(넘치면 그 안에서 스크롤). 카드를 고를 때 펼쳐져 메모 칸을 밀지 않게.
+   같은 쪽에 그 묶음 하나뿐이면(:only-of-type) 높이를 묶지 않는다 ---- */
+.dk-g:has(> .dk-body > #pLinks):not(:only-of-type){flex:0 0 auto!important;min-height:0}
+.dk-g:has(> .dk-body > #pLinks):not(:only-of-type)>.dk-body{flex:none;height:var(--dk-links-h,184px)}
+/* ---- /U3 F7 ---- */
 /* ---- R27 F15 (chrome): 도크 탭 = 아이콘 + 툴팁, 이름은 고른 탭에만(자르지 않음) · 닫기 ×는 고른 탭에 올렸을 때만(안 고른 탭은 창 메뉴로 닫음) ---- */
 .dk-tab.on{flex:none}
 .dk-tab .dk-x{display:none}

@@ -12,8 +12,7 @@
 
   var ICON = {
     star: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5-4.5 2.5 1-5L2.8 8l5-.6z"/></svg>',
-    plus: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>',
-    canvas: '<svg viewBox="0 0 40 26" aria-hidden="true"><rect x="2" y="3" width="10" height="20" rx="2"/><rect x="15" y="3" width="10" height="20" rx="2"/><rect x="28" y="3" width="10" height="20" rx="2"/><path d="M12 13h3M25 13h3"/></svg>'
+    plus: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>'
   };
 
   // ---- API ----
@@ -109,9 +108,9 @@
     if (r.state === 'missing') th.innerHTML = '<span class="gone">폴더 없음</span>';
     else if (r.thumb) {
       var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.draggable = false; img.src = r.thumb;
-      img.addEventListener('error', function () { img.replaceWith(placeholder()); });   // 썸네일이 아직 없거나 깨짐 → 기본 그림(오류 아님)
+      img.addEventListener('error', function () { img.replaceWith(placeholder(r)); });   // 썸네일이 아직 없거나 깨짐 → 이름 첫 글자(오류 아님)
       th.appendChild(img);
-    } else th.appendChild(placeholder());
+    } else th.appendChild(placeholder(r));
     c.appendChild(th);
     if (S.renaming === r.name) {
       var inp = document.createElement('input'); inp.className = 'ren'; inp.value = r.title; inp.setAttribute('aria-label', '새 이름');
@@ -133,7 +132,9 @@
     }
     return c;
   }
-  function placeholder() { var p = document.createElement('div'); p.className = 'ph'; p.innerHTML = ICON.canvas; return p; }
+  function placeholder(r) {                          // F20: 썸네일 자리 = 이름 첫 글자(허브가 뒤에서 한 장 약 20초씩 찍는 동안 빈 상자 대신)
+    var p = document.createElement('div'); p.className = 'ph'; p.textContent = M.initial(r && r.title); p.setAttribute('aria-hidden', 'true'); return p;
+  }
 
   function render() {
     renderNav();

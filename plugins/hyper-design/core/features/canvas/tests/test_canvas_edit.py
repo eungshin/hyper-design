@@ -70,7 +70,8 @@ def test_notes_panel_in_dock_scrolls(epage):
     assert epage.is_hidden("#notes") and epage.is_hidden("#pNotes"), "메모가 없으면 그 묶음은 머리 줄(탭)만 — 빈 안내로 자리를 채우지 않는다(R27 F02)"
     g = epage.evaluate("(() => { const g = document.getElementById('pNotes').closest('.dk-g'), t = g.querySelector('.dk-tabs'); return [g.getBoundingClientRect().height, t.getBoundingClientRect().height]; })()")
     assert g[0] <= g[1] + 2 and epage.is_visible('#dock .dk-tab[data-p="notes"]'), ("빈 묶음 높이 = 탭 줄", g)
-    assert epage.is_hidden("#pLinks") and epage.is_hidden("#pAlign"), "화면을 안 골랐으면 연결도 머리 줄만 · 정렬은 없다"
+    assert epage.is_visible("#pLinks .dkp-empty") and epage.is_hidden("#legend"), "화면을 안 골랐으면 연결 칸은 빈 상태 문구(고정 높이 — U3 F7, 고를 때 펼쳐져 메모 칸을 밀지 않게)"
+    assert epage.is_hidden("#pAlign"), "정렬은 두 장 이상 골랐을 때만"
 
 
 # ---------------------------------------------------------------- 오른쪽 패널 도크: 합치기·떼기·띄우기·크기·접기·닫기·저장
@@ -2041,12 +2042,14 @@ def test_view_and_window_menus(dpage):
     assert dpage.locator("#tbtn, #tmenu").count() == 0, "전환 버튼·메뉴는 없앤다(G4)"
     assert dpage.locator("header #fit").count() == 0, "[전체 보기]는 위쪽 줄 버튼이 아니다"
     assert dpage.text_content("#zoom").strip().endswith("▾")
-    # 보기 메뉴 — 화면 아이콘 단추로도 연다(배율 칩만 누르면 열린다는 게 어색하다는 피드백)
-    dpage.click("#vbtn")
+    # 보기 메뉴 = 배율 칩 하나(U3 F11 — 같은 메뉴를 열던 화면 아이콘 단추 #vbtn 은 뺐다): 누르면 열림·aria-expanded, 다시 누르면 닫힘
+    assert dpage.locator("#vbtn").count() == 0, "겹친 보기 단추 없음"
+    dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu:not([hidden])")
-    assert dpage.get_attribute("#vbtn", "aria-expanded") == "true"
-    dpage.click("#vbtn")
+    assert dpage.get_attribute("#zoom", "aria-expanded") == "true"
+    dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu", state="hidden")
+    assert dpage.get_attribute("#zoom", "aria-expanded") == "false"
     dpage.click("#zoom")
     dpage.wait_for_selector("#vmenu:not([hidden])")
     rows = dpage.eval_on_selector_all("#vmenu [data-z]", "els => els.map(e => [e.querySelector('span:not(.wm-ck)').innerText, (e.querySelector('kbd') || {}).innerText || ''])")

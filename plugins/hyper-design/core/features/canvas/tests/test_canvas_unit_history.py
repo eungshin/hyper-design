@@ -70,6 +70,16 @@ out.bad = {lock: bad.lock, bad: !!bad.rows[0].bad, hasD: !!bad.rows[0].d};
 const nb = [{id: 'a'}, {id: 'b'}, {id: 'c'}], na = [{id: 'a'}, {id: 'c'}], nd = H.diff({notes: nb}, {notes: na});
 out.order = H.patch({notes: na}, nd, 'before').notes.map(n => n.id).join('');
 out.none = H.diff({hidden: ['a']}, {hidden: ['a'], busy: 1});
+// F15: Ctrl+Z·버튼(canUndo · undo)은 이번 세션 줄까지만 — 지난 세션 줄은 기록 패널(go)에서만
+const past = H.initial(JSON.parse(JSON.stringify(H.saved(s))));
+out.past = {canUndo: H.canUndo(past), why: H.undoWhy(past), go: H.reduce(past, {type: 'go', to: past.at - 1}).at, at: past.at};
+let mixed = H.reduce(past, {type: 'record', row: {label: 'now 1', status: 'canvas', at: '', op: {undo() {}, redo() {}}}});
+out.mixed = {canUndo: H.canUndo(mixed), why: H.undoWhy(mixed)};
+mixed = H.reduce(mixed, {type: 'go', to: mixed.at - 1});
+out.mixedBack = {canUndo: H.canUndo(mixed), why: H.undoWhy(mixed), canRedo: H.canRedo(mixed)};
+let branch = H.reduce(H.reduce(past, {type: 'go', to: 1}), {type: 'record', row: {label: 'after panel', status: 'canvas', at: '', op: {undo() {}, redo() {}}}});
+out.branch = {len: branch.rows.length, canUndo: H.canUndo(branch), back: H.canUndo(H.reduce(branch, {type: 'go', to: branch.at - 1}))};
+out.fresh = {canUndo: H.canUndo(H.initial([])), why: H.undoWhy(H.initial([]))};
 console.log(JSON.stringify(out));
 """
 
@@ -129,3 +139,13 @@ def test_cap_drops_oldest_deltas(out):
 
 def test_memo_restored_in_place(out):
     assert out["order"] == "abc"
+
+
+def test_ctrl_z_stays_in_this_session(out):
+    """F15(10-31): 새로고침 뒤 첫 Ctrl+Z 가 지난 세션 줄(예: 메모 지우기)을 되살리지 않는다 — 지난 세션 줄은 기록 패널에서만."""
+    assert out["past"]["canUndo"] is False and out["past"]["why"] == "past", out["past"]
+    assert out["past"]["go"] == out["past"]["at"] - 1, "기록 패널(go)로는 지난 세션 줄도 그대로 되돌린다"
+    assert out["mixed"] == {"canUndo": True, "why": None}, "이번 세션에 한 일은 Ctrl+Z 로"
+    assert out["mixedBack"] == {"canUndo": False, "why": "past", "canRedo": True}, "이번 세션 줄을 다 되돌리면 거기서 멈춤(다시 하기는 된다)"
+    assert out["branch"] == {"len": 2, "canUndo": True, "back": False}, "패널로 지난 줄까지 간 뒤 새로 한 일은 그 일까지만"
+    assert out["fresh"] == {"canUndo": False, "why": None}

@@ -156,6 +156,7 @@ def test_picker_search_thumbs_and_opens_in_this_tab(served, ctx):
         assert pg.text_content("#ppick .pk-card[data-name='cur'] .pk-ttl") == "결제 흐름", "카드 제목 = 프로젝트 제목"
         assert pg.query_selector("#ppick .pk-card[data-name='laundry'] .pk-th img") is not None, "썸네일 주소가 있으면 그림"
         assert pg.query_selector("#ppick .pk-card[data-name='cur'] .pk-th img") is None
+        assert pg.text_content("#ppick .pk-card[data-name='cur'] .pk-th .pk-ini") == "결", "썸네일이 없으면 빈 상자 대신 제목 첫 글자(U3 F20)"
         pg.fill("#ppick .pk-q", "세탁")
         assert [c["name"] for c in cards(pg)] == ["new", "folder", "laundry"], "검색 = 제목·이름 부분 일치"
         with pg.expect_navigation(url=lambda u: "to=laundry" in u):
@@ -233,6 +234,24 @@ def test_home_failure_is_told(served, ctx):
         pg.click("#hhome")
         pg.wait_for_function("document.querySelector('#toast').textContent.includes('홈 서버를 띄우지 못했어요')")
         assert pg.url == url and pg.get_attribute("#hhome", "aria-busy") is None
+    finally:
+        pg.close()
+    assert not errors, errors
+
+
+def test_home_wait_is_told(served, ctx):
+    """F17(10-31): 허브가 처음 뜨는 몇 초 동안 회색 아이콘만이 아니라 기다림 토스트 — 답이 오면(실패) 그 까닭으로 바뀐다."""
+    out, srv = served
+    held = []
+    pg, errors = _open(ctx, srv.url, lambda p: (mock_hub(p, srv, project_rows(out)), p.route("**/api/home", lambda r: held.append(r))))
+    try:
+        pg.click("#hhome")
+        pg.wait_for_function("(() => { const t = document.getElementById('toast'); return !t.hidden && t.textContent.includes('홈을 여는 중'); })()", timeout=3000)
+        assert pg.get_attribute("#hhome", "aria-busy") == "true"
+        pg.wait_for_timeout(2700)
+        assert pg.is_visible("#toast") and "홈을 여는 중" in pg.text_content("#toast"), "기다리는 동안 토스트가 남는다(보통 토스트 2.6초보다 길게)"
+        held[0].fulfill(status=500, content_type="application/json", body=json.dumps({"error": "홈 서버를 띄우지 못했어요"}, ensure_ascii=False))
+        pg.wait_for_function("document.querySelector('#toast').textContent.includes('홈 서버를 띄우지 못했어요')")
     finally:
         pg.close()
     assert not errors, errors
