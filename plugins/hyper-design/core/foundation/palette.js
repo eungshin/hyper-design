@@ -23,7 +23,8 @@
   블록 편집(task 49a): hd-hit 답에 prev·next(앞·뒤 형제 요소가 있나 — script·style·template·link·meta 는 빼고, helper.py SIB_SKIP) · root(화면 뿌리).
     hd-pick 의 mode: 'text' = 누른 글자 요소를 hd-dbl 로 · 'select' = 누른 요소를 {type:'hd-sel', …hd-hit 칸, add?} 으로(Shift = add:true, 여러 요소 R19 · 없으면 그대로 hd-picked).
     hd-edit 이 켜져 있으면 오른쪽 클릭 = {type:'hd-ctx', …hd-hit 칸, x, y}(브라우저 메뉴 대신), 고르는 중 스크롤 = {type:'hd-scroll'},
-    왼쪽 누름 = {type:'hd-press'}(캔버스 우클릭 메뉴 닫기 — 틀 안 누름은 캔버스 문서에 오지 않는다).
+    왼쪽 누름 = {type:'hd-press'}(캔버스 우클릭 메뉴 닫기 — 틀 안 누름은 캔버스 문서에 오지 않는다) · Esc(입력 칸·그 자리 고치기 밖) = {type:'hd-esc'}
+    — 둘 다 넘기기만, 무엇을 닫을지는 캔버스 떠 있는 층 목록(view-float-stack, U1)이 정한다.
     hd-pending 항목 {path, dup:true}(바로 뒤에 점선 복사본) · {path, move:'up'|'down'}(형제와 자리 바꿈) · {path, to}(형제 사이 자리 — hd-opt 의 to 와 같은 뜻, 51-3) — 경로는 모두 바꾸기 전 문서에서 찾는다.
   블록 조립(task 49b): hd-hit 계열 답에 up(감싼 요소가 있나 — body·html 은 아님) · tag · attrs(허용 목록 ATTR_OK 의 지금 값).
     {type:'hd-up', path, tag} → {type:'hd-upchain', tag, path, chain:[조상 hd-hit 칸…](가까운 것부터 8개)} ·
@@ -994,6 +995,11 @@
     if (!at || at === document.documentElement || at === document.body) { send({type: 'hd-ctx', screen: screenId(), path: null, x: x, y: y}); return; }
     var m = hitMsg(linkAt(at) || (at.closest ? at.closest(HIT_SEL) : null) || at, 'hd-ctx');   // 판 우클릭(hd-hit-at)과 같은 요소 고르기
     m.x = x; m.y = y; send(m);
+  }, true);
+  document.addEventListener('keydown', function (e) {   // 크게 보기 틀 안에 포커스가 있어도 Esc 가 캔버스 맨 위 층을 닫게(U1 F2) — 문서 탭은 위 hd-key 가 넘긴다
+    if (e.key !== 'Escape' || !editOn || pickDoc || inl || e.isComposing || !window.parent || window.parent === window) return;
+    var t = e.target; if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+    send({type: 'hd-esc', screen: screenId()});
   }, true);
   var scrollT = 0;
   addEventListener('scroll', function () {             // 고른 요소 막대는 화면 좌표라 스크롤하면 캔버스가 걷는다

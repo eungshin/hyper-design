@@ -548,7 +548,7 @@ addEventListener('message', function (e) {         // 크게 보기 안에서 �
   MP.close(); drawPins(); sendPending(mframe, mscreen); if (PN) PN.locateModal();
 });
 $('#mclose').addEventListener('click', closeModal);
-modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });   // 화면 바깥 덮개를 누르면 닫힘
+modal.addEventListener('click', function (e) { if (e.target === modal && FL.pressedTop() === 'modal') closeModal(); });   // 화면 바깥 덮개를 누르면 닫힘 — 그 누르기 때 맨 위가 크게 보기일 때만(위 층이 있으면 그 층만, U1 F16)
 addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   if (VM) VM.stop();
@@ -557,9 +557,7 @@ addEventListener('keydown', function (e) {
   if (drag && drag.trig) { drag.trig = null; drag.off = true; EP.stop(); clearGhost(); return; }   // 트리거 끄는 중 = 잇기 취소(E11) — 놓을 때까지 판도 움직이지 않는다
   if (pickT) { endPick(); return; }
   if (!tedit.hidden) { closeTedit(false); return; }
-  if (TH && TH.close()) return;                      // 카드 메모 묶음(#224)
-  if (MP.isOpen()) { MP.close(); return; }
-  if (!modal.hidden) { closeModal(); return; }
+  if (FL && FL.esc(e)) return;                       // 떠 있는 층 맨 위 하나(크게 보기·메모 묶음·메모 창·칩 미리보기 — modules/view-float-stack.js, U1)
   if (EB.selected()) { EB.unselect(); return; }               // 판 위: 고른 요소 → 고른 카드 순으로 푼다
   if (SL.ids().length) SL.dispatch({type: 'clear'});   // 고르기를 풀면 강조도 꺼진다(강조 = 고른 카드 전부)
 });
@@ -567,6 +565,7 @@ addEventListener('resize', function () { if (!modal.hidden) { sizeModal(); drawP
 
 /* ---------- 탭 ---------- */
 function showTab(name) {
+  if (name !== 'screens') closeModal();               // 판 밖 탭으로 가면 크게 보기는 닫힌다(U1 F4) — 쓰던 메모 글은 메모 창이 맡아 둔다
   document.body.dataset.tab = name;
   $$('.tab').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === name)); });
   $$('.pane').forEach(function (p) { p.hidden = p.id !== name; });
@@ -1200,7 +1199,8 @@ var PP = null;
 var MP = HD.viewMemoPop.mount({$: $, $$: $$, esc: esc, notes: NS, save: function () { saveNotes(); }, record: function (op) { record(op); }, toast: function (m, u, ms) { toast(m, u, ms); },   // u = [되돌리기](F14 메모 지우기)
   title: function (id) { return titleOf(id); }, modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, box: mbox, picking: picking, frame: mframe}; },
   setScreen: function (id) { mscreen = id; }, frame: function () { return PP; }, cardEl: function (id) { return VL ? VL.cardEl(id) : null; },
-  pins: function () { drawPins(); }, focusPin: function (id) { if (PN) PN.focus(id); }});
+  pins: function () { drawPins(); }, focusPin: function (id) { if (PN) PN.focus(id); },
+  feeds: function (t) { return (tool === 'memo' && !!(t.closest && t.closest('#rows .card'))) || (!modal.hidden && picking && t === mframe); }});   // 메모 도구가 이 창을 다시 정하는 누르기(U1)
 function drawPins() { if (PN) PN.paint(); if (ML) ML.paint(); if (MS) MS.render(); }   // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js) · 다른 단계 메모 칩(view-memo-state)
 var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5) · 결정 필요(#232)
                              del: MP.del, edit: MP.edit, showNotes: function () { if (VD) VD.activate('notes'); },
@@ -1208,6 +1208,7 @@ var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: ci
                              sentChanged: function () { if (PN) PN.render(); if (TH) TH.refresh(); }, lost: function (n) { return PN ? PN.lost(n) : false; }});
 // 카드 메모 배지 → 그 화면 메모 묶음(modules/view-thread.js, #224) — 고치기·지우기는 메모 패널과 같은 함수, [메모 추가] = 화면 전체 메모
 var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { return NS.list(); }, title: function (id) { return titleOf(id); },
+                              avoid: function () { var t = $('#tools'); if (!t || t.offsetParent === null) return []; var r = t.getBoundingClientRect(); return [{left: r.left, right: r.right, top: r.top, bottom: r.bottom}]; },   // 묶음 창이 덮지 않을 도구 막대(F6)
                               edit: MP.edit, del: MP.del, add: function (id) { MP.card(id); },
                               done: function (id) { MP.reply([id], '확인', '메모 완료'); }, reopen: function (id) { MP.reply([id], '다시', '메모 다시 열기'); },
                               lost: function (n) { return PN ? PN.lost(n) : false; }, highlight: function (id, no) { if (PN) PN.highlight(id, no); },
@@ -1225,6 +1226,10 @@ var MS = HD.viewMemoState.mount({rowsEl: rowsEl, mbar: $('#mwin .mbar'), esc: es
   modal: function () { return {open: !modal.hidden, screen: mscreen, frame: mframe}; },
   frameOf: function (id) { var c = VL.cardEl(id); return c ? c.querySelector('.phone iframe') : null; }, toast: function (m) { toast(m); },
   select: function (id, no, inModal, pin) { if (!inModal) PN.focus(id); TH.open(id, pin, no); }});
+// 떠 있는 층 목록 하나(modules/view-float-stack.js · 규칙 float-stack.js, U1): Esc·바깥 누르기·화면 틀 안 누르기 = 맨 위 한 층만 — 쌓임 차례로 더한다
+var FL = HD.viewFloatStack.mount({frames: function () { return [mframe]; }, warn: function (m) { console.warn(m); }});
+FL.add({id: 'modal', isOpen: function () { return !modal.hidden; }, close: closeModal, hit: function () { return 'ignore'; }});   // 덮개 누르기는 위 click(pressedTop) · 위 막대·도크 누르기로는 닫지 않는다
+FL.add(TH.layer); FL.add(MP.layer); FL.add(MS.layer);
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   VN.render(NS.list(), ids);
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)

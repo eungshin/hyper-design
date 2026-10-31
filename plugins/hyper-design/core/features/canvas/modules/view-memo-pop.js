@@ -1,9 +1,12 @@
 /* View — 메모 창(#pop) 하나: 화면 전체·요소·크게 보기 고른 요소(hd-picked, Shift = 묶음에 더하기·빼기)의 메모 쓰기·고치기·지우기·사람 답, 범위·의도 고르기.
    메모 모양 = Model HD.annotation.make·makeId, 여러 장 = HD.memoBatch, 창 틀(옮기기·크기·저장한 자리) = 등록부 기능 popPlace(ctx.frame()) — 없으면 자동 자리만.
    HD.viewMemoPop.mount(ctx) → {card(id | [id]), addCard(id)(메모 화면 모드 Shift+클릭 = 열린 화면 메모에 화면 더하기·빼기), element(id, h, x?, y?, note?), addElement(id, h, x?, y?), elem(id, h, note, inModal, at?), edit(id), del(id), reply(ids, kind, label),
-     isOpen(), close(), draft() → 쓰는 중인 초안|null(핀이 고른 요소 테두리), typed() → 열린 창에 사람이 쓴 글이 있나(R52 — 셸은 도구를 바꿀 때 빈 창만 닫는다)}
+     isOpen(), close(), draft() → 쓰는 중인 초안|null(핀이 고른 요소 테두리), typed() → 열린 창에 사람이 쓴 글이 있나(R52 — 셸은 도구를 바꿀 때 빈 창만 닫는다),
+     layer(떠 있는 층 'pop' — view-float-stack: 바깥 누르기 = 빈 창이면 닫기 · 쓴 글이 있으면 남김 · 메모 도구가 누르는 카드·크게 보기 틀은 여는 것)}
+   쓰던 글 지키기(U1): 추가하지 않고 닫으면(Esc · × · 크게 보기 닫기 · 탭 바꾸기) 사람이 쓴 글을 그 대상 열쇠로 하나 맡겨 두고(HD.floatStack.stash),
+     같은 메모 고치기·같은 대상 새 메모를 다시 열면 되살린다 + 토스트.
    ctx = {$, $$, esc, notes(NS), save(), record(op), toast(msg), title(id), modal() → {open, screen, scale, box, picking, frame}, setScreen(id), frame() → popPlace|null,
-          cardEl(id), pins()(핀 다시), focusPin(id)}
+          cardEl(id), pins()(핀 다시), focusPin(id), feeds(target) → 그 누르기가 메모 도구로 이 창을 다시 정하나}
    첨부 이미지(R22): #pop 이 [data-hd-attach] 상자(칩 자리·📎 는 mount 가 만든다) — 붙이기·저장·칩은 등록부 기능 attach(view-attach), 여기서는 의도만:
      열 때 'hd-attach-set'(새 메모 = 비움 · 고치기 = 메모의 attach) · 추가/저장 때 'hd-attach-get' → 메모 칸 attach:[{path, rel, type, size, name}] + 글 끝 '첨부 이미지: <경로>' 줄(HD.attach.withText)
      · 올리는 중이면 토스트하고 기다림 · 닫으면 비움
@@ -17,6 +20,7 @@ var HD = globalThis.HD = globalThis.HD || {};
 function mount(ctx) {
   var $ = ctx.$, $$ = ctx.$$, NS = ctx.notes, pop = $('#pop'), draft = null, editing = null;
   var typed = false;                                  // 이 창을 연 뒤 사람이 글 칸에 쳤나(미리 채운 글은 아님) — 열 때마다 처음으로, Shift+클릭 묶음 바꾸기는 그대로
+  var kept = null;                                    // 추가하지 않고 닫은 쓰던 글 하나(HD.floatStack.stash) — 저장하지 않음
   var newId = function () { return HD.annotation.makeId(Date.now(), Math.random()); };
   var AT = HD.attach;
   var ICON = {                                        // 범위·닫기 아이콘(R27 F09) — 메모 묶음 아이콘과 같은 선 굵기
@@ -118,8 +122,17 @@ function mount(ctx) {
   function curIntent() { var b = $('#pintent button[aria-pressed="true"]'); return b ? b.dataset.intent : 'change'; }
   function setScope(v) { $$('#pscope button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.scope === v)); }); }
   function curScope() { var b = $('#pscope button[aria-pressed="true"]'); return b ? b.dataset.scope : 'element'; }
+  function keyOf() {                                  // 쓰던 글 열쇠 = 고치는 메모 · 새 메모의 화면 + 대상 경로
+    if (editing) return 'e:' + editing;
+    if (!draft) return null;
+    return 'd:' + [].concat(draft.screens || draft.screen).join(',') + '|' + draft.targets.map(function (t) { return t.path; }).join(',');
+  }
   function show(item, note, intent, at, scope, keep) {
     if (!keep) typed = false;     // scope 없음 = 기본(화면 전체 메모 = 이 화면, 그 밖 = 이 요소)
+    if (!keep) {                                      // 같은 대상에 맡겨 둔 쓰던 글이 있으면 되살린다
+      var back = HD.floatStack.take(kept, keyOf()); kept = back.slot;
+      if (back.text != null) { note = back.text; typed = true; ctx.toast('쓰던 글을 되살렸어요'); }
+    }
     $('#ptitle').textContent = item.text || '(글자 없음)';
     $('#ptitle').title = item.path && item.path !== 'body' ? item.path : '';   // 내부 경로는 꼬리말만(F09)
     $('#pnote').value = note || '';
@@ -133,7 +146,8 @@ function mount(ctx) {
     pop.hidden = false; place(item.rect, at, en ? en.screen : draft && draft.screen);
     $('#pnote').focus();
   }
-  function hide() {
+  function hide(done) {                               // done = 추가·저장으로 닫음(맡기지 않음) · 아니면 쓴 글을 맡겨 둔다
+    if (!pop.hidden && !done && typed && $('#pnote').value.trim()) kept = HD.floatStack.stash(kept, keyOf(), $('#pnote').value);
     if (pop.contains(document.activeElement)) document.activeElement.blur();
     att('hd-attach-set', []);
     pop.hidden = true; draft = null; editing = null; hideTip();
@@ -158,7 +172,7 @@ function mount(ctx) {
       if (!ctx.modal().open) ctx.focusPin(draft.screen);   // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
       NS.add(withAtt(HD.annotation.make({id: newId(), screen: draft.screen, targets: draft.targets, note: note, intent: intent, scope: scope, view: draft.view || null})));
     }
-    hide(); ctx.save();
+    hide(true); ctx.save();
   }
   function card(id) {                                 // 메모 도구·빈 레이아웃 누르기: 그 화면 전체에 메모(요소 = body) · id 배열 = 고른 화면마다 같은 메모(memo-batch)
     editing = null; draft = HD.memoBatch.draft([].concat(id), ctx.title); att('hd-attach-set', []);
@@ -167,7 +181,7 @@ function mount(ctx) {
   function addCard(id) {                              // 메모 도구 화면 모드 Shift+클릭: 열린 새 화면 전체 메모에 그 화면 더하기·빼기(memo-batch) — 쓰던 글·의도·범위 그대로, 다 빼면 닫힘
     if (!(draft && !editing && !pop.hidden && draft.screens && draft.targets.every(function (t) { return t.path === 'body'; }))) { card(id); return; }
     var note = $('#pnote').value, intent = curIntent(), sc = curScope(), ids = HD.memoBatch.toggle(draft.screens, id);
-    if (!ids.length) { hide(); return; }
+    if (!ids.length) { hide(true); return; }
     draft = HD.memoBatch.draft(ids, ctx.title);
     show({text: HD.memoBatch.label(draft), path: 'body', rect: null}, note, intent, null, HD.memoBatch.multi(draft) && sc === 'element' ? null : sc);
   }
@@ -181,7 +195,7 @@ function mount(ctx) {
     var note = $('#pnote').value, intent = curIntent(), sc = curScope(), at = -1;
     draft.targets.forEach(function (t, i) { if (t.path === it.path) at = i; });
     if (at >= 0) draft.targets.splice(at, 1); else draft.targets.push(it);
-    if (!draft.targets.length) { hide(); return; }
+    if (!draft.targets.length) { hide(true); return; }
     ctx.pins(); show(popItem(draft, it), note, intent, null, sc, true);
   }
   function addElement(id, h, x, y) {                  // 판 주석 도구 Shift+클릭: 같은 화면 요소 메모가 열려 있으면 묶음에 더하기·빼기, 아니면 새 메모
@@ -208,10 +222,11 @@ function mount(ctx) {
     var at = -1; NS.list().forEach(function (x, i) { if (x.id === id) at = i; });
     if (at < 0) { ctx.toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
     var n = NS.list()[at];
-    var drop = function () { NS.remove(function (x) { return x.id === id; }); if (editing === id) hide(); ctx.save(); };
+    var drop = function () { NS.remove(function (x) { return x.id === id; }); if (editing === id) hide(true); ctx.save(); };
     drop();
     ctx.record({label: n.edit ? '편집 빼기' : '메모 지우기', redo: drop,
                 undo: function () { var l = NS.list().slice(); l.splice(Math.min(at, l.length), 0, n); NS.set(l); ctx.save(); }});
+    ctx.toast(n.edit ? '편집을 뺐어요' : '메모를 지웠어요', true);   // F14 — 카드 지우기처럼 [되돌리기]
   }
   function reply(ids, kind, label) {                  // 사람 답(완료 = 확인 · 다시 열기 = 다시, 보내기 전으로) — 메모 안 n.replies 에 덧붙임, 되돌리기 한 단계
     var at = new Date().toISOString(), hit = ids.map(function (id) { return NS.find(id); }).filter(Boolean);
@@ -227,7 +242,7 @@ function mount(ctx) {
     return '<button type="button" class="pib" data-scope="' + s[0] + '" aria-pressed="false" aria-label="' + ctx.esc(s[1]) + '" data-tip="범위: ' + ctx.esc(s[1]) + '">' + (ICON[s[0]] || '') + '</button>'; }).join('');
   $$('#pscope button').forEach(function (b) { b.addEventListener('click', function () { setScope(b.dataset.scope); }); });
   $('#padd').addEventListener('click', commit);
-  $('#pcancel').addEventListener('click', hide);
+  $('#pcancel').addEventListener('click', function () { hide(); });
   pop.addEventListener('pointerover', function (e) { var b = e.target.closest ? e.target.closest('button[data-tip]') : null; if (b) showTip(b); else hideTip(); });
   pop.addEventListener('pointerleave', hideTip);
   pop.addEventListener('focusin', function (e) { var b = e.target.closest ? e.target.closest('button[data-tip]') : null; if (b && b.matches(':focus-visible')) showTip(b); else hideTip(); });
@@ -244,9 +259,16 @@ function mount(ctx) {
     ctx.pins(); show(popItem(draft, it), '', 'change');
   });
 
+  var isTyped = function () { return typed && !pop.hidden && $('#pnote').value.trim() !== ''; };
+  var layer = {id: 'pop', isOpen: function () { return !pop.hidden; }, close: function () { hide(); }, keep: isTyped,   // 떠 있는 층(view-float-stack)
+    hit: function (t) {
+      if (!t) return 'outside';
+      if (pop.contains(t) || (tip && tip.contains(t))) return 'inside';
+      return ctx.feeds && ctx.feeds(t) ? 'opener' : 'outside';   // 메모 도구로 카드·크게 보기 틀을 누름 = 그 도구가 이 창을 다시 정한다(Shift = 더하기)
+    }};
   return {card: card, addCard: addCard, element: element, addElement: addElement, elem: elem, edit: edit, del: del, reply: reply,
-          isOpen: function () { return !pop.hidden; }, close: hide, draft: function () { return draft; },
-          typed: function () { return typed && !pop.hidden && $('#pnote').value.trim() !== ''; }};
+          isOpen: function () { return !pop.hidden; }, close: function () { hide(); }, draft: function () { return draft; },
+          typed: isTyped, layer: layer};
 }
 
 HD.viewMemoPop = {mount: mount};
