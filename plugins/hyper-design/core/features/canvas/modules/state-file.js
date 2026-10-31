@@ -12,20 +12,22 @@
      rev 가 다르면 파일이 이긴다; 파일 값이 브라우저 값과 같으면(닫을 때 보낸 것이 닿음) 그만, 다르면 lost(View 가 [hd] 경고).
    read(state, name) → 저장 글 | null · write(state, name, text) → {ok, state(새 객체)} (JSON 이 아니면 ok:false, 상태 그대로) · drop(state, name) → 그 이름을 뺀 새 상태
    body(rev, state, names) → PUT 본문 {rev, state:{이름: 값 | null(지움)}}
-   LIVE = {이름: 1} — 파일에서 바뀌면 셸이 제자리에서 다시 읽는 이름(notes·note-seq·busy), 그 밖은 다시 불러오기
+   LIVE = {이름: 1} — 파일에서 바뀌면 셸이 제자리에서 다시 읽는 이름(notes·note-seq·busy·card-size — R57: 다른 AI 세션이 화면을 더하며 쓰는 카드 크기), 그 밖은 다시 불러오기
+   inPlace(names) → 바뀐 이름이 모두 LIVE 면 true(제자리에서 받기) · 하나라도 아니면 false(셸이 따로 든 값 — 다시 불러오기)
    두 탭(#274) — 같은 out 을 연 탭 가운데 파일에 쓰는 탭은 하나(BroadcastChannel 'hd:'+hash 메시지 {type, id, t}):
      tabStart(id, t) → {id, t, role:'pending'} · tab(s, ev) → {s(새 객체), send: 보낼 메시지 | null}
      ev = 내 일 {type:'timeout'}(알린 뒤 답 없음) | {type:'click'}(여기서 편집하기) 또는 남의 메시지 {type:'hello'|'here'|'take', id, t}
      새 탭은 hello 를 알리고, 쓰는 탭(writer)만 here 로 답한다 → 답을 받은 새 탭은 reader(읽기만). 답이 없으면 writer 가 되어 here 를 알림.
      둘 다 writer 면(동시에 시작) here 를 받은 쪽 중 더 새 탭(t 가 크고, 같으면 id 가 큰 쪽)이 reader, 먼저 연 탭은 here 로 다시 알림. click = writer + take, take 를 받으면 reader.
-   HD.stateFile = {NAMES, LIVE, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body, tabStart, tab} */
+   HD.stateFile = {NAMES, LIVE, inPlace, keyOf, nameOf, snapshot, fromLocal, decide, boot, read, write, drop, body, tabStart, tab} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var NAMES = ['notes', 'card-pos', 'edit-log', 'link-names', 'hidden', 'locked', 'folders', 'busy', 'note-seq', 'card-size', 'board-notes', 'board-links'];   // card-size = 카드마다 크기(task 46, modules/artboard.js) · board-notes = 판 메모(R23, modules/board-notes.js) · board-links = 판 메모 선(R47, modules/board-links.js)
-var LIVE = {notes: 1, 'note-seq': 1, busy: 1};                // 셸이 상태에서 바로 다시 읽을 수 있는 이름(view-state-sync) — 나머지는 다시 불러오기
+var LIVE = {notes: 1, 'note-seq': 1, busy: 1, 'card-size': 1};   // 셸이 상태에서 바로 다시 읽을 수 있는 이름(view-state-sync) — 나머지는 다시 불러오기 · card-size = view-artboard reload(R57)
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 
+function inPlace(names) { return (names || []).every(function (n) { return has(LIVE, n); }); }
 function keyOf(name, hash) { return 'hd-' + name + ':' + hash; }
 function nameOf(key, hash) {
   if (typeof key !== 'string') return null;
@@ -122,5 +124,5 @@ function tab(s, ev) {
   return keep;
 }
 
-HD.stateFile = {tabStart: tabStart, tab: tab, NAMES: NAMES, LIVE: LIVE, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
+HD.stateFile = {tabStart: tabStart, tab: tab, NAMES: NAMES, LIVE: LIVE, inPlace: inPlace, unsentKey: unsentKey, unsent: unsent, keyOf: keyOf, nameOf: nameOf, snapshot: snapshot, fromLocal: fromLocal, decide: decide, boot: boot, read: read, write: write, drop: drop, body: body};
 })();

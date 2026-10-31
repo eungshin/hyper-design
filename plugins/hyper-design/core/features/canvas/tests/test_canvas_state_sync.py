@@ -332,3 +332,21 @@ def test_read_only_tab_blocks_edits_up_front_and_keeps_draft(browser, served):
     finally:
         c.close()
     assert not errors, errors
+
+
+@pytest.mark.area("helper", "tools")
+def test_card_size_from_elsewhere_resizes_in_place(live):   # R57 B — 다른 AI 세션이 hd add 로 card-size 를 쓰면 판을 다시 불러오지 않고 그 카드만 크기가 바뀐다
+    pg = live
+    fit_view(pg)
+    pg.evaluate("window.__hdStay = 1")
+    w0 = pg.evaluate("document.querySelector('.card[data-id=\"pay\"] .phone').offsetWidth")
+    api = pg.srv.url.split("/index.html")[0] + "/api/state"
+    rev = json.loads((pg.out / ".hd-canvas.json").read_text(encoding="utf-8"))["rev"]
+    code, _ = _req(api, "PUT", {"rev": rev, "state": {"card-size": {"pay": {"w": 860, "h": 4200}}}}, pg.srv.token)
+    assert code == 200
+    pg.wait_for_function("document.querySelector('.card[data-id=\"pay\"] .phone').offsetWidth === 860", timeout=8000)
+    assert w0 != 860
+    assert pg.evaluate("document.querySelector('.card[data-id=\"pay\"] .phone').offsetHeight") == 4200
+    pg.wait_for_timeout(1500)                                            # 다시 불러오기는 1.2초 뒤 — 그보다 길게 본다
+    assert pg.evaluate("window.__hdStay") == 1, "판을 다시 불러오지 않는다"
+    assert "다시 불러왔어요" not in (pg.text_content("#toast") or ""), "충돌 토스트 없음"
