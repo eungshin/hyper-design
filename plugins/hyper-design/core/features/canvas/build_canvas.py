@@ -40,6 +40,7 @@ import sys, os, json, re, html, pathlib, time, urllib.parse
 
 import board_data as BD
 import code_probe as CP
+import usage_map as UM  # 부품 쓰는 화면 지도 → components.html 칩·목록(R58)
 import code_stamp
 import page_fill as PF  # hd-data 이스케이프 · noscript 링크 — 줄 때 끼우기(session.page)와 같은 규칙
 
@@ -279,8 +280,7 @@ def build_foundation(out):
 def used_classes(out):
     used = set()
     for f in (out / "screens").glob("*.html"):
-        for v in re.findall(r"""\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')""", f.read_text(encoding="utf-8", errors="ignore")):
-            used.update((v[0] or v[1]).split())
+        used |= UM.classes(f.read_text(encoding="utf-8", errors="ignore"))   # 쓰는 화면 지도(R58)와 같은 규칙
     return used
 
 
@@ -328,7 +328,11 @@ def badge_section(open_tag, inner, badges):
     return f'{open_tag}{head.group(1) if head else ""}{table}</section>'
 
 
-def build_components(out, m):
+def build_components(out, m, usage=None):
+    """usage = 부품 쓰는 화면 지도 {key: [화면 id]}(board_data.usage, hd-data 'usage' 와 같은 것) — 남은 section 마다 data-used·머리 칩, 맨 위 목록(R58).
+    None 이면 여기서 다시 잰다."""
+    if usage is None:
+        usage = BD.index_data(out, m).get("usage") or {}
     used = used_classes(out)
     badges = m.get("badges") or {}
     if not SPECIMENS.exists():
@@ -346,16 +350,26 @@ def build_components(out, m):
     src = re.sub(r"""(<link\b[^>]*\bhref\s*=\s*["'])[^"']*\btokens\.css(["'][^>]*\bid\s*=\s*["']tokens["'])""", r"\1tokens.css\2", src)
     src = re.sub(r"""(\bhref\s*=\s*["'])[^"']*components\.css(["'])""", r"\1components.css\2", src)
     src = re.sub(r"""(\bsrc\s*=\s*["'])[^"']*palette\.js(["'])""", r"\1palette.js\2", src)
-    out_parts, last, kept = [], 0, 0
+    out_parts, last, kept, index = [], 0, 0, []
     for s, e, open_tag, inner in spec_sections(src):
         out_parts.append(src[last:s]); last = e
         key = attr(open_tag, "data-key")
         if key not in used:
             continue
         kept += 1
-        out_parts.append(badge_section(open_tag, inner, badges) if key == "badge" and badges else src[s:e])
+        ids = usage.get(key) or []
+        marked = UM.mark_section(open_tag, key, ids)    # 칩 = 쓰는 화면 수(배지·0 은 그대로)
+        if marked != open_tag:
+            index.append((key, html.unescape(attr(open_tag, "data-title")) or key, len(ids)))
+        sec = badge_section(open_tag, inner, badges) if key == "badge" and badges else src[s:e]
+        out_parts.append(marked + sec[len(open_tag):])
     out_parts.append(src[last:])
-    (out / "components.html").write_text("".join(out_parts), encoding="utf-8")
+    doc = "".join(out_parts)
+    if index:                                           # 맨 위 얇은 목록 · 칩 모양 · 칩 누르기 스크립트
+        doc = re.sub(r"(<body\b[^>]*>)", lambda mo: mo.group(1) + UM.index_html(index), doc, count=1)
+        doc = doc.replace("</head>", f"<style>{UM.CSS}</style></head>", 1)
+        doc = doc.replace("</body>", f"<script>{UM.JS}</script></body>", 1) if "</body>" in doc else doc + f"<script>{UM.JS}</script>"
+    (out / "components.html").write_text(doc, encoding="utf-8")
     return kept
 
 
@@ -415,7 +429,7 @@ def main():
     copy_palette(out)                                   # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로(같으면 그대로)
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
-    nk = build_components(out, m)
+    nk = build_components(out, m)                      # 쓰는 화면 지도(R58)는 hd-data 와 같은 규칙으로 다시 잰다(board_data.usage)
     warn_reference_extras(out, m)
     print(f"canvas v3: {n} screens, {na} branch arrows, {ng} groups, scale {BD.frame(out)[0]} · foundation {nc} colors · components {nk} sections")
 
