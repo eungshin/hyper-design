@@ -1,6 +1,7 @@
 """screens.json → 캔버스 (v3, docs/v13-spec.md §7 · success-criteria §9).
 
 python3 build_canvas.py <out_dir>
+python3 build_canvas.py --shell <폴더>   # 공용 셸(1단계 P1a, shell_store 가 그 도장의 코드 사본으로 부름) — 데이터 없음
 
 출력
 - out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)·도장 meta·noscript 링크만 끼우고, 셸은 참조만 —
@@ -16,6 +17,8 @@ python3 build_canvas.py <out_dir>
 - out/foundation.html : tokens.css 의 색 역할(쉬운 이름)·글자 단계·여백·모서리·그림자 견본. palette.js 로 즉시 전환.
 - out/palette.js      : foundation/palette.js 를 복사(같으면 그대로 — 팔레트 교체 + 주석 달기 hd-pick/hd-picked + 연결 보기 hd-links).
 - out/components.html : foundation/specimens.html 중 화면들이 실제로 쓴 클래스의 섹션만. 배지는 screens.json badges 로.
+- --shell <폴더>       : hd-shell.js · hd-shell.css(out 셸과 같은 내용) + skeleton.html(템플릿에서 본 스크립트를 뺀 뼈대 — hd-code meta 만 끼우고
+                        hd-shell-css·hd-modules·빈 hd-data·빈 noscript 자리는 그대로, 채우기는 페이지를 줄 때). out 을 읽지 않는다.
 
 판 규칙(그대로 유지)
 - 한 줄 = 한 흐름(group). 상태 변형(id에 --)은 원래 화면 바로 뒤에, 같은 줄에.
@@ -359,9 +362,31 @@ def build_components(out, m):
     return kept
 
 
+SKELETON = "skeleton.html"
+
+
+def build_shell_dir(dest, stamp):
+    """공용 셸 폴더(--shell) — 셸 파일 둘 + 뼈대. build_shell 과 같은 셸 내용(split_shell · shell_js · shell_css), 데이터·out 없음. Edge."""
+    tpl, main = split_shell(TEMPLATE.read_text(encoding="utf-8"))
+    assert CSS_MARKER in tpl, f"canvas_template.html 에 {CSS_MARKER} 자리가 없다"
+    sources = [(n, (MODULES_DIR / f"{n}.js").read_text(encoding="utf-8")) for n in modules()]
+    dest = pathlib.Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    write_if_changed(dest / SHELL_JS, shell_js(sources, main))
+    write_if_changed(dest / SHELL_CSS, shell_css([f.read_text(encoding="utf-8") for f in CSS_FILES]))
+    write_if_changed(dest / SKELETON, code_stamp.stamp_page(tpl, stamp))   # 뼈대는 맨 뒤 — 뼈대가 있으면 셸 파일도 있다
+
+
 def main():
     if len(sys.argv) < 2:
-        sys.exit("usage: python3 build_canvas.py <out_dir>")
+        sys.exit("usage: python3 build_canvas.py <out_dir> | --shell <폴더>")
+    if sys.argv[1] == "--shell":
+        if len(sys.argv) < 3:
+            sys.exit("usage: python3 build_canvas.py --shell <폴더>")
+        stamp = build_stamp()
+        build_shell_dir(sys.argv[2], stamp)
+        print(f"canvas shell: {stamp} → {sys.argv[2]}")
+        return
     out = pathlib.Path(sys.argv[1])
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
     copy_palette(out)                                   # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로(같으면 그대로)

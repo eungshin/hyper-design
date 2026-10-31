@@ -6,6 +6,8 @@
 - `/v1/p/<이름>/` = 그 프로젝트 캔버스 페이지 · out 파일 · `/v1/p/<이름>/api/*`(세션 토큰 또는 허브 토큰 — 도우미와 같은 라우트, canvas/router.py)
 - `/api/*` + 세션 토큰 = 그 세션(옛 주소 별칭 — 캔버스 JS 는 그대로 '/api/…' 에 페이지 주소의 ?hd= 토큰을 보낸다)
 - 이벤트 흐름(47-4a) `/v1/p/<이름>/events` · 옛 뿌리 `/api/events` — 토큰은 머리글 또는 `?hd=`(EventSource), 처리는 canvas/router.py SessionHandler._events
+- `GET /v1/shell/<도장>/<hd-shell.js|hd-shell.css>`(1단계 P1a, 토큰 없음) = 그 도장의 공용 셸(canvas/shell_store — 모든 프로젝트가 같은 주소, immutable).
+  도장·파일 이름 검사는 shell_store.route(경로 탈출 금지), 아직 없는 도장 = 404 no-store. 미리 만들기는 registry(새 도장을 잴 때)
 - `GET /v1/sessions`(허브 토큰) = 열린 세션 표지들 {sessions:[…]}(hd_client.hub_markers — hd ls·notes·reply·claim 이 허브를 거쳐 찾는다)
 - 본문 차례(POST·PUT): Host + 토큰(403) → 크기(413) → 아는 주소(404) → JSON(400) → 담당
 - 기록 <HD_HOME>/home.json {url, pid, port, token, code} — 살아 있고 답하면 다시 쓰고(브라우저만 엶), 죽었으면 덮어씀. 정상 종료 때 지움(세션도 모두 닫음)
@@ -33,6 +35,7 @@ import registry as RG  # noqa: E402  — 프로젝트 세션들(task 47-2) — c
 import safe_port  # noqa: E402  — canvas 폴더(registry 가 path 에 넣음)
 import router as R  # noqa: E402  — 세션 주소 처리(canvas/router.py)
 import code_stamp as CS  # noqa: E402  — 코드 도장(순수 Model, canvas — registry 가 path 에 넣음)
+import shell_store as SS  # noqa: E402  — 공용 셸 저장소(P1a, canvas)
 
 PORT = 12270
 
@@ -109,15 +112,18 @@ def stop_hub(rec, wait=STOP_WAIT):
     return how
 
 
-def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build=None, paseo=None, restarter=None):
-    """허브 서버(아직 돌지 않음) → srv(srv.url · srv.token · srv.thumbs · srv.registry). renderer·picker·page·build·restarter 는 테스트가 바꿔 끼운다."""
+def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build=None, paseo=None, restarter=None, shells=None, prebuild=None):
+    """허브 서버(아직 돌지 않음) → srv(srv.url · srv.token · srv.thumbs · srv.registry). renderer·picker·page·build·restarter·shells(공용 셸 저장소)·
+    prebuild(미리 만들기) 는 테스트가 바꿔 끼운다."""
+    shells = shells or SS.STORE
     token = token or secrets.token_urlsafe(18)
     page = pathlib.Path(page or PAGE)
     thumbs = T.Thumbs(H.home() / "thumbs", renderer)
     picker = picker or H.pick_folder
     hub_port = lambda: srv.server_address[1]
     restart = lambda: (restarter or spawn_restart)(srv.server_address[1])   # 홈 화면 · 프로젝트 화면(R34)의 [다시 켜기] — 같은 하나
-    reg = RG.ProjectRegistry(hub_port, lambda: srv.url, picker=picker, paseo=paseo or os.environ.get("HD_PASEO_CMD"), build=build, restarter=restart)
+    reg = RG.ProjectRegistry(hub_port, lambda: srv.url, picker=picker, paseo=paseo or os.environ.get("HD_PASEO_CMD"), build=build, restarter=restart,
+                             prebuild=prebuild or SS.PREBUILD)
     ctx = A.Ctx(hub=True, port=hub_port, after_rows=thumbs.schedule, picker=picker, opener=reg.open, closer=reg.close)
 
     class Handler(R.SessionHandler):
@@ -190,10 +196,24 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
                 return self._json(404, {"error": "썸네일이 없어요"})
             self._send(200, p.read_bytes(), "image/png")      # /thumb/ = max-age=31536000(cache_policy) — 주소의 ?t= 가 바뀌면 새로 받는다
 
+        def _shell(self, path):
+            """공용 셸 파일(Cache-Control = cache_policy: 200 immutable · 404 no-store)."""
+            hit = SS.route(path)
+            f = shells.file(*hit) if hit else None
+            if f is None:
+                return self._json(404, {"error": "없는 공용 셸이에요"})
+            try:
+                body = f.read_bytes()
+            except OSError:
+                return self._json(404, {"error": "없는 공용 셸이에요"})
+            return self._send(200, body, STATIC[f.suffix] + "; charset=utf-8")
+
         def do_GET(self):
             if not self._host_ok():
                 return self._json(403, {"error": "주소가 맞지 않아요"})
             u = urllib.parse.urlparse(self.path)
+            if u.path.startswith(SS.PREFIX) or u.path == SS.PREFIX.rstrip("/"):
+                return self._shell(u.path)
             w = self._which(u.path, u.query)
             if w[0] == "v1" and w[1] is None:
                 return self._missing(w[3])
