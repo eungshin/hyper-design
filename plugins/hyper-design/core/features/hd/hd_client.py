@@ -1,6 +1,7 @@
 """Client — I/O 만: 떠 있는 표지 읽기 · 도우미 살아 있나 보기 · 상태 파일·screens.json 읽기 · 답 보내기. 규칙은 hd_model.
 
-표지 = <HD_HOME | ~/.hyper-design>/active/<pid>.json (helper.py 가 쓰고 지운다). 죽은 표지(강제 종료)는 1초 핑으로 걸러 내고 지우지 않는다.
+표지 = <HD_HOME | ~/.hyper-design>/active/<pid>.json (helper.py 가 쓰고 지운다). 죽은 표지(강제 종료)는 핑(3초 · 시간 넘김만 한 번 더, 늦으면 [hd] 한 줄)으로 걸러 내고 지우지 않는다.
+127.0.0.1 http 만 쓰므로 여는 길(OPENER)에 HTTPS 처리기를 두지 않는다(인증서 저장소 읽기 없음). pid 살아 있나 = Win32 API(tasklist 는 못 쓸 때만).
 상태 파일은 읽기만 한다 — 쓰기는 늘 도우미(POST /api/reply)로(쓰는 곳 하나).
 프로젝트 목록 <HD_HOME>/projects.json 은 이 파일만 읽고 쓴다(임시 파일 + os.replace). 규칙은 hd_projects.
 도우미 띄우기(hd open): 떠 있는 것(표지 · <out>/.hd-helper.json 의 살아 있는 pid + 답하는 주소)이 있으면 그것 →
@@ -23,7 +24,50 @@ import code_probe as CP  # noqa: E402
 import code_stamp as CS  # noqa: E402
 
 STATE_FILE = ".hd-canvas.json"
-PING_TIMEOUT = 1.0
+PING_TIMEOUT = 3.0                                    # 부하로 허브 답이 4.9초까지 늦은 일이 있다(W10) — 1초면 바쁜 허브를 꺼졌다고 보고 오프라인 길로 갔다
+PING_TRIES = 2                                        # 시간 넘김(바쁨)만 한 번 더 — 거부(꺼짐)는 바로 아님
+
+
+def _opener():
+    """127.0.0.1 http 만 쓰는 여는 길 — urlopen 의 기본 build_opener 는 HTTPSHandler 를 만들며 Windows 인증서 저장소를 읽는다(약 1.3초, W10).
+    ProxyHandler({}) = 프록시 설정도 읽지 않는다(늘 127.0.0.1 로 바로)."""
+    o = urllib.request.OpenerDirector()
+    for h in (urllib.request.ProxyHandler({}), urllib.request.UnknownHandler(), urllib.request.HTTPHandler(),
+              urllib.request.HTTPDefaultErrorHandler(), urllib.request.HTTPRedirectHandler(), urllib.request.HTTPErrorProcessor()):
+        o.add_handler(h)
+    return o
+
+
+OPENER = _opener()
+
+
+def _open(req, timeout):
+    return OPENER.open(req, timeout=timeout)
+
+
+def _get_status(req, timeout):
+    with _open(req, timeout) as r:
+        return r.status
+
+
+def _get_json(req, timeout):
+    with _open(req, timeout) as r:
+        return json.loads(r.read())
+
+
+def _timed_out(e):
+    """시간 넘김(서버가 받았지만 답이 늦음 — 바쁨)인가. urllib 은 연결 중 시간 넘김을 URLError(reason=timeout) 로 싼다."""
+    return isinstance(e, (socket.timeout, TimeoutError)) or isinstance(getattr(e, "reason", None), (socket.timeout, TimeoutError))
+
+
+_SLOW_SAID = set()                                    # 이 프로세스에서 '답이 늦어 꺼진 것으로 봄' 을 말한 주소 — 한 번만
+
+
+def _say_slow(what, port, timeout):
+    if port in _SLOW_SAID:
+        return
+    _SLOW_SAID.add(port)
+    warn("%s(포트 %s)가 %g초 안에 답하지 않아 %d번 물었어요 — 바쁜 것 같아요, 이번에는 없는 것으로 보고 진행해요" % (what, port, timeout, PING_TRIES))
 
 
 class HdError(Exception):
@@ -69,11 +113,19 @@ def hub_markers():
     if rec is None:
         return []
     req = urllib.request.Request("http://127.0.0.1:%d/v1/sessions" % int(rec["port"]), headers={"X-HD-Token": rec["token"]})
-    try:
-        with urllib.request.urlopen(req, timeout=PING_TIMEOUT) as r:
-            rows = json.loads(r.read())
-    except (OSError, ValueError):
-        return []
+    rows = None
+    for i in range(PING_TRIES):                      # 바쁜 허브(시간 넘김)만 한 번 더 — 꺼졌다고 오판하면 hd add 가 오프라인 길로 간다(W10)
+        try:
+            rows = _get_json(req, PING_TIMEOUT)
+            break
+        except ValueError:
+            return []
+        except OSError as e:
+            if not _timed_out(e):
+                return []
+            if i == PING_TRIES - 1:
+                _say_slow("홈 서버", rec["port"], PING_TIMEOUT)
+                return []
     return [m for m in rows.get("sessions", []) if isinstance(m, dict) and m.get("port") and m.get("token") and m.get("out")]         if isinstance(rows, dict) else []
 
 
@@ -96,19 +148,35 @@ def _base(m):
 
 
 def ping(m, timeout=PING_TIMEOUT):
+    """살아 있나(GET /api/state 200). 시간 넘김(바쁨)은 한 번 더 묻고, 그래도면 [hd] 한 줄 뒤 False — 거부(꺼짐)는 바로 False, 말 없음."""
     if m.get("local"):                                # 이 허브 프로세스 안 세션 — 열려 있으면 살아 있다
         return True
     req = urllib.request.Request(_base(m) + "/api/state", headers={"X-HD-Token": m["token"]})
+    for i in range(PING_TRIES):
+        try:
+            return _get_status(req, timeout) == 200
+        except ValueError:
+            return False
+        except OSError as e:
+            if not _timed_out(e):
+                return False
+    _say_slow("도우미" if not m.get("hub") else "홈 서버 세션", m.get("port"), timeout)
+    return False
+
+
+def _alive(m):
+    """표지 하나가 살아 있나 — pid 가 죽었으면 묻지 않는다(Windows 에서 닫힌 포트는 거부까지 약 2초), 살아 있으면 핑."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status == 200
-    except (OSError, ValueError):
-        return False
+        if not m.get("local") and m.get("pid") is not None and not pid_alive(m["pid"]):
+            return False
+    except (TypeError, ValueError):                   # 깨진 pid 칸 — 핑으로만 본다
+        pass
+    return ping(m)
 
 
 def running():
     """살아 있는 도우미의 표지만."""
-    return [m for m in markers() if ping(m)]
+    return [m for m in markers() if _alive(m)]
 
 
 def read_state(out):
@@ -148,7 +216,7 @@ def call(m, path, body=None, method="POST", timeout=10):
     req = urllib.request.Request(_base(m) + path, data=data, method=method,
                                  headers={"X-HD-Token": m["token"], "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _open(req, timeout) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         try:
@@ -167,7 +235,7 @@ def stream(m, path, last=None, timeout=30):
         headers["Last-Event-ID"] = str(last)
     req = urllib.request.Request(_base(m) + path, method="GET", headers=headers)
     try:
-        r = urllib.request.urlopen(req, timeout=timeout)
+        r = _open(req, timeout)
     except urllib.error.HTTPError as e:
         try:
             return e.code, json.loads(e.read())
@@ -535,7 +603,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 def stale():
     """응답 없는 표지(강제 종료로 남았거나 멈춘 도우미)."""
-    return [m for m in markers() if not ping(m)]
+    return [m for m in markers() if not _alive(m)]
 
 
 def marker_path(m):
@@ -555,8 +623,11 @@ def _sys32(name):
 
 
 def _image(pid):
-    """pid → 실행 파일 이름(소문자) | None(프로세스 없음)."""
+    """pid → 실행 파일 이름(소문자) | None(프로세스 없음). Windows 는 Win32 API 로(tasklist.exe 는 한 번에 1~2.4초 — W10), 못 쓰면 tasklist."""
     if sys.platform == "win32":
+        got = _win_image(pid)
+        if got is not False:
+            return got
         r = subprocess.run([_sys32("tasklist.exe"), "/FI", "PID eq %d" % pid, "/FO", "CSV", "/NH"], capture_output=True, text=True,
                            encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
         lines = (r.stdout or "").strip().splitlines()
@@ -569,6 +640,37 @@ def _image(pid):
         except OSError:
             return None
         return "python?"                                  # /proc 없음(macOS) — 살아 있으니 python 으로 본다
+
+
+def _win_image(pid):
+    """Windows: OpenProcess → 끝났나(GetExitCodeProcess) → 이름(QueryFullProcessImageNameW) → 이름(소문자) | None(없음·끝남) | False(판단 못 함 — tasklist 로)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        k.CloseHandle.argtypes = (wintypes.HANDLE,)
+        k.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        k.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD))
+    except (ImportError, OSError, AttributeError):
+        return False
+    h = k.OpenProcess(0x1000, False, int(pid))            # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        err = ctypes.get_last_error()
+        return None if err == 87 else False               # 87 = 그런 pid 없음 · 5(권한 없음) 등 = 있지만 못 봄 → tasklist
+    try:
+        code = wintypes.DWORD()
+        if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+            return False
+        if code.value != 259:                             # STILL_ACTIVE 아님 = 끝난 프로세스(손잡이만 남음)
+            return None
+        buf, n = ctypes.create_unicode_buffer(32768), wintypes.DWORD(32768)
+        if not k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+            return False
+        return pathlib.PureWindowsPath(buf.value).name.lower()
+    finally:
+        k.CloseHandle(h)
 
 
 def kill_pid(pid):

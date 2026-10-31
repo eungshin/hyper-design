@@ -148,6 +148,7 @@ def forward(out, text, agent=None, paseo=None):
 class Server(ThreadingHTTPServer):
     """out 하나를 내는 서버 — srv.session(ProjectSession). 예전 칸(srv.agent · agents_cache · repo · watch · token)은 세션 부품으로 넘긴다."""
     allow_reuse_address = sys.platform != "win32"     # Windows 의 SO_REUSEADDR 는 쓰는 중인 포트도 다시 연다 — 지난 포트가 막혔는지 알아야 한다(#270)
+    request_queue_size = 64                           # 연결 대기 줄(기본 5) — 탭 둘이 함께 새로고침하면 카드 iframe 요청이 몰려 연결 거부가 났다(W10)
 
     def server_close(self):
         if getattr(self, "session", None) is not None:   # 열기에 실패하면 socketserver 가 make_server 가 칸을 달기 전에 부른다
