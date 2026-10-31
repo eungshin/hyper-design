@@ -442,6 +442,30 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/token", "callers": ["modules/view-ds-inspect.js (Foundation token edit, R55)"],
+      "request": "{name, value}", "response": "tokens.css written once (undo = restore), same reply as the other single-write routes; bad name/value = 400",
+      "cases": [
+        {"name": "not an object = 400", "request": {"method": "POST", "path": "/api/token", "body": [1]}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/api/token", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/component", "callers": ["modules/view-ds-inspect.js (component slot edit, R55 phase C)"],
+      "request": "{selector, prop, index, from, to}", "response": "components.css written once (same-group tokens only, undo = restore); bad slot = 400",
+      "cases": [
+        {"name": "not an object = 400", "request": {"method": "POST", "path": "/api/component", "body": [1]}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/api/component", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/component-slots", "callers": ["modules/view-ds-inspect.js (rules and editable slots of the picked component, R55 phase C)"],
+      "request": "{classes, tag}", "response": "rules + editable slots, 200; no components.css = 404; bad input = 400 (read only, no write lock)",
+      "cases": [
+        {"name": "not an object = 400", "request": {"method": "POST", "path": "/api/component-slots", "body": [1]}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/api/component-slots", "body": {}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/stop", "callers": ["hd_client.py (hd stop)"],
       "request": "{}", "response": "{stopping:true}, then the server shuts down (must stay last)",
       "cases": [
