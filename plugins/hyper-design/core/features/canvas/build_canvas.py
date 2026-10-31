@@ -41,6 +41,7 @@ import sys, os, json, re, html, pathlib, time, urllib.parse
 import board_data as BD
 import code_probe as CP
 import code_stamp
+import page_fill as PF  # hd-data 이스케이프 · noscript 링크 — 줄 때 끼우기(session.page)와 같은 규칙
 
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
@@ -181,17 +182,13 @@ def build_index(out, m):
     inputs = BD.input_stamp(out)                       # 데이터보다 먼저 잰다 — 그 사이 쓰기가 들면 도장이 옛것이 되어 다음 페이지에서 다시 빌드(안전한 쪽)
     data = BD.index_data(out, m)
     data_rows = data["rows"]
-    blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\!--")
     tpl = TEMPLATE.read_text(encoding="utf-8")
-    marker = '<script id="hd-data" type="application/json">{}</script>'
-    assert marker in tpl, "canvas_template.html 에 hd-data 자리가 없다"
-    # 스크립트 없이도(그리고 도달성 검사가) 따라갈 수 있는 화면 링크 목록
-    lis = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
-    nos = f'<noscript id="hd-links"><ul>{lis}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
-    tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
+    PF.need(tpl, PF.DATA_SLOT, PF.LINKS_SLOT)          # 셸 파일을 쓰기 전에 자리 검사(없으면 SlotMissing)
+    tpl = PF.put_links(tpl, data_rows)                 # 스크립트 없이도(그리고 도달성 검사가) 따라갈 수 있는 화면 링크 목록
     stamp = build_stamp()
     tpl = code_stamp.stamp_inputs(code_stamp.stamp_page(build_shell(out, tpl, stamp), stamp), inputs)
-    (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
+    # hd-data 는 맨 끝에 — 이스케이프 = page_fill.data_json(줄 때 session.page 와 같은 규칙)
+    (out / "index.html").write_text(PF.put_data(tpl, data), encoding="utf-8")
     return len(m["screens"]), len(data["arrows"]), len(data_rows)
 
 

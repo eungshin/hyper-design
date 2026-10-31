@@ -16,14 +16,18 @@
   EventBus       — events.py(47-4a): 부품이 바뀔 때 publish → SSE /events · Rebuilder(rebuild.py) = async apply 의 뒤 빌드
 상태: 토큰 · 붙은 코드 도장 함수(code) · 포기한 도장(_gave_up · _data_gave_up) — 나머지 상태는 부품마다 주인 하나.
 페이지(figma-lite 5): 쓰기는 데이터만 확인하고 index.html 을 굽지 않는다 — page() 가 줄 때 데이터 도장(code_stamp.page_inputs)이 지금 out 파일과 다르면 다시 빌드(refresh_data), 닫을 때도 한 번.
+줄 때 끼우기(보드 전환 1단계 P1b): shell(지금 코드 도장) 이 뼈대를 주면 뼈대 + 지금 데이터(Builder.data) + 셸 참조(공용 주소) + inject 로 페이지를 만든다(page_fill.page_html) —
+  디스크 index.html 은 읽지도 다시 굽지도 않는다(빌드 프로세스 0번). shell 이 없거나 None 을 주면 예전 길(refresh + refresh_data + 디스크). 디스크는 닫을 때(file:// 용)·명시적 빌드에서만.
 부르는 곳: helper.make_server(CLI 도우미) · home.registry(허브) · router(주소 → 부품 메서드). 모듈 함수 예전 이름은 helper.py 가 부품 모듈에서 다시 내보낸다.
 오류 탐지: 시작 정리·도장 재기·다시 빌드가 실패해도 [hd] 한 줄 뒤 있던 index.html 로 보인다(페이지를 못 주지는 않는다).
+  셸 묻기·데이터 계산·뼈대 끼우기(자리 없음 SlotMissing)가 실패해도 [hd] 한 줄 뒤 예전 길(디스크 index.html).
 """
 import json, os, pathlib, secrets, sys, threading, urllib.parse
 
 import adapters as AD  # 받는 곳 고르기 · Paseo/Claude/None 어댑터(task 47-5a)
 import board_data as BD  # 데이터 도장 재기(input_stamp)
 import code_stamp as CS  # 코드 도장 — 옛 코드로 구운 index.html 알아보기(순수 Model)
+import page_fill as PF  # 뼈대에 데이터 끼우기(순수 Model, P1b)
 import events as EV  # 바뀐 것 알림(Model, task 47-4a)
 import presence as PR  # 접속한 에이전트(task 47-5a)
 import rebuild as RB  # async apply 뒤 빌드 차례(task 47-4a)
@@ -58,9 +62,10 @@ class ProjectSession:
     """프로젝트(out) 하나 — 부품 객체를 만들고 잇는다. 쓰기 자물쇠 하나(상태 파일·화면 파일·보관 파일 쓰기는 한 번에 하나) · 토큰 하나.
     open() = 시작 정리(깨진 상태 파일 옮기기 · 오래된 기록 정리) · start() = 지켜보기 시작 · close() = 멈춤."""
 
-    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None, config=None, code=None):
+    def __init__(self, out, token=None, agent=None, paseo=None, build=None, on_attach=None, name=None, config=None, code=None, shell=None):
         self.out = pathlib.Path(out).resolve()
         self.code = code                             # () → 지금 코드 도장 | None — 있으면 페이지를 줄 때 옛 도장 index.html 을 다시 빌드(CLI 도우미·허브가 넘김)
+        self.shell = shell                           # (도장) → {"dir", "js", "css", "skeleton"} | None — 공용 셸(shell_store.get, 허브가 넘김). 있으면 줄 때 끼우기(P1b)
         self.hub_stale = None                        # R34 허브 안 세션만: () → {sha, since} | None(허브가 옛 코드인가 — registry.stale_info)
         self._gave_up = None                         # 다시 빌드해도 그 도장이 안 나온 도장 — 같은 도장으로 매번 빌드하지 않게
         self._data_gave_up = None                    # 데이터 도장도 같은 규칙(그 빌드가 도장을 못 적는 옛 코드 · 실패)
@@ -169,23 +174,61 @@ class ProjectSession:
               file=sys.stderr, flush=True)
         return "failed"
 
-    def page(self):
-        """index.html + <head> 에 window.__hdHelper·__hdKeyPath·__hdOut·__hdAgent(attach 로 바뀌므로 줄 때마다)·__hdState → bytes.
-        code 가 있으면 주기 전에 옛 도장 index.html 을 다시 빌드(F5 · 즐겨찾기로 열어도 지금 코드), 그다음 데이터가 옛것이면 다시 빌드(refresh_data)."""
-        if self.code is not None:
-            try:
-                self.refresh(self.code())
-            except Exception as e:                    # noqa: BLE001 — 도장 재기·빌드 실패로 페이지를 못 주지는 않는다(한 줄 남김)
-                print("[hd] 코드 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
-        try:
-            self.refresh_data()
-        except Exception as e:                        # noqa: BLE001 — 데이터 도장 재기·빌드 실패로 페이지를 못 주지는 않는다
-            print("[hd] 데이터 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+    def _inject(self):
+        """<head> 바로 뒤에 끼울 글 — window.__hdHelper·__hdKeyPath·__hdOut·__hdAgent(attach 로 바뀌므로 줄 때마다)·__hdHubStale + __hdState."""
         snap = self.store.inject()
         inject = '<script>window.__hdHelper=%s;window.__hdKeyPath=%s;window.__hdOut=%s;' % (
             json.dumps(True), json.dumps(keypath(self.out)), json.dumps(self.out.as_posix()))
         inject += "window.__hdAgent=%s;" % json.dumps(self.queue.agent)
         if self.hub_stale is not None:                # R34 — 처음 그릴 때부터 '허브 옛 코드' 칩(그 뒤는 GET /api/state 의 hubStale)
             inject += "window.__hdHubStale=%s;" % json.dumps(self.hub_stale())
-        inject += "</script>"
-        return (self.out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + inject + snap, 1).encode("utf-8")
+        return inject + "</script>" + snap
+
+    def served(self, current):
+        """줄 때 끼우기(P1b) → 페이지 글 | None(예전 길로). current = 지금 코드 도장.
+        셸이 없거나(shell 안 넘김 · 도장 모름 · 그 도장 셸 없음) 쓰기 중(자물쇠를 PAGE_WAIT 안에 못 잡음 · 뒤 확인을 기다리는 쓰기)이면 None.
+        자물쇠 안에서 데이터를 뽑는다 — 확인 안 된 쓰기가 페이지에 들지 않게(refresh_data 와 같은 규칙). 실패 = [hd] 한 줄 뒤 None."""
+        if self.shell is None or not current:
+            return None
+        try:
+            sh = self.shell(current)
+        except Exception as e:                        # noqa: BLE001 — 셸을 못 물어도 예전 길로 준다
+            print("[hd] 공용 셸을 찾지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+            return None
+        if not sh:
+            return None
+        if not self.lock.acquire(timeout=PAGE_WAIT):
+            return None
+        try:
+            if self.rebuilder.pending():
+                return None
+            inputs = BD.input_stamp(self.out)         # 데이터보다 먼저 잰다(build_index 와 같은 차례)
+            return PF.page_html(sh["skeleton"], self.builder.data(), sh, inject=self._inject(), inputs=inputs)
+        except Exception as e:                        # noqa: BLE001 — 데이터 계산·끼우기 실패로 페이지를 못 주지는 않는다
+            print("[hd] 지금 데이터로 페이지를 만들지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+            return None
+        finally:
+            self.lock.release()
+
+    def page(self):
+        """줄 페이지 → bytes. 공용 셸이 있으면 줄 때 끼우기(served — 디스크·빌드 없음), 없으면 예전 길:
+        index.html + <head> 에 inject(_inject). code 가 있으면 주기 전에 옛 도장 index.html 을 다시 빌드(F5 · 즐겨찾기로 열어도 지금 코드), 그다음 데이터가 옛것이면 다시 빌드(refresh_data)."""
+        current = None
+        if self.code is not None:
+            try:
+                current = self.code()
+            except Exception as e:                    # noqa: BLE001 — 도장 재기 실패로 페이지를 못 주지는 않는다(한 줄 남김)
+                print("[hd] 코드 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+        body = self.served(current)
+        if body is not None:
+            return body.encode("utf-8")
+        if current is not None:
+            try:
+                self.refresh(current)
+            except Exception as e:                    # noqa: BLE001 — 빌드 실패로 페이지를 못 주지는 않는다(한 줄 남김)
+                print("[hd] 코드 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+        try:
+            self.refresh_data()
+        except Exception as e:                        # noqa: BLE001 — 데이터 도장 재기·빌드 실패로 페이지를 못 주지는 않는다
+            print("[hd] 데이터 도장을 견주지 못했어요(%s) — 있던 index.html 로 보여요" % e, file=sys.stderr, flush=True)
+        return (self.out / "index.html").read_text(encoding="utf-8").replace("<head>", "<head>" + self._inject(), 1).encode("utf-8")
