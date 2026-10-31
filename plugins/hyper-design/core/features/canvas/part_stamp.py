@@ -7,7 +7,7 @@ parts.json = {version: 1, parts: [{file, repo, watch, build, env?, post?, stamp,
 - 낡음 = 적힌 stamp ≠ 지금 도장. 지금 도장을 모르면(git 실패 · 저장소 아님) 'unknown' — 판단하지 않는다(code_stamp.stale 과 같음).
 - dirty = 빌드할 때 지켜보는 경로에 커밋하지 않은 변경이 있었음 → "미커밋 변경 포함"(빌드는 막지 않는다).
 - 모양이 틀린 항목은 건너뛰고 '[hd] parts.json …' 한 줄(projects.json 과 같은 규칙) — 줄을 내는 일은 부르는 쪽.
-부르는 곳: parts_file(읽기·재기 — 도우미 /api/app-parts) · hd_parts(hd parts — parts.json 을 쓰는 유일한 곳).
+부르는 곳: parts_file(읽기·재기 — 도우미 /api/app-parts, 화면 ↔ 부품 연결 screen_links) · hd_parts(hd parts — parts.json 을 쓰는 유일한 곳).
 """
 import hashlib
 import re
@@ -152,6 +152,19 @@ def stale_screens(deps, stale_files):
     if not deps or not stale_files:
         return []
     return sorted(sid for sid, files in deps.items() if any(f in stale_files for f in files or []))
+
+
+def screen_links(deps, parts):
+    """{화면 id: [끌어 쓰는 out 상대 경로(첫째 = 화면 파일)]} + 부품 목록 → {화면 id: {file: 화면 파일, parts: [{file, repo, watch}]}}
+    — 부품을 끌어 쓰는 화면만(대화창 /both 가 '캔버스 화면 ↔ 실제 앱' 을 요청문에 적는다). 부품 차례는 그 화면이 끌어 쓰는 차례."""
+    by = {p["file"]: p for p in parts or [] if isinstance(p, dict) and p.get("file")}
+    res = {}
+    for sid, files in (deps or {}).items():
+        files = list(files or [])
+        used = [by[f] for f in files[1:] if f in by]
+        if files and used:
+            res[sid] = {"file": files[0], "parts": [{"file": u["file"], "repo": u["repo"], "watch": list(u["watch"])} for u in used]}
+    return res
 
 
 def warn_line(rows, target):

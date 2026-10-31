@@ -20,10 +20,13 @@
      지운 메모는 칩에서 빠지고, × 나 보내기 뒤에는 목록에서 뺀다(두 번 가지 않게).
      가까운 화면 = HD.chat.nearest(메모 상자, 카드 상자 — 둘 다 판 좌표, 메모 자리·크기가 바뀔 때만 다시 잼). 보내면 요청 글 끝 '노트:' 줄(HD.chat.build) — 글이 비어도 노트가 있으면 보낸다.
      ctx.boardNotes 가 없으면(옛 셸) [hd] 경고 한 번 + 노트 칩 없이.
-   '/' 명령(R29): 입력칸 어디서든(글 첫머리·빈칸 뒤) '/' 를 치면 명령 목록(HD.chatCmd.match — 지금 /memo 하나, 새 명령 = 표 한 줄 + 아래 RUN 한 함수). 위·아래·Enter·Tab·누르기 = 고르기,
+   '/' 명령(R29): 입력칸 어디서든(글 첫머리·빈칸 뒤) '/' 를 치면 명령 목록(HD.chatCmd.match — /memo · /both, 새 명령 = 표 한 줄 + 아래 RUN 한 함수). 위·아래·Enter·Tab·누르기 = 고르기,
      Esc = 닫기(그 글은 그대로, '/' 로 다시 시작할 때까지 안 열림), 빈칸 등 맞지 않는 글 = 닫히고 보통 글. 고르면 친 '/…' 글은 지운다.
      /memo = 칩 [메모 N건 ×](보내기 전 메모 모두 — HD.chatCmd.drafts/memoChip, 올리거나 포커스면 툴팁 .ch-tip 에 화면 이름 + 첫 글). 0건 = 토스트 '보낼 메모가 없어요', 칩 없음.
      보내면 대화 글로 만든 메모 + 그때의 보내기 전 메모를 ctx.sendNotes 한 번에(위쪽 [보내기]와 같은 요청문·같은 상태 바뀜) — 칩은 보낸 뒤 빠진다. 보낸·완료 메모는 넣지 않는다.
+     /both(V1) = ctx.api GET /api/app-parts 의 links(HD.chatBoth.links) 로 대상 화면(HD.chatBoth.targets)이 모두 앱 부품에 이어졌을 때만 칩 [캔버스+앱 ×].
+     아니면 토스트 HD.chatBoth.UNLINKED(도우미 없음 = NO_HELPER, 읽기 실패 = [hd] + 토스트), 칩 없음. 보낼 때 대상을 다시 보고(그 사이 고른 것이 바뀜) 안 맞으면 토스트·안 보냄,
+     맞으면 메모 글 끝에 화면마다 캔버스 파일·앱 저장소·경로·'hd verify <화면>' 줄(HD.chatBoth.apply) — 요청문은 같은 ctx.sendNotes 한 길. 상태 = 켜짐·읽은 연결(저장 안 함).
    받는 터미널 정보(R28): 도구 줄 알약 뒤 칸 [data-hd-agent-info] 만 둔다 — 모델·생각 깊이·컨텍스트 고리는 등록부 기능 agentInfo(view-agent-info)가 채운다.
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
@@ -45,8 +48,8 @@ var CSS =
   '#hdchat .ch-chip.el .ch-ic{flex:none;width:12px;height:12px;margin-right:3px;fill:none;stroke:#6b6b66;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}' +
   /* /R27 F13 */
   /* R27 F19 + R29 (chatmemo): 노트 칩·메모 N건 칩도 요소 칩과 같은 밝은 칩 — 노랑을 쓰지 않는다(색은 판의 메모 자체에) */
-  '#hdchat .ch-chip.note,#hdchat .ch-chip.memos{background:#ecece8;color:#3a3a37;font-weight:500;padding-left:6px}' +
-  '#hdchat .ch-chip.note .ch-ic,#hdchat .ch-chip.memos .ch-ic{flex:none;width:12px;height:12px;margin-right:3px;fill:none;stroke:#6b6b66;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}' +
+  '#hdchat .ch-chip.note,#hdchat .ch-chip.memos,#hdchat .ch-chip.both{background:#ecece8;color:#3a3a37;font-weight:500;padding-left:6px}' +
+  '#hdchat .ch-chip.note .ch-ic,#hdchat .ch-chip.memos .ch-ic,#hdchat .ch-chip.both .ch-ic{flex:none;width:12px;height:12px;margin-right:3px;fill:none;stroke:#6b6b66;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}' +
   '#hdchat .ch-tip{position:absolute;z-index:3;box-sizing:border-box;max-width:min(320px,calc(100% - 8px));padding:6px 8px;border-radius:8px;background:#2b2b29;color:#f4f4f1;font:12px/18px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}' +
   '#hdchat .ch-tip[hidden]{display:none}#hdchat .ch-tip div{overflow:hidden;text-overflow:ellipsis}' +
   '#hdchat .ch-cmds{position:absolute;left:8px;bottom:calc(100% + 6px);z-index:3;min-width:260px;padding:4px;margin:0;list-style:none;background:var(--ui-surface,#fff);border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 6px 20px rgba(0,0,0,.12)}' +
@@ -106,6 +109,7 @@ function mount(ctx) {
   var boxEl = root.querySelector('.ch-box'), attN = 0, noteN = 0, memoN = 0;
   var CC = HD.chatCmd, cmdEl = root.querySelector('.ch-cmds'), tipEl = root.querySelector('.ch-tip');
   var memoOn = false, noteIds = [], cmd = {list: [], i: -1}, cmdOff = false;   // /memo 칩 켜짐 · 'AI에게'로 넣은 판 메모 id · 명령 목록(모두 저장 안 함)
+  var CB = HD.chatBoth, bothOn = false, bothLinks = {};      // /both 칩 켜짐 · 그때 읽은 화면 ↔ 앱 부품 연결(V1, 저장 안 함)
   ta.setAttribute('aria-controls', 'hdcmds'); ta.setAttribute('aria-autocomplete', 'list');
   var agentB = root.querySelector('.ch-agent'), ai = ctx.$('#aichip');
   ta.placeholder = C.placeholder([]);
@@ -154,11 +158,12 @@ function mount(ctx) {
     return C.chips({ids: selected(), titleOf: ctx.title, els: pickedEls(), notes: boardNotes()});
   }
   function memoDrafts() { return CC.drafts(ctx.notes.list()); }
+  function baseChips() { var raw = rawChips(); dismissed = C.prune(dismissed, raw); return C.visible(raw, dismissed); }   // 고른 화면·요소·노트(지운 칩 빼고)
   function chipsNow() {
-    var raw = rawChips(); dismissed = C.prune(dismissed, raw);
-    var list = C.visible(raw, dismissed), mc = memoOn ? CC.memoChip(memoDrafts(), ctx.title) : null;
+    var list = baseChips(), mc = memoOn ? CC.memoChip(memoDrafts(), ctx.title) : null;
     if (memoOn && !mc) memoOn = false;                     // 그 사이 다른 길로 다 보냈으면 칩도 빠진다
-    return mc ? list.concat([mc]) : list;
+    if (mc) list = list.concat([mc]);
+    return bothOn ? list.concat([CB.chip()]) : list;
   }
 
   var ICON = {                                           // 요소 칩 종류 아이콘(R27 F13) — 12px 선 그림
@@ -166,7 +171,8 @@ function mount(ctx) {
     link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
     field: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4"/>', image: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/>',
     box: '<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 2"/>',
-    note: '<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/>', memos: '<path d="M4 6h12M4 11h12M4 16h8"/><path d="M19 14v6M16 17h6"/>'};
+    note: '<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/>', memos: '<path d="M4 6h12M4 11h12M4 16h8"/><path d="M19 14v6M16 17h6"/>',
+    both: '<rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5"/>'};
   function icon(t) { return '<svg class="ch-ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICON[t] || ICON.box) + '</svg>'; }
   function renderChips() {                               // 칩 줄(S1c): 고른 것이 있을 때만 · 3개를 넘으면 앞 2개 + '외 N개'(누르면 펼침) · 범위는 입력 안내 글로
     var list = chipsNow();
@@ -176,9 +182,9 @@ function mount(ctx) {
     if (sig === chipSig) return;
     chipSig = sig;
     chipsEl.innerHTML = f.shown.map(function (c) {
-      var memos = c.kind === 'memos';
-      return '<span class="ch-chip' + (c.kind === 'el' || c.kind === 'note' || memos ? ' ' + c.kind : '') + '" data-key="' + ctx.esc(c.key) + '"' + (c.kind === 'el' ? ' data-type="' + ctx.esc(c.type || 'box') + '"' : '') +
-        (memos ? ' tabindex="0" aria-describedby="hdtip"' : ' title="' + ctx.esc(c.label) + '"') + '>' + (c.kind === 'el' ? icon(c.type) : c.kind === 'note' || memos ? icon(c.kind) : '') + '<span>' + ctx.esc(c.label) +
+      var memos = c.kind === 'memos', light = c.kind === 'note' || memos || c.kind === 'both';
+      return '<span class="ch-chip' + (c.kind === 'el' || light ? ' ' + c.kind : '') + '" data-key="' + ctx.esc(c.key) + '"' + (c.kind === 'el' ? ' data-type="' + ctx.esc(c.type || 'box') + '"' : '') +
+        (memos ? ' tabindex="0" aria-describedby="hdtip"' : ' title="' + ctx.esc(c.kind === 'both' ? '캔버스 화면과 연결된 실제 앱에 함께 적용' : c.label) + '"') + '>' + (c.kind === 'el' ? icon(c.type) : light ? icon(c.kind) : '') + '<span>' + ctx.esc(c.label) +
         '</span><button type="button" aria-label="' + ctx.esc(c.label) + ' 빼기">×</button></span>';
     }).join('') + (f.more ? '<button type="button" class="ch-chip ch-more" aria-expanded="false" title="고른 것 모두 보기">외 ' + f.more + '개</button>' : '');
     chipsEl.hidden = !list.length;
@@ -242,15 +248,19 @@ function mount(ctx) {
     var items = a.items || [], full = HD.attach.withText(text, items);
     var chipList = chipsNow(), notesN = chipList.filter(function (c) { return c.kind === 'note'; }).length;
     var withMemos = chipList.some(function (c) { return c.kind === 'memos'; }), drafts = withMemos ? memoDrafts() : [];   // /memo(R29) — 보낼 때의 보내기 전 메모
+    var both = bothOn ? CB.targets(chipList, bothLinks) : null;   // /both(V1) — 보낼 때 대상을 다시 본다(그 사이 고른 것이 바뀜)
+    if (both && !both.ok) { ctx.toast(CB.UNLINKED); return false; }
     var r = C.build(chipList, full, {first: firstScreen(), titleOf: ctx.title}, mkId);
+    if (both && !r.memos.length) { ctx.toast(r.why); return false; }   // 고칠 글 없이 /both 만 = 보내지 않음
     if (!r.memos.length && !drafts.length) { ctx.toast(r.why); return false; }
+    if (both) r.memos = CB.apply(r.memos, both.ids, bothLinks, ctx.title);   // 화면마다 캔버스 파일·앱 저장소·경로·hd verify 줄
     if (items.length) r.memos.forEach(function (m) { m.attach = items.slice(); });   // 메모가 첨부 목록을 지닌다
     var all = r.memos.concat(drafts), ok;                  // 한 요청 — 위쪽 [보내기]와 같은 요청문, 보낸 뒤 그 메모들도 '보냄'
     try { ok = ctx.sendNotes(all); }
     catch (e) { console.error('[hd] 대화창 보내기: ' + (e && e.message || e)); ctx.toast('보내지 못했어요 — ' + (e && e.message || e)); return false; }
     if (ok === false) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 보내 주세요'); return false; }
     if (items.length) att('hd-attach-set', []);
-    memoOn = false; noteIds = []; hideCmds();              // 함께 보낸 메모·노트는 칩에서 뺀다(두 번 가지 않게)
+    memoOn = false; noteIds = []; bothOn = false; hideCmds();   // 함께 보낸 메모·노트·/both 는 칩에서 뺀다(두 번 가지 않게)
     var said = text.trim() ? text : items.length ? '이미지 ' + items.length + '장' : notesN ? '노트 ' + notesN + '개' : '메모 ' + drafts.length + '건';
     last = C.record(said, all, Date.now());   // 마지막 요청(쓴 글 — 경로 줄·노트 줄 없이)
     var screens = all.some(function (m) { return m.scope === 'all'; }) ? [] :   // 이 요청 화면(모든 화면 요청 = 없음)
@@ -277,6 +287,7 @@ function mount(ctx) {
     var c = b && b.closest('.ch-chip[data-key]'); if (!c) return;
     var k = c.dataset.key;
     if (k === CC.KEY) memoOn = false;                      // 메모 N건 빼기(R29)
+    else if (k === CB.KEY) bothOn = false;                 // 캔버스+앱 빼기(V1)
     else if (k.indexOf('note:') === 0) noteIds = noteIds.filter(function (id) { return 'note:' + id !== k; });   // 'AI에게'로 넣은 노트 빼기(F19)
     else dismissed[k] = 1;
     renderChips(); place(); ta.focus();
@@ -300,6 +311,18 @@ function mount(ctx) {
     memo: function () {
       if (!memoDrafts().length) { ctx.toast(CC.EMPTY); return; }
       memoOn = true; renderChips(); place();
+    },
+    both: function () {                                    // V1 — 연결은 도우미가 parts.json 으로 안다(읽기만)
+      if (!ctx.api || !ctx.api.on) { ctx.toast(CB.NO_HELPER); return; }
+      ctx.api.call('GET', '/api/app-parts').then(function (res) {
+        if (!res || res.status !== 200) throw new Error('HTTP ' + (res && res.status));
+        var map = CB.links(res.body);
+        if (!CB.targets(baseChips(), map).ok) { ctx.toast(CB.UNLINKED); return; }
+        bothLinks = map; bothOn = true; renderChips(); place();
+      }).catch(function (e) {
+        var m = e && e.message || e;
+        console.warn('[hd] 대화창 /both: 앱 부품 연결을 읽지 못했어요 — ' + m); ctx.toast('앱 부품 연결을 읽지 못했어요 — ' + m);
+      });
     }
   };
   function hideCmds() { cmd = {list: [], i: -1}; cmdEl.hidden = true; cmdEl.innerHTML = ''; ta.removeAttribute('aria-activedescendant'); ta.setAttribute('aria-expanded', 'false'); }

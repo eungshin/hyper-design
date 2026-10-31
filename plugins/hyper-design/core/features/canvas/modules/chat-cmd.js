@@ -14,7 +14,8 @@
 var HD = globalThis.HD = globalThis.HD || {};
 
 var COMMANDS = [
-  {name: 'memo', label: '/memo', hint: '보내기 전 메모를 이 요청에 함께 싣기'}
+  {name: 'memo', label: '/memo', hint: '보내기 전 메모를 이 요청에 함께 싣기'},
+  {name: 'both', label: '/both', hint: '캔버스 화면과 연결된 실제 앱에 함께 적용'}   // V1 — 규칙은 HD.chatBoth(chat-both.js)
 ];
 var EMPTY = '보낼 메모가 없어요';
 var KEY = 'memos';

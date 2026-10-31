@@ -7,6 +7,7 @@
 - 낡음 판단은 도우미: `GET /api/app-parts` → `{parts:[{file, state, stale, stamp, current, dirty, dirty_now, built_at, label}], stale:[화면 id]}` (`session.parts` = `parts_file.PartsWatch` — 60초 캐시, 읽기만, 빌드하지 않음). 화면 → 끌어 쓰는 파일은 `busy._deps`(F25, iframe·link·script) 그대로라서 부품을 iframe 으로 싣는 화면만 고른다.
 - `parts`(Model) `HD.parts.marks(body)` → `{화면 id: {text:'낡음', title}}`(title = 낡은 부품 이름 셋까지 · 미커밋 변경 포함 표시 · `hd parts --rebuild`) · `same(a, b)`. 모양이 틀린 답 = 표시 없음.
 - `view-parts`(View): 열 때 한 번 + `HD.parts.EVERY`(60초)마다(탭이 보일 때만) 묻고, 카드 `.phone` 왼쪽 위에 `.pchip`(`role=status`, busy 상태 칩과 같은 모양 — 화면을 가리지 않음). 교체 `hd-swap` done 이면 그 카드에 다시 붙인다. 도우미가 없으면(`api.on` 거짓) 아무것도 하지 않는다. 읽기 실패는 `[hd]` 경고 한 줄(다시 성공할 때까지 한 번).
+- 화면 ↔ 부품 연결(V1 `/both`): 같은 답에 `links: {화면 id: {file: 화면 파일, parts: [{file, repo, watch}]}}`(`part_stamp.screen_links(screen_deps, 부품)` — 부품을 끌어 쓰는 화면만). git 캐시(60초)와 달리 파일만 읽어 늘 지금 것(틀린 항목 경고는 캐시된 check 쪽 한 번만). 쓰는 곳 = 대화창 `/both`(`contract/chat.md`)
 - 터미널: `hd notes` · `hd wait` 가 낡은 부품이 있으면 stderr 에 `[hd] 낡은 앱 부품 N개: … — 다시 빌드: hd parts --rebuild <이름>` 한 줄(hd/contract.md '앱 부품').
 
 ## 고치면 돌릴 것
