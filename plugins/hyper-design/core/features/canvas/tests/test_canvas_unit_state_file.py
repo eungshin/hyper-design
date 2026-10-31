@@ -76,9 +76,8 @@ out.tab = {
   start: A0, a1: a1, b1: b1, aHello: aHello.send, b2: b2.s.role, b2send: b2.send, b2t: b2t.s.role, bClick: bClick, aTake: [aTake.s.role, aTake.send],
   aHello2: aHello2.send, bSeesOld: bSeesOld.s.role, aSeesNew: [aSeesNew.s.role, aSeesNew.send], tie: tie.s.role, own: own.s.role,
   junk: [T(a1.s, null).s.role, T(a1.s, {type: 'nope', id: 'z'}).s.role]};
-// W10 F1: 파일에서 바뀐 이름 → 제자리(LIVE·ADOPT)·다시 불러오기·합치기(이 탭이 아직 보내지 않은 같은 이름)
+// W10 F1: 파일에서 바뀐 이름 → 제자리(LIVE 하나 — R57 inPlace)·다시 불러오기·합치기(이 탭이 아직 보내지 않은 같은 이름)
 const I = typeof S.incoming === 'function' ? S.incoming : null;
-out.adopt = S.ADOPT ? Object.keys(S.ADOPT) : null;
 out.live = Object.keys(S.LIVE);
 out.incoming = I && {
   none: I([], []), notes: I(['notes', 'busy'], []), pos: I(['card-pos', 'card-size'], []), mixed: I(['notes', 'card-pos', 'hidden'], []),
@@ -191,24 +190,19 @@ def test_tab_writer_rule(out):
     assert t["own"] == "writer" and t["junk"] == ["writer", "writer"], "제 메시지·모르는 메시지는 무시"
 
 
-def test_adoptable_names_are_one_model_list(out):
-    """W10 F1 — 셸이 새로고침 없이 다시 읽을 수 있는 이름(adoptState) 목록 하나. LIVE(메모·덮개)와 겹치지 않고, 기록(edit-log)은 넣지 않는다."""
-    assert out["adopt"] is not None, "state-file.js 에 ADOPT 가 없다"
-    assert sorted(out["adopt"]) == sorted(["card-pos", "card-size", "hidden", "locked", "link-names", "folders", "board-notes", "board-links"])
-    assert not set(out["adopt"]) & set(out["live"]) and "edit-log" not in out["adopt"]
-    assert set(out["adopt"]) <= set(out["names"])
+def test_in_place_names_are_one_model_list(out):
+    """W10 F1 — 셸이 새로고침 없이 다시 읽는 이름 목록은 LIVE 하나(R57 이 card-size 를 넣은 그 목록). 기록(edit-log)은 넣지 않는다."""
+    assert sorted(out["live"]) == sorted(["notes", "note-seq", "busy", "card-size", "card-pos", "hidden", "locked", "link-names", "folders", "board-notes", "board-links"])
+    assert "edit-log" not in out["live"] and set(out["live"]) <= set(out["names"])
 
 
 def test_incoming_change_classification(out):
-    """W10 F1 — 파일 쪽 변경: 메모·덮개 = live, 자리·크기·숨김… = adopt(제자리), 그 밖(edit-log·모르는 이름) = reload,
+    """W10 F1 — 파일 쪽 변경: 모두 LIVE = take(제자리), 그 밖(edit-log·모르는 이름) = reload,
     이 탭이 아직 보내지 않은 같은 이름이 있으면 merge(먼저 보내 409 합치기 길 — 사용자가 옮기는 중인 값을 덮지 않는다)."""
     i = out["incoming"]
     assert i is not None, "state-file.js 에 incoming 이 없다"
-    assert i["none"] == {"how": "none", "live": [], "adopt": []}
-    assert i["notes"] == {"how": "take", "live": ["notes", "busy"], "adopt": []}
-    assert i["pos"] == {"how": "take", "live": [], "adopt": ["card-pos", "card-size"]}, "바깥의 카드 자리·크기 = 새로고침 없이"
-    assert i["mixed"] == {"how": "take", "live": ["notes"], "adopt": ["card-pos", "hidden"]}
-    assert i["editLog"]["how"] == "reload" and i["unknown"]["how"] == "reload", "셸이 제자리에서 못 받는 이름은 지금처럼 다시 불러오기"
-    assert i["dragging"]["how"] == "merge", "옮기는 중(보내지 않은 card-pos) + 밖 card-pos = 합치기 길"
-    assert i["otherPending"] == {"how": "take", "live": [], "adopt": ["card-size"]}, "다른 이름이 대기 중이면 받는다(대기 값은 View 가 지킨다)"
-    assert i["junk"] == {"how": "none", "live": [], "adopt": []}
+    assert i["none"] == "none" and i["junk"] == "none"
+    assert i["notes"] == "take" and i["pos"] == "take" and i["mixed"] == "take", "바깥의 카드 자리·크기·숨김 = 새로고침 없이"
+    assert i["editLog"] == "reload" and i["unknown"] == "reload", "셸이 제자리에서 못 받는 이름은 지금처럼 다시 불러오기"
+    assert i["dragging"] == "merge", "옮기는 중(보내지 않은 card-pos) + 밖 card-pos = 합치기 길"
+    assert i["otherPending"] == "take", "다른 이름이 대기 중이면 받는다(대기 값은 View 가 지킨다)"

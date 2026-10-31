@@ -26,6 +26,13 @@ out.view = S.beside({x: 340, y: 60, w: 700, h: 920}, size, [board, view]);
 out.none = S.beside({x: 0, y: 0, w: 1440, h: 1000}, size, [board, view]);
 out.clampY = S.beside({x: 400, y: 950, w: 100, h: 20}, size, [board, view]);
 out.bad = [S.beside(null, size, [board]), S.beside({x: 1, y: 2, w: 'x', h: 4}, size, [board]), S.beside({x: 1, y: 2, w: 3, h: 4}, size, [])];
+// F6(10-31): 배지 아래 오른쪽 끝 맞춤 창(메모 묶음) — 도구 막대 같은 피할 상자를 덮지 않게 옆으로
+const tools = {left: 372, top: 368, right: 420, bottom: 664}, scr = {x: 8, y: 8, w: 1424, h: 984}, sz = {w: 320, h: 230};
+out.under = S.under({left: 630, right: 650, top: 150, bottom: 170}, sz, scr, [tools]);
+out.underClear = S.under({left: 930, right: 950, top: 150, bottom: 170}, sz, scr, [tools]);
+out.underFlip = S.under({left: 930, right: 950, top: 900, bottom: 920}, sz, scr, []);
+out.underLeft = S.under({left: 1400, right: 1420, top: 300, bottom: 320}, sz, scr, [{left: 1200, top: 300, right: 1440, bottom: 700}]);
+out.underBad = [S.under(null, sz, scr, []), S.under({left: 1, right: 2, top: 3, bottom: 'x'}, sz, scr, [null, {left: 'a'}])];
 console.log(JSON.stringify(out));
 """
 
@@ -74,3 +81,12 @@ def test_side_spot_is_clamped_inside_area(out):
 def test_broken_input_is_first_area_corner(out):
     assert out["bad"][0] == {"x": 340, "y": 40, "side": "none"} and out["bad"][1] == out["bad"][0]
     assert out["bad"][2] == {"x": 8, "y": 8, "side": "none"}
+
+
+def test_under_badge_moves_off_the_toolbar(out):
+    """F6(10-31): 메모 묶음 창(배지 아래 오른쪽 끝 맞춤)이 왼쪽 도구 막대를 덮으면 막대 오른쪽으로 비킨다."""
+    assert out["under"] == {"x": 420 + 6, "y": 170 + 6}, ("막대와 겹치면 막대 오른쪽 + 틈", out["under"])
+    assert out["underClear"] == {"x": 950 - 320, "y": 176}, "겹치지 않으면 예전 그대로(배지 아래 오른쪽 끝)"
+    assert out["underFlip"] == {"x": 630, "y": 900 - 6 - 230}, "아래 자리가 모자라면 배지 위"
+    assert out["underLeft"] == {"x": 1200 - 6 - 320, "y": 326}, "오른쪽으로 못 가면 피할 상자 왼쪽"
+    assert out["underBad"] == [{"x": 8, "y": 8}, {"x": 8, "y": 8}], "깨진 값 = 화면 왼쪽 위(던지지 않음), 깨진 피할 상자는 무시"

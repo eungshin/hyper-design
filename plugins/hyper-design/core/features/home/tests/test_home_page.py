@@ -223,6 +223,16 @@ def test_populated_home_cards_and_screenshot(home):
     assert not errors, errors
 
 
+def test_card_without_thumbnail_shows_initial(home):
+    """F20(10-31): 썸네일이 아직 없거나(허브가 뒤에서 한 장 약 20초씩 찍는 중) 못 불러오면 빈 회색 상자 대신 이름 첫 글자."""
+    pg, api, go, errors = home
+    go("all")
+    assert pg.text_content(".card[data-key='fresh'] .th .ph") == "새", "썸네일 없음 = 제목 첫 글자"
+    pg.evaluate("document.querySelector(\".card[data-key='onboard'] .th img\").dispatchEvent(new Event('error'))")
+    assert pg.text_content(".card[data-key='onboard'] .th .ph") == "온", "그림을 못 불러와도 같은 자리 표시"
+    assert not errors, errors
+
+
 def test_click_selects_double_click_and_enter_open(home):
     pg, api, go, errors = home
     go("recent")

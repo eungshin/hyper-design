@@ -98,7 +98,7 @@ button{font:inherit;color:inherit}
 .glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap;position:relative;z-index:7}   /* 줄 제목은 위 줄 카드의 펼친 설명(.cbody z 6) 위 — 고른 줄 아래 줄 제목도 보이고 눌린다(S1c) */
 .cards{display:flex;gap:84px;align-items:flex-start}
 .card{flex:none;width:var(--card-w,375px);position:relative}
-.phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:var(--card-r,28px);overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
+.phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:min(var(--card-r,28px), calc(var(--card-h,812px) / 4));overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
 .card.xp{z-index:6}
 .card.xp>:not(.phone):not(.pres){visibility:hidden}
 .phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
@@ -140,6 +140,7 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 #modal{position:fixed;inset:0;z-index:20;background:rgba(20,20,20,.62);display:flex;flex-direction:column;align-items:center;justify-content:center}
 #modal[hidden]{display:none}
 #modal .box{position:relative;border-radius:8px 8px var(--modal-r,30px) var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}   /* 창 = 제목 막대 + 화면 */
+#mview{position:relative;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;background:#fff}   /* 크게 보기 굴림 칸(R57 — 크기·굴림은 view-modal-zoom) */
 #mbox{position:relative;overflow:hidden;background:#fff}
 /* 크게 보기 제목 막대(H15): 위쪽 줄은 그대로, 화면 제목·닫기는 그 창 위 26px 막대 */
 #modal .mbar{height:26px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;background:#3a3a37;color:#f1f1ee;font-size:12px;cursor:default}
@@ -491,9 +492,14 @@ body.split-lr #screens{right:calc(50% + (var(--dockw) - var(--dockl)) / 2)}
 .dk-ghost{position:fixed;z-index:60;display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:8px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);font:700 13px system-ui,sans-serif;pointer-events:none;opacity:.94}
 .dk-menu button{gap:8px}
 /* ---- R27 F02 (chrome): 빈 패널은 머리 줄만 — 연결(화면을 안 골랐을 때)·메모 없음·반영 대기 없음은 몸통을 접고 남는 높이를 다른 묶음에 ---- */
-.dk-g:has(#legend[hidden]),.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
-.dk-g:has(#legend[hidden])>.dk-body,.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
+.dk-g:has(#notes[hidden]),.dk-g:has(#pend[hidden]){flex:0 0 auto!important;min-height:0}
+.dk-g:has(#notes[hidden])>.dk-body,.dk-g:has(#pend[hidden])>.dk-body{display:none}
 /* ---- /R27 F02 ---- */
+/* ---- U3 F7 (10-31): 연결 칸은 고르기 전·뒤 같은 높이 — 안 고르면 빈 상태 문구, 고르면 줄 목록(넘치면 그 안에서 스크롤). 카드를 고를 때 펼쳐져 메모 칸을 밀지 않게.
+   같은 쪽에 그 묶음 하나뿐이면(:only-of-type) 높이를 묶지 않는다 ---- */
+.dk-g:has(> .dk-body > #pLinks):not(:only-of-type){flex:0 0 auto!important;min-height:0}
+.dk-g:has(> .dk-body > #pLinks):not(:only-of-type)>.dk-body{flex:none;height:var(--dk-links-h,184px)}
+/* ---- /U3 F7 ---- */
 /* ---- R27 F15 (chrome): 도크 탭 = 아이콘 + 툴팁, 이름은 고른 탭에만(자르지 않음) · 닫기 ×는 고른 탭에 올렸을 때만(안 고른 탭은 창 메뉴로 닫음) ---- */
 .dk-tab.on{flex:none}
 .dk-tab .dk-x{display:none}

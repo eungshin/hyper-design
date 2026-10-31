@@ -2,6 +2,7 @@
    도우미가 없으면(file://) 아무것도 바꾸지 않는다 — 제목은 셸이 HD.projects.shown(manifest 제목, 폴더)으로 이미 썼다.
    제목: GET /api/projects(HD.projectList — 페이지에 한 번, 탭 바·주소 복사와 나눠 씀) → HD.projects.rows → 지금 줄의 title(없으면 셸이 쓴 것 그대로, [hd] 경고 한 줄).
    의도(문서 이벤트, cancelable — 받으면 preventDefault 로 '받음'을 알린다): 'hd-home' → 홈으로 · 'hd-project-title' {name, title, current} → 지금 것이면 제목을 바꾼다.
+   홈으로 가는 답이 0.3초 넘게 늦으면(허브를 처음 띄우는 몇 초) 기다림 토스트 — 답이 오면 이동하거나 실패 까닭 토스트로 바뀐다(F17).
    상태: 홈으로 가는 중인지(한 번에 하나) · 지금 프로젝트 이름(이 모듈만).
    HD.feature('home', {needs: ['api', '$', 'toast']}) → {home(), title(t)} | {} (도우미 없음) */
 (function () {
@@ -35,7 +36,8 @@ function mount(ctx) {
   function home() {
     if (going) return;
     going = true; btn.setAttribute('aria-busy', 'true');
-    function done() { going = false; btn.removeAttribute('aria-busy'); }
+    var waitT = setTimeout(function () { ctx.toast('홈을 여는 중… 허브를 처음 켤 때는 몇 초 걸려요', false, 15000); }, 300);   // F17 — 회색 아이콘만으로 기다리지 않게(빠른 답이면 안 띄움)
+    function done() { clearTimeout(waitT); going = false; btn.removeAttribute('aria-busy'); }
     ctx.api.call('GET', '/api/home').then(function (res) {
       if (res.status !== 200 || !res.body || !res.body.url) throw new Error(res.body && res.body.error || ('도우미 답 ' + res.status));
       done();

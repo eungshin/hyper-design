@@ -18,7 +18,7 @@ JS = r"""
 const fs = require('fs'), vm = require('vm');
 ['state-file.js', 'history.js', 'save-merge.js'].forEach(f => vm.runInThisContext(fs.readFileSync(process.argv[2] + '/' + f, 'utf8'), {filename: f}));
 const M = globalThis.HD.saveMerge, out = {};
-out.NAMES = HD.stateFile.NAMES; out.LIVE = Object.keys(HD.stateFile.LIVE); out.ADOPT = Object.keys(HD.stateFile.ADOPT || {}); out.TRACK = HD.history.TRACK;
+out.NAMES = HD.stateFile.NAMES; out.LIVE = Object.keys(HD.stateFile.LIVE); out.TRACK = HD.history.TRACK;
 const note = (id, extra) => Object.assign({id: id, note: 'n-' + id, sent: true, replies: []}, extra || {});
 const R1 = {kind: '반영됨', what: 'x'};
 
@@ -146,7 +146,7 @@ def test_name_lists_agree(out):   # #277 — 이름 목록 셋이 따로 놀지 
     assert body, "템플릿의 adoptState 를 찾지 못함"
     handled = set(re.findall(r"has\('([a-z-]+)'\)", body.group(1)))
     assert names - {"edit-log", "busy", "note-seq"} <= handled, "adoptState 가 다루지 않는 이름: %s" % (names - {"edit-log", "busy", "note-seq"} - handled)
-    assert out["ADOPT"] and set(out["ADOPT"]) <= handled, "state-file ADOPT(제자리에서 받는 이름) ⊆ adoptState 가 다시 읽는 이름(W10 F1)"
+    assert set(out["LIVE"]) - {"busy", "note-seq"} <= handled, "제자리에서 받는 이름(LIVE) ⊆ adoptState 가 다시 읽는 이름(R57·W10 F1)"
 
 
 def test_busy_merges_per_card(out):   # 칩 걷기 + 같은 순간의 hd claim = 다시 보냄(다시 불러오지 않음)

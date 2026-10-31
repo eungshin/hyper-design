@@ -462,10 +462,10 @@ def test_other_tabs_keep_talk_window_and_top_bar(served, ctx):
             now = pg.evaluate(bar)
             assert {i: v for i, v, d in now} == before, (tab, "위 막대 단추가 그대로 보인다", now)
             dis = {i for i, v, d in now if d}
-            assert {"vbtn", "zoom"} <= dis, (tab, "판 전용 보기·배율은 눌리지 않는다", now)
+            assert "zoom" in dis, (tab, "판 전용 보기·배율(배율 칩 하나 — U3 F11)은 눌리지 않는다", now)
             shot(pg, "talk-tab-%s.png" % tab)
         pg.click('.tab[data-tab="screens"]')
-        assert pg.is_enabled("#vbtn") and pg.is_enabled("#zoom"), "판으로 돌아오면 다시 눌린다"
+        assert pg.is_enabled("#zoom"), "판으로 돌아오면 다시 눌린다"
     finally:
         pg.close()
     assert not errors, errors
