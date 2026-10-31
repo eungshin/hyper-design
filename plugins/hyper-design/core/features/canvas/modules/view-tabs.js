@@ -1,5 +1,5 @@
 /* View — 아래쪽 프로젝트 탭 바(task 44, Xmind 시트 바 모양): 탭 하나 = 프로젝트 하나, 판 아래 왼쪽(S1b — 가운데는 대화창). 도우미가 없으면(file://) 만들지 않는다.
-   시작: GET /api/tabs + GET /api/projects → HD.tabs.bar(차례·지금 것 더하기, 더했으면 PUT /api/tabs 로 남김). 지금 탭 = 지금 캔버스(aria-selected).
+   시작: GET /api/tabs + GET /api/projects(HD.projectList — 페이지에 한 번, 머리 제목·주소 복사와 나눠 씀) → HD.tabs.bar(차례·지금 것 더하기, 더했으면 PUT /api/tabs 로 남김). 지금 탭 = 지금 캔버스(aria-selected).
    누르기 → POST /api/open {name} → 이 탭이 그 주소로 · '+' → 고르기 창(의도 'hd-pick-project') · 두 번 누르기 → 제자리 이름 바꾸기(Enter·blur 확정, Esc 취소,
    빈 값·같은 값 무시 = HD.tabs.rename) → POST /api/project {name, title} → 지금 것이면 의도 'hd-project-title'(머리 제목) · 끌기 → 차례 → PUT /api/tabs.
    우클릭·탭의 ▾ → 메뉴: 이름 바꾸기 · 탭 닫기(하나뿐이면 끔) · 다른 탭 닫기 · 폴더 열기(POST /api/reveal) · 홈(의도 'hd-home'). 지금 탭을 닫으면 옆 탭으로 간다.
@@ -108,8 +108,8 @@ function mount(ctx) {
     });
   }
 
-  function load() {
-    return Promise.all([ctx.api.call('GET', '/api/tabs'), ctx.api.call('GET', '/api/projects')]).then(function (rs) {
+  function load(again) {                             // 처음 = 페이지에 한 번 받은 목록(HD.projectList.get) · reload() = 새로
+    return Promise.all([ctx.api.call('GET', '/api/tabs'), again ? HD.projectList.fresh(ctx.api) : HD.projectList.get(ctx.api)]).then(function (rs) {
       var tb = check(rs[0]);
       if (rs[1].status !== 200) throw new Error(rs[1].body && rs[1].body.error || ('도우미 답 ' + rs[1].status));
       var pr = P.rows(rs[1].body, window.__hdOut || null), me = P.current(pr.rows);
@@ -301,7 +301,7 @@ function mount(ctx) {
   });
 
   load();
-  return {reload: load, names: function () { return names.slice(); }};
+  return {reload: function () { return load(true); }, names: function () { return names.slice(); }};
 }
 
 HD.viewTabs = {mount: mount};

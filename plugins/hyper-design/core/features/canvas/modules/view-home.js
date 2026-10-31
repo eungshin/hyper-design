@@ -1,6 +1,6 @@
 /* View — 위쪽 줄 머리(task 44): 도우미로 열면 'hd' 표시 자리가 🏠 홈 단추(누르면 GET /api/home → 이 탭이 홈으로)가 되고, 제목 = 이 프로젝트의 제목(페이지 제목도 같게).
    도우미가 없으면(file://) 아무것도 바꾸지 않는다 — 제목은 셸이 HD.projects.shown(manifest 제목, 폴더)으로 이미 썼다.
-   제목: GET /api/projects → HD.projects.rows → 지금 줄의 title(없으면 셸이 쓴 것 그대로, [hd] 경고 한 줄).
+   제목: GET /api/projects(HD.projectList — 페이지에 한 번, 탭 바·주소 복사와 나눠 씀) → HD.projects.rows → 지금 줄의 title(없으면 셸이 쓴 것 그대로, [hd] 경고 한 줄).
    의도(문서 이벤트, cancelable — 받으면 preventDefault 로 '받음'을 알린다): 'hd-home' → 홈으로 · 'hd-project-title' {name, title, current} → 지금 것이면 제목을 바꾼다.
    상태: 홈으로 가는 중인지(한 번에 하나) · 지금 프로젝트 이름(이 모듈만).
    HD.feature('home', {needs: ['api', '$', 'toast']}) → {home(), title(t)} | {} (도우미 없음) */
@@ -46,7 +46,7 @@ function mount(ctx) {
     });
   }
 
-  ctx.api.call('GET', '/api/projects').then(function (res) {
+  HD.projectList.get(ctx.api).then(function (res) {
     if (res.status !== 200) throw new Error(res.body && res.body.error || ('도우미 답 ' + res.status));
     var r = P.rows(res.body, window.__hdOut || null), cur = P.current(r.rows);
     if (!cur) { console.warn('[hd] 이 캔버스가 프로젝트 목록에 없어 폴더 이름을 제목으로 써요'); return; }

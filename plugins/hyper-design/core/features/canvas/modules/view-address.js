@@ -1,7 +1,7 @@
 /* View — 주소 복사(R30, Figma '선택 링크 복사' · Ctrl+L): 카드·요소의 주소 줄(HD.address)을 클립보드에 넣고 "주소를 복사했어요" 토스트.
    들어오는 길: 카드 메뉴 '주소 복사'(셸 → cards(ids)) · 요소 메뉴 '주소 복사'(셸 → element(screen, h, inModal)) · Ctrl/Cmd+L(이 모듈이 듣는다 —
      크게 보기 = 고른 요소, 판 = 고른 요소 모두(R19 차례) → 없으면 고른 카드).
-   프로젝트 이름 = 도우미가 주는 프로젝트 줄의 이름(GET /api/projects — hd open 이 받는 이름), 없으면 out 폴더 이름(HD.address.projectOf).
+   프로젝트 이름 = 도우미가 주는 프로젝트 줄의 이름(GET /api/projects — HD.projectList 가 페이지에 한 번 받은 것, hd open 이 받는 이름), 없으면 out 폴더 이름(HD.address.projectOf).
    상태 = 프로젝트 이름 · 복사 함수(attach 로 받음 — view-send 의 클립보드 + execCommand 예전 길). 마지막 복사한 글은 window.__hdLastAddress(테스트가 읽음).
    HD.feature('address', {needs: ['$', 'toast', 'warn', 'cardEl', 'selected', 'pickedAll', 'picked', 'api']})
      → {attach({copy(text) → Promise<bool>}), cards(ids), element(screen, h, inModal), items(list) → 주소 항목들, copy(items) → Promise<bool>}
@@ -14,7 +14,7 @@ function mount(ctx) {
   var $ = ctx.$, A = HD.address, copyFn = null;
   var out = A.outOf(window.__hdOut, location.pathname), project = A.projectOf(out);
   if (ctx.api && ctx.api.on) {
-    ctx.api.call('GET', '/api/projects').then(function (res) {
+    HD.projectList.get(ctx.api).then(function (res) {
       if (res.status !== 200) throw new Error(res.body && res.body.error || ('도우미 답 ' + res.status));
       var cur = HD.projects.current(HD.projects.rows(res.body, window.__hdOut || null).rows);
       if (cur && cur.name) project = cur.name;

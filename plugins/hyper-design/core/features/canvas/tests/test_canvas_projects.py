@@ -249,3 +249,23 @@ def test_file_url_keeps_look_without_old_title(served, ctx):
     finally:
         pg.close()
     assert not errors, errors
+
+
+def test_one_page_load_asks_projects_once(served, ctx):
+    """보드 전환 S2: 머리 제목·탭 바·주소 복사가 한 페이지 열기에 GET /api/projects 하나를 나눠 쓴다(modules/project-list.js) ·
+    고르기 창은 열 때마다 새로 받는다."""
+    out, srv = served
+    holder = {}
+    pg, errors = _open(ctx, srv.url, lambda p: holder.update(calls=mock_hub(p, srv, project_rows(out, [{"name": "laundry", "title": "세탁 앱"}]))[0]))
+    try:
+        pg.wait_for_function("document.querySelector('#title').textContent === '결제 흐름'")
+        pg.wait_for_selector("#ptabs .pt-tab[data-name='cur']")
+        pg.wait_for_timeout(500)                                            # 늦게 붙는 쪽(주소 복사)도 다 불렀을 때
+        asked = lambda: [c for c in holder["calls"] if c[:2] == ("GET", "/api/projects")]
+        assert len(asked()) == 1, holder["calls"]
+        pg.click("#pbtn")
+        pg.wait_for_selector("#ppick .pk-card[data-name='laundry']")
+        assert len(asked()) == 2, "고르기 창 = 열 때 새로"
+    finally:
+        pg.close()
+    assert not errors, errors

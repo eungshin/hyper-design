@@ -14,10 +14,11 @@
 - 떠나기: 이 탭이 다른 주소로 갈 때 보내지 않은 상태 쓰기는 `view-state-sync` 의 pagehide keepalive PUT 이 마저 보내고 못 닿으면 쓰기 대기 표시(`hd-unsent:`)로 다음 시작 때 올린다 — 이 기능들은 따로 저장하지 않는다(`tests/test_canvas_tabs.py::test_leaving_by_tab_keeps_pending_state_write`)
 - 실패: 목록을 못 받으면 창에 그 줄 + 토스트. 열기·만들기가 실패하면(4xx/5xx `{error}`·끊김) 도우미의 한 줄을 토스트로, 창은 열어 둔다. 기다리는 동안 그 카드 `aria-busy`, 한 번에 하나만. 모양이 틀린 목록 줄은 빼고 `[hd]` 경고 한 줄
 - 층: `projects`(Model, 순수 — 줄 상태·제목·썸네일·지금 표시·언제 글·검색·새 이름·머리 제목) · `view-projects`(View — 창 그리기·`ctx.api` 부르기) · `view-home`(View — 홈 단추·제목). View 끼리는 문서 이벤트 의도로만 잇는다: `hd-home`(→ 홈) · `hd-pick-project`(→ 고르기 창) · `hd-project-title {name, title, current}`(→ 머리 제목). 받은 쪽은 `preventDefault()` 로 받음을 알리고 보낸 쪽은 아무도 안 받으면 토스트
+- 목록 받기 하나(보드 전환 S2): `project-list`(ViewModel) — 페이지 열기에 `GET /api/projects` 한 번(`HD.projectList.get`), 머리 제목·탭 바·주소 복사가 같은 답을 나눠 쓴다. 고르기 창은 열 때마다 `fresh`(새로 받아 나눠 쓸 답도 바꿈). 실패한 답은 남기지 않는다(`tests/test_canvas_unit_cache_policy.py` · `test_canvas_projects.py::test_one_page_load_asks_projects_once`)
 - 등록: `HD.feature('projects', {needs: ['api', '$', 'esc', 'toast']})` → `{open, close}` | `{}` · `HD.feature('home', {needs: ['api', '$', 'toast']})` → `{home, title}` | `{}`
 
 ## 고치면 돌릴 것
 
 | 고친 곳 | `-m` |
 |---|---|
-| `modules/projects.js` · `view-projects.js` · `view-home.js` · 도우미 `/api/projects`·`/api/open` | `unit or menu or helper`(`tests/test_canvas_unit_projects.py` · `tests/test_canvas_projects.py`) |
+| `modules/projects.js` · `project-list.js` · `view-projects.js` · `view-home.js` · 도우미 `/api/projects`·`/api/open` | `unit or menu or helper`(`tests/test_canvas_unit_projects.py` · `tests/test_canvas_projects.py`) |
