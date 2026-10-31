@@ -40,7 +40,6 @@ def test_links_panel_keeps_its_height_when_a_card_is_picked(apage):
 
 
 @pytest.mark.area("notes")
-@pytest.mark.xfail(strict=True, reason="U1 view-memo-pop.js del() 에 부르는 한 줄(ctx.toast(…, true))을 합친 뒤 통과 — 합치면 이 표시를 뺀다")
 def test_memo_delete_offers_undo_toast(apage):
     pg = apage
     fit_view(pg)

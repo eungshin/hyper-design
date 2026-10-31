@@ -226,6 +226,7 @@ function mount(ctx) {
     drop();
     ctx.record({label: n.edit ? '편집 빼기' : '메모 지우기', redo: drop,
                 undo: function () { var l = NS.list().slice(); l.splice(Math.min(at, l.length), 0, n); NS.set(l); ctx.save(); }});
+    ctx.toast(n.edit ? '편집을 뺐어요' : '메모를 지웠어요', true);   // F14 — 카드 지우기처럼 [되돌리기]
   }
   function reply(ids, kind, label) {                  // 사람 답(완료 = 확인 · 다시 열기 = 다시, 보내기 전으로) — 메모 안 n.replies 에 덧붙임, 되돌리기 한 단계
     var at = new Date().toISOString(), hit = ids.map(function (id) { return NS.find(id); }).filter(Boolean);

@@ -1208,6 +1208,7 @@ var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: ci
                              sentChanged: function () { if (PN) PN.render(); if (TH) TH.refresh(); }, lost: function (n) { return PN ? PN.lost(n) : false; }});
 // 카드 메모 배지 → 그 화면 메모 묶음(modules/view-thread.js, #224) — 고치기·지우기는 메모 패널과 같은 함수, [메모 추가] = 화면 전체 메모
 var TH = HD.viewThread.mount({rowsEl: rowsEl, esc: esc, list: function () { return NS.list(); }, title: function (id) { return titleOf(id); },
+                              avoid: function () { var t = $('#tools'); if (!t || t.offsetParent === null) return []; var r = t.getBoundingClientRect(); return [{left: r.left, right: r.right, top: r.top, bottom: r.bottom}]; },   // 묶음 창이 덮지 않을 도구 막대(F6)
                               edit: MP.edit, del: MP.del, add: function (id) { MP.card(id); },
                               done: function (id) { MP.reply([id], '확인', '메모 완료'); }, reopen: function (id) { MP.reply([id], '다시', '메모 다시 열기'); },
                               lost: function (n) { return PN ? PN.lost(n) : false; }, highlight: function (id, no) { if (PN) PN.highlight(id, no); },

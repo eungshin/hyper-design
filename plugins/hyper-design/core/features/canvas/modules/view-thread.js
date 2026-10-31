@@ -12,7 +12,7 @@
    핀 누르기(셸이 open(id, 핀, no)) = 그 메모로 스크롤하고 펼침. 연 자리(배지 · 핀)는 메모가 바뀌어도 그대로 — 핀으로 열었으면 배지로 옮겨 붙지 않고, 붙을 것이 없어지면 마지막 자리(F1b).
    배지가 없어져도(열린 메모 0) 메모가 남아 있으면 그 자리에 둔다.
    HD.viewThread.mount(ctx) → {open(id, anchorEl, no?), close() → 열려 있었나, refresh(), isOpen(), layer(떠 있는 층 — id 'thread')}
-   ctx = {rowsEl, esc, list() → 메모 전부, title(id), edit(noteId), del(noteId), add(screenId), done(noteId), reopen(noteId), lost(n), highlight(id, no|null),
+   ctx = {rowsEl, esc, avoid() → 피할 상자 [{left, right, top, bottom}](왼쪽 도구 막대), list() → 메모 전부, title(id), edit(noteId), del(noteId), add(screenId), done(noteId), reopen(noteId), lost(n), highlight(id, no|null),
           choose(noteId, choice), queued() → 보내기가 대기열 파일에만 가나, showSent() → 보낸 메모 보기 켜짐} */
 (function () {
 'use strict';
@@ -109,10 +109,9 @@ function mount(ctx) {
   }
   function place() {                                 // 배지(또는 핀) 아래 오른쪽 끝을 맞춤, 창 안으로 — 붙을 것이 없어졌으면 그 자리 그대로
     if (cur.badge && cur.badge.isConnected) { var b = cur.badge.getBoundingClientRect(); cur.at = {left: b.left, right: b.right, top: b.top, bottom: b.bottom}; }
-    var r = cur.at || {left: 8, right: 328, top: 8, bottom: 8}, w = box.offsetWidth, h = box.offsetHeight;
-    var x = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)), y = r.bottom + 6;
-    if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
-    box.style.left = x + 'px'; box.style.top = y + 'px';
+    var r = cur.at || {left: 8, right: 328, top: 8, bottom: 8};
+    var p = HD.popSide.under(r, {w: box.offsetWidth, h: box.offsetHeight}, {x: 8, y: 8, w: innerWidth - 16, h: innerHeight - 16}, ctx.avoid ? ctx.avoid() : []);   // 공용 자리 규칙 — 왼쪽 도구 막대는 피한다(F6)
+    box.style.left = p.x + 'px'; box.style.top = p.y + 'px';
   }
   function open(id, badge, no) {
     no = no == null ? null : no;
