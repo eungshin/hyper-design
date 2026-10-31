@@ -19,6 +19,7 @@ out.drop = R.cleanPos(JSON.stringify({a: {dx: 1, dy: 1, g: '옛 줄'}, gone: {dx
 out.empty = R.cleanPos(null, live);
 out.broken = R.cleanPos('{oops', live);
 out.notObj = R.cleanPos('[1,2]', live);
+out.absent = R.cleanPos(JSON.stringify({a: {dx: 1, dy: 2, g: '안내'}, fresh: {dx: 5, dy: 6, g: '새 줄'}, junk: {dx: 'x', dy: 1}, b: {dx: 1, dy: 1, g: '옛 줄'}}), live, true);   // W10 F1 — 밖에서 받은 자리: 아직 판에 없는 카드는 들고 있는다
 // View: 상자(판 좌표 = 화면 px / 배율) · 옮기기 한 단계(되돌리기·다시 하기) · 잠긴 카드는 세기만
 const el = (id, l, t) => ({dataset: {id}, classList: {contains: () => false, toggle() {}}, offsetWidth: 100, style: {},
   closest: () => null, getBoundingClientRect: () => ({left: l, top: t, width: 50, height: 80})});
@@ -28,6 +29,11 @@ const CP = HD.viewCardPos.mount({$: () => null, $$: () => Object.values(cards), 
   getItem: k => store[k] || null, setItem: (k, v) => { store[k] = v; }, hash: 'h', zoom: () => 0.5,
   cardEl: id => cards[id] || null, locked: id => id === 'k', record: op => rows.push(op), toast: () => {}, redraw: () => {}, moved: () => {}});
 out.box = CP.boxOf(cards.a, {left: 10, top: 0});
+store['hd-card-pos:h'] = JSON.stringify({a: {dx: 3, dy: 4, g: ''}, fresh: {dx: 7, dy: 8, g: '결제'}});
+const before = store['hd-card-pos:h'];
+CP.reload();
+out.reloadAbsent = {fresh: CP.at('fresh') || null, a: CP.at('a') || null, untouched: store['hd-card-pos:h'] === before};
+CP.replace({});
 out.boxes = CP.boxes(['a', 'b', 'k', 'none']);
 out.moved = CP.move({a: [5, 0], none: [1, 1]}, '정렬');
 out.after = CP.at('a'); rows[0].undo(); out.undone = CP.at('a') || null; rows[0].redo(); out.redone = CP.at('a');
@@ -77,3 +83,15 @@ def test_move_is_one_undo_step(js):
     assert js["after"] == {"dx": 5, "dy": 0, "g": ""}
     assert js["undone"] is None and js["redone"] == js["after"]
     assert js["saved"] == {"a": {"dx": 5, "dy": 0, "g": ""}}
+
+
+def test_clean_pos_keep_absent_holds_cards_not_on_board_yet(js):
+    """W10 F1 — 밖에서 받은 card-pos(hd add)가 새 카드 데이터보다 먼저 닿아도 그 카드의 자리를 버리지 않는다(다시 쓰지도 않음).
+    판에 있는 카드의 규칙(다른 줄·숫자 아님 = 버림)은 그대로."""
+    assert js["absent"] == {"pos": {"a": {"dx": 1, "dy": 2, "g": "안내"}, "fresh": {"dx": 5, "dy": 6, "g": "새 줄"}}, "dirty": True, "bad": False}
+
+
+def test_reload_keeps_pos_of_card_not_rendered_yet(js):
+    r = js["reloadAbsent"]
+    assert r["fresh"] == {"dx": 7, "dy": 8, "g": "결제"}, "다시 읽기 = 아직 없는 카드의 자리도 들고 있다(데이터가 오면 place 가 쓴다)"
+    assert r["a"] == {"dx": 3, "dy": 4, "g": ""} and r["untouched"], "버릴 것이 없으면 다시 쓰지 않는다(밖 쓰기를 메아리하지 않음)"

@@ -24,14 +24,14 @@ function mount(ctx) {
     c.style.left = p ? p.dx + 'px' : ''; c.style.top = p ? p.dy + 'px' : ''; c.classList.toggle('moved', !!p);
   }
   function placeAll() { $$('.card', rowsEl).forEach(place); }
-  function load() {                                 // 시작(빈 레이아웃 카드까지 그린 뒤) · 기록 줄로 오갈 때 — 없는 화면·다른 줄로 간 화면의 값은 버리고 다시 쓴다
-    var r = HD.rows.cleanPos(ctx.getItem(PKEY), liveGroups());
+  function load(keepAbsent) {                       // 시작(빈 레이아웃 카드까지 그린 뒤) — 없는 화면·다른 줄로 간 화면의 값은 버리고 다시 쓴다
+    var r = HD.rows.cleanPos(ctx.getItem(PKEY), liveGroups(), keepAbsent);
     if (r.bad) console.warn('[hd] card-pos 저장값이 깨져 옮긴 자리를 비웠어요');
     Object.keys(r.pos).forEach(function (id) { cardPos[id] = r.pos[id]; });
     if (r.dirty) save();
     placeAll();
   }
-  function reload() { cardPos = {}; load(); }
+  function reload() { cardPos = {}; load(true); }   // 다시 읽기(기록 줄로 오갈 때 · 밖에서 바뀐 자리, W10 F1) — 아직 판에 없는 카드의 자리는 들고 있다(데이터가 오면 place 가 쓴다)
   function set(id, p) {                             // 되돌리기·다시 하기에서: 그 자리로 놓고 저장·화살표 다시
     if (p) cardPos[id] = {dx: p.dx, dy: p.dy, g: p.g}; else delete cardPos[id];
     $$('.card', rowsEl).forEach(function (c) { if (c.dataset.id === id) place(c); });

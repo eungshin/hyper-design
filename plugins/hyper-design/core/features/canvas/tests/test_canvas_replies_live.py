@@ -115,6 +115,40 @@ def test_agent_reply_shows_live_without_reload(live):
     assert pg.locator(PIN).count() == 0, "끄면 보낸(대기열)·완료 메모 둘 다 숨는다"
 
 
+def put_state(pg, names):
+    """밖(hd add 의 자리 쓰기 · 다른 도구)에서 PUT /api/state — 파일 rev 그대로 받아 바뀐 이름만."""
+    base = pg.srv.url.split("/index.html")[0]
+    h = {"Content-Type": "application/json", "X-HD-Token": pg.srv.token}
+    with urllib.request.urlopen(urllib.request.Request(base + "/api/state", headers=h), timeout=5) as r:
+        rev = json.loads(r.read())["rev"]
+    req = urllib.request.Request(base + "/api/state", data=json.dumps({"rev": rev, "state": names}).encode("utf-8"), method="PUT", headers=h)
+    with urllib.request.urlopen(req, timeout=5) as r:
+        assert r.status == 200
+
+
+@pytest.mark.area("helper", "input")
+def test_outside_card_pos_size_write_adopts_without_reload(live):
+    """W10 F1 — 밖에서 카드 자리·크기(card-pos·card-size)를 쓰면 열린 탭이 새로고침 없이 그 카드만 옮기고 키운다:
+    다른 카드 iframe 은 다시 싣지 않고, 카메라 그대로, '다시 불러왔어요' 토스트 없음."""
+    pg = live
+    fit_view(pg)
+    done = '.card[data-id="done"] iframe'
+    pg.wait_for_function("(() => { const f = document.querySelector('%s'); const d = f && f.contentDocument;"
+                         " return !!(d && d.readyState === 'complete' && d.body && d.body.childElementCount); })()" % done, timeout=8000)
+    pg.evaluate("""() => { window.__hdStay = 1; window.__loads = 0;
+      document.querySelectorAll('.card:not([data-id="pay"]) iframe').forEach(f => f.addEventListener('load', () => window.__loads++)); }""")
+    cam = pg.evaluate("document.getElementById('stage').style.transform")
+    put_state(pg, {"card-pos": {"pay": {"dx": 40, "dy": 60, "g": "결제"}}, "card-size": {"pay": {"w": 1440, "h": 1024}}})
+    pay = '.card[data-id="pay"]'
+    pg.wait_for_function("(() => { const c = document.querySelector('%s'); return !!c && c.style.left === '40px' && c.style.top === '60px'"
+                         " && c.style.getPropertyValue('--card-w') === '1440px' && c.style.getPropertyValue('--card-h') === '1024px'; })()" % pay, timeout=3000)
+    pg.wait_for_timeout(1500)                       # 다시 불러오기(1.2초 뒤)가 있었다면 여기서 드러난다
+    assert pg.evaluate("window.__hdStay") == 1, "새로고침 없이"
+    assert pg.evaluate("window.__loads") == 0, "다른 카드 iframe 은 다시 싣지 않는다"
+    assert pg.evaluate("document.getElementById('stage').style.transform") == cam, "카메라 그대로(U2)"
+    assert "다시 불러왔어요" not in (pg.text_content("#toast") or ""), "충돌 토스트 없음"
+
+
 @pytest.mark.area("notes", "helper")
 def test_question_reply_surfaces_and_choice_sends_follow_up(live):
     """(b) 질문 → '결정 필요 1'·배지 강조색 · 고르기 = 질문 메모 완료(확인 + answer) + 새 메모 '질문 "…" → 파랑' 를 대기열로 보냄."""

@@ -8,7 +8,8 @@
    checkName(names, from, to) → {name} | {name, same: true} | {error} — 앞뒤 빈칸을 자른 새 이름, 빈 이름·80자 넘음·같은 이름 줄·없는 줄은 이유
    rekeyPos(pos, live) → {pos, changed} — 옮긴 카드 자리(card-pos {id: {dx, dy, g}})의 줄 이름 g 를 지금 줄(live {id: 줄 이름})로 옮긴 새 값(S1c).
      줄 이름 바꾸기·줄만 걷기 뒤 view-card-pos 가 부른다 — 새로고침 뒤 cleanPos 가 g 가 다른 자리를 버리지 않게. live 에 없는 카드는 그대로, 입력은 고치지 않는다
-   cleanPos(text, live) → {pos, dirty, bad} — 저장된 card-pos 글 → 지금 카드(live {id: 줄 이름})에 맞는 자리만 {dx, dy, g: 지금 줄}(셸 C4).
+   cleanPos(text, live, keepAbsent?) → {pos, dirty, bad} — 저장된 card-pos 글 → 지금 카드(live {id: 줄 이름})에 맞는 자리만 {dx, dy, g: 지금 줄}(셸 C4).
+     keepAbsent(다시 읽기 — 밖에서 받은 자리, W10 F1) = live 에 없는 카드의 숫자 자리는 버리지 않고 {dx, dy, g: 적힌 줄} 로 둔다(hd add 의 상태 쓰기가 새 카드 데이터보다 먼저 닿아도). 시작 때 load 는 지금처럼 버린다.
      없는 화면·다른 줄로 간 화면(g 가 있고 다름)·dx/dy 가 수가 아닌 값·빈 값은 버리고 dirty(다시 쓸 것) · 깨진 JSON·객체 아님 = 빈 자리 + bad(다시 쓰지 않음)
    space(rows, {base, clear}) → [px] — 줄 사이 띄우기(t51-8, Figma 섹션: 아래 줄 제목은 위 줄 내용과 겹치지 않는다). rows = 줄마다 {bottom, over}(같은 판 좌표:
      bottom = 그 줄 카드가 차지한 아래 끝, over = 그 줄 카드 아래 펼친 설명의 가장 아래 끝) → 줄마다 덧붙일 아래 여백(정수 ≥ 0) = over + clear 가
@@ -70,13 +71,14 @@ function rekeyPos(pos, live) {
 
 var CLEAR = 40;                                       // 펼친 설명 그림자(14px) + 숨 쉴 틈
 function num(v) { return typeof v === 'number' && isFinite(v); }
-function cleanPos(text, live) {
+function cleanPos(text, live, keepAbsent) {
   var raw = {}, bad = false, pos = {}, dirty = false;
   live = live && typeof live === 'object' ? live : {};
   try { raw = JSON.parse(text || '{}') || {}; } catch (e) { raw = {}; bad = true; }
   if (typeof raw !== 'object' || Array.isArray(raw)) { raw = {}; bad = true; }
   Object.keys(raw).forEach(function (id) {
     var p = raw[id];
+    if (keepAbsent && live[id] === undefined && p && isFinite(p.dx) && isFinite(p.dy)) { pos[id] = {dx: +p.dx, dy: +p.dy, g: p.g == null ? '' : String(p.g)}; return; }   // 아직 판에 없는 카드(W10 F1) — 들고 있는다
     if (live[id] === undefined || !p || !isFinite(p.dx) || !isFinite(p.dy) || (p.g != null && p.g !== live[id])) { dirty = true; return; }
     pos[id] = {dx: +p.dx, dy: +p.dy, g: live[id]};
   });
