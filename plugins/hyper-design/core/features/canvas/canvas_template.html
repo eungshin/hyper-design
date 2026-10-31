@@ -98,7 +98,7 @@
 <div id="modal" hidden role="dialog" aria-modal="true" aria-label="화면 크게 보기">
   <div class="box" id="mwin">
     <div class="mbar"><div class="mtitle" id="mtitle"></div><button type="button" class="mx" id="mclose" aria-label="닫기" title="닫기 (Esc · 바깥 누르기)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div>
+    <div id="mview"><div id="mbox"><iframe id="mframe" title="크게 보기"></iframe><div id="mpins"></div></div></div>
   </div>
 </div>
 <div id="ttip" hidden></div>
@@ -260,7 +260,7 @@ function apply() {
   lastCam = {z: z, tx: tx, ty: ty};
   stage.style.transform = 'translate(' + tx.toFixed(1) + 'px,' + ty.toFixed(1) + 'px) scale(' + z.toFixed(4) + ')';
   stage.dataset.zoom = z.toFixed(4);
-  $('#zoom').textContent = Math.round(z * 100) + '% ▾';
+  $('#zoom').textContent = ((MZ && MZ.label()) || Math.round(z * 100) + '%') + ' ▾';   // 크게 보기가 열렸으면 그 배율(R57)
   var ts = tagScale();                             // 선 위 태그: 작게 볼 때 화면에서 읽히는 크기로(겹침 상자도 다시 잰다)
   scheduleZoomVars();                              // --lw·--ts 는 한 프레임에 한 번(figma-lite 2) — 이동은 위에서 바로
   if (PN) PN.zoom(z);                              // 화면이 실제의 60% 이상이면 메모 핀을 늘 보인다
@@ -511,34 +511,26 @@ function frameLoaded(id, f) {                        // 카드 iframe 이 막 �
 
 /* ---------- 크게 보기 ---------- */
 var modal = $('#modal'), mframe = $('#mframe'), mbox = $('#mbox');
-function sizeModal() {
-  var top = $('.hd').offsetHeight, dw = (parseFloat(document.body.style.getPropertyValue('--dockw')) || 0) + (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0);   // 덮개 = 위쪽 줄 아래 · 두 도크 사이
-  var tb = $('#tools'), tr = tb && tb.offsetParent !== null ? tb.getBoundingClientRect() : null;   // 덮개 위에 뜨는 도구 막대(G5) 자리는 비운다 — 왼쪽 도크가 생기면 창이 그 밑에 깔려 왼쪽 내용을 가렸다(S3)
-  var g = tr && tr.width ? Math.max(0, Math.round(tr.right - (parseFloat(document.body.style.getPropertyValue('--dockl')) || 0) + 8)) : 0;
-  modal.style.paddingLeft = g ? g + 'px' : '';
-  var hc = $('#hdchat'), hb = hc && hc.getClientRects().length && !hc.closest('.dk-body') ? hc.querySelector('.ch-box') : null, ch = hb ? hb.offsetHeight + 24 : 0;   // 덮개 위에 뜬 대화창(아래 가운데, 10-29) 자리는 비운다 — 화면이 그 위에서 끝나게. 도크에 붙은 창은 덮개 밖(10-30)
-  modal.style.paddingBottom = ch ? ch + 'px' : '';
-  var m = modalSize(), mw = m.w, mh = m.h;
-  var s = Math.min(1, (innerHeight - top - 128 - 30 - ch) / mh, (innerWidth - dw - 16 - g) / mw);   // 위 주석 달기 버튼 56 + 여유 + 창 제목 막대 30(R27 F16)
-  mscale = s;
-  mframe.style.width = m.custom ? mw + 'px' : ''; mframe.style.height = m.custom ? mh + 'px' : '';   // 크기를 바꾼 카드 = 그 크기로 크게 보기(task 46)
-  mframe.style.transform = s < 1 ? 'scale(' + s.toFixed(4) + ')' : '';
-  mbox.style.width = Math.floor(mw * s) + 'px'; mbox.style.height = Math.floor(mh * s) + 'px';
-}
+// 크게 보기 창·배율·굴림(modules/view-modal-zoom.js · 규칙 modal-zoom.js, R57) — 열 때 폭 맞추기, Ctrl+휠·Ctrl+=/-/0 확대, 긴 화면은 창 안에서 굴림. 배율이 바뀌면 핀·테두리·막대·글 칸 다시
+var MZ = HD.viewModalZoom.mount({$: $, modal: modal, mview: $('#mview'), mbox: mbox, mframe: mframe, size: function () { return modalSize(); }, open: function () { return !modal.hidden; },
+  chip: function (t) { $('#zoom').textContent = (t || Math.round(z * 100) + '%') + ' ▾'; },
+  changed: function (s) { mscale = s; drawPins(); modalMoved(); }, moved: function () { modalMoved(); }});
+function sizeModal() { MZ.layout(); }
+function modalMoved() { if (BK) BK.place(); if (tedCtx && tedCtx.inModal) placeTedit(); if (CM.isOpen()) CM.close(); }   // 굴림·배율 — 화면 위에 뜬 것을 다시 그 자리에(셸인 까닭: 막대·글 칸·메뉴 주인이 셸에서 만난다)
 function modalSize() { var s = mscreen ? sizeOf(mscreen) : null; return s && s.custom ? s : {w: MW, h: MH, custom: false}; }   // 기본 카드 = 표면 프로필의 크게 보기 크기
 function openModal(file, title, pick) {
   document.body.style.setProperty('--hdh', $('.hd').offsetHeight + 'px');
   mscreen = idOf(file);                             // 크기 재기 전에 — 그 카드 크기로(task 46)
-  sizeModal(); $('#mtitle').textContent = title || '';
+  $('#mtitle').textContent = title || '';
   clearTimeout(mcloseT); modal.classList.remove('is-closing');
-  mframe.src = file; modal.hidden = false; document.body.classList.add('modal-open'); $('#mclose').focus(); placeSelbar();   // 고른 카드의 선택 막대는 크게 보기 위에 뜨지 않게
+  mframe.src = file; modal.hidden = false; MZ.open(); document.body.classList.add('modal-open'); $('#mclose').focus(); placeSelbar();   // 고른 카드의 선택 막대는 크게 보기 위에 뜨지 않게 · MZ.open = 보인 뒤 재기(굴림 칸, R57) — 같은 차례라 그리기 전   // 고른 카드의 선택 막대는 크게 보기 위에 뜨지 않게
   setPick(!!pick);
   drawPins();
 }
 var mcloseT = 0;
 function closeModal() {                            // hidden 은 바로(상태), 닫히는 모습은 .is-closing 동안(motion.css · 06-modal)
   if (modal.hidden) return;
-  setPick(false); MP.close(); if (BK) BK.hide('modal'); if (ML) ML.clear(); modal.hidden = true; document.body.classList.remove('modal-open'); mscreen = null; drawPins(); modalTools();
+  setPick(false); MP.close(); if (BK) BK.hide('modal'); if (ML) ML.clear(); modal.hidden = true; MZ.close(); document.body.classList.remove('modal-open'); mscreen = null; drawPins(); modalTools();
   modal.classList.add('is-closing');
   clearTimeout(mcloseT);
   mcloseT = setTimeout(function () { modal.classList.remove('is-closing'); if (modal.hidden) mframe.removeAttribute('src'); },
@@ -556,7 +548,7 @@ addEventListener('message', function (e) {         // 크게 보기 안에서 �
   try { e.source.postMessage({type: 'hd-edit', on: true}, '*'); } catch (err) {}   // 그림·글꼴을 다 받기(load) 전에도 두 번 누르기 고치기가 되게
   if (d.screen === mscreen) return;
   mscreen = String(d.screen); $('#mtitle').textContent = titleOf(mscreen);
-  if (sizeOf(mscreen).custom || mframe.style.width) sizeModal();   // 넘어간 화면의 카드 크기로(task 46)
+  if (sizeOf(mscreen).custom || mframe.style.width) MZ.layout(true);   // 넘어간 화면의 카드 크기로(task 46) — 배율은 그대로, 맨 위부터(R57)
   MP.close(); drawPins(); sendPending(mframe, mscreen); if (PN) PN.locateModal();
 });
 $('#mclose').addEventListener('click', closeModal);
@@ -673,6 +665,7 @@ VP = HD.viewViewport.mount({stage: stage, host: $('.panes'), cam: function () { 
   panMain: function (dx, dy) { tx += dx; ty += dy; apply(); }, onFrame: function (f) { if (VT) VT.send(f); },
   onChange: function () { placeSelbar(); LC.schedule(); }});
 VMN = HD.viewMenu.mount({$: $, esc: esc, icons: DOCK_ICON, typing: typing, modalOpen: function () { return !modal.hidden; },
+  modalView: {fit: function () { MZ.fit(); }, z100: function () { MZ.z100(); }, zin: function () { MZ.zin(); }, zout: function () { MZ.zout(); }},   // 크게 보기가 열렸으면 배율 칩 = 그 배율(R57)
   split: {state: function () { return VP.state(); }, dispatch: function (a) { VP.dispatch(a); }},
   dock: {state: function () { return VD.state(); }, dispatch: function (a) { VD.dispatch(a); }, absent: function () { return VD.absent(); }},
   view: {fit: fit, z100: function () { zoomAt(pane.clientWidth / 2, pane.clientHeight / 2, 1); },
@@ -1015,16 +1008,20 @@ function editScreenText(id, h, inModal) {            // 화면 안 글자: 그 �
 }
 function textBox(id, h, inModal) {                   // 예전 글 칸(textarea) — 그 요소 자리 위에 띄운다
   var c = inModal ? null : VL.cardEl(id), ph = inModal ? mbox : c ? $('.phone', c) : null; if (!ph) return;
-  var r = ph.getBoundingClientRect(), s = inModal ? mscale : r.width / wOf(c), q = h.rect || {x: 0, y: 0, w: 120, h: 20};
   var ta = $('textarea', tedit), old = h.full || h.text || '';
-  tedCtx = {id: id, h: h, old: old};
+  tedCtx = {id: id, h: h, old: old, inModal: !!inModal, ph: ph, c: c};
   ta.value = old; EB.clear();                      // 칸이 요소 자리에 딱 — 위 줄·종류 꼬리표를 덮지 않게
-  ta.style.fontSize = Math.max(13, Math.min(28, q.h * s * 0.6)) + 'px';
   tedit.hidden = false;
+  placeTedit();
+  ta.focus(); ta.select();
+}
+function placeTedit() {                              // 글 칸 자리·크기 — 크게 보기를 굴리거나 확대하면 다시(R57, modalMoved)
+  var t = tedCtx; if (!t || tedit.hidden) return;
+  var r = t.ph.getBoundingClientRect(), s = t.inModal ? mscale : r.width / wOf(t.c), q = t.h.rect || {x: 0, y: 0, w: 120, h: 20}, ta = $('textarea', tedit);
+  ta.style.fontSize = Math.max(13, Math.min(28, q.h * s * 0.6)) + 'px';
   ta.style.width = Math.max(180, Math.min(innerWidth - 40, q.w * s + 16)) + 'px';
   tedit.style.left = Math.max(8, Math.min(innerWidth - tedit.offsetWidth - 8, r.left + q.x * s - 2)) + 'px';
   tedit.style.top = Math.max(8, Math.min(innerHeight - tedit.offsetHeight - 8, r.top + q.y * s - 2)) + 'px';
-  ta.focus(); ta.select();
 }
 function closeTedit(save) {
   if (tedit.hidden || !tedCtx) return;
@@ -1174,7 +1171,7 @@ function setMode(m, el) {                          // el = 요소 고르기로(P
 }
 function modalSel(id, h) {                         // 크게 보기 고른 요소 → 요소 막대 sel(task 49a·49b) — 막대는 크게 보기 덮개(도크 왼쪽) 안, 고른 요소 위
   var q = h.rect || {x: 0, y: 0, w: 0, h: 0};
-  return {screen: id, h: h, app: appCard(id), where: 'modal', frame: function () { return mframe; }, view: function () { return rectOf(modal); }, avoid: function () { return rectOf($('#modal .mbar')); },   // 창 제목 막대(닫기)는 덮지 않게
+  return {screen: id, h: h, app: appCard(id), where: 'modal', frame: function () { return mframe; }, view: function () { return rectOf($('#mview')); }, avoid: function () { return rectOf($('#modal .mbar')); },   // 보이는 화면 칸 안(R57 — 확대·굴림해도 화면 위) · 창 제목 막대(닫기)는 덮지 않게
           anchor: function () { if (modal.hidden) return null; var b = mbox.getBoundingClientRect(); return {x: b.left + q.x * mscale, y: b.top + q.y * mscale, w: q.w * mscale, h: q.h * mscale}; }};
 }
 function rectOf(el) { var r = el.getBoundingClientRect(); return {x: r.left, y: r.top, w: r.width, h: r.height}; }
