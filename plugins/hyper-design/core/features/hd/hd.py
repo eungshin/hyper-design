@@ -22,10 +22,12 @@
                                           "이 화면 고치는 중" — 캔버스 그 카드에 덮개(파일이 바뀌거나 hd release 면 걷힘, by 기본 env PASEO_AGENT_ID)
   hd release <screen> [<name|path>]       덮개 걷기
   hd screens [<name|path>]                화면 목록: 줄마다 id · 제목 · 파일 · 자리 +dx,+dy · W×H(프리셋) — 떠 있지 않아도 저장한 이름·out 경로로 읽음
-  hd add <file.html> [<name|path>] [--id ID] [--title T] [--group G] [--purpose P] [--after ID | --at DX,DY] [--size Desktop|WxH]
-         [--asset PATH …] [--replace]
-                                          HTML 화면 하나를 캔버스에 넣기: out 으로 복사 · screens.json 에 등록(새 줄이면 만듦) · 자리·크기(도우미로)
-                                          · 열린 캔버스에 바로 보임(새로고침 없음). 자리 = --after 옆 | --at 제 자리에서 옮긴 거리 | 그 줄 끝
+  hd add <file.html> [<file.html> …] [--to <name|path>] [--id ID] [--title T] [--group G] [--purpose P] [--after ID | --at DX,DY]
+         [--size Desktop|WxH] [--asset PATH …] [--replace]
+                                          HTML 화면을 캔버스에 넣기(여러 장 한 번에): out 으로 복사 · screens.json 에 등록(새 줄이면 만듦) · 자리·크기(도우미로)
+                                          · 열린 캔버스에 바로 보임(새로고침 없음 — 여러 장이어도 반영 한 번 · 상태 쓰기 한 번).
+                                          자리 = --after 옆 | --at 제 자리에서 옮긴 거리 | 그 줄 끝 — 여러 장이면 첫 장 기준, 나머지는 차례로 그 옆
+                                          (옛 모양 hd add a.html <name|path> 도 됨 — [hd] 한 줄로 --to 를 알려 줌. --id · --title 은 한 장일 때만)
   hd home [--no-browser] [--port N] [--restart]
                                           홈(모든 캔버스) 허브를 띄우고 브라우저로 — 떠 있으면 그 주소(home_server, 옛 코드면 한 줄 알림)
                                           --restart = 떠 있는 허브를 끄고 지금 코드로 같은 포트에 다시 띄움
@@ -225,15 +227,26 @@ def cmd_screens(a):
     return d, head + "\n" + S.place_text(d["screens"], d["groups"])
 
 
-def cmd_add(a):
-    p = _hub().target(a.target)
-    r = p.add(a.file, sid=a.id, title=a.title, group=a.group, purpose=a.purpose, after=a.after, at=a.at, size=a.size,
-              assets=a.asset or (), replace=a.replace)
+def _add_line(name, r):
     where = "%s 옆" % r["after"] if r["after"] else ("'%s' 줄 끝" % r["group"] if r["group"] else "끝")
     bits = [x for x in (S.place_pos(r["pos"]), S.place_size(r["size"])) if x]
-    live = "캔버스에 바로 보여요" if r["live"] else "도우미 꺼짐 — index.html 다시 빌드(다음에 열면 보여요)"
-    return r, "%s · %s %s (%s · %s%s%s) · %s" % (p.name, r["id"], "바꿈" if r["replaced"] else "넣음", r["file"], where,
-                                               " · 새 줄" if r["group_added"] else "", "".join(" · " + b for b in bits), live)
+    return "%s · %s %s (%s · %s%s%s)" % (name, r["id"], "바꿈" if r["replaced"] else "넣음", r["file"], where,
+                                       " · 새 줄" if r["group_added"] else "", "".join(" · " + b for b in bits))
+
+
+def cmd_add(a):
+    files, target, legacy = S.split_add_args(a.files, a.to, lambda x: pathlib.Path(x).is_file())
+    p = _hub().target(target)
+    if legacy:                                       # 옛 모양 — 대상을 찾은 뒤에만 알린다(못 찾으면 그 오류 한 줄만)
+        print("[hd] 둘째 위치 인자를 캔버스로 읽었어요 — 이제는 hd add <파일…> --to %s (여러 장 한 번에)" % target, file=sys.stderr, flush=True)
+    opts = dict(sid=a.id, title=a.title, group=a.group, purpose=a.purpose, after=a.after, at=a.at, size=a.size,
+                assets=a.asset or (), replace=a.replace)
+    live = lambda r: "캔버스에 바로 보여요" if r["live"] else "도우미 꺼짐 — index.html 다시 빌드(다음에 열면 보여요)"
+    if len(files) == 1:
+        r = p.add(files[0], **opts)
+        return r, "%s · %s" % (_add_line(p.name, r), live(r))
+    r = p.add_many(files, **opts)
+    return r, "\n".join([_add_line(p.name, x) for x in r["screens"]] + ["%s · %d장 · %s" % (p.name, len(r["screens"]), live(r))])
 
 
 def _parts_args(a):
@@ -369,18 +382,18 @@ def parser():
     sc = sub.add_parser("screens", parents=[common], help="화면 목록(id · 제목 · 줄 · 파일 · 자리 · 크기)")
     sc.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     sc.set_defaults(fn=cmd_screens)
-    ad = sub.add_parser("add", parents=[common], help="HTML 화면 하나를 캔버스에 넣기(복사 · 등록 · 자리 · 바로 보임)")
-    ad.add_argument("file", help="넣을 HTML 파일")
-    ad.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
-    ad.add_argument("--id", help="화면 id(기본 = 파일 이름)")
-    ad.add_argument("--title", help="제목(기본 = HTML <title> | id)")
+    ad = sub.add_parser("add", parents=[common], help="HTML 화면을 캔버스에 넣기(여러 장 한 번에 · 복사 · 등록 · 자리 · 바로 보임)")
+    ad.add_argument("files", nargs="+", metavar="file", help="넣을 HTML 파일(여러 개) — 옛 모양 'file <이름|out>' 도 받음")
+    ad.add_argument("--to", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    ad.add_argument("--id", help="화면 id(기본 = 파일 이름 · 한 장일 때만)")
+    ad.add_argument("--title", help="제목(기본 = HTML <title> | id · 한 장일 때만)")
     ad.add_argument("--group", help="줄 이름(없으면 새 줄 · 기본 = --after 의 줄 | 마지막 화면의 줄)")
     ad.add_argument("--purpose", help="목적 한 줄")
     pl = ad.add_mutually_exclusive_group()
     pl.add_argument("--after", help="이 화면 바로 옆에(같은 줄 · 그 화면이 옮긴 거리 · 크기를 따름)")
     pl.add_argument("--at", help="제 자리에서 옮긴 거리 DX,DY(판 px, hd screens 의 '자리' 와 같은 값 · 음수는 --at=-200,40)")
     ad.add_argument("--size", help="카드 크기: 프리셋 이름(Desktop · iPhone 16 …) 또는 WxH")
-    ad.add_argument("--asset", action="append", help="같이 복사할 파일(여러 번) — 화면 폴더 안이면 그 상대 경로로, 아니면 이름만")
+    ad.add_argument("--asset", action="append", help="같이 복사할 파일(여러 번) — 첫 화면 폴더 안이면 그 상대 경로로, 아니면 이름만")
     ad.add_argument("--replace", action="store_true", help="같은 id 화면·같은 이름 파일을 바꿈")
     ad.set_defaults(fn=cmd_add)
     pa = sub.add_parser("parts", parents=[common], help="앱 부품(out/parts.json) 보기 — 낡음 · 미커밋 변경 포함")
