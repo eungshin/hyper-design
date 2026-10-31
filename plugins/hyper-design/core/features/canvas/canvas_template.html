@@ -136,6 +136,7 @@ var CARD = D.card || {w: 375, h: 812}, MW = (D.modal || {}).w || 390, MH = (D.mo
 var BK = null;                                   // 요소 막대(modules/view-blocks.js · 규칙 blocks.js, task 49a) — 기능 등록부로 아래에서 붙는다
 var BT = null;                                   // 판 글 레이어(modules/view-board-text.js, t51-9) — 기능 등록부로 아래에서 붙는다
 var CC = null;                                   // 카드 바로 복제(modules/view-card-copy.js · 규칙 card-copy.js, 51-6) — 기능 등록부로 아래에서 붙는다
+var A11 = null;                                  // 접근성 검사(modules/view-a11y.js · 규칙 a11y.js, R59) — 기능 등록부로 아래에서 붙는다
 var AD = null;                                   // 주소 복사(modules/view-address.js · 규칙 address.js, R30) — 기능 등록부로 아래에서 붙는다
 var OP = null;                                   // 바로 반영(modules/view-optimistic.js · 규칙 optimistic.js·reorder.js, task 49c) — VS 뒤에서 붙는다
 var AB = null;                                   // 카드마다 크기(modules/view-artboard.js · 규칙 artboard.js, task 46) — 기능 등록부로 아래에서 붙는다
@@ -766,7 +767,8 @@ pane.addEventListener('contextmenu', function (e) {
     var isDraft = card.classList.contains('draft');
     var cardItems = (isDraft ? [] : [
       {id: 'card-open', label: '크게 보기', key: '두 번', act: function () { open(false); }},
-      {id: 'card-links', label: '연결 보기', key: '누르기', act: function () { SL.dispatch({type: 'only', id: id}); }},
+      {id: 'card-links', label: '연결 보기', key: '누르기', act: function () { SL.dispatch({type: 'only', id: id}); }}]).concat(isDraft || !A11 ? [] : [
+      {id: 'card-a11y', label: '접근성 검사', act: function () { open(false); A11.runOnLoad(); }}]).concat(isDraft ? [] : [   // R59 — 크게 보기를 열고 실리면 검사
       '-']).concat([
       {id: 'card-title', label: '이름', act: function () { var t = $('.ftitle', card); if (t) CT.open(t, {field: 'title'}); }},
       {id: 'card-desc', label: '설명', act: function () { CT.open($('.fdesc', card) || $('.ftitle', card), {field: 'purpose'}); }},   // 빈 본문도 쓸 수 있다(R21)
@@ -1202,7 +1204,7 @@ var MP = HD.viewMemoPop.mount({$: $, $$: $$, esc: esc, notes: NS, save: function
   setScreen: function (id) { mscreen = id; }, frame: function () { return PP; }, cardEl: function (id) { return VL ? VL.cardEl(id) : null; },
   pins: function () { drawPins(); }, focusPin: function (id) { if (PN) PN.focus(id); },
   feeds: function (t) { return (tool === 'memo' && !!(t.closest && t.closest('#rows .card'))) || (!modal.hidden && picking && t === mframe); }});   // 메모 도구가 이 창을 다시 정하는 누르기(U1)
-function drawPins() { if (PN) PN.paint(); if (ML) ML.paint(); if (MS) MS.render(); }   // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js) · 다른 단계 메모 칩(view-memo-state)
+function drawPins() { if (PN) PN.paint(); if (ML) ML.paint(); if (MS) MS.render(); if (A11) A11.paint(); }   // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js) · 다른 단계 메모 칩(view-memo-state)
 var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5) · 결정 필요(#232)
                              del: MP.del, edit: MP.edit, showNotes: function () { if (VD) VD.activate('notes'); },
                              storage: localStorage, key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); },   // 보낸 메모 보기 켜짐(#263 — 셸이 저장소·키를 건넨다)
@@ -1374,6 +1376,10 @@ PP = FT.popPlace || null;
 TW = FT.talkWindow || null;                    // 대화 창 틀(R53) — 도크 배치가 바뀌면 onLayout 이 layout() 을 부른다
 AD = FT.address || null; if (AD) AD.attach({copy: function (t) { return SN.copy(t); }});   // 주소 복사(R30) — 클립보드는 보내기와 같은 길
 if (FT.twin && FT.twin.layer) FL.add(FT.twin.layer);   // 맞음 검증 목록 창(modules/view-twin.js, V2) — 떠 있는 층(Esc·바깥 누르기는 view-float-stack)
+// 접근성 검사(modules/view-a11y.js, R59) — 크게 보기 화면 틀·배율·고르기만 넘긴다. 결과 창·핀은 떠 있는 층(Esc 로만 걷힘)
+A11 = FT.a11y ? FT.a11y.attach({modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, frame: mframe, box: mbox, view: $('#mview'), win: $('#mwin'), bar: $('#modal .mbar')}; },
+  pick: function (id, h) { if (modal.hidden || id !== mscreen || !h || !h.path) return false; setMode('move'); ML.pick(id, h, false); if (BK) BK.show(modalSel(id, h)); return true; }}) : null;
+if (A11) FL.add(A11.layer);
 // 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
 BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
   queue: function (l, list, msg) { ED.add(l, list, msg, null, true); }, hide: LF.hide, hidden: LF.hidden, tool: function () { return tool; },

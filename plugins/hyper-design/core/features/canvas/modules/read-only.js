@@ -10,7 +10,8 @@ var HD = globalThis.HD = globalThis.HD || {};
 var CONTROLS = [
   '#tools [data-tool]:not([data-tool="hand"])',   // 편집 도구(손만 그대로)
   '#selbar button', '#undo', '#redo', '#nsend', '#nclear', '#padd', '#tedel',
-  '#thread button[data-act]', '#nlist button[data-act]', '#lyBar button', '.ly-eye', '.ly-lock', '.ly-hov'
+  '#thread button[data-act]', '#nlist button[data-act]', '#lyBar button', '.ly-eye', '.ly-lock', '.ly-hov',
+  '#a11yPanel .a11y-fix'                           // 접근성 'AI로 고치기'(R59) — 보내기 길이라 읽기만 탭에서는 막는다(검사 자체는 됨)
 ];
 
 var PICK = '#tools [data-tool="move"]';            // 문서 탭에서는 고르기만 하는 선택(V) 단추(R55)
