@@ -40,6 +40,14 @@ out.read = M.readPick({type: 'hd-sel', path: 'div.sw', token: '--c-brand', token
 out.readBad = [M.readPick(null), M.readPick({type: 'hd-sel', path: 'x'}), M.readPick({type: 'hd-sel', token: 'c-brand; x'}), M.readPick({type: 'hd-sel', token: '--c-brand', rect: 'no'})];
 out.href = [M.href('tokens.css', 'class101', 0), M.href('tokens.css', '@project', 7), M.href('../tokens.css?v=3', '', 9), M.href('tokens.css', null, 0)];
 out.docTab = ['screens', 'foundation', 'components', 'x', null].map(M.docTab);
+const F = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
+out.families = typeof M.family === 'function' ? F.families.map(f => M.family(f[0])) : null;
+out.pairs = typeof M.same === 'function' ? F.pairs.map(p => M.same(p[0], p[1])) : null;
+out.part = M.readPick({type: 'hd-sel', doc: true, path: 'button.btn', label: ' 버튼 ', rect: {x: 1, y: 2, w: 3, h: 4},
+                       part: {key: 'btn', title: '버튼', classes: ['btn', 'primary', 'x"><b'], tag: 'BUTTON', state: 'disabled'}});
+out.partBad = [M.readPick({type: 'hd-sel', doc: true, rect: {x: 1, y: 2, w: 3, h: 4}, part: {classes: []}}),
+               M.readPick({type: 'hd-sel', doc: true, rect: {x: 1, y: 2, w: 3, h: 4}, part: 'btn'})];
+out.reload = typeof M.reloadMsg === 'function' ? [M.reloadMsg('tokens', 't1'), M.reloadMsg('components', 'c2'), M.reloadMsg('x', 1)] : null;
 console.log(JSON.stringify(out));
 """
 
@@ -48,7 +56,8 @@ console.log(JSON.stringify(out));
 def r():
     if not NODE:
         pytest.skip("node 없음")
-    p = subprocess.run([NODE, "-e", JS, str(MOD), str(HERE / "fixtures" / "token-values.json"), str(PALETTE)],
+    p = subprocess.run([NODE, "-e", JS, str(MOD), str(HERE / "fixtures" / "token-values.json"), str(PALETTE),
+                        str(HERE / "fixtures" / "component-families.json")],
                        capture_output=True, text=True, encoding="utf-8")
     assert p.returncode == 0, p.stderr
     return json.loads(p.stdout)
@@ -98,3 +107,24 @@ def test_pick_message_shape(r):
 def test_token_href_and_doc_tabs(r):
     assert r["href"] == ["tokens-class101.css", "tokens.css?v=7", "../tokens.css?v=9", "tokens.css"]
     assert r["docTab"] == [False, True, True, False, False]
+
+
+# ---- phase C(부품)
+FAM = json.loads((HERE / "fixtures" / "component-families.json").read_text(encoding="utf-8"))
+
+
+def test_family_rule_is_the_same_table_as_python(r):
+    """부품 칸은 같은 묶음 토큰만(사용자 결정) — Python component_edit.family·same 과 같은 표."""
+    assert r["families"] == [f for _, f in FAM["families"]]
+    assert r["pairs"] == [ok for _, _, ok in FAM["pairs"]]
+
+
+def test_read_part_pick(r):
+    assert r["part"] == {"kind": "part", "label": "버튼", "rect": {"x": 1, "y": 2, "w": 3, "h": 4},
+                         "part": {"key": "btn", "title": "버튼", "classes": ["btn", "primary"], "tag": "button", "state": "disabled"}}
+    assert r["partBad"] == [None, None], "클래스 없는 부품·모양이 틀린 부품 = 고르지 않음"
+
+
+def test_reload_message_names_the_stylesheet(r):
+    assert r["reload"] == [{"type": "hd-css-reload", "sheet": "tokens", "v": "t1"},
+                           {"type": "hd-css-reload", "sheet": "components", "v": "c2"}, None]

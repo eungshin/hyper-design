@@ -132,7 +132,7 @@ FOUNDATION_JS = """
     document.querySelectorAll('[data-var]').forEach(function(el){ var v=cs.getPropertyValue(el.getAttribute('data-var')).trim();
       var o=el.querySelector('.val'); if(o) o.textContent=v||'(없음)'; }); }
   var l=document.getElementById('tokens'); if(l) l.addEventListener('load',read);
-  addEventListener('message',function(e){ var t=e.data&&e.data.type; if(t==='hd-palette'||t==='hd-tokens-reload'){ [30,150,500,1200].forEach(function(t){setTimeout(read,t)}); } });
+  addEventListener('message',function(e){ var t=e.data&&e.data.type; if(t==='hd-palette'||t==='hd-tokens-reload'||t==='hd-css-reload'){ [30,150,500,1200].forEach(function(t){setTimeout(read,t)}); } });
   addEventListener('DOMContentLoaded',read); addEventListener('load',read);
 })();
 """

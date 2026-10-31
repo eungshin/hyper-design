@@ -55,7 +55,11 @@
      고르기(select) 중 [data-var] 안을 누르면 그 견본(closest)으로 hd-sel + token('--이름')·tokenKind·label(견본이 보이는 이름)·vars(그 토큰과 글자 줄 짝 --fw/--lh 의 지금 값),
      견본에 고른 테두리(스크롤을 따라감) · 캔버스로 초점(H·V·Ctrl+Z 가 캔버스로). {type:'hd-unpick'} = 테두리 걷기. 토큰을 고른 동안 스크롤 = hd-scroll.
      문서 탭(doc:true 를 받은 뒤)에서 H·V·Esc·Ctrl/Cmd+Z/Y 는 {type:'hd-key', key, ctrl, meta, shift} 로 캔버스에 넘긴다(입력 칸 안은 아님).
-     {type:'hd-tokens-reload', v} = #tokens 를 지금 팔레트 주소 + ?v= 로 다시 읽는다(저장 뒤). hd-palette 의 slug '@project' = 프로젝트 tokens.css 그대로 */
+     {type:'hd-css-reload', sheet:'tokens'|'components', v} = 그 스타일 파일만 다시 읽는다(저장 뒤) — tokens = #tokens 를 지금 팔레트 주소 + ?v=,
+     components = components.css 링크 + ?v=(옛 이름 hd-tokens-reload = tokens). hd-palette 의 slug '@project' = 프로젝트 tokens.css 그대로
+   부품 고르기(R55 phase C, Components 탭): [data-var] 가 없고 .spec-stage 가 있는 문서 = 부품 문서(hd-pick-on 의 parts = .spec-stage 수).
+     고르기 중 .spec-stage 안을 누르면 components.css 규칙이 겨누는 요소(클래스가 그 규칙 클래스를 모두 가짐) 가운데 그 견본 묶음(section data-key)
+     클래스를 가진 가장 가까운 요소, 없으면 가장 가까운 것(Alt = 가장 안쪽) → hd-sel + part {key, title, classes, tag, state('disabled'|'checked'|'')}·label·rect */
 (function () {
   if (new URLSearchParams(location.search).get('hd-mode') !== 'board') return;
   var mm = window.matchMedia;
@@ -87,6 +91,17 @@
     var l = document.getElementById('tokens'); if (!l || !slug) return;
     var base = l.getAttribute('data-base') || l.getAttribute('href'); l.setAttribute('data-base', base);
     curSlug = String(slug); l.setAttribute('href', tokHref(base));
+  }
+  function reloadSheet(sheet, v) {                   // R55 phase C — 한 메시지(hd-css-reload)로 그 스타일 파일만
+    if (sheet === 'tokens') { reloadTokens(v); return; }
+    if (sheet !== 'components') return;
+    var ver = String(v || Date.now()).replace(/[^\w-]/g, '');
+    Array.prototype.forEach.call(document.querySelectorAll('link[rel~="stylesheet"]'), function (l) {
+      var base = l.getAttribute('data-base') || l.getAttribute('href') || '';
+      if (!/(^|\/)components\.css(\?|$)/.test(base)) return;
+      l.setAttribute('data-base', base.split('?')[0]); l.setAttribute('href', base.split('?')[0] + '?v=' + ver);
+      l.addEventListener('load', function () { partRules = null; if (tokEl) tselShow(tokEl); }, {once: true});
+    });
   }
   function reloadTokens(v) {
     var l = document.getElementById('tokens'); if (!l) return;
@@ -272,7 +287,7 @@
   document.addEventListener('mousemove', function (e) {
     if (!picking || inEdit(e)) return;
     var t = target(e);
-    if (t && pickDoc) { t = t.closest ? t.closest('[data-var]') : null; if (!t) { last = null; if (box) box.style.display = 'none'; return; } }   // 문서 탭: 토큰 견본만 비춘다(R55)
+    if (t && pickDoc) { t = partsDoc() ? partEl(t, e.altKey) : t.closest ? t.closest('[data-var]') : null; if (!t) { last = null; if (box) box.style.display = 'none'; return; } }   // 문서 탭: 토큰 견본·부품만 비춘다(R55)
     if (!t || t === last) return;
     last = t; send({type: 'hd-hover', rect: showBox(t)});
   }, true);
@@ -302,7 +317,7 @@
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
-    if (pickMode === 'select' && pickDoc) { pickToken(t); return; }   // 문서 탭(R55) — 토큰 견본만 고른다
+    if (pickMode === 'select' && pickDoc) { if (partsDoc()) pickPart(t, e.altKey); else pickToken(t); return; }   // 문서 탭(R55) — 토큰 견본·부품(phase C)만 고른다
     if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey, e.shiftKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
     send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
   }, true);
@@ -343,6 +358,49 @@
     send({type: 'hd-sel', screen: screenId(), path: pathOf(el), doc: true, token: name, tokenKind: tokenKind(name),
           label: lab ? lab.textContent.replace(/\s+/g, ' ').trim() : '', rect: rectOf(el), vars: tokVars(name)});
     try { window.parent.focus(); } catch (e) { console.warn('[hd] 캔버스로 초점 돌리기 실패 — ' + e); }   // H·V·Ctrl+Z 가 캔버스로
+  }
+  /* 부품 고르기(R55 phase C, Components 탭) */
+  var partRules = null;                               // components.css 맨 위 규칙의 겹 선택자 클래스 묶음들 [[클래스…]] — 다시 읽으면 비움
+  function partsDoc() { return !document.querySelector('[data-var]') && !!document.querySelector('.spec-stage'); }
+  function rulesOf() {
+    if (partRules) return partRules;
+    var out = [];
+    Array.prototype.forEach.call(document.styleSheets, function (sh) {
+      if (!/(^|\/)components\.css(\?|$)/.test(String(sh.href || '').replace(/^.*\//, '/'))) return;
+      var rs; try { rs = sh.cssRules; } catch (e) { console.warn('[hd] components.css 규칙을 읽지 못함 — ' + e); return; }
+      Array.prototype.forEach.call(rs || [], function (r) {
+        if (r.type !== 1) return;
+        r.selectorText.split(',').forEach(function (p) {
+          p = p.trim(); if (/[\s>+~]/.test(p.replace(/\[[^\]]*\]|\([^)]*\)/g, ''))) return;   // 다른 요소 안을 겨누는 규칙은 아님
+          var c = p.match(/\.[\w-]+/g); if (c) out.push(c.map(function (x) { return x.slice(1); }));
+        });
+      });
+    });
+    return (partRules = out);
+  }
+  function hasRule(el) {
+    var cl = el.classList; if (!cl || !cl.length) return false;
+    return rulesOf().some(function (cs) { return cs.every(function (c) { return cl.contains(c); }); });
+  }
+  function partEl(t, deep) {                          // 견본 칸 안: Alt = 규칙이 있는 가장 안쪽 요소 · 아니면 그 견본 묶음(data-key) 클래스 요소, 없으면 가장 안쪽
+    var stage = t.closest ? t.closest('.spec-stage') : null; if (!stage) return null;
+    var sec = stage.closest('[data-key]'), key = sec ? sec.getAttribute('data-key') : '', first = null;
+    for (var el = t; el && el !== stage; el = el.parentElement) {
+      if (!hasRule(el)) continue;
+      if (!first) { first = el; if (deep) return el; }
+      if (key && el.classList.contains(key)) return el;
+    }
+    return first;
+  }
+  function pickPart(t, deep) {
+    var el = partEl(t, deep);
+    if (!el) { unpick(); send({type: 'hd-sel', screen: screenId(), path: null, doc: true}); return; }
+    var sec = el.closest('[data-key]'), title = sec ? sec.getAttribute('data-title') || '' : '';
+    var state = el.disabled || el.getAttribute('aria-disabled') === 'true' ? 'disabled' : el.getAttribute('aria-checked') === 'true' ? 'checked' : '';
+    tokEl = el; tselShow(el); if (box) box.style.display = 'none';
+    send({type: 'hd-sel', screen: screenId(), path: pathOf(el), doc: true, label: title, rect: rectOf(el),
+          part: {key: sec ? sec.getAttribute('data-key') || '' : '', title: title, classes: Array.prototype.slice.call(el.classList), tag: el.tagName.toLowerCase(), state: state}});
+    try { window.parent.focus(); } catch (e) { console.warn('[hd] 캔버스로 초점 돌리기 실패 — ' + e); }
   }
   addEventListener('scroll', function () { if (tokEl && window.parent && window.parent !== window) send({type: 'hd-scroll', screen: screenId(), doc: true}); }, true);
   document.addEventListener('keydown', function (e) {  // 문서 탭(손·선택 모두): 캔버스 키(H·V·Esc·Ctrl+Z/Y)를 캔버스로 — 문서 안을 누른 뒤에도 도구 키가 듣게
@@ -906,9 +964,10 @@
       if (!picking && box) box.style.display = 'none';
       document.documentElement.style.cursor = picking ? 'crosshair' : '';
       pickDoc = !!d.doc;
-      if (d.doc) { if (!picking) unpick(); send({type: 'hd-pick-on', screen: screenId(), on: picking, tokens: document.querySelectorAll('[data-var]').length}); }
+      if (d.doc) { if (!picking) unpick(); send({type: 'hd-pick-on', screen: screenId(), on: picking, tokens: document.querySelectorAll('[data-var]').length, parts: document.querySelectorAll('.spec-stage').length}); }
     }
     else if (d.type === 'hd-unpick') unpick();
-    else if (d.type === 'hd-tokens-reload') reloadTokens(d.v);
+    else if (d.type === 'hd-css-reload') reloadSheet(d.sheet, d.v);
+    else if (d.type === 'hd-tokens-reload') reloadTokens(d.v);   // 옛 이름(R55 phase F) — 옛 캔버스가 보내도 받는다
   });
 })();

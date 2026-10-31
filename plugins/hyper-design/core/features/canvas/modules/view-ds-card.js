@@ -1,6 +1,6 @@
 /* View — 판 위 디자인 시스템 카드(S6): 판 글 아래·화면 줄 위 자기 줄에 카드 하나, 화면과 같은 tokens.css 로 그린다. 칸 규칙은 modules/ds-card.js(Model).
    카드 = iframe(srcdoc) 하나 — <link id="tokens" href="tokens.css"> 를 화면과 똑같이 읽고, 셸이 모든 iframe 에 보내는 hd-palette·hd-theme-vars 를
-   그대로 받는다(화면의 palette.js 와 같은 것만 — 토큰 저장 뒤 hd-tokens-reload 도, R55). 그래서 테마 패널에서 고르거나 색을 고치면 카드와 모든 화면이 한 번에 바뀐다.
+   그대로 받는다(화면의 palette.js 와 같은 것만 — 토큰 저장 뒤 hd-css-reload {sheet:'tokens'} 도, R55). 그래서 테마 패널에서 고르거나 색을 고치면 카드와 모든 화면이 한 번에 바뀐다.
    누르기(끌지 않고)·Enter = Foundation 탭(이동 도구 V 에서는 누르기 = 판 글 고르기, t51-9). 숨기기 = 판 글 레이어 '@dscard'(주인은 셸 hidden — 레이어 패널 눈·숨긴 것 목록). 시작 때 숨김은
    view-layer-flags 의 loadHidden(셸이 붙일 때) 이 이 카드보다 먼저 돌아서 저장 키 hd-hidden 을 읽기만 한다. 요청문·메모 핀·연결·교체 대상이 아니다(.card 가 아님).
    토큰이 없으면(hd-data tokens 없음·색 토큰 0) 카드 없음, 오류 없음. 데이터가 깨졌으면 [hd] 경고 한 줄.
@@ -34,7 +34,7 @@ var DOC_CSS = '*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:h
   '.shape i{display:block;width:52px;height:40px;background:var(--c-brand-tint,#eee);border:2px solid var(--c-brand,#333)}' +
   '.shape i.sh{background:var(--c-surface,#fff);border:0;border-radius:8px}';
 
-// 화면의 palette.js 와 같은 세 가지(바탕 토큰 파일 바꾸기 — '@project' = tokens.css 그대로 · 내 테마 색 덮어쓰기 · hd-tokens-reload 토큰 다시 읽기, R55)만 — 나머지 메시지는 모른다
+// 화면의 palette.js 와 같은 세 가지(바탕 토큰 파일 바꾸기 — '@project' = tokens.css 그대로 · 내 테마 색 덮어쓰기 · hd-css-reload sheet tokens 토큰 다시 읽기, R55)만 — 나머지 메시지는 모른다
 var DOC_JS = '(function(){var KEY="hd-palette",set=[],cur="",ver="";' +
   'function href(b){b=String(b).split("?")[0];var h=cur&&cur!=="@project"?b.replace(/tokens(-[^/]*)?\\.css$/,"tokens-"+cur+".css"):b;return ver?h+"?v="+ver:h;}' +
   'function put(){var l=document.getElementById("tokens");if(!l)return;var b=l.getAttribute("data-base")||l.getAttribute("href");l.setAttribute("data-base",b);l.setAttribute("href",href(b));}' +
@@ -43,7 +43,7 @@ var DOC_JS = '(function(){var KEY="hd-palette",set=[],cur="",ver="";' +
   'function vars(v){var st=document.documentElement.style;set.forEach(function(k){st.removeProperty(k);});set=[];' +
   'Object.keys(v||{}).forEach(function(k){if(/^--c-[a-z0-9-]+$/.test(k)&&/^#[0-9a-f]{6}$/i.test(v[k])){st.setProperty(k,v[k]);set.push(k);}});}' +
   'try{pal(localStorage.getItem(KEY));}catch(e){}' +
-  'addEventListener("message",function(e){var d=e.data;if(!d||e.source!==parent)return;if(d.type==="hd-palette")pal(d.slug);else if(d.type==="hd-theme-vars")vars(d.vars);else if(d.type==="hd-tokens-reload")reload(d.v);});})();';
+  'addEventListener("message",function(e){var d=e.data;if(!d||e.source!==parent)return;if(d.type==="hd-palette")pal(d.slug);else if(d.type==="hd-theme-vars")vars(d.vars);else if(d.type==="hd-tokens-reload"||(d.type==="hd-css-reload"&&d.sheet==="tokens"))reload(d.v);});})();';
 
 var ICON_SEARCH = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
 var ICON_PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';

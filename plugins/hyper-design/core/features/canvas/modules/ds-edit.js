@@ -5,7 +5,11 @@
    compose(field, 입력) → 저장할 값 글   len = 숫자 + 지금 단위 · color = hex 면 대문자
    pickMsg(on) → {type:'hd-pick', on, mode, doc:true}(문서 탭 iframe 에) · readPick(hd-sel) → {token, kind, label, rect, vars} | null(토큰을 고르지 않음·모양이 틀림)
    href(base, slug, v) → 토큰 css 주소: slug(바탕 팔레트, '@project' = 프로젝트 tokens.css) · v = 다시 읽기 표(?v=) · docTab(이름) → Foundation·Components 인가
-   HD.dsEdit = {PROJECT, kindOf, check, fields, compose, pickMsg, readPick, href, docTab} — 종류(kind)는 컴포넌트(phase C)가 같은 길로 더한다 */
+   부품(phase C, Components 탭): family(이름) → 'color'|'radius'|'space'|'font-size'|'box'|'weight'|'line'|'shadow'|null · same(가, 나) — Python component_edit 와 같은 표
+     (tests/fixtures/component-families.json). 부품 칸은 같은 묶음 토큰만 고른다(사용자 결정 — 자유 값 없음).
+     readPick 은 hd-sel 의 part {key, title, classes, tag, state} 도 받는다 → {kind:'part', part, label, rect}.
+   reloadMsg(sheet, v) → {type:'hd-css-reload', sheet:'tokens'|'components', v} | null — 저장 뒤 모든 틀이 그 스타일 파일만 다시 읽는다(한 메시지)
+   HD.dsEdit = {PROJECT, kindOf, check, fields, compose, pickMsg, readPick, href, docTab, family, same, reloadMsg} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
@@ -81,7 +85,26 @@ function compose(f, raw) {
 }
 function pickMsg(on) { return {type: 'hd-pick', on: !!on, mode: on ? 'select' : '', doc: true}; }
 function isRect(r) { return !!r && typeof r === 'object' && ['x', 'y', 'w', 'h'].every(function (k) { return typeof r[k] === 'number' && isFinite(r[k]); }); }
+var CLS = /^[A-Za-z0-9_-]{1,60}$/, SHEETS = {tokens: 1, components: 1};
+function clean(s, n) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n); }
+function readPart(d) {
+  var p = d.part;
+  if (!p || typeof p !== 'object' || Array.isArray(p) || !Array.isArray(p.classes) || !isRect(d.rect)) return null;
+  var cls = p.classes.filter(function (c) { return typeof c === 'string' && CLS.test(c); }).slice(0, 40);
+  if (!cls.length) return null;
+  return {kind: 'part', label: clean(d.label || p.title, 60), rect: {x: d.rect.x, y: d.rect.y, w: d.rect.w, h: d.rect.h},
+          part: {key: clean(p.key, 40), title: clean(p.title, 60), classes: cls, tag: /^[a-z][a-z0-9-]*$/i.test(p.tag || '') ? p.tag.toLowerCase() : '', state: clean(p.state, 20)}};
+}
+function family(name) {
+  if (typeof name !== 'string' || !NAME.test(name)) return null;
+  var k = kindOf(name);
+  if (k === 'size') return name.indexOf('--fs-') === 0 ? 'font-size' : 'box';
+  return k === 'other' ? null : k;
+}
+function same(a, b) { var f = family(a); return f !== null && f === family(b); }
+function reloadMsg(sheet, v) { return SHEETS[sheet] === 1 ? {type: 'hd-css-reload', sheet: sheet, v: String(v)} : null; }
 function readPick(d) {
+  if (d && typeof d === 'object' && d.part !== undefined && d.token === undefined) return readPart(d);
   if (!d || typeof d !== 'object' || typeof d.token !== 'string' || !NAME.test(d.token) || !isRect(d.rect)) return null;
   var vars = {};
   if (d.vars && typeof d.vars === 'object') Object.keys(d.vars).forEach(function (k) { if (NAME.test(k) && typeof d.vars[k] === 'string') vars[k] = d.vars[k]; });
@@ -95,5 +118,6 @@ function href(base, slug, v) {
 }
 function docTab(name) { return typeof name === 'string' && DOC[name] === 1; }
 
-HD.dsEdit = {PROJECT: PROJECT, kindOf: kindOf, check: check, fields: fields, compose: compose, pickMsg: pickMsg, readPick: readPick, href: href, docTab: docTab};
+HD.dsEdit = {PROJECT: PROJECT, kindOf: kindOf, check: check, fields: fields, compose: compose, pickMsg: pickMsg, readPick: readPick, href: href, docTab: docTab,
+             family: family, same: same, reloadMsg: reloadMsg};
 })();

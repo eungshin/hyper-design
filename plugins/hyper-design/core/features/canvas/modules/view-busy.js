@@ -18,7 +18,7 @@
      칩이 걷히면(새 교체 'hd-swap' start · 덮개 다시 씀) 켜져 있던 전/후 보기도 off.
    실시간(47-4b, view-live): live(true) = /api/files 1초 읽기 멈춤(덮개 칩의 /api/watch 는 칩이 있는 동안 그대로) · changed(ids, seq) = 이벤트 screen.written by ai
      (폴링 답과 같은 길 — seq 를 기준으로 삼아 폴링으로 돌아가도 이어짐) · resync() = /api/files 한 번(reset 뒤 놓친 것) · since() = 지금 파일 seq|null
-   토큰 파일(R55): 바뀐 목록에 '@tokens'(도우미가 tokens.css 를 따로 봄)가 있으면 의도 'hd-tokens-changed'(Foundation·DS 카드 토큰 다시 읽기 — view-ds-inspect)
+   공용 스타일 파일(R55): 바뀐 목록에 '@tokens'·'@components'(도우미가 tokens.css·components.css 를 따로 봄)가 있으면 의도 'hd-css-changed' {sheet}(모든 틀 그 스타일 다시 읽기 — view-ds-inspect)
    칩 글의 에이전트 이름(R27 F12): document 'hd-agent' {agent, name}(잡는 단계)로 모은 이름 — 모르면 "AI 수정 중"(날 id 는 title 에만, HD.busy.look).
    HD.viewBusy.mount(ctx) → {mark(screens:[{id, file}], via), render(), lift(id), adopt(), wrote(ids), live(on), changed(ids, seq), resync(), since()}
    ctx = {cardEl(id) → .card|null, watch(files) → Promise<{mtimes}>, reload(ids), getItem(k), setItem(k, v), key, toast(msg), warn(msg)?,
@@ -252,7 +252,7 @@ function mount(ctx) {
   var since = null, ftimer = 0, fwarned = false, liveOn = false;
   function changed(list) {                            // 바뀐 화면 파일(폴링 답 · 이벤트 screen.written by ai) → 고른 카드만 다시 · 칩 카드는 걷는 길을 바로
     if (!Array.isArray(list) || !list.length) return;
-    if (list.indexOf('@tokens') >= 0) document.dispatchEvent(new CustomEvent('hd-tokens-changed'));   // tokens.css 가 바뀜(R55) — 토큰 다시 읽기는 view-ds-inspect
+    ['tokens', 'components'].forEach(function (s) { if (list.indexOf('@' + s) >= 0) document.dispatchEvent(new CustomEvent('hd-css-changed', {detail: {sheet: s}})); });   // tokens.css·components.css 가 바뀜(R55) — 다시 읽기는 view-ds-inspect
     var now = Date.now(), t = B.refresh(list, {known: ctx.known ? ctx.known() : [], busy: st, skip: skip, now: now,
                                               modal: ctx.modalScreen ? ctx.modalScreen() : null});
     if (t.cards.length) { wrote(t.cards); ctx.reload(t.cards); }
