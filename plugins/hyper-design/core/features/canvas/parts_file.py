@@ -3,7 +3,7 @@
 - read(out) = 고른 부품 목록. 파일이 없으면 [](조용히) · 깨진 JSON · 모양이 틀린 항목은 stderr 에 '[hd]' 한 줄씩(projects.json 과 같은 규칙).
 - check(out) = 부품마다 part_stamp.row(지금 도장 = code_probe.tree_shas → part_stamp.tree_of, 지금 미커밋 = code_probe.dirty).
   같은 (저장소, 경로들) 은 한 번만 잰다. 재지 못하면 'unknown' — 낡았다고 하지 않는다.
-- PartsWatch(out).status() = {parts: [row], stale: [화면 id]} — 도우미 GET /api/app-parts. EVERY(60초)보다 자주 git 을 부르지 않는다(캐시),
+- PartsWatch(out).status() = {parts: [row], stale: [화면 id], links: {화면 id: {file, parts:[{file, repo, watch}]}}} — 도우미 GET /api/app-parts. EVERY(60초)보다 자주 git 을 부르지 않는다(캐시 — links 는 파일만 읽어 늘 지금 것),
   화면 → 끌어 쓰는 파일은 busy._deps(F25, iframe·link·script) 그대로.
 쓰기는 하지 않는다 — parts.json 을 쓰는 곳은 hd parts(hd/hd_parts.py) 하나. 빌드도 하지 않는다(도우미 스레드에서 35초 빌드를 돌리지 않게).
 부르는 곳: session.ProjectSession(parts) · router(/api/app-parts) · hd_parts(hd parts --check · hd notes · hd wait 경고 줄).
@@ -94,10 +94,11 @@ class PartsWatch:
     def status(self):
         with self._lock:
             now = self.clock()
-            if self._last is not None and now - self._at < self.every:
-                return self._last
-            rows = check(self.out)
-            stale = {r["file"] for r in rows if r["stale"]}
-            self._last = {"parts": rows, "stale": PS.stale_screens(screen_deps(self.out), stale) if stale else []}
-            self._at = now
-            return self._last
+            if self._last is None or now - self._at >= self.every:
+                rows = check(self.out)
+                stale = {r["file"] for r in rows if r["stale"]}
+                self._last = {"parts": rows, "stale": PS.stale_screens(screen_deps(self.out), stale) if stale else []}
+                self._at = now
+            # 연결(/both)은 파일만 읽어 싸다 — 캐시 없이 늘 지금 것(hd parts 로 막 이은 화면이 60초 기다리지 않게). 틀린 항목 경고는 위 check 가 이미 낸다
+            links = PS.screen_links(screen_deps(self.out), read(self.out, warn=lambda m: None))
+            return dict(self._last, links=links)

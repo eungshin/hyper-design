@@ -1,5 +1,6 @@
 /* View — 기록 패널(#hlist)과 되돌리기·다시 하기: 시간줄 하나(E8)의 주인. 상태는 HD.history 리듀서, 줄을 누르면 그 줄 바로 뒤 상태로(E2, 포토샵처럼 — 아래 줄은 흐리게 = 다시 하기).
    되돌리기 Ctrl+Z · 버튼 · 줄 누르기(Enter 도) 가 모두 여기 하나로 온다. 잠긴 줄을 누르면 까닭을 토스트로(보냄·파일에 씀·너무 오래됨·지난 세션 화면 설정).
+   Ctrl+Z·버튼은 이번 세션 줄까지만(HD.history.canUndo) — 지난 세션 줄은 줄 누르기로만 되돌린다(F15, 막히면 까닭 토스트).
    줄마다 상태 차이(d)를 잡는다: 기록 직전 상태(base)와 기록 때 상태의 차이. base 는 한 일이 끝난 뒤(다음 차례, setTimeout 0) 다시 읽어
      기록 없이 바뀐 것(AI 답·번호 매기기)은 다음 줄에 섞이지 않는다 — 한 일과 그 기록이 같은 차례에 일어나야 한다(셸의 record 자리 모두 그렇다).
    이번 세션 줄은 op 로, 지난 세션 줄은 d 를 ctx.track.write 로 되쓰고 ctx.adopt(이름들) 로 셸이 다시 읽어 그린다(상태 주인은 셸·state-sync 그대로).
@@ -85,7 +86,7 @@ function mount(ctx) {
     set(H.reduce(st, {type: 'record', row: row}));
   }
   function undo() {
-    if (!H.canUndo(st)) { if (st.at > 0) ctx.toast(reason()); return; }
+    if (!H.canUndo(st)) { if (st.at > 0) ctx.toast(H.REASON[H.undoWhy(st)] || '되돌릴 수 없어요'); return; }   // 지난 세션 줄 = 기록 패널에서만(F15)
     var r = st.rows[st.at - 1]; go(st.at - 1); ctx.toast('되돌렸어요: ' + r.label);
   }
   function redo() {

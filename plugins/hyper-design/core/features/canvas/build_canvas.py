@@ -40,6 +40,7 @@ import sys, os, json, re, html, pathlib, time, urllib.parse
 
 import board_data as BD
 import code_probe as CP
+import usage_map as UM  # 부품 쓰는 화면 지도 → components.html 칩·목록(R58)
 import code_stamp
 import page_fill as PF  # hd-data 이스케이프 · noscript 링크 — 줄 때 끼우기(session.page)와 같은 규칙
 
@@ -268,7 +269,7 @@ def build_foundation(out):
 <title>Foundation — 색·글자·여백</title>
 <link id="tokens" rel="stylesheet" href="tokens.css"><script src="palette.js"></script>
 <style>{FOUNDATION_CSS}</style></head><body><div class="wrap">
-<h1>Foundation</h1><p class="lead">이 앱의 모든 화면이 쓰는 색·글자·여백. 위의 색 점을 누르면 여기도 바로 바뀌어요.</p>
+<h1>Foundation</h1><p class="lead">이 앱의 모든 화면이 쓰는 색·글자·여백.</p>
 {"".join(parts)}
 </div><script>{FOUNDATION_JS}</script></body></html>"""
     (out / "foundation.html").write_text(doc, encoding="utf-8")
@@ -279,8 +280,7 @@ def build_foundation(out):
 def used_classes(out):
     used = set()
     for f in (out / "screens").glob("*.html"):
-        for v in re.findall(r"""\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')""", f.read_text(encoding="utf-8", errors="ignore")):
-            used.update((v[0] or v[1]).split())
+        used |= UM.classes(f.read_text(encoding="utf-8", errors="ignore"))   # 쓰는 화면 지도(R58)와 같은 규칙
     return used
 
 
@@ -328,7 +328,11 @@ def badge_section(open_tag, inner, badges):
     return f'{open_tag}{head.group(1) if head else ""}{table}</section>'
 
 
-def build_components(out, m):
+def build_components(out, m, usage=None):
+    """usage = 부품 쓰는 화면 지도 {key: [화면 id]}(board_data.usage, hd-data 'usage' 와 같은 것) — 남은 section 마다 data-used·머리 칩, 맨 위 목록(R58).
+    None 이면 여기서 다시 잰다."""
+    if usage is None:
+        usage = BD.index_data(out, m).get("usage") or {}
     used = used_classes(out)
     badges = m.get("badges") or {}
     if not SPECIMENS.exists():
@@ -346,16 +350,26 @@ def build_components(out, m):
     src = re.sub(r"""(<link\b[^>]*\bhref\s*=\s*["'])[^"']*\btokens\.css(["'][^>]*\bid\s*=\s*["']tokens["'])""", r"\1tokens.css\2", src)
     src = re.sub(r"""(\bhref\s*=\s*["'])[^"']*components\.css(["'])""", r"\1components.css\2", src)
     src = re.sub(r"""(\bsrc\s*=\s*["'])[^"']*palette\.js(["'])""", r"\1palette.js\2", src)
-    out_parts, last, kept = [], 0, 0
+    out_parts, last, kept, index = [], 0, 0, []
     for s, e, open_tag, inner in spec_sections(src):
         out_parts.append(src[last:s]); last = e
         key = attr(open_tag, "data-key")
         if key not in used:
             continue
         kept += 1
-        out_parts.append(badge_section(open_tag, inner, badges) if key == "badge" and badges else src[s:e])
+        ids = usage.get(key) or []
+        marked = UM.mark_section(open_tag, key, ids)    # 칩 = 쓰는 화면 수(배지·0 은 그대로)
+        if marked != open_tag:
+            index.append((key, html.unescape(attr(open_tag, "data-title")) or key, len(ids)))
+        sec = badge_section(open_tag, inner, badges) if key == "badge" and badges else src[s:e]
+        out_parts.append(marked + sec[len(open_tag):])
     out_parts.append(src[last:])
-    (out / "components.html").write_text("".join(out_parts), encoding="utf-8")
+    doc = "".join(out_parts)
+    if index:                                           # 맨 위 얇은 목록 · 칩 모양 · 칩 누르기 스크립트
+        doc = re.sub(r"(<body\b[^>]*>)", lambda mo: mo.group(1) + UM.index_html(index), doc, count=1)
+        doc = doc.replace("</head>", f"<style>{UM.CSS}</style></head>", 1)
+        doc = doc.replace("</body>", f"<script>{UM.JS}</script></body>", 1) if "</body>" in doc else doc + f"<script>{UM.JS}</script>"
+    (out / "components.html").write_text(doc, encoding="utf-8")
     return kept
 
 
@@ -374,6 +388,32 @@ def build_shell_dir(dest, stamp):
     write_if_changed(dest / SKELETON, code_stamp.stamp_page(tpl, stamp))   # 뼈대는 맨 뒤 — 뼈대가 있으면 셸 파일도 있다
 
 
+# 보관(reference) 화면은 원본만(R56) — 설명·출처는 screens.json policies 로. 덧붙인 표시를 찾으면 화면마다 경고 한 줄(빌드는 계속)
+REFERENCE_EXTRAS = (("구현 메모", re.compile(r'data-impl-note|class="impl-note"')), ("캡션 줄", re.compile(r'class="cap"')),
+                    ("창 끝 점선", re.compile(r'id="fold"')))
+
+
+def reference_extras(out, m):
+    """kind "reference" 화면 중 덧붙인 표시가 있는 것 → [(id, [이름…])]. 파일이 없거나 못 읽으면 건너뜀."""
+    found = []
+    for s in m.get("screens") or []:
+        if not isinstance(s, dict) or s.get("kind") != "reference" or not s.get("file"):
+            continue
+        try:
+            src = (pathlib.Path(out) / s["file"]).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        hit = [name for name, pat in REFERENCE_EXTRAS if pat.search(src)]
+        if hit:
+            found.append((str(s.get("id")), hit))
+    return found
+
+
+def warn_reference_extras(out, m):
+    for sid, hit in reference_extras(out, m):
+        print(f"경고: 보관 화면 {sid} 에 {'·'.join(hit)} — 보관 화면은 원본만, 설명·출처는 screens.json 의 policies 로", file=sys.stderr)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit("usage: python3 build_canvas.py <out_dir> | --shell <폴더>")
@@ -389,7 +429,8 @@ def main():
     copy_palette(out)                                   # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로(같으면 그대로)
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
-    nk = build_components(out, m)
+    nk = build_components(out, m)                      # 쓰는 화면 지도(R58)는 hd-data 와 같은 규칙으로 다시 잰다(board_data.usage)
+    warn_reference_extras(out, m)
     print(f"canvas v3: {n} screens, {na} branch arrows, {ng} groups, scale {BD.frame(out)[0]} · foundation {nc} colors · components {nk} sections")
 
 

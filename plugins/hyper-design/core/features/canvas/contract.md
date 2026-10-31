@@ -28,7 +28,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 쓰는 곳은 `hd parts --rebuild` 하나(hd/contract.md '앱 부품'). 도우미·캔버스는 읽기만 하고 빌드하지 않는다. 틀린 항목은 건너뛰고 `[hd] parts.json …` 한 줄, 깨진 파일은 한 줄 뒤 부품 없음(projects.json 과 같은 규칙)
 
 ## 구조
-- `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
+- `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`camera-anchor`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-camera-anchor`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 기능별 규칙은 `contract/<기능>.md`(파일 하나 = 기능 하나 — 구조 규칙과 '고치면 돌릴 것' 줄). 목록은 그 폴더 자체다(여기에 줄을 더하지 않는다). 모듈 머리 주석이 아니라 파일로 둔 까닭: 규칙이 Model·View·셸에 걸치고, 머리 주석은 한 줄 책임 + API 만 말한다
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 기능 등록부 `features`(ViewModel) — View 가 읽힐 때 `HD.feature(이름, {needs, mount(ctx)})` 로 등록하고, 셸은 기존 mount 들 뒤에서 `HD.mountAll(ctx)` 를 한 번 부른다(공통 ctx 칸은 `modules/features.js` 머리 주석). `needs` 칸이 없거나 mount 가 던지면 그 기능만 빠지고 `[hd]` console.error + 토스트, 나머지는 붙는다. 기존 mount 는 그 자리에 둔다(스트랭글러) — 지금 등록부로 붙는 것: `agents` · `aiUndo` · `artboard` · `blocks` · `chat` · `dsCard` · `home` · `parts` · `popPlace` · `presence` · `projects` · `promote` · `readOnly` · `rowHeads` · `spawn` · `swap` · `tabs`(목록의 진실은 `modules/` 의 `HD.feature(` — 여기는 참고)
@@ -63,6 +63,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 ## 로컬 도우미 (`helper.py`, 선택)
 - 구조(task 47-2): `helper.py` = CLI·`make_server`·예전 이름 · `html_edit.py`(Model — HTML 원문 고치기) · `session.py`(`ProjectSession` = 조립 지점, out 하나 — 부품은 모듈마다: `state_store.py` `StateStore` · `history.py` `History`(쓰기 기록 `write_record.py` · 편집 적용 `screen_edits.py` `EDIT_OPS` · 줄 `board_rows.py`) · `send_queue.py` `Queue` · `busy.py` `Busy` · `ai_undo.py` `AiUndo` · `note_archive.py` `Archive` · `chat_store.py` `ChatLog` · `builder.py` `Builder` · `ticker.py` `Ticker` · 파일 바탕 `out_io.py`) · `router.py`(`Router` 주소 → 세션 메서드 · `SessionHandler` 토큰·Host·크기·JSON 오류). 허브(`hd home`)도 같은 세션·라우터를 `/v1/p/<이름>/` 아래에 쓴다(home/contract.md '서버 하나')
 - 포트(#270): `--port` 가 없으면 `<out>/.hd-helper.json` 의 지난 포트를 먼저 열고, 막혔으면 빈 포트로(`[hd]` 한 줄) — 주소(origin)가 같아야 캔버스 localStorage(도크·테마·설정·보낸 것 보기·안 보낸 표시)가 이어진다. `.hd-helper.json` = 떠 있는 동안 `{url, pid, port, token}`(주소를 찍기 전에 씀) · 정상 종료 뒤 `{port}`
+- 연결 대기 줄(W10): `Server.request_queue_size = 64`(기본 5) — 새로고침 몰림(카드 iframe 수십 개)에 연결 거부가 나지 않게. 허브도 같게(home/contract.md)
 - 한 out 에 도우미 하나(#271): 시작할 때 `.hd-helper.json` 의 pid 가 살아 있고 그 주소가 답하면 띄우지 않고 한국어 한 줄 + 종료 코드 1. 죽은 pid·답 없는 주소면 덮어쓴다(규칙 `hd_model.start_verdict`)
 - 읽기(`GET /api/state`·`index.html` 의 `__hdState`)는 빌드 자물쇠 없이 읽는다(쓰기가 임시 파일 + `os.replace` — Windows 에서 읽는 중이라 바꾸기가 막히면 잠깐 다시). 깨진 파일일 때만 자물쇠 안에서 옮긴다. 쓰기(apply·delete·restore·PUT·reply·claim·release)는 그대로 하나씩 — 긴 빌드 중에도 `hd` 핑(1초)이 답한다
 - 127.0.0.1에만, 실행마다 새 토큰(주소의 `?hd=`·머리글 `X-HD-Token`), Host 검사. 쓰는 곳은 `<out>` 안뿐이고(안인지는 `hd_projects.inside` — `hd` 와 같은 out 규칙 하나, #282), 쓰기 전 원본을 `<out>/.hd-history/<시각>/`에 남긴 뒤 데이터만 다시 뽑아 확인한다(figma-lite 5 — `builder.verify` = 프로세스 안 `board_data.index_data`, 깨지면 되돌림 — 쓰기가 바꾸는 파일에 달린 빌드 실패는 모두 여기서 난다). `index.html` 전체는 쓰기 때 굽지 않고, 페이지를 줄 때 데이터 도장(`<meta name="hd-inputs">` = `board_data.input_stamp`, out 의 screens.json·곁 파일·화면 파일 내용)이 지금과 다르면 그때 다시 빌드한다(`ProjectSession.refresh_data` — 쓰기 자물쇠를 0.25초만 기다리고 쓰기 중·뒤 확인 대기면 있던 페이지, 자물쇠 안에서 구움, 도장 없는 페이지는 견주지 않음, 다시 빌드해도 그 도장이 안 나오면 그 도장으로는 다시 하지 않음 + `[hd]` 한 줄). 세션을 닫을 때도 한 번(도우미 없이 file:// 로 열어도 마지막 쓰기까지). `/api/data` 는 늘 파일에서 바로. 페이지 빌드는 CLI 로 뜬 도우미는 `hd open` 과 같은 `build_ref.py`(저장소면 git HEAD 코드, 아니면 작업 트리 — #278)로, 같은 프로세스에서 `make_server` 를 쓰는 테스트는 작업 트리 `build_canvas.py` 로
@@ -108,6 +109,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `modules/viewport.js` · `view-viewport.js`(창 나누기·동시 스크롤 · 카메라 계산 zoomAt·fit) | `unit or menu or input` |
 | `helper.py` · `modules/view-sync.js`(화면 파일에 바로 쓰기: 잇기·끊기·삭제·되살리기·바뀐 카드만 다시·모드 칩) | `unit or helper` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
+| `modules/camera-anchor.js` · `view-camera-anchor.js` · 셸 `home`(첫 카메라 · 눈앞 내용 제자리, U2) | `contract/camera.md` 의 줄 |
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
 | `modules/selection.js` · `view-select.js` (고른 카드: 누르기 = 고르기 + 연결 강조, Shift = 여러 장) | `unit or tools or input or links` |
 | `canvas_template.html` 이동·확대·입력 | `input` |

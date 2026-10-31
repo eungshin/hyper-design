@@ -117,3 +117,48 @@ def test_add_without_helper_builds_and_leaves_state_file_alone(tmp_path):
     assert not (home / "projects.json").exists(), "읽고 넣기만 — 프로젝트 목록에 넣지 않는다"
     code, text, err = hd(home, "screens", str(out))
     assert code == 0 and "도우미 꺼짐" in text.splitlines()[0] and "  mock · 목업 화면 · mock.html" in text, err
+
+
+def _collect_events(m, out_list, ready, stop):
+    """도우미 이벤트 흐름을 따로 모은다(열린 탭이 받는 알림 수를 세려고)."""
+    import threading  # noqa: F401
+    sys.path.insert(0, str(hdfix.HD))
+    import hd_sdk as S
+    p = S.Project(m)
+    for ev in p._events(None, 30, 3, __import__("time").time, __import__("time").sleep, opens=True):
+        if ev.type == "open":
+            ready.set(); continue
+        out_list.append(ev.type)
+        if stop.is_set():
+            return
+
+
+def test_add_many_files_one_call_bumps_state_once_and_notifies_once(canvas, tmp_path):
+    import threading, time
+    out, home = canvas
+    fs = [mock(tmp_path, n, n.upper()) for n in ("m1", "m2", "m3")]
+    m = marker(home)
+    rev0 = api(m, "/api/state", method="GET")["rev"]
+    evs, ready, stop = [], threading.Event(), threading.Event()
+    t = threading.Thread(target=_collect_events, args=(m, evs, ready, stop), daemon=True)
+    t.start()
+    assert ready.wait(10), "이벤트 흐름이 열리지 않았어요"
+    code, r, err = hdj(home, "add", *map(str, fs), "--to", "proj-a", "--at=0,300", "--size", "390x844")
+    assert code == 0, err
+    time.sleep(0.6); stop.set()
+    assert [x["id"] for x in r["screens"]] == ["m1", "m2", "m3"] and r["live"] is True
+    st = api(m, "/api/state", method="GET")
+    assert st["rev"] == rev0 + 1 == r["state_rev"], "여러 장이어도 상태 쓰기는 한 번"
+    assert {k: st["state"]["card-pos"][k] for k in ("m1", "m2", "m3")} == {k: {"dx": 0, "dy": 300, "g": None} for k in ("m1", "m2", "m3")}
+    assert st["state"]["card-size"]["m3"] == {"w": 390, "h": 844}
+    assert [s["id"] for s in manifest(out)["screens"]] == ["home", "list", "m1", "m2", "m3"]
+    assert evs.count("screen.written") == 1 and evs.count("notes.changed") == 1, evs
+
+
+def test_add_old_form_canvas_as_second_positional_still_works_with_one_warning(canvas, tmp_path):
+    out, home = canvas
+    code, r, err = hdj(home, "add", str(mock(tmp_path)), "proj-a")
+    assert code == 0 and r["id"] == "mock" and r["live"] is True, err
+    warn = [ln for ln in err.strip().splitlines() if ln]
+    assert len(warn) == 1 and warn[0].startswith("[hd] ") and "--to proj-a" in warn[0], err
+    assert [s["id"] for s in manifest(out)["screens"]] == ["home", "list", "mock"]

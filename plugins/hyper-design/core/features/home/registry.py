@@ -55,6 +55,7 @@ def prefix(name):
 class _Alias(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
     daemon_threads = True
+    request_queue_size = 64                           # 허브와 같은 연결 대기 줄(W10)
 
 
 class ProjectRegistry:

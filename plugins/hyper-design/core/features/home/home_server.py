@@ -57,6 +57,7 @@ def warn(msg):
 class Hub(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"     # Windows 의 SO_REUSEADDR 는 쓰는 중인 포트도 연다 — 막혔는지 알아야 한다
     daemon_threads = True
+    request_queue_size = 64                           # 연결 대기 줄(기본 5) — 새로고침 몰림(카드 iframe 수십 개)에 ERR_CONNECTION_REFUSED 가 났다(W10)
 
     def server_close(self):
         reg = getattr(self, "registry", None)

@@ -34,6 +34,7 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 - 허브는 스스로 끄지 않는다. 홈 화면 띠 `새 버전이 있어요 — 허브를 다시 켜면 반영돼요` + `[다시 켜기]`(`home.js` → `/api/hub/restart` → `/` 를 0.5초마다 읽어 토큰이 바뀌면 새 홈으로, 20초 넘으면 토스트 `hd home --restart`) · 터미널 `hd home` 은 주소 뒤 한 줄(`--json` `stale:true`) · `hd home --restart` = `stop_hub`(`/api/hub/stop`, 그 주소가 없는 옛 허브·답 없음 = python pid 강제 종료) 뒤 같은 포트
 
 ## 서버 하나 (task 47-2) — 허브가 프로젝트 세션을 품는다
+- 연결 대기 줄 `request_queue_size = 64`(허브 `Hub` · 옛 포트 별칭 `_Alias`, 기본 5) — 탭 둘이 함께 새로고침하면 카드 iframe 요청이 몰려 연결 거부(`ERR_CONNECTION_REFUSED`)가 났다(W10)
 - 허브 프로세스 하나 = 홈 + 모든 프로젝트. `registry.py` `ProjectRegistry`(Client) 가 프로젝트마다 `canvas/session.py` `ProjectSession` 을 열고 닫는다(이름 → 세션, 상태 주인 = 이것). 목록·탭·별표·휴지통 파일은 그대로 `hd_client`·`home_client` 가 주인
 - 열기(`/api/open`·`/api/new` = `Ctx.opener` = `registry.open`): 이 허브에 열려 있으면 그것 · 따로 떠 있는 옛 도우미가 있으면 그것(한 out 에 쓰는 프로세스 하나) · 아니면 build_ref 빌드 뒤 세션. 휴지통에 넣으면 그 세션을 닫는다(`Ctx.closer`)
 - 주소: `/v1/p/<이름>/`(캔버스 페이지 · out 파일 · `/v1/p/<이름>/api/*` — 세션 토큰 또는 허브 토큰, 라우트는 도우미와 같은 `canvas/router.py`) · 옛 `/api/*` + 세션 토큰 = 그 세션(캔버스 JS 그대로) · 허브 토큰 = 홈 API · `GET /v1/sessions`(허브 토큰) = 열린 세션 표지. `/v1/p/<이름>`(빗금 없음) = 301 · 안 열린 이름 = 404 `{error}` · `GET /v1/shell/<도장>/<hd-shell.js|hd-shell.css>`(토큰 없음, 1단계 P1a) = 그 코드 도장의 공용 셸(`canvas/shell_store`, 모든 프로젝트가 같은 주소 — immutable, 도장·파일 이름 검사 `shell_store.route`, 아직 없음 = 404 no-store). 미리 만들기 = `registry.current_code` 가 새로 잴 때 `make_hub` 가 넘긴 `shell_store.PREBUILD.want`(뒤 스레드 하나, 같은 도장 두 번 안 함)
@@ -42,6 +43,7 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 
 ## 썸네일
 헤드리스 Edge(없으면 Chrome) `--headless=new --screenshot --window-size=1260,780 --virtual-time-budget=6000 --hide-scrollbars` 로 `<out>/index.html`(file://). 낡음 = 그림 없음 또는 max(`.hd-canvas.json`, `index.html` mtime) 보다 오래됨(`home_model.thumb_stale`), 없어진 out·index.html 없음은 건너뜀. 한 번에 하나, 같은 이름은 한 번만 줄 섬, 요청을 막지 않음. 실패는 `[hd]` 한 줄(다음 예약 때 다시). 브라우저 없음 = 그림 없음(한 번 알림). 한 장 약 20초.
+그림이 아직 없을 때(첫 목록 — 허브가 뒤에서 한 장씩 찍는 동안 · 브라우저 없음 · 그림을 못 불러옴) 홈 카드와 캔버스 프로젝트 고르기 창은 빈 상자 대신 제목 첫 글자를 보인다(U3 F20 10-31 — 규칙 `home-model.initial` · 캔버스 `HD.projects.initial` 같은 뜻: 처음 나오는 글자·숫자, 영문 대문자, 없으면 첫 글자, 빈 글 '?'). 새로 찍힌 그림은 목록을 다시 받을 때(새로고침·구역 바꾸기) 보인다.
 
 ## 바로 가기
 `<Desktop>/Hyper Design.lnk`(Desktop = `[Environment]::GetFolderPath('Desktop')`) → `pythonw.exe`(sys.executable 옆, 없으면 python.exe) `"<hd.py>" home`, 작업 폴더 HD_HOME, 아이콘 `<HD_HOME>/hd.ico`(256px PNG 를 담은 ICO, 캔버스 "hd" 배지 모양 — 표준 라이브러리로 그림). 아이콘을 못 만들면 `[hd]` 한 줄 + 아이콘 없이. .lnk 는 PowerShell `WScript.Shell`.

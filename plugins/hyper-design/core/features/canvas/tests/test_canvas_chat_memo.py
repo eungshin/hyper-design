@@ -67,3 +67,28 @@ def test_slash_memo_sends_unsent_memos_with_the_chat_text_once(served, ctx):
     finally:
         pg.close()
     assert not errors, errors
+
+
+@pytest.mark.area("chat", "notes")
+def test_slash_memo_works_in_the_middle_of_a_sentence(served, ctx):
+    """GPT·Slack 처럼 글을 쓰다가 도중에 '/me' — 명령 낱말만 지우고 앞뒤 글은 그대로, 칩이 붙는다. 'a/b' 같은 낱말 안 '/' 는 명령이 아니다."""
+    out, srv = served
+    rev = call(srv, "GET", "/api/state")[1].get("rev", 0)
+    assert call(srv, "PUT", "/api/state", {"rev": rev, "state": {"notes": [memo("m1", "pay", 1, "결제 버튼을 더 크게")]}})[0] == 200
+    pg, errors = open_page(ctx, srv)
+    pg.set_viewport_size({"width": 1440, "height": 1000})
+    try:
+        ta = "#hdchat textarea"
+        pg.click(ta)
+        pg.keyboard.type("a/b")
+        assert pg.is_hidden("#hdchat .ch-cmds"), "낱말 안의 '/' 는 명령이 아니다"
+        pg.fill(ta, ""); pg.keyboard.type("이것도 같이 /me")
+        pg.wait_for_selector("#hdchat .ch-cmds li[data-cmd='memo'][aria-selected='true']", timeout=5000)
+        pg.keyboard.press("Enter")
+        pg.wait_for_selector("#hdchat .ch-chip.memos", timeout=5000)
+        assert pg.input_value(ta) == "이것도 같이 ", "명령 낱말만 지운다"
+        pg.keyboard.type("반영해 줘")
+        assert pg.input_value(ta) == "이것도 같이 반영해 줘", "커서는 지운 자리에"
+    finally:
+        pg.close()
+    assert not errors, errors

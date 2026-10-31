@@ -2,14 +2,14 @@
    규칙(어떤 키·파일이 이기나·올리기·보낼 본문)은 modules/state-file.js(Model). 여기는 쓰기를 300ms 모아 PUT /api/state, 닫을 때 마저 보내기, 409 처리.
    409(다른 곳에서 바뀜 — hd reply·claim 은 rev 를 늘 올린다, #269) = 409 답의 서버 상태와 HD.saveMerge.resolve(Model)로 합친다:
      보낸 이름이 서버에서 안 바뀌었으면(메모는 id 마다 칸끼리, busy 는 카드마다) 서버의 나머지를 받고 내 값을 지켜 새 rev 로 한 번 다시 보낸다
-     (받은 이름 중 notes·note-seq·busy 는 ctx.onExternal, 그 밖이 바뀌었으면 다시 보낸 뒤 다시 불러오기 — 잃는 것 없음).
+     (받은 이름 중 LIVE(notes·note-seq·busy·card-size)는 ctx.onExternal, 그 밖이 바뀌었으면 다시 보낸 뒤 다시 불러오기 — 잃는 것 없음).
      둘 다 바꾼 이름이 있거나 다시 보낸 것도 409 면 이번 변경은 버리고 잃은 것을 토스트로 말한 뒤 ctx.reload().
    쓰기 대기 표시(hd-unsent:<hash> = {base: rev, names}) — 파일에 닿았다고 확인 못 한 이름(모으는 중·보내는 중·닫을 때 보낸 것)을 브라우저 저장소에 남긴다.
      닫을 때 보낸 PUT 이 새 페이지 GET 보다 늦게 닿거나 못 닿아도(300ms 안의 새로고침) 다음 시작 때 boot 가 그 값을 다시 올린다. 답(성공)·409 때 고쳐 쓰거나 지운다.
    보내기가 실패하면(도우미 꺼짐 등) 한 번 알리고 [hd] 경고, 바뀐 키는 다음 쓰기 때 같이 보낸다.
    살아 있는 새로 받기(A2a): 페이지가 보이는 동안 2초마다(숨으면 10초) GET /api/state. 파일 rev 가 더 크면 —
-     보내지 않은 변경이 있으면 먼저 보낸다(409 = 위 충돌 길) · 바뀐 이름이 notes·note-seq·busy 뿐이면 제자리에서 받아(상태·캐시) ctx.onExternal(이름들) ·
-     다른 이름(자리·폴더…)도 바뀌었으면 셸이 따로 들고 있으니 지금처럼 알리고 다시 불러오기. 네트워크 실패 3번 연속 = 멈추고 한 번 알림, 창에 돌아오면(focus) 다시.
+     보내지 않은 변경이 있으면 먼저 보낸다(409 = 위 충돌 길) · 받는 규칙 = HD.stateFile.incoming(Model): 바뀐 이름이 모두 LIVE(notes·note-seq·busy·card-size(R57)·card-pos·숨김·잠금·선 이름·폴더·판 메모(W10 F1))면
+     제자리에서 받아(상태·캐시) ctx.onExternal(이름들) · 이 탭이 아직 보내지 않은 같은 이름이면 먼저 보내 409 합치기 길 · 그 밖(edit-log·모르는 이름)이 바뀌었으면 지금처럼 알리고 다시 불러오기. 네트워크 실패 3번 연속 = 멈추고 한 번 알림, 창에 돌아오면(focus) 다시.
      답에 hubStale 칸이 있으면(허브 안 세션, R34) document 'hd-hub-stale' {detail: hubStale} 로 알린다(칩은 view-hub-stale).
      묻기는 GET /api/state?since=<rev>(#273) — 파일 rev 가 같으면 도우미가 {rev, unchanged:true} 만 답하고 아무것도 하지 않는다(옛 도우미의 전체 답도 그대로 받는다).
    413(상태가 너무 큼, #273) = 도우미의 {error} 글을 토스트로 한 번(성공할 때까지 다시 알리지 않음), 다음 변경까지 다시 보내지 않고 완료 메모 보관을 바로 해 본다.
@@ -171,10 +171,14 @@ function mount(ctx) {
     var all = {}, changed = [];
     Object.keys(state).concat(Object.keys(snap.state)).forEach(function (n) { all[n] = 1; });
     Object.keys(all).forEach(function (n) { if (!same(state[n], snap.state[n])) changed.push(n); });
-    if (changed.some(function (n) { return !S.LIVE[n]; })) { conflict(); return; }   // 자리·폴더 등은 셸이 따로 들고 있다 — 지금처럼 다시 불러오기
-    rev = snap.rev; state = snap.state; base = snap.state;
+    var mine = union(names(), inflight), how = S.incoming(changed, mine);   // 규칙 = Model(R57 inPlace · W10 F1 merge)
+    if (how === 'merge') { schedule(); return; }     // 이 탭이 아직 보내지 않은 같은 이름 — 먼저 보낸다(파일이 앞서 있으니 409 = 합치기 길)
+    if (how === 'reload') { conflict(); return; }     // 셸이 제자리에서 못 받는 이름(edit-log·모르는 이름) — 지금처럼 다시 불러오기
+    var fresh = Object.assign({}, snap.state);
+    mine.forEach(function (n) { if (n in state) fresh[n] = state[n]; else delete fresh[n]; });   // 다른 이름의 보내지 않은 값은 지킨다(다음 PUT 이 새 rev 로)
+    rev = snap.rev; state = fresh; base = snap.state;
     changed.forEach(function (n) { cacheSet(n, S.read(state, n)); });
-    if (changed.length && ctx.onExternal) ctx.onExternal(changed);
+    if (changed.length && ctx.onExternal) ctx.onExternal(changed);   // 셸 adoptExternal — 메모·덮개 + 카드 자리·크기·숨김…(adoptState: 그 값만 다시 그림, 카드 iframe·카메라 그대로, 토스트 없음)
   }
   function poll() {
     clearTimeout(ptimer); ptimer = 0;

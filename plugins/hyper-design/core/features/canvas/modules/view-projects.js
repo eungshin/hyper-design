@@ -24,6 +24,7 @@ var CSS = '#ppick{position:fixed;inset:0;z-index:40;background:rgba(28,28,28,.28
   '#ppick .pk-card{position:relative;display:flex;flex-direction:column;gap:6px;padding:0;border:0;background:none;text-align:left;cursor:pointer;min-width:0;font:inherit;color:inherit}' +
   '#ppick .pk-th{position:relative;aspect-ratio:42/26;border-radius:10px;border:1px solid #e3e3df;background:#F4F4F1 center/cover no-repeat;overflow:hidden;display:grid;place-items:center;color:#8a8a85}' +
   '#ppick .pk-th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}' +
+  '#ppick .pk-ini{font-size:30px;font-weight:600;line-height:1;color:#a9a9a2}' +
   '#ppick .pk-card:hover .pk-th,#ppick .pk-card:focus-visible .pk-th{border-color:#2b2b29}' +
   '#ppick .pk-card:focus-visible{outline:none}' +
   '#ppick .pk-card[aria-current="true"] .pk-th{border:2px solid var(--ui-mark)}' +
@@ -95,7 +96,7 @@ function mount(ctx) {
         return '<button type="button" class="pk-card" role="listitem" data-name="' + esc(r.name) + '" data-state="' + r.state + '"' +
           (r.current ? ' aria-current="true"' : '') + (r.clickable ? '' : ' aria-disabled="true"') + (busy === r.name ? ' aria-busy="true"' : '') +
           ' title="' + esc(r.why || r.title) + '">' +
-          '<span class="pk-th">' + (r.thumb ? '<img alt="" loading="lazy" src="' + esc(r.thumb) + '">' : '') + '</span>' +
+          '<span class="pk-th"><span class="pk-ini" aria-hidden="true">' + esc(P.initial(r.title)) + '</span>' + (r.thumb ? '<img alt="" loading="lazy" src="' + esc(r.thumb) + '">' : '') + '</span>' +   // F20 — 그림이 없거나 못 불러오면 그 아래 첫 글자
           '<span class="pk-ttl">' + esc(r.title) + '</span>' +
           '<span class="pk-meta">' + (r.state === 'open' ? '<span class="pk-dot" title="열림"></span>' : '') +
           (r.current ? '<span class="pk-cur">지금</span>' : '') + '<span class="pk-when">' + esc(busy === r.name ? '여는 중…' : P.ago(r.last_opened, now)) + '</span></span></button>';

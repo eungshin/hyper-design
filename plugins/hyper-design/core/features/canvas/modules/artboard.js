@@ -1,5 +1,5 @@
 /* Model — 카드(아트보드) 크기 규칙(task 46): 프리셋 묶음·검사·카드마다 크기(없으면 프로젝트 기본)·방향·최근 6개·내 프리셋. DOM·저장소를 쓰지 않는다.
-   크기 = {w, h, preset?} (CSS px 정수 MIN~MAX, preset = 고른 프리셋 이름 — 요청문·단추에 보임). 카드 크기 맵 sizes = {카드 id: 크기}(상태 이름 card-size).
+   크기 = {w, h, preset?} (CSS px 정수 MIN~MAX = 16~60000, preset = 고른 프리셋 이름 — 요청문·단추에 보임). 카드 크기 맵 sizes = {카드 id: 크기}(상태 이름 card-size).
    CATS = [{id, name}] (recent 최근 · mobile 모바일 · tablet 태블릿 · desktop 웹/데스크톱 · saved 사용자 정의) · PRESETS = [{cat, name, w, h}]
    check(w, h) → {ok:true, w, h} | {ok:false, error}   글자 숫자도 받는다, 정수 MIN~MAX 만
    of(sizes, id, def) → {w, h, preset?, custom}   custom = 이 카드에 저장된 크기(아니면 def = 프로젝트 카드 크기)
@@ -16,7 +16,7 @@
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
-var MIN = 100, MAX = 4000, RECENT = 6;
+var MIN = 16, MAX = 60000, RECENT = 6;            // R57: 웹·광고(320×50)·상세페이지(860×40000)·AI 이미지 어떤 모양이든 — 정말 예외만 거절(hd_place.py SIZE_MIN·SIZE_MAX 와 같게, test_canvas_unit_size_range.py)
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
 var CATS = [{id: 'recent', name: '최근'}, {id: 'mobile', name: '모바일'}, {id: 'tablet', name: '태블릿'}, {id: 'desktop', name: '웹/데스크톱'}, {id: 'saved', name: '사용자 정의'}];
 // 크기 = CSS px(기기 논리 해상도) — Figma 프레임 프리셋·Apple/Google 기기 표(RESEARCH.md)

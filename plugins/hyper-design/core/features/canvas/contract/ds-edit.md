@@ -15,7 +15,7 @@
 
 ## 규칙
 
-- **도구** — Foundation·Components 탭에서는 도구 막대(`#tools`)를 그 탭 칸으로 옮기고 손·선택(V)만 보인다(다른 도구·구분선·숨긴 것은 숨김). 문서 iframe 은 막대 자리(64px)를 비킨다. H·V 키. 위쪽 줄·대화창은 그대로, `#vbtn`·`#zoom` 은 쉰다(셸 그대로). Screens 로 돌아오면 막대는 판으로, 판 도구 눌림 그대로
+- **도구** — Foundation·Components 탭에서는 도구 막대(`#tools`)를 그 탭 칸으로 옮기고 손·선택(V)만 보인다(다른 도구·구분선·숨긴 것은 숨김). 문서 iframe 은 막대 자리(64px)를 비킨다. H·V 키. 위쪽 줄·대화창은 그대로, `#zoom`(보기·배율) 은 쉰다(셸 그대로). Screens 로 돌아오면 막대는 판으로, 판 도구 눌림 그대로
 - **고르기** — 선택이면 그 탭 `iframe.doc` 에 `hd-pick {on:true, mode:'select', doc:true}`, 손이면 `on:false`(손 = 그냥 보기, R52). palette.js 는 `[data-var]`(closest)를 누르면 `hd-sel` + `token`·`tokenKind`·`label`(견본이 보이는 이름)·`vars`(그 토큰 + 글자 줄 짝 `--fw-`·`--lh-` 의 지금 값)·`rect` 로 답하고 그 견본에 고른 테두리(스크롤을 따라감). 견본 밖 = `path:null`(창 닫기). 마우스 올림 테두리도 견본에만. 문서 안을 누른 뒤의 H·V·Esc·Ctrl+Z/Y 는 `hd-key` 로 캔버스에 넘긴다
 - **속성 창**(`#dsInsp`) — 견본 오른쪽 → 왼쪽 → 아래, 문서 칸 안으로(`HD.popPlace.clamp`, R58). 제목 = 견본 이름 + 토큰 이름. 색 = 색 판 + HEX · 크기·여백·모서리 = 숫자 + 지금 단위 · 굵기 = 100~900 · 줄 높이 = 숫자 · 그림자·그 밖 = 글. 글자 줄 = 크기·굵기·줄 높이 칸(있는 짝만) — 어느 칸을 고치나가 종류. Enter·change = 저장, Esc·×·밖 누르기 = 닫기. 틀린 값 = 그 칸을 원래 값으로 + 빨간 테두리 + 까닭 한 줄(쓰지 않음)
 - **값 규칙**(Python `token_edit.check` = JS `HD.dsEdit.check`, 표 `tests/fixtures/token-values.json`) — 있는 토큰 이름만(`없는 토큰: --x`), 200자 이하, `; { } < > \` · 제어 문자 · `url(` · `expression` · 주석 · `@import` 거절. 색 = `#hex`(3·4·6·8, 대문자로) · `rgb/rgba/hsl/hsla(숫자)` · 길이 = `0` 또는 숫자 + `px|rem|em|%|vw|vh`(음수 없음) · 굵기 = 100~900 정수 · 줄 높이 = 0.5~5 또는 길이 · 그림자 = `#·글자·숫자·공백·.,()%/-` 만
@@ -30,6 +30,7 @@
 - **부품 창** — `POST /api/component-slots {classes, tag}` → 규칙마다 묶음: 바탕·변형(클래스 적은 것부터, 머리글 = 선택자) 다음 '상태' 아래 상태 규칙(누를 때 · 못 누를 때 · 올렸을 때 · 초점 · 켰을 때 …, 고른 견본의 상태면 '이 견본'). 선택자 목록이 다른 부품도 부르면 '버튼·칩·… 함께 바뀌어요'. 칸 = `var(--토큰)` 자리만(묶음 없는 토큰·글자 값은 보이지 않음): 쉬운 속성 이름(배경 · 글자 색 · 테두리 · 모서리 · 안쪽 여백 · 높이 · 글자 크기 · 굵기 · 그림자 · 간격 …, 없으면 CSS 이름) + 토큰 단추(색 점·모서리 조각 · 쉬운 이름 · 흐린 값). 단추 = 같은 묶음 토큰 목록(`#dsList`, 화면 안 · ↑↓ Enter Esc). 칸 없는 요소 = '이 요소에는 토큰으로 바꿀 칸이 없어요'
 - **부품 묶음**(`family`) — 색 `--c-*` · 모서리 `--r-*` · 여백 · 글자 크기 `--fs-*` · 높이·너비 `--h-*`/`--w-*`(`box`) · 굵기 `--fw-*` · 줄 높이 `--lh-*` · 그림자 `--shadow-*` · 그 밖(`--icon`·`--font`) = 묶음 없음(바꿀 수 없음)
 - **부품 저장** — `POST /api/component {selector, prop, index, from, to}` → 그 선택자의 마지막 규칙 · 그 속성 마지막 선언 · index 번째 `var(` 의 이름만(다른 바이트 그대로). 400 까닭: 모르는 선택자·속성·자리 · `from` 이 그 자리와 다름 · `to` 가 tokens.css 첫 `:root` 에 없음 · 다른 묶음 · 묶음 없는 토큰. 기록 한 줄 '부품 바꾸기 <부품> <속성>', 되돌리기 = restore, 다시 하기 = 같은 몸통 다시
+- **쓰는 화면**(R58) — 부품 창 머리에 '쓰는 화면 N'(지도에 있을 때만) — 누르면 창을 닫고 판에서 그 화면들(`contract/usage-map.md`)
 - **다시 읽기 한 메시지** — `hd-css-reload {sheet:'tokens'|'components', v}`(옛 `hd-tokens-reload` 도 palette.js 가 받음). components = components.css 링크 + `?v=`. `/api/files` 의 `@components` → 의도 `hd-css-changed {sheet}`
 
 ## 고치면 돌릴 것

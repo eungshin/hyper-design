@@ -12,6 +12,7 @@
 - 우클릭·탭의 ▾·Shift+F10 → 메뉴(`#ptmenu`): 이름 바꾸기 · 탭 닫기 · 다른 탭 닫기(둘 다 탭이 하나뿐이면 끔) · 폴더 열기(`POST /api/reveal {name}`) · 홈(의도 `hd-home`). 닫기는 바에서만 뺀다(프로젝트는 그대로) — 지금 탭을 닫으면 저장한 뒤 오른쪽(없으면 왼쪽) 탭으로 간다. 다른 탭만 남기면 그 탭으로 간다
 - 넘치면 스크롤바 없이 ◀ ▶(넘칠 때만 보임, 끝이면 그쪽 끔), 시작 때 지금 탭이 보이게 민다. Ctrl+Shift+[ / ] = 이전/다음 탭(끝에서 돌아감, 입력 중이면 아님)
 - 떠나기: 보내지 않은 상태 쓰기는 `view-state-sync` 의 pagehide 길이 마저 보낸다(`projects.md` 와 같음)
+- 속도 재기: `python perf/measure_switch.py --cases normal,data,code,first --runs 5` — 임시 detached worktree·runs 사본·HD_HOME 에서 허브를 띄워 탭 누르기→카드 보임 등을 ms 표 + JSON 으로(저장소·runs 원본은 쓰지 않고 끝나면 다 치움, 사용법은 파일 머리)
 - 층: `tabs`(Model, 순수 — bar·close·others·move·slot·rename·step·arrows·place) · `view-tabs`(View — 그리기·끌기·메뉴·`ctx.api`). 상태 = 탭 이름 차례·제목·여는 중·이름 바꾸는 중·끄는 중(이 View 만, 진실 원천은 도우미의 `tabs.json`). 등록 `HD.feature('tabs', {needs: ['api', '$', 'esc', 'toast']})` → `{reload, names}` | `{}`
 
 ## 고치면 돌릴 것

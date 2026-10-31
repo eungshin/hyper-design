@@ -51,7 +51,8 @@ def test_size_and_at_text():
     assert L.parse_size("Desktop", PRESETS) == {"w": 1440, "h": 1024, "preset": "Desktop"}
     assert L.parse_size("iphone 16", PRESETS) == {"w": 393, "h": 852, "preset": "iPhone 16"}
     assert L.parse_size("1440x1024", PRESETS)["preset"] == "Desktop" and L.parse_size("800×600", PRESETS) == {"w": 800, "h": 600}
-    for bad in ("99x500", "4001x200", "Nope", ""):
+    assert L.parse_size("320x50", PRESETS) == {"w": 320, "h": 50} and L.parse_size("860x40000", PRESETS) == {"w": 860, "h": 40000}
+    for bad in ("15x500", "60001x200", "Nope", ""):
         with pytest.raises(L.PlaceError):
             L.parse_size(bad, PRESETS)
     assert L.parse_at("200,0") == (200, 0) and L.parse_at(" -40 , 12.6 ") == (-40, 13)

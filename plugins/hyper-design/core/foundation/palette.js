@@ -61,6 +61,7 @@
      고르기(select) 중 [data-var] 안을 누르면 그 견본(closest)으로 hd-sel + token('--이름')·tokenKind·label(견본이 보이는 이름)·vars(그 토큰과 글자 줄 짝 --fw/--lh 의 지금 값),
      견본에 고른 테두리(스크롤을 따라감) · 캔버스로 초점(H·V·Ctrl+Z 가 캔버스로). {type:'hd-unpick'} = 테두리 걷기. 토큰을 고른 동안 스크롤 = hd-scroll.
      문서 탭(doc:true 를 받은 뒤)에서 H·V·Esc·Ctrl/Cmd+Z/Y 는 {type:'hd-key', key, ctrl, meta, shift} 로 캔버스에 넘긴다(입력 칸 안은 아님).
+     크게 보기 확대(R57): 어느 화면이든 Ctrl/Cmd+휠 = {type:'hd-wheel', screen, x, y, dy, mode} · Ctrl/Cmd + = + - _ 0 = {type:'hd-key', screen, zoom:true, key, ctrl, meta, shift} (브라우저 배율은 막는다)
      {type:'hd-css-reload', sheet:'tokens'|'components', v} = 그 스타일 파일만 다시 읽는다(저장 뒤) — tokens = #tokens 를 지금 팔레트 주소 + ?v=,
      components = components.css 링크 + ?v=(옛 이름 hd-tokens-reload = tokens). hd-palette 의 slug '@project' = 프로젝트 tokens.css 그대로
    부품 고르기(R55 phase C, Components 탭): [data-var] 가 없고 .spec-stage 가 있는 문서 = 부품 문서(hd-pick-on 의 parts = .spec-stage 수).
@@ -464,6 +465,18 @@
     if (!(mod && !e.altKey && (low === 'z' || low === 'y')) && !(!mod && !e.altKey && (low === 'h' || low === 'v' || k === 'Escape'))) return;
     e.preventDefault();
     send({type: 'hd-key', screen: screenId(), doc: true, key: k, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey});
+  }, true);
+  // 크게 보기 확대(R57 C): 화면 안에서 Ctrl/⌘+휠·Ctrl/⌘ += - 0 은 브라우저 배율이 아니라 캔버스 크게 보기 배율로 — 막고 넘긴다(x·y = 이 화면 CSS px)
+  addEventListener('wheel', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || !window.parent || window.parent === window) return;
+    e.preventDefault();
+    send({type: 'hd-wheel', screen: screenId(), x: e.clientX, y: e.clientY, dy: e.deltaY, mode: e.deltaMode});
+  }, {passive: false, capture: true});
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.isComposing || !window.parent || window.parent === window) return;
+    if (['=', '+', '-', '_', '0'].indexOf(e.key) < 0) return;
+    e.preventDefault();
+    send({type: 'hd-key', screen: screenId(), zoom: true, key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey});
   }, true);
 
   /* ---------- 연결 보기: 다른 화면으로 가는 링크 ---------- */
