@@ -175,6 +175,23 @@
       ]
     },
     {
+      "method": "POST", "path": "/api/verify", "callers": ["hd verify <screen> (hd_sdk Project.verify, V2)"],
+      "request": "{screen}", "response": "publishes event verify.ask {req, screen} and waits up to 10 s for the open canvas page (modules/view-twin.js) to POST /api/verify-result → {status: match|differ|no-pair|error, screen, req, app, count, match, missing, extra, style, unsure, size, capped, ms | why}; no event stream open = {status:'no-canvas', screen, why} at once; no answer in time = {status:'timeout', screen, req, why}",
+      "cases": [
+        {"name": "no canvas page open (no event stream) answers at once", "request": {"method": "POST", "path": "/api/verify", "body": {"screen": "home"}}, "expect": {"status": 200, "json": {"status": {"$eq": "no-canvas"}, "screen": {"$eq": "home"}, "why": "str"}}},
+        {"name": "no screen", "request": {"method": "POST", "path": "/api/verify", "body": {}}, "expect": {"status": 400, "json": {"error": "str"}}},
+        {"name": "no token", "request": {"method": "POST", "path": "/api/verify", "body": {"screen": "home"}, "token": false}, "expect": {"status": 403, "json": {"error": "str"}}}
+      ]
+    },
+    {
+      "method": "POST", "path": "/api/verify-result", "callers": ["modules/view-twin.js (answer to verify.ask, V2)"],
+      "request": "{req, result:{status, …}}", "response": "{taken: bool} — false for an unknown or already answered req (late answer, second tab)",
+      "cases": [
+        {"name": "unknown req is dropped", "request": {"method": "POST", "path": "/api/verify-result", "body": {"req": "nope", "result": {"status": "match"}}}, "expect": {"status": 200, "json": {"taken": {"$eq": false}}}},
+        {"name": "wrong shape", "request": {"method": "POST", "path": "/api/verify-result", "body": {"req": 3}}, "expect": {"status": 400, "json": {"error": "str"}}}
+      ]
+    },
+    {
       "method": "POST", "path": "/api/apply", "callers": ["modules/view-sync.js (Send: direct edits)"],
       "request": "{edits:[{id, screen, edit: text|remove|title|purpose|policies|policy|link|duplicate|move|attr|insert|replace, path?, value?, op?, to?, index?}]} — move: op up|down (swap with a sibling) | op 'to' + to:<int index among element siblings, script/style/template/link/meta skipped> (one write, one undo — 49c drag)",
       "response": "{applied:[id], failed:[{id, reason}], stamp, changed:[screen], history} (stamp null and no history when nothing written)",

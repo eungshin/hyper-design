@@ -85,6 +85,9 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 - 오류(한 줄 · 종료 1): 주소가 아님 · 화면 없음 · 파일 못 읽음 · 경로에 맞는 요소 0개/여럿(파일 경로와 함께). 줄 여럿이면 처음 틀린 줄에서 멈춘다
 - 출력: 줄마다 `<프로젝트> · <화면> · <파일>` / `경로: <경로>|(화면 전체 — 카드)` / HTML, 줄 사이 빈 줄. `--json` → `{items:[{project, screen, path, file, text, tag, html}]}`
 
+## 맞음 검증 (hd verify, V2) — 결과 → 종료 코드 `hd_verify`(Model), 길 `hd_sdk` `Project.verify` → 도우미 `POST /api/verify`
+- `hd verify <화면> [<name|path>]` — 열린 캔버스가 그 화면과 앱 카드(parts.json 짝)를 스크립트로 재서(AI 없음) 결과 JSON + 한 줄. 종료 코드 0 일치 · 1 다름 · 2 검증 못 함(캔버스 안 열림 · 짝 없음 · 10초 넘김 · 도우미 없음). 브라우저를 띄우지 않는다. 규칙·한계 = canvas `contract/twin.md`, 테스트 `test_hd_verify.py`
+
 ## 답 규칙 (tasks/PLAN-2026-10-23.md §3 — task A2 의 캔버스와 같은 계약)
 답 = `{kind, by, at, …칸, detail?}`. AI 종류: `반영됨 {what ≤140, screens ≥1, captured: bool}` · `일부 {done ≤140, left ≤140}` · `대체됨 {where ≤140}` · `답변 {text ≤280}`(질문 메모에만) · `질문 {question ≤140, choices 2–4개 각 ≤40}` · `detail ≤50000` 아무 종류에나(R26 — 긴 답 본문: 요약 칸은 한 줄 상태에 쓰이니 짧게, 전체 답은 detail. 대화 패널 답 줄 = 요약 + 빈 줄 + detail 전체 · 메모 묶음 = 답 줄 아래 전체 · 툴팁 앞 300자. CLI 는 `--detail-file PATH|-`(UTF-8, CRLF→LF) — Windows 명령줄 약 32000자 한도) · `by` 1–40자(기본 `agent`). `보류` 없음(미루려면 질문). 사람 종류 `확인`·`다시` 는 캔버스만 — `hd`/도우미는 400. 모르는 칸도 400. 실패한 칸마다 한 줄 이유.
 보내지 않은 메모(draft)에는 답하지 않는다(400).
