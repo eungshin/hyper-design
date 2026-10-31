@@ -42,6 +42,7 @@ python $SK/features/hd/hd.py home --shortcut [--desktop DIR]     # 바탕 화면
 
 ## 썸네일
 헤드리스 Edge(없으면 Chrome) `--headless=new --screenshot --window-size=1260,780 --virtual-time-budget=6000 --hide-scrollbars` 로 `<out>/index.html`(file://). 낡음 = 그림 없음 또는 max(`.hd-canvas.json`, `index.html` mtime) 보다 오래됨(`home_model.thumb_stale`), 없어진 out·index.html 없음은 건너뜀. 한 번에 하나, 같은 이름은 한 번만 줄 섬, 요청을 막지 않음. 실패는 `[hd]` 한 줄(다음 예약 때 다시). 브라우저 없음 = 그림 없음(한 번 알림). 한 장 약 20초.
+그림이 아직 없을 때(첫 목록 — 허브가 뒤에서 한 장씩 찍는 동안 · 브라우저 없음 · 그림을 못 불러옴) 홈 카드와 캔버스 프로젝트 고르기 창은 빈 상자 대신 제목 첫 글자를 보인다(U3 F20 10-31 — 규칙 `home-model.initial` · 캔버스 `HD.projects.initial` 같은 뜻: 처음 나오는 글자·숫자, 영문 대문자, 없으면 첫 글자, 빈 글 '?'). 새로 찍힌 그림은 목록을 다시 받을 때(새로고침·구역 바꾸기) 보인다.
 
 ## 바로 가기
 `<Desktop>/Hyper Design.lnk`(Desktop = `[Environment]::GetFolderPath('Desktop')`) → `pythonw.exe`(sys.executable 옆, 없으면 python.exe) `"<hd.py>" home`, 작업 폴더 HD_HOME, 아이콘 `<HD_HOME>/hd.ico`(256px PNG 를 담은 ICO, 캔버스 "hd" 배지 모양 — 표준 라이브러리로 그림). 아이콘을 못 만들면 `[hd]` 한 줄 + 아이콘 없이. .lnk 는 PowerShell `WScript.Shell`.

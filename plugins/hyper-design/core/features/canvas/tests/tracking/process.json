@@ -1286,6 +1286,33 @@
         "test_drag_whose_async_build_fails_puts_the_order_back"
       ],
       "note": "화면 쪽 약속(dataset.hdState·window.hdGoto)은 contract/memo-state.md — 하네스 스킬에는 아직 없음"
+    },
+    {
+      "slice": "ux-u3-small: 화면 경험 작은 것들 — 연결 칸 고정 높이(F7) · 손 꼬리말(F9) · 메모 지우기 토스트 공용 쪽(F14) · 묶음 창 도구 막대 피하기 popSide.under(F6) · Ctrl+Z 이번 세션만(F15) · 홈 기다림 토스트(F17) · 썸네일 첫 글자(F20) · #vbtn 빼기(F11) · Foundation 문장(F8)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 2,
+        "minutes": 35
+      },
+      "gate": {
+        "checks": 1,
+        "sec": 5,
+        "fired": []
+      },
+      "caught": [
+        {
+          "by": "unit",
+          "what": "F11 테스트가 클래스 .vbtn 까지 막음 — id 참조만 보게 고침"
+        }
+      ],
+      "waste": "다른 세션 실행이 잠금을 쥐어 첫 최종 실행이 시간 제한으로 끊김 — 바깥 timeout 을 잠금 대기까지 넉넉히",
+      "flaky": [
+        "test_drag_whose_async_build_fails_puts_the_order_back",
+        "test_helper_canvas_busy_chip_never_hides_screen"
+      ],
+      "note": "F14·F6 은 U1 파일(view-memo-pop·view-thread)에 부르는 줄이 필요 — 합칠 때 넣고 test_canvas_ux_small 의 xfail 을 뺀다. F12(#aibtn)는 결정이 맞지 않아 보고만"
     }
   ]
 }

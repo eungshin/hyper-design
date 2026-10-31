@@ -268,7 +268,7 @@ def build_foundation(out):
 <title>Foundation — 색·글자·여백</title>
 <link id="tokens" rel="stylesheet" href="tokens.css"><script src="palette.js"></script>
 <style>{FOUNDATION_CSS}</style></head><body><div class="wrap">
-<h1>Foundation</h1><p class="lead">이 앱의 모든 화면이 쓰는 색·글자·여백. 위의 색 점을 누르면 여기도 바로 바뀌어요.</p>
+<h1>Foundation</h1><p class="lead">이 앱의 모든 화면이 쓰는 색·글자·여백.</p>
 {"".join(parts)}
 </div><script>{FOUNDATION_JS}</script></body></html>"""
     (out / "foundation.html").write_text(doc, encoding="utf-8")

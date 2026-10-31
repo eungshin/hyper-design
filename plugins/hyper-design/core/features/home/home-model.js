@@ -136,7 +136,12 @@
 
   function validSection(s) { return SECTIONS.indexOf(s) >= 0 ? s : 'recent'; }
 
-  root.HDHomeModel = {
+  function initial(title) {                           // 썸네일 자리 표시 글자(F20): 처음 나오는 글자·숫자(영문은 대문자) · 없으면 첫 글자 · 빈 글 = '?'
+    var t = typeof title === 'string' ? title.trim() : '', m = /[\p{L}\p{N}]/u.exec(t);
+    return m ? m[0].toUpperCase() : (Array.from(t)[0] || '?');
+  }
+
+  root.HDHomeModel = {initial: initial,
     SECTIONS: SECTIONS, LABEL: LABEL, normalize: normalize, row: row, section: section, search: search, view: view,
     relTime: relTime, move: move, menu: menu, newTitle: newTitle, renameValue: renameValue, empty: empty, validSection: validSection
   };

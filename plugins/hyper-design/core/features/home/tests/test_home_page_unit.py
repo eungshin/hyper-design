@@ -48,6 +48,7 @@ out.newTitle = [M.newTitle([]), M.newTitle([{title: '새 프로젝트 1'}, {titl
 out.rename = [M.renameValue('  새 이름 ', '옛'), M.renameValue('옛', '옛'), M.renameValue('   ', '옛'), M.renameValue(null, '옛')];
 out.empty = [M.empty('recent', ''), M.empty('trash', ' '), M.empty('all', ' 결제 '), M.empty('starred')];
 out.sv = [M.validSection('trash'), M.validSection('nope'), M.validSection(null)];
+out.ini = [M.initial('laundry-v1'), M.initial('  감마 앱'), M.initial('(새) 결제'), M.initial(''), M.initial(null), M.initial('---')];
 console.log(JSON.stringify(out));
 """
 
@@ -116,3 +117,8 @@ def test_new_title_rename_empty_section(out):
     e = out["empty"]
     assert e[0] == "최근에 연 프로젝트가 없어요" and e[1] == "휴지통이 비었어요" and e[2] == "‘결제’와 맞는 프로젝트가 없어요" and "별표" in e[3]
     assert out["sv"] == ["trash", "recent", "recent"], "모르는 구역 = 최근 항목"
+
+
+def test_placeholder_initial_letter(out):
+    """F20(10-31): 썸네일이 아직 없으면 빈 상자 대신 이름 첫 글자 — 영문은 대문자, 앞 공백·문장 부호는 건너뜀, 글자가 없으면 '?'."""
+    assert out["ini"] == ["L", "감", "새", "?", "?", "-"]

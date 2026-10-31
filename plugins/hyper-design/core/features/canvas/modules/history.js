@@ -1,15 +1,16 @@
 /* ViewModel — 기록 시간줄 하나(E2·E8): 한 일을 순서대로, 어디까지 했는지(at), 어디부터 되돌릴 수 없는지(lock)와 그 까닭, 줄마다 되돌릴 상태 차이(d). DOM·저장소를 쓰지 않는다.
-   상태 {rows:[{label, status, at, op?, d?, cut?, old?}], at, lock}
+   상태 {rows:[{label, status, at, op?, d?, cut?, old?}], at, lock, from}
      rows   : 한 일. status = canvas(화면에만) · pending(반영 대기) · sent(AI 에 보냄) · file(파일에 씀). op = {undo(), redo()} — 이번 세션 것만(있으면 이것을 쓴다)
               d = 상태 차이 {이름: {k, e}} — 새로고침 뒤에도 되돌리고 다시 할 수 있는 데이터(TRACK 이름만). cut = 이 줄 뒤에 보냄('sent')·파일에 씀('file') 경계
               old = 크기 한도로 d 를 버린 줄
      at     : 해 둔 줄 수(rows[0..at-1] = 한 것, 나머지 = 되돌린 것 — 다시 하기)
      lock   : 이 앞(rows[0..lock-1])으로는 되돌릴 수 없다 — 줄에서 계산: cut·보낸 줄·되돌릴 데이터가 없는 줄(op 도 d 도 없음, 파일에 쓴 줄은 op 만) 중 마지막 다음
+     from   : 이번 세션이 시작한 줄 수(rows[0..from-1] = 지난 세션 줄) — Ctrl+Z·버튼(canUndo)은 이 앞으로 가지 않는다(F15, 지난 세션 줄은 기록 패널 go 로만)
    차이(d): k = obj(키마다) · ids(id 가진 것들의 배열 — 메모, [전, 후, 전 자리, 후 자리]) · set(글자·수 배열 — 숨김·잠금, [전 있음, 후 있음, 전 자리, 후 자리, 값]) · val(통째로 [전, 후])
    의도 → 새 상태(원래 상태는 건드리지 않음):
      record{row}  새 줄(되돌린 줄은 버림)      go{to}  at = to(lock..rows.length 안으로)
      sent         해 둔 반영 대기 줄 = AI 에 보냄, 경계 = at      applied  해 둔 반영 대기 줄 = 파일에 씀, 경계 = at
-   HD.history = {initial(saved), reduce, steps(s, to) → {undo:[row…], redo:[row…]}, canUndo, canRedo, saved(s) → 남길 줄(되돌린 줄 뺌, d 는 새것부터 MAX_BYTES 까지),
+   HD.history = {initial(saved), reduce, steps(s, to) → {undo:[row…], redo:[row…]}, canUndo(s) → Ctrl+Z 가 되나(이번 세션 줄만), undoWhy(s) → 안 되는 까닭 | null, canRedo, saved(s) → 남길 줄(되돌린 줄 뺌, d 는 새것부터 MAX_BYTES 까지),
                  diff(전 값들, 후 값들) → d | null, patch(값들, d, 'before'|'after') → {이름: 새 값}, why(s) → 'sent'|'file'|'old'|'live'|null, REASON, TRACK, STATUS, KEEP, MAX_BYTES} */
 (function () {
 'use strict';
@@ -18,7 +19,8 @@ var KEEP = 200, MAX_BYTES = 1000000;
 var STATUS = {canvas: '화면에만', pending: '반영 대기', sent: 'AI에 보냄', file: '파일에 씀'};
 var TRACK = ['notes', 'card-pos', 'link-names', 'hidden', 'locked', 'folders', 'card-size', 'board-notes', 'board-links'];   // board-links = 판 메모 선(R47) · 되돌릴 상태 이름(state-file NAMES 중) — edit-log(기록 자신)·busy(AI 작업 표시)·note-seq(번호는 다시 쓰지 않음)는 뺀다
 var REASON = {sent: 'AI에 보낸 일이라 되돌릴 수 없어요', file: '파일에 쓴 일이라 되돌릴 수 없어요',
-              old: '너무 오래된 일이라 되돌릴 수 없어요', live: '다시 열기 전에 한 화면 설정 일이라 되돌릴 수 없어요'};
+              old: '너무 오래된 일이라 되돌릴 수 없어요', live: '다시 열기 전에 한 화면 설정 일이라 되돌릴 수 없어요',
+              past: '지난 세션에 한 일은 기록 패널에서 되돌려요'};
 var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
 function same(a, b) { return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b); }
@@ -135,7 +137,7 @@ function initial(saved) {                            // 지난 세션 줄 — d 
     if (r.old) o.old = 1;
     return o;
   });
-  return {rows: rows, at: rows.length, lock: lockOf(rows)};
+  return {rows: rows, at: rows.length, lock: lockOf(rows), from: rows.length};
 }
 function copyRow(r, patchObj) { var o = {}; for (var k in r) if (has(r, k)) o[k] = r[k]; for (k in patchObj) o[k] = patchObj[k]; return o; }
 function mark(s, from, to) {
@@ -145,18 +147,18 @@ function mark(s, from, to) {
     if (i === s.at - 1) p.cut = to === 'sent' ? 'sent' : 'file';
     return Object.keys(p).length ? copyRow(r, p) : r;
   });
-  return {rows: rows, at: s.at, lock: lockOf(rows)};
+  return {rows: rows, at: s.at, lock: lockOf(rows), from: s.from | 0};
 }
 function reduce(s, a) {
   if (!a) return s;
   switch (a.type) {
     case 'record':
-      var rows = s.rows.slice(0, s.at).concat([a.row]), at = rows.length;
-      if (rows.length > KEEP) { var cut = rows.length - KEEP; rows = rows.slice(cut); at -= cut; }
-      return {rows: rows, at: at, lock: lockOf(rows)};
+      var rows = s.rows.slice(0, s.at).concat([a.row]), at = rows.length, from = Math.min(s.from | 0, s.at);   // 기록 패널로 지난 줄까지 간 뒤 새로 한 일 = 그 일부터 이번 세션
+      if (rows.length > KEEP) { var cut = rows.length - KEEP; rows = rows.slice(cut); at -= cut; from = Math.max(0, from - cut); }
+      return {rows: rows, at: at, lock: lockOf(rows), from: from};
     case 'go':
       var to = Math.max(s.lock, Math.min(s.rows.length, a.to | 0));
-      return to === s.at ? s : {rows: s.rows, at: to, lock: s.lock};
+      return to === s.at ? s : {rows: s.rows, at: to, lock: s.lock, from: s.from | 0};
     case 'sent': return mark(s, 'pending', 'sent');
     case 'applied': return mark(s, 'pending', 'file');
   }
@@ -167,7 +169,8 @@ function steps(s, to) {
   to = Math.max(s.lock, Math.min(s.rows.length, to | 0));
   return {undo: to < s.at ? s.rows.slice(to, s.at).reverse() : [], redo: to > s.at ? s.rows.slice(s.at, to) : []};
 }
-function canUndo(s) { return s.at > s.lock; }
+function canUndo(s) { return s.at > Math.max(s.lock, s.from | 0); }   // Ctrl+Z·버튼 — 지난 세션 줄은 기록 패널(go)에서만(F15)
+function undoWhy(s) { if (canUndo(s)) return null; return s.at > s.lock ? 'past' : why(s); }
 function canRedo(s) { return s.at < s.rows.length; }
 function saved(s) {                                  // 되돌린 줄은 남기지 않는다 · d 는 새것부터 MAX_BYTES 까지, 넘으면 옛 줄의 d 를 버리고 old
   var rows = s.rows.slice(0, s.at), out = new Array(rows.length), bytes = 0;
@@ -183,6 +186,6 @@ function saved(s) {                                  // 되돌린 줄은 남기�
   return out;
 }
 
-HD.history = {initial: initial, reduce: reduce, steps: steps, canUndo: canUndo, canRedo: canRedo, saved: saved, diff: diff, patch: patch, why: why,
+HD.history = {initial: initial, reduce: reduce, steps: steps, canUndo: canUndo, undoWhy: undoWhy, canRedo: canRedo, saved: saved, diff: diff, patch: patch, why: why,
               REASON: REASON, TRACK: TRACK, STATUS: STATUS, KEEP: KEEP, MAX_BYTES: MAX_BYTES};
 })();

@@ -27,6 +27,7 @@ out.notList = [P.rows({error: 'x'}, null), P.rows(null, null)];
 out.noCur = P.rows(body.slice(0, 2), null).rows.map(r => r.current);
 out.keys = [P.key('C:\\A\\b\\'), P.key('/Home/X/'), P.key('C:/'), P.key('c:')];
 out.when = [P.when(null), P.when(''), P.when('2026-01-02 03:04:05'), P.when('어제')];
+out.ini = [P.initial('laundry-v1'), P.initial('  감마 앱'), P.initial('(새) 결제'), P.initial(''), P.initial(null)];
 console.log(JSON.stringify(out));
 """
 
@@ -144,3 +145,8 @@ def test_new_project_default_name(out2):
 def test_header_title_without_project_row(out2):
     assert out2["shown"] == ["세탁 앱", "laundry-v1", "gym", "r", "", "dayfine"], \
         "manifest 제목이 있으면 그것 · 옛 기본 문구('전체 화면 한눈에 보기')나 빈 값이면 폴더 이름(out 이면 그 위)"
+
+
+def test_placeholder_initial_letter(out):
+    """F20(10-31): 고르기 창 썸네일이 없으면 빈 상자 대신 이름 첫 글자(홈 화면과 같은 규칙)."""
+    assert out["ini"] == ["L", "감", "새", "?", "?"]
