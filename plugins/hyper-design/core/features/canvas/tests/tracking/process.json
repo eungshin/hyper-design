@@ -1245,6 +1245,47 @@
       "waste": "테마 미리 보기가 늘 팔레트 파일(tokens-<slug>.css)이라 tokens.css 저장이 안 보이는 것을 늦게 알아챔 — '@project' 를 더함",
       "flaky": [],
       "note": "phase C(컴포넌트)는 readPick·fields 의 종류로 더한다"
+    },
+    {
+      "slice": "memo-state: 움직이는 화면(안내 단계) 메모 — 단계가 바뀌면 점선·번호 숨김, 칩 줄 번호로 그 단계 가기(hdGoto · 클릭 다시 하기)",
+      "commit": "(이 커밋)",
+      "numbered": false,
+      "tests": {
+        "full": 0,
+        "area": 1,
+        "minutes": 16
+      },
+      "gate": {
+        "checks": 1,
+        "sec": 3,
+        "fired": [
+          {
+            "rule": "purity",
+            "real": true,
+            "what": "Model 머리 주석의 window.hdGoto 글자"
+          }
+        ]
+      },
+      "caught": [
+        {
+          "by": "browser",
+          "what": "단계 값만 보던 판 카드: 화면이 시작 전(hdState 없음)이면 '모름'으로 봐 점선이 남음 — null = 다름"
+        },
+        {
+          "by": "browser",
+          "what": "클릭 없이 처음 실린 화면에 단 메모까지 상태를 적어 파일 글 바뀜이 '요소를 찾을 수 없음' 대신 칩이 됨 — 단계 값·클릭 없으면 view 를 적지 않음"
+        },
+        {
+          "by": "eye",
+          "what": "미리보기가 크게 보기 닫기 단추를 가리고 칩이 닫기 옆 — 칩은 제목 뒤, 미리보기는 칩 줄 아래"
+        }
+      ],
+      "waste": "다른 세션이 테스트 잠금을 쥐어 -n 3 실행이 10분 기다리다 끝남(타임아웃) — 잠금 주인 먼저 볼 것",
+      "flaky": [
+        "test_async_apply_whose_build_fails_reverts_the_optimistic_change",
+        "test_drag_whose_async_build_fails_puts_the_order_back"
+      ],
+      "note": "화면 쪽 약속(dataset.hdState·window.hdGoto)은 contract/memo-state.md — 하네스 스킬에는 아직 없음"
     }
   ]
 }

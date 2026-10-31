@@ -1206,7 +1206,7 @@ var MP = HD.viewMemoPop.mount({$: $, $$: $$, esc: esc, notes: NS, save: function
   title: function (id) { return titleOf(id); }, modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, box: mbox, picking: picking, frame: mframe}; },
   setScreen: function (id) { mscreen = id; }, frame: function () { return PP; }, cardEl: function (id) { return VL ? VL.cardEl(id) : null; },
   pins: function () { drawPins(); }, focusPin: function (id) { if (PN) PN.focus(id); }});
-function drawPins() { if (PN) PN.paint(); if (ML) ML.paint(); }           // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js)
+function drawPins() { if (PN) PN.paint(); if (ML) ML.paint(); if (MS) MS.render(); }   // 크게 보기 핀 · 고른 요소 테두리(modules/view-pins.js) · 다른 단계 메모 칩(view-memo-state)
 var VN = HD.viewNotes.mount({$: $, $$: $$, esc: esc, rowsEl: rowsEl, circled: circled, title: function (id) { return titleOf(id); },   // 메모·반영 대기 목록(E5) · 결정 필요(#232)
                              del: MP.del, edit: MP.edit, showNotes: function () { if (VD) VD.activate('notes'); },
                              storage: localStorage, key: function (prefix) { return prefix + ':' + hashStr(KEYPATH); },   // 보낸 메모 보기 켜짐(#263 — 셸이 저장소·키를 건넨다)
@@ -1223,8 +1223,13 @@ var PN = HD.viewPins.mount({rowsEl: rowsEl, mpins: $('#mpins'), $: $, $$: $$, es
   cardEl: function (id) { return VL.cardEl(id); },
   modal: function () { return {open: !modal.hidden, screen: mscreen, scale: mscale, frame: mframe, draft: MP.draft()}; },
   openThread: function (id, no, el) { TH.open(id, el, no); }, showSent: function () { return VN.showSent(); },
-  changed: function () { TH.refresh(); VN.relost(); }});
+  changed: function (id) { TH.refresh(); VN.relost(); if (MS) MS.render(id); }});
 PN.zoom(z);
+// 다른 단계에 단 메모의 칩 줄(modules/view-memo-state.js) — 판 카드 위쪽 빈 줄·크게 보기 머리 줄, 누르면 그 단계로
+var MS = HD.viewMemoState.mount({rowsEl: rowsEl, mbar: $('#mwin .mbar'), esc: esc, away: function (id, m) { return PN.away(id, m); }, cardEl: function (id) { return VL.cardEl(id); },
+  modal: function () { return {open: !modal.hidden, screen: mscreen, frame: mframe}; },
+  frameOf: function (id) { var c = VL.cardEl(id); return c ? c.querySelector('.phone iframe') : null; }, toast: function (m) { toast(m); },
+  select: function (id, no, inModal, pin) { if (!inModal) PN.focus(id); TH.open(id, pin, no); }});
 function renderNotes(ids) {                          // ids = 메모가 바뀐 화면(NS.commit) — 그 카드만 다시 그린다 · 없으면 전부(처음)
   VN.render(NS.list(), ids);
   if (VD) VD.render();                             // 탭 숫자만 — 사용자가 고른 탭은 바꾸지 않는다(10-24 피드백, D3 의 '탭을 앞으로'를 바꿈)

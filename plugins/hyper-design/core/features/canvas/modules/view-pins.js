@@ -7,15 +7,17 @@
      숨김이 될 메모의 핀은 켜졌을 때 흐리게(.nhid). 켜짐이 바뀌면 셸이 render() 를 부른다 = 다시 그리고 자리를 다시 묻는다(#263).
    요소를 찾을 수 없음(#285): 답이 how 'none'(같은 요소가 여럿·없음)인 대상은 핀 없음 — lost(n)(HD.relocate.lost)로 메모 목록·묶음 줄이 알린다.
    핀 누르기 = ctx.openThread(화면 id, no, 핀) — 카드 고르기·끌기로 가지 않는다.
-   HD.viewPins.mount(ctx) → {locate(id, frame), locateModal(), render(ids?), paint(), zoom(z), focus(id|null), highlight(id, no|null), lost(n)}
+   움직이는 화면(memo-state): 답의 view.hd·항목 now 를 자리와 함께 들고, 메모를 단 때 상태(n.view)와 지금이 다르면(HD.memoState.same) 그 메모의 점선·핀을 그리지 않는다.
+     그런 메모는 away(id, modal) 로 내주고(칩 줄 = view-memo-state), 요소를 찾을 수 없음(lost)도 아니다. 상태가 있는 메모는 크게 보기에서 답이 오기 전엔 저장한 rect 로 그리지 않는다.
+   HD.viewPins.mount(ctx) → {locate(id, frame), locateModal(), render(ids?), paint(), zoom(z), focus(id|null), highlight(id, no|null), lost(n), away(id, modal) → [메모]}
    ctx = {rowsEl, mpins, $, $$, esc, CARD, list() → 메모 전부, cardEl(id), modal() → {open, screen, scale, frame, draft}, openThread(id, no, el), showSent() → 켜짐, changed(id)?} */
 (function () {
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 
 function mount(ctx) {
-  var A = HD.annotation, T = HD.notes.targets, L = HD.relocate, esc = ctx.esc;
-  var located = {}, mloc = {screen: null, items: {}}, asked = [], focused = null;
+  var A = HD.annotation, T = HD.notes.targets, L = HD.relocate, MS = HD.memoState, esc = ctx.esc;
+  var located = {}, hds = {}, mloc = {screen: null, items: {}, hd: null}, asked = [], focused = null;   // hds = 판 카드마다 화면이 알린 단계 값(memo-state)
 
   function key(n, i) { return L.key(n.id, i); }
   function shows(n) { return A.visible(n, ctx.showSent()); }   // 보일 메모(task 29) — 꺼짐이면 working·done 빠짐
@@ -47,12 +49,18 @@ function mount(ctx) {
     var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-located' || !Array.isArray(d.items)) return;
     var a = asked.filter(function (x) { return x.win === e.source; })[0]; if (!a) return;
     var map = {};
-    d.items.forEach(function (it) { if (it && it.key) map[it.key] = {rect: it.rect || null, how: it.how || 'none'}; });
-    if (a.slot === 'modal') { mloc = {screen: a.id, items: map}; paint(); }
-    else { located[a.id] = map; draw(a.id); }
+    d.items.forEach(function (it) { if (it && it.key) map[it.key] = {rect: it.rect || null, how: it.how || 'none', now: it.now || null}; });
+    var hd = d.view && typeof d.view === 'object' ? d.view.hd : undefined;   // undefined = 옛 palette(모름)
+    if (a.slot === 'modal') { mloc = {screen: a.id, items: map, hd: hd}; paint(); }
+    else { located[a.id] = map; hds[a.id] = hd; draw(a.id); }
     if (ctx.changed) ctx.changed(a.id);
   });
 
+  function nowAt(id, modal) {                       // 그 자리(판 카드 · 크게 보기)의 지금 상태 — 답이 없으면 null
+    if (modal) return mloc.screen === id ? {hd: mloc.hd, items: mloc.items} : null;
+    return located[id] ? {hd: hds[id], items: located[id]} : null;
+  }
+  function isAway(n, modal) { return !MS.same(n, nowAt(n.screen, modal)); }
   function phoneOf(id) { var c = ctx.cardEl(id); return c && !c.classList.contains('draft') ? ctx.$('.phone', c) : null; }
   function loaded(ph) { var f = ph && ctx.$('iframe', ph); return !!f && !f.hasAttribute('data-src') && !!f.getAttribute('src'); }
   function scaleOf(ph) { var c = ph.closest('.card'), w = c && ctx.sizeOf ? ctx.sizeOf(c.dataset.id).w : ctx.CARD.w; return ph.offsetWidth / w || 1; }   // 그 카드 폭 기준(task 46)
@@ -63,7 +71,7 @@ function mount(ctx) {
     if (map && loaded(ph)) {
       var s = scaleOf(ph);
       boardMemos(id).forEach(function (n) {
-        if (!shows(n)) return;
+        if (!shows(n) || isAway(n, false)) return;    // 다른 단계에서 단 메모 = 칩 줄로(memo-state)
         var st = A.status(n);
         T(n).forEach(function (t, i) {
           var at = map[key(n, i)]; if (!pinnable(t) || !at || !at.rect) return;
@@ -92,9 +100,9 @@ function mount(ctx) {
     if (m.open && m.screen) {
       var mine = mloc.screen === m.screen ? mloc.items : {};
       ctx.list().forEach(function (n) {
-        if (n.screen !== m.screen || !shows(n)) return;
+        if (n.screen !== m.screen || !shows(n) || isAway(n, true)) return;   // 다른 단계에서 단 메모 = 칩 줄로(memo-state)
         T(n).forEach(function (t, i) {
-          var at = mine[key(n, i)], r = at ? at.rect : t.rect; if (!r) return;
+          var at = mine[key(n, i)], r = at ? at.rect : n.view ? null : t.rect; if (!r) return;   // 상태가 있는 메모는 답을 기다린다(다른 단계일 수 있다)
           h += '<div class="pin-box' + dim(n) + '" data-no="' + n.no + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px;width:' + (r.w * s) + 'px;height:' + (r.h * s) + 'px"></div>' +
             '<button type="button" class="pin' + dim(n) + '" data-id="' + esc(n.id) + '" data-n="' + n.no + '" data-no="' + n.no + '" data-st="' + A.status(n) + '" style="left:' + (r.x * s) + 'px;top:' + (r.y * s) + 'px">' + n.no + '</button>';
         });
@@ -141,8 +149,15 @@ function mount(ctx) {
     var m = ctx.modal();
     if (m.open && m.screen === id) ctx.$$('[data-no="' + no + '"]', ctx.mpins).forEach(function (b) { b.classList.add('hi'); });
   }
-  function lost(n) {                                 // 다시 찾지 못한 대상이 있나(판 카드 답, 없으면 크게 보기 답)
+  function lost(n) {                                 // 다시 찾지 못한 대상이 있나(판 카드 답, 없으면 크게 보기 답) — 다른 단계에서 단 메모는 잃은 것이 아니다
+    var board = !!located[n.screen];
+    if (isAway(n, !board)) return false;
     return L.lost(n.id, T(n), located[n.screen] || (mloc.screen === n.screen ? mloc.items : null));
+  }
+  function away(id, modal) {                         // 그 자리에서 지금 단계가 달라 점선·핀을 그리지 않는 메모(보일 메모 · 핀이 될 대상이 있는 것)
+    return ctx.list().filter(function (n) {
+      return n.screen === id && !n.edit && n.view && shows(n) && T(n).some(pinnable) && isAway(n, !!modal);
+    });
   }
 
   function pinOf(e) { var p = e.target.closest ? e.target.closest('.npin, #mpins .pin') : null; return p; }
@@ -156,7 +171,7 @@ function mount(ctx) {
     ctx.rowsEl.addEventListener(n, function (e) { if (pinOf(e)) e.stopPropagation(); });   // 판 끌기·카드 옮기기·크게 보기로 가지 않게
   });
 
-  return {locate: locate, locateModal: locateModal, render: render, paint: paint, zoom: zoom, focus: focus, highlight: highlight, lost: lost};
+  return {locate: locate, locateModal: locateModal, render: render, paint: paint, zoom: zoom, focus: focus, highlight: highlight, lost: lost, away: away};
 }
 
 HD.viewPins = {mount: mount};
