@@ -77,6 +77,7 @@ def release_post(out, body):
 
 WATCH_EVERY = 1.0
 TOKENS = "@tokens"                                   # /api/files 바뀐 목록의 토큰 파일 줄(R55)
+SHEETS = ((TOKENS, "tokens.css"), ("@components", "components.css"))   # 화면 id 가 아닌 공용 스타일 파일 줄(R55 phase C)
 
 
 
@@ -114,7 +115,7 @@ class FileWatch:
 
 
 def scan(out, cache):
-    """screens.json 에 적힌 화면 파일(out 안만) + '@tokens'(out/tokens.css, R55) → {화면: mtime|None} | None(screens.json 을 못 읽음 — [hd] 한 줄). cache = {'sj': (mtime, files)} — screens.json 이 바뀔 때만 다시 읽는다."""
+    """screens.json 에 적힌 화면 파일(out 안만) + '@tokens'·'@components'(out/tokens.css·components.css, R55) → {화면: mtime|None} | None(screens.json 을 못 읽음 — [hd] 한 줄). cache = {'sj': (mtime, files)} — screens.json 이 바뀔 때만 다시 읽는다."""
     out = pathlib.Path(out)
     sj = out / "screens.json"
     try:
@@ -134,11 +135,12 @@ def scan(out, cache):
             res[sid] = _newest(out, p, cache) if _inside(out, p) and p.is_file() else None
         except (OSError, ValueError):
             res[sid] = None
-    tok = out / "tokens.css"                          # R55 — 토큰 파일은 자기 줄 '@tokens'(화면 id 가 아님): 캔버스가 Foundation·DS 카드 토큰만 다시 읽는다
-    try:
-        res[TOKENS] = tok.stat().st_mtime if tok.is_file() else None
-    except OSError:
-        res[TOKENS] = None
+    for key, name in SHEETS:                          # R55 — 공용 스타일 파일은 자기 줄 '@tokens'·'@components'(화면 id 가 아님): 캔버스가 모든 틀의 그 스타일만 다시 읽는다
+        f = out / name
+        try:
+            res[key] = f.stat().st_mtime if f.is_file() else None
+        except OSError:
+            res[key] = None
     return res
 
 
@@ -230,7 +232,7 @@ class Busy:
                     if changed:
                         EV.emit(self.bus, "screen.written", screens=changed, by="ai", rev=self.watch.seq, stamp=None)
                     for sid in changed:
-                        if self.ai is not None and sid != TOKENS:   # AI 되돌리기 줄은 화면마다(토큰 파일은 아님)
+                        if self.ai is not None and not sid.startswith("@"):   # AI 되돌리기 줄은 화면마다(토큰 파일은 아님)
                             self._ai(sid, self.ai.seen)
 
     def _ai(self, sid, fn):

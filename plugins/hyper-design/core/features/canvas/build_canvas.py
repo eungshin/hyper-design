@@ -106,26 +106,8 @@ def build_index(out, m):
 
 
 # ---------------------------------------------------------------- foundation.html
-COLOR_GROUPS = [("bg", "배경"), ("text", "글자"), ("brand", "브랜드"), ("sem", "의미색 — 성공 · 주의 · 정보 · 오류"), ("etc", "선 · 그림자 · 기타")]
-COLOR_NAMES = {   # 토큰 → (묶음, 쉬운 이름). 표에 없는 변수는 변수 이름 그대로 '기타'에.
-    "--c-bg": ("bg", "화면 바탕"), "--c-surface": ("bg", "블록 바탕"), "--c-surface-2": ("bg", "한 단계 깊은 바탕"),
-    "--c-disabled-bg": ("bg", "못 누르는 칸 바탕"), "--c-overlay": ("bg", "뒤를 가리는 막"),
-    "--c-text": ("text", "본문 글자"), "--c-text-1": ("text", "제목·본문 글자"), "--c-text-2": ("text", "보조 글자"),
-    "--c-text-3": ("text", "흐린 설명 글자"), "--c-text-disabled": ("text", "못 누르는 글자"),
-    "--c-brand": ("brand", "버튼·강조 색"), "--c-on-brand": ("brand", "버튼 위 글자"), "--c-brand-text": ("brand", "강조 글자"),
-    "--c-brand-tint": ("brand", "연한 강조 바탕"), "--c-brand-tint-text": ("brand", "연한 강조 위 글자"),
-    "--c-brand-pressed": ("brand", "눌렀을 때 버튼 색"), "--c-focus": ("brand", "고른 칸 테두리"),
-    "--c-success": ("sem", "성공 색"), "--c-success-tint": ("sem", "성공 연한 바탕"), "--c-success-tint-text": ("sem", "성공 바탕 위 글자"),
-    "--c-warning": ("sem", "주의 색"), "--c-warning-tint": ("sem", "주의 연한 바탕"), "--c-warning-tint-text": ("sem", "주의 바탕 위 글자"),
-    "--c-info": ("sem", "정보 색"), "--c-info-tint": ("sem", "정보 연한 바탕"), "--c-info-tint-text": ("sem", "정보 바탕 위 글자"),
-    "--c-danger": ("sem", "오류 색"), "--c-danger-tint": ("sem", "오류 연한 바탕"), "--c-danger-tint-text": ("sem", "오류 바탕 위 글자"),
-    "--c-line": ("etc", "구분선"), "--c-line-strong": ("etc", "진한 테두리"), "--c-shadow": ("etc", "그림자 색"),
-}
-FS_NAMES = {"title": "큰 제목", "h2": "블록 제목", "body": "본문", "strong": "강조 본문", "sub": "보조 글", "caption": "작은 글"}
-SPACE_NAMES = {"--stack-s": "작은 간격", "--stack-m": "보통 간격", "--stack-l": "큰 간격", "--page-x": "화면 좌우 여백",
-               "--block-pad": "블록 안쪽 여백", "--block-gap": "블록 사이", "--row-py": "줄 위아래 여백"}
-R_NAMES = {"--r-s": "작은 모서리", "--r-m": "보통 모서리", "--r-l": "큰 모서리", "--r-pill": "알약 모양"}
-SH_NAMES = {"--shadow-1": "약한 그림자", "--shadow-2": "뜬 그림자", "--shadow-3": "가장 뜬 그림자"}
+# 쉬운 이름 표는 token_edit(토큰 Model) 하나에 — 부품 고치기 창(R55 phase C)도 같은 이름을 쓴다
+from token_edit import COLOR_GROUPS, COLOR_NAMES, FS_NAMES, SPACE_NAMES, R_NAMES, SH_NAMES  # noqa: E402
 
 FOUNDATION_CSS = """
 *{box-sizing:border-box} body{margin:0;background:#F6F6F3;color:#1c1c1c;font-family:-apple-system,BlinkMacSystemFont,'Pretendard',sans-serif;word-break:keep-all;padding:24px 24px 64px}
@@ -150,7 +132,7 @@ FOUNDATION_JS = """
     document.querySelectorAll('[data-var]').forEach(function(el){ var v=cs.getPropertyValue(el.getAttribute('data-var')).trim();
       var o=el.querySelector('.val'); if(o) o.textContent=v||'(없음)'; }); }
   var l=document.getElementById('tokens'); if(l) l.addEventListener('load',read);
-  addEventListener('message',function(e){ var t=e.data&&e.data.type; if(t==='hd-palette'||t==='hd-tokens-reload'){ [30,150,500,1200].forEach(function(t){setTimeout(read,t)}); } });
+  addEventListener('message',function(e){ var t=e.data&&e.data.type; if(t==='hd-palette'||t==='hd-tokens-reload'||t==='hd-css-reload'){ [30,150,500,1200].forEach(function(t){setTimeout(read,t)}); } });
   addEventListener('DOMContentLoaded',read); addEventListener('load',read);
 })();
 """

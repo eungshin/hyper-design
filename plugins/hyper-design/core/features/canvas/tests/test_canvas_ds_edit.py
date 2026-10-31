@@ -145,3 +145,88 @@ def test_pick_brand_swatch_change_colour_undo_and_reload(ctx, served):  # noqa: 
     finally:
         pg.close()
     assert not errors, errors
+
+
+# ---- phase C: Components 탭 — 부품 칸은 같은 묶음 토큰만(사용자 결정)
+ACCENT = "rgb(15, 126, 194)"                         # dayfine --c-accent #0F7EC2
+
+
+def comps_css(out):
+    return (out / "components.css").read_text(encoding="utf-8")
+
+
+def components(pg):
+    return next(f for f in pg.frames if f.url.split("?")[0].endswith("/components.html"))
+
+
+def test_pick_primary_button_swap_background_token_undo_and_reload(ctx, served):  # noqa: F811
+    out, srv = served
+    pg = ctx.new_page()
+    errors = []
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        pg.goto(srv.url)
+        pg.wait_for_function("window.__hdReady !== undefined")
+        pg.keyboard.press("0"); pg.wait_for_timeout(300)
+        before = card_button(pg)
+        assert before == "rgb(27, 27, 27)", before
+
+        pg.click('.tab[data-tab="components"]')
+        pg.wait_for_function("() => { const f = document.querySelector('#components iframe.doc'); try { return !!f.contentDocument.querySelector('.spec[data-key=\"btn\"] .btn.primary'); } catch (e) { return false; } }")
+        cd = components(pg)
+        btn = '.spec[data-key="btn"] .spec-stage .btn.primary:not([disabled])'
+        shown = pg.evaluate("[...document.querySelectorAll('#tools .tb')].filter(b => b.offsetWidth).map(b => b.dataset.tool)")
+        assert shown == ["hand", "move"], shown
+
+        cd.click(btn); pg.wait_for_timeout(300)
+        assert pg.locator("#dsInsp").is_hidden(), "손(H) 누르기는 아무것도 열지 않는다"
+
+        pg.keyboard.press("v")
+        cd.click(btn)
+        pg.wait_for_selector("#dsInsp:not([hidden]) .di-tok")
+        assert "버튼" in pg.text_content("#dsInsp .di-title")
+        grp = pg.locator("#dsInsp .di-grp", has=pg.locator('code[title=".btn.primary"]'))
+        row = grp.locator(".di-row", has=pg.locator("label", has_text="배경"))
+        assert row.locator(".di-tok .nm").text_content() == "버튼·강조 색", "배경 = 버튼·강조 색"
+        assert pg.text_content("#dsInsp .di-sec") == "상태"
+        states = pg.eval_on_selector_all("#dsInsp .di-state .di-gh b", "bs => bs.map(b => b.textContent)")
+        assert "누를 때" in states and "못 누를 때" in states, states
+        assert pg.locator("#dsInsp .di-shared").first.is_visible(), "다른 부품도 부르는 규칙 = 함께 바뀌어요"
+        box = pg.locator("#dsInsp").bounding_box()
+        assert box["x"] >= 0 and box["y"] >= 0 and box["x"] + box["width"] <= 1440 and box["y"] + box["height"] <= 1000, "창은 화면 안"
+        assert cd.evaluate("[...document.querySelectorAll('[data-hd-pick]')].some(d => d.style.display === 'block' && d.style.position === 'absolute')"), "고른 부품에 테두리"
+        shot(pg, "c-1-picked-button-inspector.png")
+
+        row.locator(".di-tok").click()
+        pg.wait_for_selector("#dsList:not([hidden])")
+        names = pg.eval_on_selector_all('#dsList [role="option"]', "os => os.map(o => o.dataset.name)")
+        assert names and all(n.startswith("--c-") for n in names), "같은 묶음(색) 토큰만"
+        assert "--c-accent" in names
+        lb = pg.locator("#dsList").bounding_box()
+        assert lb["y"] + lb["height"] <= 1000 and lb["x"] + lb["width"] <= 1440, "목록은 화면 안"
+        shot(pg, "c-2-token-dropdown.png")
+        pg.click('#dsList [role="option"][data-name="--c-accent"]')
+        pg.wait_for_function("() => !document.getElementById('toast').hidden")
+        assert ".btn.primary { background: var(--c-accent);" in comps_css(out), "components.css 그 칸만"
+        assert row.locator(".di-tok .nm").text_content() == "포인트 색"
+        cd.wait_for_function("() => getComputedStyle(document.querySelector('.spec[data-key=\"btn\"] .btn.primary')).backgroundColor === 'rgb(15, 126, 194)'")
+        pg.keyboard.press("Escape")
+        assert pg.locator("#dsInsp").is_hidden()
+
+        pg.click('.tab[data-tab="screens"]')
+        assert card_button(pg, ACCENT) == ACCENT, "판 카드의 주 단추가 새 토큰 색"
+        shot(pg, "c-3-card-after-change.png", card=True)
+
+        pg.keyboard.press("Control+z")
+        assert card_button(pg, before) == before, "Ctrl+Z = 원래 토큰"
+        assert ".btn.primary { background: var(--c-brand);" in comps_css(out)
+        shot(pg, "c-4-card-after-undo.png", card=True)
+        pg.keyboard.press("Control+Shift+z")
+        assert card_button(pg, ACCENT) == ACCENT, "다시 하기"
+
+        pg.reload(); pg.wait_for_function("window.__hdReady !== undefined")
+        pg.keyboard.press("0"); pg.wait_for_timeout(300)
+        assert card_button(pg, ACCENT) == ACCENT, "새로고침해도 저장한 토큰"
+    finally:
+        pg.close()
+    assert not errors, errors
