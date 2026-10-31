@@ -374,6 +374,32 @@ def build_shell_dir(dest, stamp):
     write_if_changed(dest / SKELETON, code_stamp.stamp_page(tpl, stamp))   # 뼈대는 맨 뒤 — 뼈대가 있으면 셸 파일도 있다
 
 
+# 보관(reference) 화면은 원본만(R56) — 설명·출처는 screens.json policies 로. 덧붙인 표시를 찾으면 화면마다 경고 한 줄(빌드는 계속)
+REFERENCE_EXTRAS = (("구현 메모", re.compile(r'data-impl-note|class="impl-note"')), ("캡션 줄", re.compile(r'class="cap"')),
+                    ("창 끝 점선", re.compile(r'id="fold"')))
+
+
+def reference_extras(out, m):
+    """kind "reference" 화면 중 덧붙인 표시가 있는 것 → [(id, [이름…])]. 파일이 없거나 못 읽으면 건너뜀."""
+    found = []
+    for s in m.get("screens") or []:
+        if not isinstance(s, dict) or s.get("kind") != "reference" or not s.get("file"):
+            continue
+        try:
+            src = (pathlib.Path(out) / s["file"]).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        hit = [name for name, pat in REFERENCE_EXTRAS if pat.search(src)]
+        if hit:
+            found.append((str(s.get("id")), hit))
+    return found
+
+
+def warn_reference_extras(out, m):
+    for sid, hit in reference_extras(out, m):
+        print(f"경고: 보관 화면 {sid} 에 {'·'.join(hit)} — 보관 화면은 원본만, 설명·출처는 screens.json 의 policies 로", file=sys.stderr)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit("usage: python3 build_canvas.py <out_dir> | --shell <폴더>")
@@ -390,6 +416,7 @@ def main():
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
     nk = build_components(out, m)
+    warn_reference_extras(out, m)
     print(f"canvas v3: {n} screens, {na} branch arrows, {ng} groups, scale {BD.frame(out)[0]} · foundation {nc} colors · components {nk} sections")
 
 

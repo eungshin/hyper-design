@@ -71,3 +71,4 @@ PACK=<pack 절대경로>
 
 ## 참고
 - 요청문 형식 원본: `$SK/features/canvas/canvas_template.html`의 `requestText` · 수정 에이전트: `plugins/hyper-design/agents/screen-reviser.md` · 설계: `docs/eungshin/tdr-v2.md` 14-3·14-4
+- 보관 화면(screens.json `kind: "reference"` — 지울 옛 화면을 참고용으로 남긴 것)은 원본만 둔다. 구현 메모·캡션 줄·실제 창 끝 점선 같은 설명을 화면 파일에 넣지 않고, 설명·출처는 그 화면의 `policies` 로. 넣으면 `build_canvas.py` 가 화면마다 `경고:` 한 줄(R56)
