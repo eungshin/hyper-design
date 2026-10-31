@@ -102,11 +102,11 @@ def test_copy_address_from_card_and_element_menus_and_ctrl_l(live):
     fr.wait_for_selector("button.pay", state="attached", timeout=5000)
     a, b = _xy(pg, ph, fr, "button.pay"), _xy(pg, ph, fr, "p.lead")
 
-    # 카드 범위 — 카드 메뉴의 주소 복사(10개 이하 그대로)
+    # 카드 범위 — 카드 메뉴의 주소 복사(11개 이하 — R59 접근성 검사)
     pg.mouse.click(a[0], a[1], button="right")
     pg.wait_for_selector('#cmenu:not([hidden]) button[data-act="card-addr"]', timeout=3000)
     acts = pg.evaluate("[...document.querySelectorAll('#cmenu button')].map(b => b.dataset.act)")
-    assert len(acts) <= 10, acts
+    assert len(acts) <= 11, acts                    # R59 접근성 검사 한 줄 더(10 → 11)
     assert pg.locator('#cmenu button[data-act="card-addr"] kbd').inner_text() == "Ctrl+L"
     shot(pg, "card-menu.png")
     pg.click('#cmenu button[data-act="card-addr"]')

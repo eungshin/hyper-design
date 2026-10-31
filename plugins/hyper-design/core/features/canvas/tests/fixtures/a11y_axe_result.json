@@ -1,0 +1,303 @@
+{
+ "_about": "R59 — palette.js hd-a11y 의 실제 답(axe-core 4.14.0, screens/a11y.html: 회색 글·아이콘만 단추·alt 없는 그림·16px 단추 둘). 다시 만들기: r59 dump 스크립트",
+ "screen": "a11y",
+ "result": {
+  "violations": [
+   {
+    "id": "button-name",
+    "impact": "critical",
+    "help": "Buttons must have discernible text",
+    "nodes": [
+     {
+      "impact": "critical",
+      "target": [
+       ".close"
+      ],
+      "any": [
+       {
+        "id": "button-has-visible-text",
+        "data": null
+       },
+       {
+        "id": "aria-label",
+        "data": null
+       },
+       {
+        "id": "aria-labelledby",
+        "data": null
+       },
+       {
+        "id": "non-empty-title",
+        "data": {
+         "messageKey": "noAttr"
+        }
+       },
+       {
+        "id": "implicit-label",
+        "data": null
+       },
+       {
+        "id": "explicit-label",
+        "data": null
+       },
+       {
+        "id": "presentational-role",
+        "data": null
+       }
+      ],
+      "hd": {
+       "screen": "a11y",
+       "path": "button.close:nth-of-type(1)",
+       "text": "",
+       "full": "",
+       "rect": {
+        "x": 24,
+        "y": 118,
+        "w": 44,
+        "h": 44
+       },
+       "to": null,
+       "kind": "button",
+       "quote": {
+        "exact": "",
+        "prefix": "",
+        "suffix": ""
+       },
+       "textOk": false,
+       "prev": true,
+       "next": true,
+       "root": false,
+       "up": true,
+       "tag": "button",
+       "attrs": {}
+      }
+     }
+    ]
+   },
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "nodes": [
+     {
+      "impact": "serious",
+      "target": [
+       "p"
+      ],
+      "any": [
+       {
+        "id": "color-contrast",
+        "data": {
+         "fgColor": "#9ca3af",
+         "bgColor": "#ffffff",
+         "contrastRatio": 2.53,
+         "fontSize": "9.8pt (13px)",
+         "fontWeight": "normal",
+         "messageKey": null,
+         "expectedContrastRatio": "4.5:1"
+        }
+       }
+      ],
+      "hd": {
+       "screen": "a11y",
+       "path": "p.hint:nth-of-type(1)",
+       "text": "이 금액은 부가세 포함이에요",
+       "full": "이 금액은 부가세 포함이에요",
+       "rect": {
+        "x": 24,
+        "y": 88,
+        "w": 342,
+        "h": 17
+       },
+       "to": null,
+       "kind": "text",
+       "quote": {
+        "exact": "이 금액은 부가세 포함이에요",
+        "prefix": "결제 ",
+        "suffix": " "
+       },
+       "textOk": true,
+       "prev": true,
+       "next": true,
+       "root": false,
+       "up": true,
+       "tag": "p",
+       "attrs": {}
+      }
+     }
+    ]
+   },
+   {
+    "id": "image-alt",
+    "impact": "critical",
+    "help": "Images must have alternative text",
+    "nodes": [
+     {
+      "impact": "critical",
+      "target": [
+       "img"
+      ],
+      "any": [
+       {
+        "id": "has-alt",
+        "data": null
+       },
+       {
+        "id": "aria-label",
+        "data": null
+       },
+       {
+        "id": "aria-labelledby",
+        "data": null
+       },
+       {
+        "id": "non-empty-title",
+        "data": {
+         "messageKey": "noAttr"
+        }
+       },
+       {
+        "id": "presentational-role",
+        "data": null
+       }
+      ],
+      "hd": {
+       "screen": "a11y",
+       "path": "img.hero:nth-of-type(1)",
+       "text": "",
+       "full": "",
+       "rect": {
+        "x": 24,
+        "y": 162,
+        "w": 120,
+        "h": 80
+       },
+       "to": null,
+       "kind": "box",
+       "quote": {
+        "exact": "",
+        "prefix": "",
+        "suffix": ""
+       },
+       "textOk": false,
+       "prev": true,
+       "next": true,
+       "root": false,
+       "up": true,
+       "tag": "img",
+       "attrs": {
+        "src": "hero.png",
+        "alt": ""
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "target-size",
+    "impact": "serious",
+    "help": "All touch targets must be 24px large, or leave sufficient space",
+    "nodes": [
+     {
+      "impact": "serious",
+      "target": [
+       "button[aria-label=\"이전\"]"
+      ],
+      "any": [
+       {
+        "id": "target-size",
+        "data": {
+         "minSize": 24,
+         "width": 16,
+         "height": 16
+        }
+       },
+       {
+        "id": "target-offset",
+        "data": {
+         "closestOffset": 8,
+         "minOffset": 24
+        }
+       }
+      ],
+      "hd": {
+       "screen": "a11y",
+       "path": "div.tiny:nth-of-type(1) > button:nth-of-type(1)",
+       "text": "이전",
+       "full": "",
+       "rect": {
+        "x": 24,
+        "y": 244,
+        "w": 16,
+        "h": 16
+       },
+       "to": null,
+       "kind": "button",
+       "quote": {
+        "exact": "",
+        "prefix": "",
+        "suffix": ""
+       },
+       "textOk": true,
+       "prev": false,
+       "next": true,
+       "root": false,
+       "up": true,
+       "tag": "button",
+       "attrs": {}
+      }
+     },
+     {
+      "impact": "serious",
+      "target": [
+       "button[aria-label=\"다음\"]"
+      ],
+      "any": [
+       {
+        "id": "target-size",
+        "data": {
+         "minSize": 24,
+         "width": 16,
+         "height": 16
+        }
+       },
+       {
+        "id": "target-offset",
+        "data": {
+         "closestOffset": 8,
+         "minOffset": 24
+        }
+       }
+      ],
+      "hd": {
+       "screen": "a11y",
+       "path": "button:nth-of-type(2)",
+       "text": "다음",
+       "full": "",
+       "rect": {
+        "x": 40,
+        "y": 244,
+        "w": 16,
+        "h": 16
+       },
+       "to": null,
+       "kind": "button",
+       "quote": {
+        "exact": "",
+        "prefix": "",
+        "suffix": ""
+       },
+       "textOk": true,
+       "prev": true,
+       "next": false,
+       "root": false,
+       "up": true,
+       "tag": "button",
+       "attrs": {}
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

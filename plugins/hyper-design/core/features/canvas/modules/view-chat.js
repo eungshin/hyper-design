@@ -27,6 +27,7 @@
      /both(V1) = ctx.api GET /api/app-parts 의 links(HD.chatBoth.links) 로 대상 화면(HD.chatBoth.targets)이 모두 앱 부품에 이어졌을 때만 칩 [캔버스+앱 ×].
      아니면 토스트 HD.chatBoth.UNLINKED(도우미 없음 = NO_HELPER, 읽기 실패 = [hd] + 토스트), 칩 없음. 보낼 때 대상을 다시 보고(그 사이 고른 것이 바뀜) 안 맞으면 토스트·안 보냄,
      맞으면 메모 글 끝에 화면마다 캔버스 파일·앱 저장소·경로·'hd verify <화면>' 줄(HD.chatBoth.apply) — 요청문은 같은 ctx.sendNotes 한 길. 상태 = 켜짐·읽은 연결(저장 안 함).
+   글 넣기(R59): 의도 'hd-chat-prefill' {text} = 입력칸을 그 글로(보내지 않음 · 숨긴 창이면 다시 보임 · 커서는 끝) — 접근성 'AI로 고치기'가 요소를 고른 뒤 보낸다.
    받는 터미널 정보(R28): 도구 줄 알약 뒤 칸 [data-hd-agent-info] 만 둔다 — 모델·생각 깊이·컨텍스트 고리는 등록부 기능 agentInfo(view-agent-info)가 채운다.
    HD.feature('chat', {needs: ['$', 'toast', 'esc', 'notes', 'local', 'store', 'key', 'title', 'rowsEl']}) → {render(), send(text), last()} */
 (function () {
@@ -369,6 +370,14 @@ function mount(ctx) {
       noteIds = noteIds.filter(function (x) { return x !== id; }); ctx.toast('빈 판 메모는 AI 에게 보낼 수 없어요'); return;
     }
     ta.focus();
+  });
+  document.addEventListener('hd-chat-prefill', function (e) {   // 입력칸에 글만 넣기(R59 접근성 'AI로 고치기') — 보내지 않는다(사용자가 보고 보낸다), 요소 칩은 보낸 쪽이 고른 것
+    var d = e.detail || {}, t = typeof d.text === 'string' ? d.text : '';
+    d.done = true;
+    if (!t.trim()) { console.warn('[hd] 대화창: 빈 글 prefill'); return; }
+    if (document.body.classList.contains('no-chat')) document.dispatchEvent(new CustomEvent('hd-chrome', {detail: {part: 'chat', on: true, done: false}}));   // 숨긴 대화창이면 다시 보인다
+    ta.value = t; grow(); render();
+    ta.focus(); try { ta.setSelectionRange(t.length, t.length); } catch (err) {}
   });
   agentB.addEventListener('click', function () {
     var d = {anchor: agentB, done: false};

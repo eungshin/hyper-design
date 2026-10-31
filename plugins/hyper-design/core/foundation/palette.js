@@ -66,7 +66,8 @@
      components = components.css 링크 + ?v=(옛 이름 hd-tokens-reload = tokens). hd-palette 의 slug '@project' = 프로젝트 tokens.css 그대로
    부품 고르기(R55 phase C, Components 탭): [data-var] 가 없고 .spec-stage 가 있는 문서 = 부품 문서(hd-pick-on 의 parts = .spec-stage 수).
      고르기 중 .spec-stage 안을 누르면 components.css 규칙이 겨누는 요소(클래스가 그 규칙 클래스를 모두 가짐) 가운데 그 견본 묶음(section data-key)
-     클래스를 가진 가장 가까운 요소, 없으면 가장 가까운 것(Alt = 가장 안쪽) → hd-sel + part {key, title, classes, tag, state('disabled'|'checked'|'')}·label·rect */
+     클래스를 가진 가장 가까운 요소, 없으면 가장 가까운 것(Alt = 가장 안쪽) → hd-sel + part {key, title, classes, tag, state('disabled'|'checked'|'')}·label·rect
+   접근성 검사(R59): {type:'hd-a11y', tag, src, rules} → axe.min.js 를 이 문서에 한 번 끼워 axe.run → {type:'hd-a11y-r', tag, state:'run'|'done'|'error', …} — 아래 처리기 머리 주석 */
 (function () {
   if (new URLSearchParams(location.search).get('hd-mode') !== 'board') return;
   var mm = window.matchMedia;
@@ -1044,6 +1045,48 @@
     else if (d.type === 'hd-css-reload') reloadSheet(d.sheet, d.v);
     else if (d.type === 'hd-tokens-reload') reloadTokens(d.v);   // 옛 이름(R55 phase F) — 옛 캔버스가 보내도 받는다
   });
+  /* ---------- 접근성 검사(R59 — 캔버스 modules/view-a11y.js, 규칙 a11y.js): 메시지 처리기 하나 ----------
+     {type:'hd-a11y', tag, src, rules} → 곧바로 {type:'hd-a11y-r', tag, state:'run'}(받았음) → 이 문서에 axe 가 없으면 <script src> 를 한 번 끼우고(문서가 새로 실리면 다시)
+     axe.run(document, runOnly rules — 팔레트가 붙인 data-hd-* 는 뺌) → {type:'hd-a11y-r', tag, state:'done', screen, result:{violations:[{id, impact, help, nodes:[{impact, target, any:[{id, data}], hd}]}]}}
+     hd = 그 요소의 hd-hit 칸(path·text·rect·kind·quote… — 캔버스가 테두리·핀·대화창 칩에 그대로 쓴다). 실패 = {state:'error', why:'load'|'run', message}.
+     화면 파일에는 아무것도 더하지 않는다(script 는 실행 중 문서에만). axe.min.js 는 고치지 않는다(MPL-2.0 — 밖에서 부르기만). */
+  (function () {
+    var loading = null;
+    function load(src) {
+      if (window.axe && typeof window.axe.run === 'function') return Promise.resolve(window.axe);
+      if (loading) return loading;
+      loading = new Promise(function (ok, no) {
+        var s = document.createElement('script'); s.src = String(src || ''); s.setAttribute('data-hd-a11y', '');
+        s.onload = function () { if (window.axe && typeof window.axe.run === 'function') ok(window.axe); else { loading = null; no(new Error('axe 가 없어요')); } };
+        s.onerror = function () { loading = null; s.remove(); no(new Error('axe.min.js 를 읽지 못했어요')); };
+        (document.head || document.documentElement).appendChild(s);
+      });
+      return loading;
+    }
+    function plain(v) { try { return JSON.parse(JSON.stringify(v == null ? null : v)); } catch (e) { return null; } }
+    function pack(res) {
+      return {violations: (res && res.violations || []).map(function (v) {
+        return {id: v.id, impact: v.impact || null, help: v.help || '', nodes: (v.nodes || []).map(function (n) {
+          var el = n.element, hd = null;
+          if (el && el.nodeType === 1 && el !== document.body && el !== document.documentElement) { hd = hitMsg(el, 'hd-a11y-node'); delete hd.type; }
+          return {impact: n.impact || null, target: plain(n.target), any: (n.any || []).map(function (c) { return {id: c.id, data: plain(c.data)}; }), hd: hd};
+        })};
+      })};
+    }
+    addEventListener('message', function (e) {
+      var d = e.data; if (!d || typeof d !== 'object' || d.type !== 'hd-a11y') return;
+      var tag = d.tag || '';
+      send({type: 'hd-a11y-r', tag: tag, state: 'run'});
+      whenLoaded(function () {
+        load(d.src).then(function (axe) {
+          return axe.run({exclude: [['[data-hd-pick]'], ['[data-hd-links]'], ['[data-hd-board]']]},
+                         {runOnly: {type: 'rule', values: Array.isArray(d.rules) ? d.rules : []}, resultTypes: ['violations'], elementRef: true})
+            .then(function (res) { send({type: 'hd-a11y-r', tag: tag, state: 'done', screen: screenId(), result: pack(res)}); },
+                  function (err) { send({type: 'hd-a11y-r', tag: tag, state: 'error', why: 'run', message: String(err && err.message || err)}); });
+        }, function (err) { send({type: 'hd-a11y-r', tag: tag, state: 'error', why: 'load', message: String(err && err.message || err)}); });
+      });
+    });
+  })();
   /* ---------- 짝 검증 스냅숏(V2 hd verify — 캔버스 modules/view-twin.js, 비교는 twin-diff.js): 메시지 처리기 하나 ----------
      {type:'hd-snapshot', tag} → {type:'hd-snapshot-r', tag, screen, items:[{role, text, tag, style:{color, bg, fs, fw, radius}}], size: 상한 전 수}
      {type:'hd-snapshot-mark', i} → 다시 재서 i 번째 항목에 주황 테두리(i 가 null 이면 지움). 무엇을 담나 = snapItem 하나:

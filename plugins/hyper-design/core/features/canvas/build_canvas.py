@@ -53,6 +53,7 @@ CSS_MARKER = "<!-- hd-shell-css -->"                 # → <link rel="stylesheet
 CSS_FILES = (MODULES_DIR / "shell.css", MODULES_DIR / "motion.css")
 SHELL_JS, SHELL_CSS = "hd-shell.js", "hd-shell.css"  # out 안 상대 경로(file:// 로 열어도 된다)
 PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
+AXE_JS = HERE.parents[1] / "foundation" / "vendor" / "axe" / "axe.min.js"   # 접근성 검사(R59) — 고치지 않고 그대로 싣는다(MPL-2.0)
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
 
 
@@ -153,9 +154,19 @@ def write_if_changed(path, content):
 
 
 def copy_palette(out):
-    """foundation/palette.js → out/palette.js(화면 쪽 스크립트를 최신으로) — 내용이 같으면 쓰지 않는다."""
+    """foundation/palette.js → out/palette.js(화면 쪽 스크립트를 최신으로) — 내용이 같으면 쓰지 않는다. 접근성 검사 axe.min.js 도 같이(copy_axe)."""
     if PALETTE_JS.exists():
         write_if_changed(out / "palette.js", PALETTE_JS.read_bytes())
+    copy_axe(out)
+
+
+def copy_axe(out):
+    """foundation/vendor/axe/axe.min.js → out/axe.min.js(R59 — 검사할 때만 화면 틀이 읽는다) — 내용이 같으면 쓰지 않는다. 없으면 [hd] 한 줄(판은 열린다)."""
+    if not AXE_JS.is_file():
+        print(f"[hd] 접근성 검사 파일이 없어요: {AXE_JS} — 접근성 검사는 안 돼요", file=sys.stderr)
+        return False
+    write_if_changed(out / "axe.min.js", AXE_JS.read_bytes())
+    return True
 
 
 def build_shell(out, tpl, stamp):

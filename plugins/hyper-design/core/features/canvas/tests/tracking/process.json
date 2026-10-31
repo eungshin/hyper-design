@@ -1347,6 +1347,36 @@
     "test_helper_canvas_busy_chip_never_hides_screen"
    ],
    "note": "F14·F6 은 U1 파일(view-memo-pop·view-thread)에 부르는 줄이 필요 — 합칠 때 넣고 test_canvas_ux_small 의 xfail 을 뺀다. F12(#aibtn)는 결정이 맞지 않아 보고만"
+  },
+  {
+   "slice": "r59-a11y: 크게 보기 '접근성' 검사(axe-core, v1 규칙 8개) — 결과 창·번호 핀(R57 자리 맞춤)·AI로 고치기(요소 칩 + 요청 글, 안 보냄)·카드 메뉴 '접근성 검사'·오류 토스트",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 30
+   },
+   "gate": {
+    "checks": 1,
+    "sec": 5,
+    "fired": [
+     "purity: a11y.js 머리 주석의 'document-title' 낱말(진짜 아님 — 말을 바꿈)"
+    ]
+   },
+   "caught": [
+    {
+     "by": "area",
+     "what": "카드 메뉴 10개 이하·크게 보기 머리 줄 단추 하나를 고정한 옛 테스트 5개 — 새 항목·단추를 넣어 고침"
+    }
+   ],
+   "waste": "영역 실행 끝 다시 돌리기에서 혼자 실패로 찍힌 3개가 따로 돌리니 통과(부하) · test_copy_failure_keeps_notes_unsent_and_storage_failure_warns 는 기준 커밋에서도 실패(내 변경 아님)",
+   "flaky": [
+    "test_zoom_keys_and_wheel_inside_the_screen_frame",
+    "test_read_only_tab_blocks_edits_up_front_and_keeps_draft",
+    "test_slash_both_on_unlinked_screen_toasts_and_sends_nothing"
+   ],
+   "note": "부르는 길 = palette.js 메시지 hd-a11y(file:// 판에서 iframe contentDocument 가 막힘을 확인)"
   }
  ]
 }
