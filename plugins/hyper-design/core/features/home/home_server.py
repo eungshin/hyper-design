@@ -123,7 +123,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
     hub_port = lambda: srv.server_address[1]
     restart = lambda: (restarter or spawn_restart)(srv.server_address[1])   # 홈 화면 · 프로젝트 화면(R34)의 [다시 켜기] — 같은 하나
     reg = RG.ProjectRegistry(hub_port, lambda: srv.url, picker=picker, paseo=paseo or os.environ.get("HD_PASEO_CMD"), build=build, restarter=restart,
-                             prebuild=prebuild or SS.PREBUILD)
+                             prebuild=prebuild or SS.PREBUILD, shells=shells)
     ctx = A.Ctx(hub=True, port=hub_port, after_rows=thumbs.schedule, picker=picker, opener=reg.open, closer=reg.close)
 
     class Handler(R.SessionHandler):

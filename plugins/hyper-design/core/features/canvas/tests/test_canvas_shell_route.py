@@ -98,3 +98,29 @@ def test_hub_prebuilds_with_the_shared_prebuilder(monkeypatch):
         assert srv.registry.prebuild is SS.PREBUILD and seen == [srv.registry.code], "허브가 뜰 때 잰 도장의 셸을 미리 만든다"
     finally:
         srv.server_close()
+
+
+def test_hub_project_page_uses_the_shared_shell_and_fresh_data_without_a_build(tmp_path):
+    """합치기(P1a + P1b): 허브가 세션에 shell=저장소.get 을 넘긴다 — 프로젝트 페이지 = 공용 셸 주소 + 지금 데이터, 화면을 고친 뒤에도 빌드 0번."""
+    import json, test_canvas_cache as TC
+    s = SS.ShellStore(root=tmp_path / "shell", trees=tmp_path / "none", head=lambda: (SHA, CANVAS / "build_canvas.py"))
+    assert s.ensure(STAMP)
+    out = TC.make_out(tmp_path, "alpha")
+    builds = []
+    srv = home_server.make_hub(0, renderer=lambda *a: None, picker=lambda: None, build=lambda o: builds.append(o), restarter=lambda p: None,
+                               shells=s, prebuild=SS.Prebuilder(s))
+    srv.registry.current_code = lambda *a, **k: STAMP
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        sess = srv.registry._start("alpha", out, None)
+        srv.registry.sessions["alpha"] = sess
+        (out / "screens" / "home.html").write_text(TC.SCREEN.format(t="ZZZZ-새글"), encoding="utf-8")
+        data = json.loads((out / "screens.json").read_text(encoding="utf-8")); data["screens"][0]["title"] = "바뀐 제목"
+        (out / "screens.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        st, h, body = get(port, "/v1/p/alpha/")
+        html = body.decode("utf-8")
+        assert st == 200 and "/v1/shell/%s/hd-shell.js" % STAMP in html and "/v1/shell/%s/hd-shell.css" % STAMP in html, html[:400]
+        assert "바뀐 제목" in html and builds == [], "지금 데이터를 끼우고 빌드는 하지 않는다"
+    finally:
+        srv.shutdown(); srv.server_close()

@@ -60,9 +60,10 @@ class _Alias(ThreadingHTTPServer):
 class ProjectRegistry:
     """열린 세션들(이름 → ProjectSession). hub_port()·hub_url() = 허브 주소, picker = 폴더 고르기, build = 다시 빌드(테스트가 바꿔 끼움)."""
 
-    def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None, restarter=None, prebuild=None):
+    def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None, restarter=None, prebuild=None, shells=None):
         self.hub_port, self.hub_url, self.picker, self.paseo = hub_port, hub_url, picker, paseo
         self.build, self.after_rows, self.restarter = build or ref_build, after_rows, restarter
+        self.shells = shells                         # 공용 셸 저장소(1단계) — 세션 페이지가 뼈대 + 지금 데이터로(허브가 SS.STORE 를 넘김, 없으면 예전 길)
         self.prebuild = prebuild                     # 새 도장의 공용 셸을 뒤에서 만든다 — 허브(make_hub)가 SS.PREBUILD 를 넘김, 없으면 안 함(unit 은 I/O 없이)
         self.clock = time.monotonic                  # 도장 기억의 시계(테스트가 바꿔 끼움)
         self._probe, self._probe_lock = None, threading.Lock()   # (잰 때 clock, 지금 도장) — current_code 의 기억 하나
@@ -156,7 +157,8 @@ class ProjectRegistry:
 
     def _start(self, name, out, agent):
         sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build, name=name,
-                                code=self.current_code).open()   # name = 이벤트의 project · code = 페이지를 줄 때 견줄 지금 도장
+                                code=self.current_code,
+                                shell=self.shells.get if self.shells is not None else None).open()   # name = 이벤트의 project · code = 페이지를 줄 때 견줄 지금 도장 · shell = 공용 셸(1단계)
         sess.name, sess.started = name, C.now()
         sess.hub_stale = self.stale_info             # R34 프로젝트 화면의 '허브 옛 코드' 칩(GET /api/state · 페이지)
         sess.router = R.Router(home_ctx=self.ctx(sess), on_stop=lambda: threading.Thread(target=self.close, args=(name,), daemon=True).start(),
