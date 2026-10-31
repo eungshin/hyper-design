@@ -585,7 +585,7 @@ def test_helper_state_corrupt_file_on_start_is_moved_aside(out, capfd):   # #228
 
 
 @pytest.mark.area("helper", "notes")
-def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228 — 도우미로 열면 메모가 <out>/.hd-canvas.json 에 · 다른 브라우저(빈 저장소)에서도 그대로 · 다른 곳에서 바뀌면 알리고 다시 불러옴
+def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228 — 도우미로 열면 메모가 <out>/.hd-canvas.json 에 · 다른 브라우저(빈 저장소)에서도 그대로 · 다른 곳에서 바뀐 hidden 은 합쳐 제자리에서 받음(W10 F1)
     from test_canvas_edit import fit_view, visible_cover
     srv = _serve(out)
     f = out / ".hd-canvas.json"
@@ -633,10 +633,16 @@ def test_helper_memo_lives_in_state_file_across_browsers(browser, out):   # #228
         assert code == 200
         pg.evaluate("window.__hdStay = 1")
         pg.click('#nlist li button[data-act="del"]')
-        pg.wait_for_function("document.getElementById('toast').textContent.indexOf('다른 곳에서 바뀌어 다시 불러왔어요') >= 0", timeout=5000)
-        pg.wait_for_function("window.__hdStay === undefined && window.__hdReady !== undefined", timeout=10000)
-        assert pg.locator("#nlist li").count() == 0, "서버가 메모를 바꾸지 않았으니 이번 변경(지우기)은 지켜 다시 보내고, 바뀐 hidden 을 받으려 다시 불러온다"
+        import time as _t
+        t1 = _t.time()                                               # 서버가 메모를 바꾸지 않았으니 지우기는 지켜 다시 보내고, 바뀐 hidden 은 제자리에서 받는다(W10 F1 — stateFile.LIVE)
+        while _t.time() - t1 < 8 and not ((state().get("state") or {}).get("hidden") == ["job"] and not state()["state"].get("notes")):
+            _t.sleep(0.1)
         assert state()["state"]["hidden"] == ["job"] and len(state()["state"]["notes"]) == 0, "다른 곳의 변경을 덮어쓰지 않고 내 지우기도 남는다"
+        pg.wait_for_selector('.card[data-id="job"].hid', state="attached", timeout=5000)
+        pg.wait_for_timeout(1500)                                    # 다시 불러오기(1.2초 뒤)가 있었다면 여기서 드러난다
+        assert pg.evaluate("window.__hdStay") == 1, "새로고침 없이(바뀐 hidden 은 adoptState 로)"
+        assert pg.locator("#nlist li").count() == 0
+        assert "다시 불러왔어요" not in (pg.text_content("#toast") or ""), "충돌 토스트 없음"
     finally:
         for c in (c1, c2):
             if c:
