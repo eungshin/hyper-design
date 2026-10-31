@@ -82,7 +82,7 @@ function mount(ctx) {
     if (sending) { ctx.toast('보내는 중이에요 — 잠시 뒤 다시 골라 주세요'); return; }
     var at = new Date().toISOString(), k = q.replies.length, ts = HD.notes.targets(q);
     var n = A.make({id: A.makeId(Date.now(), Math.random()), screen: q.screen, targets: ts, note: A.followUp(ask.question, choice), intent: 'change',
-                    scope: A.scopeOf(q)});            // 질문 메모의 범위(R7)를 이어받는다
+                    scope: A.scopeOf(q), view: q.view || null});   // 질문 메모의 범위(R7)·단 때 화면 상태(memo-state)를 이어받는다
     var go = function () { q.replies = q.replies.slice(0, k).concat([A.answer(choice, at)]); if (!NS.find(n.id)) NS.add(n); ctx.save(); };
     go();
     ctx.record({label: '질문에 답하기', redo: go, undo: function () { q.replies = q.replies.slice(0, k); NS.remove(function (x) { return x.id === n.id; }); ctx.save(); }});

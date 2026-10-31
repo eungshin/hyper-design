@@ -156,7 +156,7 @@ function mount(ctx) {
                   undo: function () { var ids = ms.map(function (m) { return m.id; }); NS.remove(function (x) { return ids.indexOf(x.id) >= 0; }); ctx.save(); }});
     } else if (draft) {
       if (!ctx.modal().open) ctx.focusPin(draft.screen);   // 막 메모를 단 카드는 배율과 상관없이 핀을 바로 보인다
-      NS.add(withAtt(HD.annotation.make({id: newId(), screen: draft.screen, targets: draft.targets, note: note, intent: intent, scope: scope})));
+      NS.add(withAtt(HD.annotation.make({id: newId(), screen: draft.screen, targets: draft.targets, note: note, intent: intent, scope: scope, view: draft.view || null})));
     }
     hide(); ctx.save();
   }
@@ -172,7 +172,7 @@ function mount(ctx) {
     show({text: HD.memoBatch.label(draft), path: 'body', rect: null}, note, intent, null, HD.memoBatch.multi(draft) && sc === 'element' ? null : sc);
   }
   function element(id, h, x, y, note) {               // 주석 도구: 판 위 카드 안 요소 하나에 메모(크게 보기 없이) · note = 미리 채울 글(요소 막대, task 49a)
-    editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect, quote: h.quote || null, src: h.src || null}]};   // src = 앱 소스 줄(요청문 '소스:')
+    editing = null; draft = {screen: id, targets: [{path: h.path, text: h.text, rect: h.rect, quote: h.quote || null, src: h.src || null}], view: HD.memoState.capture(h.view)};   // src = 앱 소스 줄(요청문 '소스:') · view = 단 때 화면 상태(memo-state)
     att('hd-attach-set', []);
     show({text: h.text || h.path, path: h.path, rect: h.rect || null}, note || '', 'change', x == null ? null : {x: x, y: y});   // rect = 그 요소 옆에 창(F09)
     ctx.pins();                                       // 메모 창이 열린 동안 그 카드에 고른 요소 테두리
@@ -194,7 +194,7 @@ function mount(ctx) {
   function elem(id, h, note, inModal, at) {           // 요소 하나에 메모 창(note = 미리 채울 요청 글) — 판 = 그 자리 옆, 크게 보기 = 고른 요소 아래
     var it = {path: h.path, text: String(h.text || '').slice(0, 60), rect: h.rect || null, quote: h.quote || null, src: h.src || null};
     if (!inModal) { element(id, h, at ? at.x : null, at ? at.y : null, note); return; }
-    editing = null; draft = {screen: id, targets: [it]}; att('hd-attach-set', []);
+    editing = null; draft = {screen: id, targets: [it], view: HD.memoState.capture(h.view)}; att('hd-attach-set', []);
     ctx.pins(); show(popItem(draft, it), note || '', 'change');
   }
   function edit(id) {                                 // 메모 고치기 — 메모 패널·카드 메모 묶음(#224)이 같이 쓴다
@@ -240,7 +240,7 @@ function mount(ctx) {
     var it = {path: String(d.path || ''), text: String(d.text || '').slice(0, 60), rect: d.rect || null, quote: d.quote || null, src: d.src || null};   // src = 앱 소스 위치(task 27)
     if (d.add && draft && !editing && !pop.hidden) { toggleTarget(it); return; }   // Shift+클릭: 고른 묶음에 더하거나 빼기
     editing = null; att('hd-attach-set', []);
-    draft = {screen: String(d.screen || ctx.modal().screen || ''), targets: [it]};
+    draft = {screen: String(d.screen || ctx.modal().screen || ''), targets: [it], view: HD.memoState.capture(d.view)};   // view = 단 때 화면 상태(memo-state)
     ctx.pins(); show(popItem(draft, it), '', 'change');
   });
 

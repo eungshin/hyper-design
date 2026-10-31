@@ -47,6 +47,11 @@
    다시 찾기: {type:'hd-locate', items:[{key, path, quote}]} → {type:'hd-located', items:[{key, rect|null, how}]} — path 가 있고(quote 가 없거나 그 요소 글에 quote.exact 가 있음) = 'path',
    아니면 문서 글에서 quote.exact 를 찾아(앞·뒤 글이 맞는 곳 먼저) 그 글을 감싼 가장 작은 요소 = 'quote', 못 찾으면 'none'(rect:null).
    스크롤(R16): 마지막 hd-locate 항목을 기억했다가 화면 안 스크롤(문서·안쪽 칸)마다 한 애니메이션 프레임에 한 번 hd-located 를 다시 보낸다(점선·핀이 요소를 따라가게).
+   움직이는 화면(memo-state — canvas contract/memo-state.md): hd-located 에 view:{hd}(documentElement.dataset.hdState, 없으면 null)와 항목마다 now:{text(textOf), shown}(path 가
+     요소 하나에 맞을 때, 아니면 {text:null, shown:false}). 문서가 바뀌면(MutationObserver · transitionend, 120ms 에 한 번) 마지막 hd-locate 를 다시 재고 답이 달라졌을 때만 보낸다.
+     클릭 기록 trail = 고르기 중이 아닌 클릭의 요소 경로(최근 30개, 이 페이지를 읽은 뒤) — hd-picked·hd-hit/sel/dbl 답에 view:{hd, trail}.
+     {type:'hd-goto', tag, state} → window.hdGoto(state) 를 부르고 {type:'hd-gone', tag, ok, how:'hd'|'none'}(함수 없음 = none, false 를 돌려주거나 던지면 ok:false).
+     {type:'hd-replay', tag, trail} → 문서가 다 실린 뒤 경로마다(요소가 하나가 될 때까지 1.5초 기다림) el.click()(고르기 막기 건너뜀), 사이 250ms → {type:'hd-replayed', tag, ok, done}.
    소스 위치(앱 카드, Svelte 개발 서버): 요소나 그 조상에 __svelte_meta.loc 이 있으면 hd-picked·hd-hit·hd-dbl 답과 hd-located 항목에
    src:{file, line, column}(window.__hdSrc = {root, base} 가 있으면 저장소 기준 경로) · comp:[안쪽 컴포넌트부터] 를 더한다. 없으면 두 칸 모두 없다.
    판 모드(?hd-mode=board — 캔버스 판 위 카드만, 크게 보기는 아님): 화면 스크립트보다 먼저 reduced-motion 을 켜고 움직임을 멈춘다
@@ -233,11 +238,59 @@
     if (!box || box === document.body) return {key: it.key, rect: null, how: 'none'};
     return withSrc({key: it.key, rect: rectOf(box), how: 'quote'}, box);
   }
-  var lastLoc = null, locRaf = 0;
-  function locate(items) {
+  var lastLoc = null, locRaf = 0, locSent = '', domT = 0, domObs = null;
+  function shownOf(el) { if (!el.getClientRects().length) return false; return getComputedStyle(el).visibility !== 'hidden'; }
+  function nowOf(path) {                              // 움직이는 화면(memo-state): 지금 그 대상이 보이나·보이는 글 — 메모를 단 때 글(textOf)과 견준다
+    var el = path ? find(path) : null;
+    if (!el || el === document.body || el === document.documentElement) return {text: null, shown: false};
+    return {text: textOf(el), shown: shownOf(el)};
+  }
+  function hdState() { var v = document.documentElement.getAttribute('data-hd-state'); return v ? String(v) : null; }
+  function locate(items, quiet) {                     // quiet = 문서가 바뀌어 다시 잼 — 답이 같으면 보내지 않는다
     lastLoc = items && items.length ? items : null;   // 스크롤 뒤 다시 답할 것(R16)
     var d = docText();
-    send({type: 'hd-located', screen: screenId(), items: (items || []).map(function (it) { return locateOne(it || {}, d); })});
+    var msg = {type: 'hd-located', screen: screenId(), view: {hd: hdState()}, items: (items || []).map(function (it) {
+      var r = locateOne(it || {}, d); r.now = nowOf((it || {}).path); return r; })};
+    var sig = JSON.stringify(msg);
+    if (quiet && sig === locSent) return;
+    locSent = sig; send(msg);
+    watchDom();
+  }
+  function domChanged() { if (!lastLoc || domT) return; domT = setTimeout(function () { domT = 0; if (lastLoc) locate(lastLoc, true); }, 120); }
+  function watchDom() {                               // 단계가 바뀌면(같은 요소의 글만 바뀜·요소 교체·숨김) 다시 잰다 — 스크롤이 없어도
+    if (domObs || typeof MutationObserver !== 'function' || !document.body || !window.parent || window.parent === window) return;
+    domObs = new MutationObserver(domChanged);
+    domObs.observe(document.body, {subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden']});
+    domObs.observe(document.documentElement, {attributes: true, attributeFilter: ['data-hd-state']});
+    addEventListener('transitionend', domChanged, true);
+  }
+  var trail = [], replaying = false, TRAIL_MAX = 30;  // 클릭 기록(memo-state) — 규칙은 canvas modules/memo-state.js record 와 같다
+  function viewNow() { return {hd: hdState(), trail: trail.slice()}; }
+  addEventListener('click', function (e) {             // window 잡는 단계 = 아래 고르기 막기(document)보다 먼저
+    if (picking && !replaying) return;
+    var t = e.target; if (!t || t.nodeType !== 1 || t === box || (t.closest && t.closest('[data-hd-pick],[data-hd-links]'))) return;
+    var p = pathOf(t); if (!p) return;
+    trail.push(p); if (trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
+  }, true);
+  function gotoState(d) {
+    var has = typeof window.hdGoto === 'function', ok = false;
+    if (has && d.state != null) {
+      try { ok = window.hdGoto(String(d.state)) !== false; } catch (err) { console.warn('[hd] hdGoto 실패: ' + (err && err.message || err)); ok = false; }
+    }
+    send({type: 'hd-gone', screen: screenId(), tag: d.tag || '', ok: ok, how: has ? 'hd' : 'none'});
+  }
+  function replay(d) {
+    var steps = (Array.isArray(d.trail) ? d.trail : []).filter(function (p) { return typeof p === 'string' && p; }).slice(-TRAIL_MAX), k = 0, wait = 0;
+    function end(ok) { send({type: 'hd-replayed', screen: screenId(), tag: d.tag || '', ok: ok, done: k}); }
+    function step() {
+      if (k >= steps.length) { end(true); return; }
+      var el = find(steps[k]);
+      if (!el) { if (++wait > 15) { end(false); return; } setTimeout(step, 100); return; }   // 앞 클릭 뒤 요소가 늦게 생길 수 있다
+      wait = 0; replaying = true;
+      try { el.click(); } catch (err) { console.warn('[hd] 다시 하기 클릭 실패: ' + steps[k]); } finally { replaying = false; }
+      k++; setTimeout(step, 250);
+    }
+    whenLoaded(function () { setTimeout(step, 300); });
   }
   addEventListener('scroll', function () {             // R16: 메모 점선·핀은 화면 좌표라 스크롤(문서·안쪽 칸)하면 자리를 다시 답한다 — 한 애니메이션 프레임에 한 번
     if (!lastLoc || locRaf || !window.parent || window.parent === window) return;
@@ -292,7 +345,7 @@
     last = t; send({type: 'hd-hover', rect: showBox(t)});
   }, true);
   function inEdit(e) { return !!(inl && e.target && e.target.nodeType && inl.el.contains(e.target)); }   // 그 자리 글자 고치기 중인 요소 안(49c) — 커서·선택은 그대로
-  function block(e) { if (!picking || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+  function block(e) { if (!picking || replaying || inEdit(e)) return; e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
   ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit'].forEach(function (ev) { document.addEventListener(ev, block, true); });   // dblclick 은 아래 글자 고치기 리스너가 막고 받는다
   var pressInl = false;                               // 그 자리 고치기 중 선택(V)으로 다른 곳을 누르기 시작함(pointerdown — 고르는 중엔 mousedown 이 막혀 blur 가 없다)
   function retarget(e) {                              // 고치는 중 다른 곳 누르기(R52 — HD.textEdit.press 와 같은 뜻): 글자 = 캔버스에 hd-dbl(→ hd-inline 이 지금 것을 저장으로 끝내고 그 글자로) · 글자 아님 = 저장하고 끝(away)
@@ -312,14 +365,14 @@
   }, true);
   document.addEventListener('click', function (e) {
     if (pressInl) { pressInl = false; if (!inEdit(e) && retarget(e)) return; }
-    if (!picking || inEdit(e)) return;
+    if (!picking || replaying || inEdit(e)) return;
     block(e);
     if (grabbed) { grabbed = false; return; }        // 끌어 놓은 뒤의 클릭 = 고르기 아님(49c)
     var t = target(e); if (!t) return;
     if (pickMode === 'text') { sendHit(t, true, 'hd-dbl'); return; }   // 크게 보기 글자 도구(task 49a)
     if (pickMode === 'select' && pickDoc) { if (partsDoc()) pickPart(t, e.altKey); else pickToken(t); return; }   // 문서 탭(R55) — 토큰 견본·부품(phase C)만 고른다
     if (pickMode === 'select') { selEl = e.altKey ? t : linkAt(t) || (t.closest ? t.closest(HIT_SEL) : null) || t; sendHit(t, false, 'hd-sel', e.altKey, e.shiftKey); return; }   // Alt = 가장 안쪽 요소(51-2)   // 크게 보기 고르기 도구 → 요소 막대(고른 것 = 눌러 끌 수 있음, 49c)
-    send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey}, t));
+    send(withSrc({type: 'hd-picked', screen: screenId(), path: pathOf(t), text: textOf(t), rect: showBox(t), quote: quoteOf(t), add: !!e.shiftKey, view: viewNow()}, t));
   }, true);
 
   /* ---------- 토큰 고르기(R55, Foundation 탭) ---------- */
@@ -478,7 +531,7 @@
     var el = leaf ? leafOf(at) : deep ? at : linkAt(at) || (at && at.closest ? at.closest(HIT_SEL) : null) || at;
     var m;
     if (!el || el === document.documentElement || el === document.body || el.hasAttribute('data-hd-links')) m = {type: type || 'hd-hit', screen: screenId(), path: null};
-    else m = hitMsg(el, type || 'hd-hit');
+    else { m = hitMsg(el, type || 'hd-hit'); m.view = viewNow(); }   // view = 메모를 단 때 화면 상태(memo-state)
     if (add) m.add = true;                            // hd-sel 의 Shift = 더하기·빼기(여러 요소 R19)
     send(m);
   }
@@ -958,6 +1011,8 @@
       });
     }
     else if (d.type === 'hd-locate') locate(d.items);
+    else if (d.type === 'hd-goto') gotoState(d);
+    else if (d.type === 'hd-replay') replay(d);
     else if (d.type === 'hd-edit') editOn = !!d.on;
     else if (d.type === 'hd-pick') {
       picking = !!d.on; last = null; pickMode = picking && (d.mode === 'text' || d.mode === 'select') ? d.mode : '';
