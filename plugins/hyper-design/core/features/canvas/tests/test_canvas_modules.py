@@ -3,7 +3,7 @@
 graph.js · route.js · style.js · camera.js · prefs.js 를 순서대로 node 에서 읽어 확인한다.
 D 는 runs/gym-v2/out 임시 복사본을 build_canvas.py 로 만든 index.html 의 hd-data 에서 꺼낸다.
 """
-import colorsys, json, os, re, shutil, subprocess, sys, tempfile
+import colorsys, json, os, re, shutil, subprocess, sys, tempfile, urllib.parse
 from pathlib import Path
 
 import pytest
@@ -116,8 +116,9 @@ def gym_data():
         assert m, "hd-data 없음"
         D = json.loads(m.group(1).replace("<\\!--", "<!--"))
         screens = json.loads((out / "screens.json").read_text(encoding="utf-8"))
-        assert "<!-- hd-modules -->" not in html and "data-hd-module=\"view-links\"" in html
-        return D, screens, html
+        assert "<!-- hd-modules -->" not in html and (out / "hd-shell.js").is_file() and (out / "hd-shell.css").is_file()
+        shell = {"js": (out / "hd-shell.js").read_text(encoding="utf-8"), "css": (out / "hd-shell.css").read_text(encoding="utf-8")}
+        return D, screens, html, shell
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -128,7 +129,7 @@ def res():
         pytest.skip("node 가 PATH 에 없음 — modules/*.js 단위 테스트는 node 로 돌린다")
     if not GYM.exists():
         pytest.skip(f"fixture 없음: {GYM}")
-    D, screens, html = gym_data()
+    D, screens, html, shell = gym_data()
     tmp = Path(tempfile.mkdtemp(prefix="hd-canvas-mod-js-"))
     try:
         (tmp / "h.js").write_text(HARNESS, encoding="utf-8")
@@ -140,6 +141,7 @@ def res():
         shutil.rmtree(tmp, ignore_errors=True)
     out["_branches"] = sum(len(s.get("branches") or []) for s in screens["screens"])
     out["_html"] = html
+    out["_shell"] = shell
     return out
 
 
@@ -256,17 +258,91 @@ def test_registry_loads_before_views():
     assert kinds == sorted(kinds) and "features" in ALL_MODULES
 
 
-def test_single_file_output(res):
-    html = res["_html"]
+def test_shell_file_output(res):
+    """셸(모듈 + 템플릿 본 스크립트 + shell.css·motion.css)은 out/hd-shell.js·hd-shell.css 에만 — index.html 은 데이터와 참조만(perf S3).
+    옛 data-hd-module 검사가 지키던 뜻을 셸 파일에서: 모듈 전부 · 빌드 차례 · 본 스크립트는 맨 뒤 · 머리 주석은 싣지 않음 · CSS 캐스케이드 차례."""
+    html, js, css = res["_html"], res["_shell"]["js"], res["_shell"]["css"]
     for n in ALL_MODULES:
-        assert f'data-hd-module="{n}"' in html
-    order = [html.index(f'data-hd-module="{n}"') for n in ALL_MODULES]
-    assert order == sorted(order) and order[-1] < html.index("// ── Canvas shell")
-    assert "/* hd-motion */" not in html and "--duration-fast: 250ms" in html and html.index("--camera-glide-dur") < html.index("</style>")   # motion.css 인라인
-    assert "/* hd-shell */" not in html and html.index(":root{--ui-accent") < html.index("--duration-fast: 250ms"), "shell.css 인라인 — motion.css 보다 앞(캐스케이드 차례)"
-    assert not re.search(r"<script[^>]+\bsrc=", html), "외부 스크립트 참조 없음"
-    # figma-lite 6: 모듈 머리 주석(층·책임 설명)은 원본에만 — index.html 에는 싣지 않는다(그 밖 주석·코드는 그대로)
-    assert not re.search(r'<script data-hd-module="[^"]+">\s*/\* (Model|ViewModel|View) — ', html), "모듈 머리 주석이 index.html 에 실렸다"
+        assert f"/* hd-module: {n} */" in js, f"모듈 {n} 이 hd-shell.js 에 없다"
+    order = [js.index(f"/* hd-module: {n} */\n") for n in ALL_MODULES]
+    assert order == sorted(order) and order[-1] < js.index("// ── Canvas shell"), "모듈은 modules() 차례, 템플릿 본 스크립트는 그 뒤"
+    for n in ALL_MODULES:
+        src = (MOD / f"{n}.js").read_text(encoding="utf-8")
+        assert src.splitlines()[0] not in js, f"모듈 {n} 머리 주석이 hd-shell.js 에 실렸다"
+        # 모듈마다 try 로 감싼다(예전 <script> 하나씩처럼 따로 실패) — 감싸도 이름 범위가 같으려면 모듈 몸이 IIFE 여야 한다
+        assert re.match(r"\s*;?\s*\(", src[src.index("*/") + 2:] if src.lstrip().startswith("/*") else src), f"모듈 {n} 은 (function () {{ … }})() 로 시작해야 한다"
+    assert js.count("} catch (e) { console.error('[hd] 모듈 ") == len(ALL_MODULES)
+    assert "--duration-fast: 250ms" in css and css.index(":root{--ui-accent") < css.index("--camera-glide-dur"), "shell.css 다음 motion.css(캐스케이드 차례)"
+    assert not re.search(r"^\s*/\* (View|Model|ViewModel) — ", css) and "build_canvas.py 가" not in css, "CSS 머리 주석(shell.css·motion.css)도 떼고 싣는다"
+    # index.html: 셸 내용 없음 · 상대 주소 + ?v=<코드 도장> · 본 스크립트 자리는 hd-data 바로 뒤, 막는 스크립트(defer·async 아님)
+    assert "// ── Canvas shell" not in html and ":root{--ui-accent" not in html and "/* hd-shell */" not in html and "/* hd-motion */" not in html
+    stamp = re.search(r'<meta name="hd-code" content="([^"]+)">', html).group(1)
+    tag = re.search(r'<script src="hd-shell\.js\?v=([^"]+)"></script>', html)
+    assert tag and urllib.parse.unquote(tag.group(1)) == stamp, "셸 스크립트 주소 = 상대 경로 + 코드 도장"
+    assert html.index('id="hd-data"') < tag.start() and not re.search(r"<script[^>]*hd-shell[^>]*(defer|async)", html)
+    link = re.search(r'<link rel="stylesheet" href="hd-shell\.css\?v=([^"]+)">', html)
+    assert link and link.group(1) == tag.group(1) and html.index('id="tokens"') < link.start() < html.index("</head>"), "tokens.css 뒤 셸 CSS(차례 그대로)"
+    assert len(html.encode("utf-8")) < 120_000, f"index.html 이 크다: {len(html.encode('utf-8'))} B"
+
+
+def _build_into(out):
+    """작업 트리 build_canvas 로 index.html·셸 파일을 같은 프로세스에서 굽는다(하위 프로세스 없음)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import build_canvas as BC
+    sys.path.pop(0)
+    BC.build_index(out, json.loads((out / "screens.json").read_text(encoding="utf-8")))
+    BC.copy_palette(out)
+    return BC
+
+
+@pytest.mark.skipif(not GYM.exists(), reason=f"fixture 없음: {GYM}")
+def test_data_only_rebuild_keeps_shell_files(tmp_path):
+    """데이터만 바뀐 두 번째 빌드는 셸 파일·palette.js 를 다시 쓰지 않는다(mtime 그대로) — index.html 만 새로(작게)."""
+    out = tmp_path / "out"
+    shutil.copytree(GYM, out, ignore=shutil.ignore_patterns("index.html", "hd-shell.*", ".hd-*"))
+    _build_into(out)
+    old = 1_000_000_000
+    for f in ("hd-shell.js", "hd-shell.css", "palette.js"):
+        os.utime(out / f, (old, old))
+    m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
+    m["screens"][0]["title"] = "데이터만 바뀐 제목"
+    (out / "screens.json").write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    _build_into(out)
+    for f in ("hd-shell.js", "hd-shell.css", "palette.js"):
+        assert (out / f).stat().st_mtime == old, f"{f} 을 다시 썼다(내용이 같으면 쓰지 않는다)"
+    html = (out / "index.html").read_text(encoding="utf-8")
+    assert "데이터만 바뀐 제목" in html and len(html.encode("utf-8")) < 120_000
+
+
+def test_write_if_changed(tmp_path):
+    """같은 내용이면 쓰지 않음(False) · 다르거나 없으면 씀(True)."""
+    sys.path.insert(0, str(SCRIPTS))
+    from build_canvas import write_if_changed
+    sys.path.pop(0)
+    f = tmp_path / "a.js"
+    assert write_if_changed(f, "x") is True and f.read_text(encoding="utf-8") == "x"
+    os.utime(f, (5, 5))
+    assert write_if_changed(f, "x") is False and f.stat().st_mtime == 5
+    assert write_if_changed(f, "y") is True and f.read_text(encoding="utf-8") == "y"
+
+
+@pytest.mark.skipif(not GYM.exists(), reason=f"fixture 없음: {GYM}")
+def test_shell_write_failure_inlines(tmp_path, monkeypatch, capsys):
+    """셸 파일을 못 쓰면 [hd] 한 줄 뒤 예전 길 — 셸을 index.html 에 끼워 넣는다(판은 그대로 열린다)."""
+    out = tmp_path / "out"
+    shutil.copytree(GYM, out, ignore=shutil.ignore_patterns("index.html", "hd-shell.*", ".hd-*"))
+    sys.path.insert(0, str(SCRIPTS))
+    import build_canvas as BC
+    sys.path.pop(0)
+
+    def boom(path, text):
+        raise PermissionError("잠김")
+    monkeypatch.setattr(BC, "write_if_changed", boom)
+    BC.build_index(out, json.loads((out / "screens.json").read_text(encoding="utf-8")))
+    html = (out / "index.html").read_text(encoding="utf-8")
+    assert "[hd]" in capsys.readouterr().err
+    assert "src=\"hd-shell.js" not in html and "href=\"hd-shell.css" not in html and "// ── Canvas shell" in html and ":root{--ui-accent" in html
+    assert "/* hd-module: view-links */" in html and html.index("/* hd-module: features */") < html.index("// ── Canvas shell")
 
 
 def test_strip_head_only_first_block():

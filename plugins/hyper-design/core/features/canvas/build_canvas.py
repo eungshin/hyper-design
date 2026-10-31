@@ -3,12 +3,18 @@
 python3 build_canvas.py <out_dir>
 
 출력
-- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)과 modules/*.js 모듈(<!-- hd-modules -->)·modules/shell.css(/* hd-shell */)·modules/motion.css(/* hd-motion */)를 끼워 넣은 한 파일.
+- out/index.html      : canvas_template.html 에 데이터 JSON(<script id="hd-data">)·도장 meta·noscript 링크만 끼우고, 셸은 참조만 —
+                        <!-- hd-shell-css --> → <link rel="stylesheet" href="hd-shell.css?v=<코드 도장>"> · <!-- hd-modules -->(+ 바로 뒤 본 <script>) → <script src="hd-shell.js?v=…">
+                        (hd-data 바로 뒤, defer·async 아님 — 실행 차례는 예전 인라인과 같다. 상대 주소라 file:// 로 열어도 된다).
+- out/hd-shell.js     : modules/*.js(modules() 차례, 머리 주석 뗌, 앞에 /* hd-module: <이름> */ 한 줄) + 템플릿 본 스크립트(맨 뒤).
+- out/hd-shell.css    : modules/shell.css 다음 motion.css(캐스케이드 차례, 머리 주석 뗌).
+                        셸 파일·palette.js 는 내용이 지금 파일과 다를 때만 쓴다(데이터만 바뀐 빌드는 작은 index.html 만 새로 — 새로 쓴 큰 파일 첫 열기가 느리다).
+                        셸 파일을 못 쓰면 [hd] 한 줄 뒤 예전 길(index.html 에 셸을 끼워 넣는다).
                         헤더 = 제목 · 탭[Screens|Foundation|Components] · 팔레트 점 · [전체 보기][배율%]
                         (조작 그룹 3개: data-group="tabs"/"palette"/"view", 모드 전환 없음)
                         Screens 판 = 끌어서 이동, Ctrl/⌘+휠·핀치 확대, 카드 누르면 크게 보기(크기는 표면 프로필 frame.modal, 기본 390×844).
 - out/foundation.html : tokens.css 의 색 역할(쉬운 이름)·글자 단계·여백·모서리·그림자 견본. palette.js 로 즉시 전환.
-- out/palette.js      : foundation/palette.js 를 복사(팔레트 교체 + 주석 달기 hd-pick/hd-picked + 연결 보기 hd-links).
+- out/palette.js      : foundation/palette.js 를 복사(같으면 그대로 — 팔레트 교체 + 주석 달기 hd-pick/hd-picked + 연결 보기 hd-links).
 - out/components.html : foundation/specimens.html 중 화면들이 실제로 쓴 클래스의 섹션만. 배지는 screens.json badges 로.
 
 판 규칙(그대로 유지)
@@ -27,7 +33,7 @@ screens.json:
 없으면 빌드 입력(템플릿·모듈·shell.css·motion.css·이 파일·palette.js) 내용 해시. 열기가 지금 도장과 견줘 옛 페이지를 다시 빌드한다.
 데이터 도장(figma-lite 5): <meta name="hd-inputs"> = out 의 데이터 입력 내용(board_data.input_stamp) — 도우미는 쓰기 때 데이터만 확인하고, 페이지를 줄 때 이 도장이 다르면 다시 빌드한다.
 """
-import sys, os, json, re, html, pathlib, shutil
+import sys, os, json, re, html, pathlib, time, urllib.parse
 
 import board_data as BD
 import code_probe as CP
@@ -36,9 +42,11 @@ import code_stamp
 HERE = pathlib.Path(__file__).resolve().parent
 TEMPLATE = HERE / "canvas_template.html"
 MODULES_DIR = HERE / "modules"
-MODULES_MARKER = "<!-- hd-modules -->"
-# <style> 안 표시 자리 → 끼울 CSS(템플릿에서 셸 CSS 가 motion.css 보다 앞 — 캐스케이드 차례 그대로)
-CSS_SLOTS = (("/* hd-shell */", MODULES_DIR / "shell.css"), ("/* hd-motion */", MODULES_DIR / "motion.css"))
+MODULES_MARKER = "<!-- hd-modules -->"                # 이 자리 + 바로 뒤 본 <script> → <script src="hd-shell.js?v=…">
+CSS_MARKER = "<!-- hd-shell-css -->"                 # → <link rel="stylesheet" href="hd-shell.css?v=…">(tokens.css 뒤 — 예전 <style> 자리)
+# hd-shell.css 에 싣는 차례 = 캐스케이드 차례(셸 화면 틀 CSS 가 motion.css 보다 앞)
+CSS_FILES = (MODULES_DIR / "shell.css", MODULES_DIR / "motion.css")
+SHELL_JS, SHELL_CSS = "hd-shell.js", "hd-shell.css"  # out 안 상대 경로(file:// 로 열어도 된다)
 PALETTE_JS = HERE.parents[1] / "foundation" / "palette.js"
 SPECIMENS = pathlib.Path(os.environ.get("HD_SPECIMENS") or HERE.parents[1] / "foundation" / "specimens.html")
 
@@ -71,21 +79,99 @@ def strip_head(src):
     return src if end < 0 else body[end + 2:].lstrip("\r\n")
 
 
-def inline_modules(tpl):
-    """modules/*.js 를 <!-- hd-modules --> 자리에 <script> 로 끼워 넣는다(한 파일로, 외부 참조 없음)."""
-    assert MODULES_MARKER in tpl, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
-    parts = []
+def split_shell(tpl):
+    """템플릿 글 → (셸 자리를 비운 템플릿, 본 스크립트 글). 순수.
+    본 스크립트 = <!-- hd-modules --> 바로 뒤 <script>…</script>(인라인 스크립트라 안에 `</script>` 가 없다). 그 자리는 표시 하나로 줄인다."""
+    at = tpl.find(MODULES_MARKER)
+    assert at >= 0, f"canvas_template.html 에 {MODULES_MARKER} 자리가 없다"
+    start = at + len(MODULES_MARKER)
+    m = re.match(r"\s*<script>", tpl[start:])
+    assert m, f"canvas_template.html 의 {MODULES_MARKER} 바로 뒤에 본 <script> 가 없다"
+    end = tpl.find("</script>", start + m.end())
+    assert end >= 0, "canvas_template.html 의 본 <script> 가 닫히지 않았다"
+    main = tpl[start + m.end():end].lstrip("\r\n")
+    return tpl[:at] + MODULES_MARKER + tpl[end + len("</script>"):], main
+
+
+def shell_js(sources, main):
+    """[(모듈 이름, 원문)] · 본 스크립트 → hd-shell.js 글. 순수. 모듈마다 머리 주석을 떼고 앞에 `/* hd-module: <이름> */` 한 줄, 본 스크립트는 맨 뒤.
+    모듈마다 try 로 감싼다 — 예전 <script> 하나씩과 같게: 앞 모듈이 `;` 없이 끝나도 다음 `(function` 과 붙지 않고(ASI),
+    읽다 던지면 그 모듈만 빠진다([hd] console.error 뒤 같은 오류를 다시 던져 pageerror 로도 보인다). 모듈은 모두 IIFE 라 감싸도 이름 범위가 같다."""
+    parts = [f"/* hd-module: {name} */\ntry {{\n{strip_head(src)}\n}} catch (e) {{ console.error('[hd] 모듈 {name} 을 읽다 멈췄어요', e); "
+             f"setTimeout(function () {{ throw e; }}); }}" for name, src in sources]
+    parts.append(f"/* hd-shell: canvas_template.html 본 스크립트 */\n{main}")
+    return "\n".join(p if p.endswith("\n") else p + "\n" for p in parts)
+
+
+def shell_css(sources):
+    """[원문] → hd-shell.css 글(주어진 차례 = 캐스케이드 차례, 머리 주석 뗌). 순수."""
+    return "\n".join(strip_head(src) for src in sources)
+
+
+def shell_refs(stamp, js, css):
+    """(index.html 의 CSS 자리 글, 스크립트 자리 글) — 상대 주소 + ?v=<코드 도장>(옛 캐시 막기). 순수.
+    도장이 없으면 셸 내용 해시. file:// 로 열어도 같은 폴더 파일이라 그대로 된다."""
+    v = urllib.parse.quote(stamp or code_stamp.content_stamp([("hd-shell.js", js.encode("utf-8")), ("hd-shell.css", css.encode("utf-8"))]), safe=":")
+    return f'<link rel="stylesheet" href="{SHELL_CSS}?v={v}">', f'<script src="{SHELL_JS}?v={v}"></script>'
+
+
+def shell_inline(js, css):
+    """예전 길(셸 파일을 못 쓸 때) — (CSS 자리 글, 스크립트 자리 글)을 index.html 안에 끼울 글로. 순수."""
+    css = css.replace("</", "<\\/")
+    js = js.replace("</", "<\\/").replace("<!--", "<\\!--")
+    return f"<style>\n{css}</style>", f"<script>\n{js}</script>"
+
+
+def write_if_changed(path, content):
+    """내용(str = utf-8 · bytes)이 지금 파일과 다를 때만 쓴다 → 썼나. Edge.
+    같으면 손대지 않는다(mtime 그대로 — 데이터만 바뀐 빌드가 큰 셸 파일을 새로 쓰지 않게, 새로 쓴 큰 파일 첫 열기가 느리다).
+    쓰기 = 임시 파일 + os.replace(Windows 에서 읽는 중이라 막히면 잠깐 다시). 끝내 못 쓰면 OSError."""
+    data = content.encode("utf-8") if isinstance(content, str) else content
+    path = pathlib.Path(path)
+    try:
+        if path.read_bytes() == data:
+            return False
+    except OSError:                                    # 없음·못 읽음 = 다르다고 보고 쓴다
+        pass
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    tmp.write_bytes(data)
+    for i in range(5):
+        try:
+            os.replace(tmp, path)
+            return True
+        except PermissionError:
+            if i == 4:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05 * (i + 1))
+    return True
+
+
+def copy_palette(out):
+    """foundation/palette.js → out/palette.js(화면 쪽 스크립트를 최신으로) — 내용이 같으면 쓰지 않는다."""
+    if PALETTE_JS.exists():
+        write_if_changed(out / "palette.js", PALETTE_JS.read_bytes())
+
+
+def build_shell(out, tpl, stamp):
+    """셸(modules/*.js + 템플릿 본 스크립트 · shell.css + motion.css)을 out/hd-shell.js·hd-shell.css 로 쓰고(같으면 그대로)
+    셸 자리를 참조로 채운 템플릿을 돌려준다. 셸 파일을 못 쓰면 [hd] 한 줄 뒤 예전 길 — index.html 에 끼워 넣는다(판은 열린다)."""
+    tpl, main = split_shell(tpl)
+    assert CSS_MARKER in tpl, f"canvas_template.html 에 {CSS_MARKER} 자리가 없다"
+    sources = []
     for name in modules():
         f = MODULES_DIR / f"{name}.js"
         assert f.exists(), f"캔버스 모듈이 없다: {f}"
-        js = strip_head(f.read_text(encoding="utf-8")).replace("</", "<\\/").replace("<!--", "<\\!--")
-        parts.append(f'<script data-hd-module="{name}">\n{js}</script>')
-    tpl = tpl.replace(MODULES_MARKER, "\n".join(parts), 1)
-    # 셸 화면 틀(modules/shell.css)·움직임 토큰·전환(modules/motion.css)을 <style> 안 표시 자리에
-    for marker, f in CSS_SLOTS:
-        assert marker in tpl, f"canvas_template.html 에 {marker} 자리가 없다"
-        tpl = tpl.replace(marker, strip_head(f.read_text(encoding="utf-8")).replace("</", "<\\/"), 1)
-    return tpl
+        sources.append((name, f.read_text(encoding="utf-8")))
+    js, css = shell_js(sources, main), shell_css([f.read_text(encoding="utf-8") for f in CSS_FILES])
+    try:
+        write_if_changed(out / SHELL_JS, js)          # index.html 보다 먼저 — 페이지가 없는 셸 파일을 가리키지 않게
+        write_if_changed(out / SHELL_CSS, css)
+        link, script = shell_refs(stamp, js, css)
+    except OSError as e:
+        print(f"[hd] 셸 파일({SHELL_JS}·{SHELL_CSS})을 쓰지 못했어요({e}) — 이번 index.html 에는 셸을 끼워 넣어요", file=sys.stderr, flush=True)
+        link, script = shell_inline(js, css)
+    return tpl.replace(CSS_MARKER, link, 1).replace(MODULES_MARKER, script, 1)
 
 
 def build_index(out, m):
@@ -100,7 +186,8 @@ def build_index(out, m):
     lis = "".join(f'<li><a href="{esc(c["file"])}">{esc(c["title"])}</a></li>' for r in data_rows for c in r["screens"])
     nos = f'<noscript id="hd-links"><ul>{lis}<li><a href="foundation.html">Foundation</a></li><li><a href="components.html">Components</a></li></ul></noscript>'
     tpl = tpl.replace('<noscript id="hd-links"></noscript>', nos)
-    tpl = code_stamp.stamp_inputs(code_stamp.stamp_page(inline_modules(tpl), build_stamp()), inputs)
+    stamp = build_stamp()
+    tpl = code_stamp.stamp_inputs(code_stamp.stamp_page(build_shell(out, tpl, stamp), stamp), inputs)
     (out / "index.html").write_text(tpl.replace(marker, marker.replace("{}", blob)), encoding="utf-8")
     return len(m["screens"]), len(data["arrows"]), len(data_rows)
 
@@ -277,8 +364,7 @@ def main():
         sys.exit("usage: python3 build_canvas.py <out_dir>")
     out = pathlib.Path(sys.argv[1])
     m = json.loads((out / "screens.json").read_text(encoding="utf-8"))
-    if PALETTE_JS.exists():                             # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로
-        shutil.copyfile(PALETTE_JS, out / "palette.js")
+    copy_palette(out)                                   # 화면 쪽 스크립트(주석 달기·연결 보기)를 최신으로(같으면 그대로)
     n, na, ng = build_index(out, m)
     nc = build_foundation(out)
     nk = build_components(out, m)

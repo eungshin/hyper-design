@@ -4,12 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>hyper-design</title>
-<!-- 캔버스 템플릿(정적). build_canvas.py 가 아래 hd-data 에 데이터만 끼워 넣는다. 외부 라이브러리 없음. -->
+<!-- 캔버스 템플릿(정적). build_canvas.py 가 아래 hd-data 에 데이터를 끼우고, 셸(modules/*.js + 아래 본 스크립트 · shell.css + motion.css)은 out/hd-shell.js·hd-shell.css 로 빼 hd-shell-css·hd-modules 자리에 참조만 둔다. 외부 라이브러리 없음. -->
 <link id="tokens" rel="stylesheet" href="tokens.css" media="print" onload="this.media='all'" onerror="this.media='all'"><!-- onerror: 바깥 글꼴 @import 실패(인터넷 없음)에도 테마 색은 켠다 -->
-<style>
-/* hd-shell */
-/* hd-motion */
-</style>
+<!-- hd-shell-css -->
 </head>
 <body data-tab="screens">
 <header class="hd">
@@ -172,7 +169,7 @@ $('#foot').style.marginLeft = LEFT + 'px';
 
 /* ======================================================================
    판의 선·고른 화면 안 연결 — Model(modules/graph.js · route.js) / ViewModel(modules/prefs.js) / View(modules/view-links.js).
-   build_canvas.py 가 hd-modules 표시 자리(이 스크립트 앞)에 그 모듈들을 끼워 넣는다(globalThis.HD).
+   build_canvas.py 가 그 모듈들 뒤에 이 스크립트를 붙여 out/hd-shell.js 로 쓴다(globalThis.HD — hd-modules 자리에는 그 파일 참조만).
    ====================================================================== */
 // ── 판의 선(그래프의 flow·link 간선) — 그리기는 modules/view-lines.js, 셸은 언제 다시 그릴지만 정한다
 var G = HD.graph.fromData(D);
