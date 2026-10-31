@@ -112,3 +112,15 @@ def test_session_route_app_parts_names_stale_screens(tmp_path):
     code, body = R.Router().call("GET", "/api/app-parts", {}, None, sess)
     assert code == 200 and body["stale"] == ["tabs"] and body["parts"][0]["state"] == "stale", body
     assert (out / "parts.json").read_bytes() == before
+
+
+def test_status_links_screens_to_app_parts_without_waiting_for_the_cache(tmp_path):
+    """/both(V1): status()['links'] = {화면 id: {file, parts:[{file, repo, watch}]}} — git 캐시(60초)와 달리 parts.json 을 고치면 바로 보인다."""
+    out = make_out(tmp_path, tmp_path / "not-a-repo", "g:" + "a" * 16)
+    t = [0.0]
+    w = PF.PartsWatch(out, clock=lambda: t[0])
+    st = w.status()
+    assert st["links"] == {"tabs": {"file": "screens/tabs.html", "parts": [
+        {"file": "screens/mock-a.html", "repo": str(tmp_path / "not-a-repo"), "watch": ["ui/src"]}]}}, st
+    (out / "parts.json").write_text(json.dumps({"version": 1, "parts": []}), encoding="utf-8")
+    assert w.status()["links"] == {}, "연결을 지우면 캐시 안에서도 바로"

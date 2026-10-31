@@ -59,7 +59,7 @@ def out():
 
 
 def test_slash_opens_list_only_for_a_bare_command_word(out):
-    assert out["match"] == [["memo"], ["memo"], ["memo"], ["memo"], [], [], [], [], ["memo"], [], []]
+    assert out["match"] == [["memo", "both"], ["memo"], ["memo"], ["memo"], [], [], [], [], ["memo", "both"], [], []], "'/' 만이면 명령 모두(/both = V1)"
 
 
 def test_slash_command_works_anywhere_after_a_space_or_line_start(out):
