@@ -5,7 +5,7 @@
      screen.written by ai = ev.rev > at.files 일 때만 {do:'cards', ids, seq}(바뀐 카드 다시 싣기) — 그중 echo(되살리기 notify 의 지켜보기 메아리)는 한 번 먹는다
      screen.written by human = 처음 보는 stamp 일 때만 {do:'data', ids, stamp}(판 데이터 + 바뀐 카드) — 캔버스가 스스로 쓴 것(own)은 건너뜀
      ai.write = {do:'aiWrites'} · build.done = {do:'built', ids} · build.failed(async, repaired 가 null 아님) = {do:'revert', ids: reverted, why, screens}
-     agent.hello/away/progress/reply · request.sent(47-5b) = [](기준 id 만 앞으로 — View 는 hd-event 로 받는다)
+     agent.hello/away/progress/reply · request.sent(47-5b) · verify.ask(V2 hd verify — view-twin 이 hd-event 로 받음) = [](기준 id 만 앞으로 — View 는 hd-event 로 받는다)
      reset = {do:'state'}, {do:'files'}, {do:'aiWrites'}(놓친 것을 다시 맞춤), 기준 id = ev.last · 이미 받은 id(이어 받기로 다시 옴)·모르는 type·깨진 이벤트 = []
    own(s, stamp, ids, echo, t) → {s, fresh} — 캔버스가 스스로 쓴·되살린 것을 다시 실으려 함: 그 stamp 를 이벤트로 이미 실었으면 fresh false.
      도장 없는 쓰기(keep 없는 되살리기 — 이벤트 stamp null) = 화면마다 RECENT_MS 안에 반대쪽(이벤트 ↔ 캔버스)이 실었으면 건너뜀(어느 쪽이 먼저 와도 한 번)
@@ -17,7 +17,7 @@
 'use strict';
 var HD = globalThis.HD = globalThis.HD || {};
 var TYPES = ['screen.written', 'notes.changed', 'claim', 'release', 'ai.write', 'build.started', 'build.done', 'build.failed', 'reset',
-             'agent.hello', 'agent.away', 'agent.progress', 'agent.reply', 'request.sent', 'agent.transcript'];   // S3b 터미널 대화(대화 패널) · 47-5b: 받는 곳 상태·진행 줄 — 할 일 없음(hd-event 로만 알림), 마지막 id 는 앞으로
+             'agent.hello', 'agent.away', 'agent.progress', 'agent.reply', 'request.sent', 'agent.transcript', 'verify.ask'];   // S3b 터미널 대화(대화 패널) · 47-5b: 받는 곳 상태·진행 줄 — 할 일 없음(hd-event 로만 알림), 마지막 id 는 앞으로
 var ECHO_MS = 4000, RECENT_MS = 1500, SEEN_MAX = 200, MAX_WAIT = 30000;
 var has = function (o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); };
 

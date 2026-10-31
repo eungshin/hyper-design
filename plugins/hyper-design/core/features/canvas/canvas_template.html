@@ -1372,6 +1372,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
 PP = FT.popPlace || null;
 TW = FT.talkWindow || null;                    // 대화 창 틀(R53) — 도크 배치가 바뀌면 onLayout 이 layout() 을 부른다
 AD = FT.address || null; if (AD) AD.attach({copy: function (t) { return SN.copy(t); }});   // 주소 복사(R30) — 클립보드는 보내기와 같은 길
+if (FT.twin && FT.twin.layer) FL.add(FT.twin.layer);   // 맞음 검증 목록 창(modules/view-twin.js, V2) — 떠 있는 층(Esc·바깥 누르기는 view-float-stack)
 // 판 글 레이어(modules/view-board-text.js · 규칙 board-text.js, t51-9) — 쓰기 길(바로·반영 대기)·숨김·카드 글 상자·도구는 셸 것을 넘긴다
 BT = FT.boardText ? FT.boardText.attach({data: D, on: function () { return VS.on; }, write: function (l, list) { return VS.write(l, list); },
   queue: function (l, list, msg) { ED.add(l, list, msg, null, true); }, hide: LF.hide, hidden: LF.hidden, tool: function () { return tool; },

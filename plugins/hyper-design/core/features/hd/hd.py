@@ -35,6 +35,8 @@
   hd parts [--check [<file>] | --rebuild [<file>]] [<name|path>]
                                           앱 부품(out/parts.json): 파일 · 낡음|최신|모름 · 미커밋 변경 포함 · 빌드 시각 — 읽기만(git 나무 도장 비교)
                                           --rebuild = build argv(cwd = 앱 저장소) → post 단계 → 파일에 원자적으로 → 기록(자물쇠, 미커밋이면 경고 + dirty)
+  hd verify <화면> [<name|path>]          캔버스 화면 ↔ 그 앱 카드(parts.json 짝)가 맞나 — 열린 캔버스가 재고(스크립트, AI 없음) 결과 JSON + 한 줄.
+                                          종료 코드 0 일치 · 1 다름 · 2 검증 못 함(캔버스 안 열림 · 짝 없음 · 10초 넘김). 브라우저를 띄우지 않는다
   hd locate <주소…|->                    캔버스 '주소 복사'(R30) 줄 → 화면 파일 · 요소 경로 · 그 요소의 지금 바깥 HTML 앞 300자(읽기만)
                                           줄 = hd://<프로젝트>/<화면>#<요소 경로>  <화면 파일> · "<글>" — 여러 줄은 - (stdin)
   모든 명령 --json = 기계용 출력. 쓰기는 늘 도우미로(도우미가 없으면 hd reply 는 실패하고 띄우는 법을 알려 준다).
@@ -279,6 +281,17 @@ def cmd_parts(a):
     return {"project": p.name, "out": str(p.out), "parts": rows}, head + "\n" + hd_parts.format_rows(rows)
 
 
+def cmd_verify(a):
+    import hd_verify as V
+    try:
+        res = _hub().pick(a.target).verify(a.screen)
+    except S.HdError as e:                           # 떠 있는 캔버스 없음 · 옛 도우미(404) · 시간 넘김 = 검증 못 함(2)
+        res = V.unreachable(a.screen, e.line())
+    code, line = V.outcome(res)
+    js = json.dumps(res, ensure_ascii=False, indent=1)
+    return res, js + "\n" + line, code
+
+
 def cmd_locate(a):
     """주소 줄(들) → 화면 파일 · 경로 · 바깥 HTML(읽기만). - 또는 인자 없음 = stdin(여러 줄)."""
     import hd_address, hd_locate
@@ -403,6 +416,10 @@ def parser():
                     help="다시 빌드(build argv → post → 파일에 원자적으로 → 기록) — FILE 없으면 전부")
     pa.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
     pa.set_defaults(fn=cmd_parts)
+    vf = sub.add_parser("verify", parents=[common], help="캔버스 화면 ↔ 앱 카드 맞음 검증(0 일치 · 1 다름 · 2 검증 못 함)")
+    vf.add_argument("screen", help="캔버스 화면 id")
+    vf.add_argument("target", nargs="?", help="이름 또는 out 경로(떠 있는 것이 하나면 생략)")
+    vf.set_defaults(fn=cmd_verify)
     lc = sub.add_parser("locate", parents=[common], help="캔버스 '주소 복사' 줄 → 화면 파일 · 요소 경로 · 지금 HTML(읽기만)")
     lc.add_argument("address", nargs="*", help="hd://… 줄(따옴표로 한 줄 통째 · - 또는 없음 = stdin, 여러 줄)")
     lc.set_defaults(fn=cmd_locate)
@@ -424,14 +441,15 @@ def main(argv=None):
             pass
     a = parser().parse_args(argv)
     try:
-        data, text = a.fn(a)
+        got = a.fn(a)                                # (data, text) | (data, text, 종료 코드) — hd verify 는 결과로 코드를 정한다
     except S.HdError as e:
         if a.json:
             print(json.dumps(e.as_dict(), ensure_ascii=False))
         print("hd: %s" % e.line(), file=sys.stderr)
         return e.code
+    data, text = got[0], got[1]
     print(json.dumps(data, ensure_ascii=False, indent=1) if a.json else text)
-    return 0
+    return got[2] if len(got) > 2 else 0
 
 
 if __name__ == "__main__":

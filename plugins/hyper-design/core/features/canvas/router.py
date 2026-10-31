@@ -120,6 +120,8 @@ ROUTES = {
         "/api/archive": lambda s, q, b: s.archive.post(b),
         "/api/chat": lambda s, q, b: s.chat.post(b),                    # S3 캔버스가 남기는 ask(보낸 글·칩) · undone(턴 되돌림)
         "/api/forward": _obj(lambda s, q, b: s.queue.send(b)),          # 47-5a: to · notes, 이벤트 또는 어댑터
+        "/api/verify": _obj(lambda s, q, b: s.verify.ask(b)),          # V2 hd verify {screen} → 열린 캔버스가 잰 결과(최대 10초 기다림)
+        "/api/verify-result": _obj(lambda s, q, b: s.verify.answer(b)),   # V2 캔버스가 돌려주는 결과 {req, result}
         "/hello": lambda s, q, b: s.presence.hello(b),
         "/api/hello": lambda s, q, b: s.presence.hello(b),
         "/beat": lambda s, q, b: s.presence.beat(b),

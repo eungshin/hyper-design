@@ -1044,4 +1044,59 @@
     else if (d.type === 'hd-css-reload') reloadSheet(d.sheet, d.v);
     else if (d.type === 'hd-tokens-reload') reloadTokens(d.v);   // 옛 이름(R55 phase F) — 옛 캔버스가 보내도 받는다
   });
+  /* ---------- 짝 검증 스냅숏(V2 hd verify — 캔버스 modules/view-twin.js, 비교는 twin-diff.js): 메시지 처리기 하나 ----------
+     {type:'hd-snapshot', tag} → {type:'hd-snapshot-r', tag, screen, items:[{role, text, tag, style:{color, bg, fs, fw, radius}}], size: 상한 전 수}
+     {type:'hd-snapshot-mark', i} → 다시 재서 i 번째 항목에 주황 테두리(i 가 null 이면 지움). 무엇을 담나 = snapItem 하나:
+     보이는 요소만(display·visibility·opacity·크기 0 빼고), 역할 button·heading·link·input·img(alt 있음)·text(제 글자 있음), 문서 차례, SNAP_MAX 개까지.
+     button·heading·link·input·img 는 안쪽을 따로 담지 않는다(그 글자가 곧 항목). 팔레트가 붙인 것(data-hd-*)·script·style·iframe·svg 는 건너뛴다. */
+  (function () {
+    var SNAP_MAX = 400, LEAF = {button: 1, heading: 1, link: 1, input: 1, img: 1}, SKIP = /^(script|style|template|noscript|iframe|svg|canvas|object)$/;
+    var BTN_INPUT = /^(button|submit|reset)$/, mark = null;
+    function flat(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+    function own(el) { var t = ''; for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3) t += n.nodeValue; return flat(t); }
+    function snapItem(el, cs) {                        // 요소 하나 → 항목 | null(담지 않음) — 담는 규칙은 여기 하나
+      var tag = el.localName, r = (el.getAttribute('role') || '').toLowerCase(), type = (el.getAttribute('type') || '').toLowerCase(), role = null, text = '';
+      if (r === 'button' || tag === 'button' || (tag === 'input' && BTN_INPUT.test(type))) { role = 'button'; text = tag === 'input' ? el.value : el.textContent; }
+      else if (r === 'heading' || /^h[1-6]$/.test(tag)) { role = 'heading'; text = el.textContent; }
+      else if (r === 'link' || (tag === 'a' && el.hasAttribute('href'))) { role = 'link'; text = el.textContent; }
+      else if (tag === 'input' || tag === 'textarea' || tag === 'select') { if (type === 'hidden') return null; role = 'input'; text = el.getAttribute('placeholder') || el.getAttribute('aria-label') || ''; }
+      else if (tag === 'img') { text = flat(el.getAttribute('alt')); if (!text) return null; role = 'img'; }
+      else { text = own(el); if (!text) return null; role = 'text'; }
+      text = flat(text) || flat(el.getAttribute('aria-label'));
+      if (cs.visibility === 'hidden' || cs.visibility === 'collapse' || +cs.opacity === 0) return null;
+      var b = el.getBoundingClientRect(); if (!(b.width > 0 && b.height > 0)) return null;
+      return {role: role, text: text, tag: tag, style: {color: cs.color, bg: cs.backgroundColor, fs: parseFloat(cs.fontSize) || 0,
+              fw: parseInt(cs.fontWeight, 10) || 400, radius: parseFloat(cs.borderTopLeftRadius) || 0}};
+    }
+    function capture() {
+      var items = [], els = [], total = 0;
+      (function walk(p) {
+        for (var c = p.firstElementChild; c; c = c.nextElementSibling) {
+          if (SKIP.test(c.localName) || c.hasAttribute('data-hd-pick') || c.hasAttribute('data-hd-board')) continue;
+          var cs = getComputedStyle(c); if (cs.display === 'none') continue;
+          var it = snapItem(c, cs);
+          if (it) { total++; if (items.length < SNAP_MAX) { items.push(it); els.push(c); } }
+          if (!it || !LEAF[it.role]) walk(c);
+        }
+      })(document.body || document.documentElement);
+      return {items: items, els: els, size: total};
+    }
+    function markAt(i) {
+      if (mark) { mark.remove(); mark = null; }
+      var el = i == null ? null : capture().els[+i]; if (!el) return;
+      var r = el.getBoundingClientRect();
+      mark = document.createElement('div'); mark.setAttribute('data-hd-pick', '');
+      mark.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #ea580c;background:rgba(234,88,12,.12);border-radius:4px;' +
+        'left:' + (r.left - 3) + 'px;top:' + (r.top - 3) + 'px;width:' + (r.width + 2) + 'px;height:' + (r.height + 2) + 'px';
+      document.documentElement.appendChild(mark);
+    }
+    addEventListener('message', function (e) {
+      var d = e.data; if (!d || typeof d !== 'object') return;
+      if (d.type === 'hd-snapshot') {
+        whenLoaded(function () { setTimeout(function () {   // 앱 무대(Svelte)는 load 뒤 한 틱에 붙는다
+          var s = capture(); send({type: 'hd-snapshot-r', tag: d.tag || '', screen: screenId(), items: s.items, size: s.size});
+        }, 30); });
+      } else if (d.type === 'hd-snapshot-mark') markAt(d.i);
+    });
+  })();
 })();

@@ -8,7 +8,8 @@ import collections, json, sys, threading, time
 
 TYPES = ("screen.written", "notes.changed", "claim", "release", "ai.write", "build.started", "build.done", "build.failed",
          "agent.hello", "agent.away", "agent.progress", "agent.reply", "request.sent",   # 47-5a: 접속·보내기
-         "agent.transcript")                         # S3b: 터미널 대화 줄(대화 패널이 시간 차례로 섞는다)
+         "agent.transcript",                         # S3b: 터미널 대화 줄(대화 패널이 시간 차례로 섞는다)
+         "verify.ask")                               # V2: hd verify — 열린 캔버스가 그 화면을 앱 카드와 견줘 /api/verify-result 로 답한다(verify_desk.py)
 COMMON = ("id", "type", "ts", "project")
 RING = 256                                           # 이어 받기로 다시 줄 수 있는 최근 이벤트 수
 QUEUE_MAX = 512                                      # 구독자 하나가 이만큼 뒤처지면 닫는다(다시 붙어 이어 받기)

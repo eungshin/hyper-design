@@ -26,6 +26,7 @@ WAKE = ("open", "notes.changed", "claim", "release", "reset")   # wait 가 상�
 KINDS = ("paseo", "claude", "codex", "other")         # 서버 presence.KINDS 와 같게(protocol presence.json)
 PROGRESS_MAX = 200
 BEAT_MIN = 0.5
+VERIFY_HTTP = 15.0                                   # hd verify — 도우미가 캔버스를 10초까지 기다린다(verify_desk.WAIT) + 여유
 
 
 def check_claim(screen, by=None, note=None):
@@ -180,6 +181,13 @@ class Project:
     def apply(self, edits, **opts):
         """화면 파일에 바로 쓰기 POST /api/apply {edits, …opts} → {applied, failed, stamp, changed, history?}(모양 = protocol helper.json)."""
         return self._call("POST", "/api/apply", dict(opts, edits=list(edits)), timeout=120)
+
+    def verify(self, screen, timeout=VERIFY_HTTP):
+        """V2 hd verify — POST /api/verify {screen} → 열린 캔버스가 잰 결과 {status: match|differ|no-pair|error|no-canvas|timeout, …}.
+        도우미가 10초까지 기다리므로 HTTP 는 VERIFY_HTTP 초. 브라우저를 띄우지 않는다(열린 캔버스가 없으면 status no-canvas)."""
+        if not isinstance(screen, str) or not screen.strip():
+            raise E.Invalid("화면 id 가 있어야 해요")
+        return self._call("POST", "/api/verify", {"screen": screen.strip()}, timeout=timeout)
 
     def attach(self, agent):
         """보내기 받을 에이전트 바꾸기(None = 떼기) → 서버가 받은 agent. 표지의 agent 도 고친다."""
