@@ -8,11 +8,13 @@ SessionHandler = 세션 하나를 내는 HTTP 처리기(helper.py 가 out 하나
 /api/forward {text, to?, notes?} = Queue.send(이벤트 또는 어댑터) — 계약 tests/protocol/presence.json.
 허브 옛 코드(R34): 허브 안 세션(session.hub_stale 이 있음)이면 GET /api/state 답에 hubStale {sha, since} | null 을 싣는다(도우미는 싣지 않음 = 모름) ·
 POST /api/hub/restart = 서버가 넘긴 on_restart(허브의 [다시 켜기] — 없으면 모르는 주소).
+캐시(보드 전환 S2): Cache-Control 은 end_headers 가 cache_policy.header(주소, 답 상태) 하나로 · out 정적 파일은 ETag(send_head) — 같은 판이면 304.
 """
-import json, pathlib, select, socket, sys, time, urllib.parse
+import json, os, pathlib, select, socket, sys, time, urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
 import attach_rules as AR  # 첨부 이미지 본문 한도(R22)
+import cache_policy as CP  # 캐시 머리글 규칙 하나(S2)
 import chat_log as CL
 import events as EV
 from state_store import STATE_MAX  # out_io 가 hd 폴더를 sys.path 에 넣는다
@@ -201,14 +203,41 @@ class SessionHandler(SimpleHTTPRequestHandler):
             res[2]()
         return None
 
+    _status, _etag = 200, None
+
+    def send_response(self, code, message=None):     # 답 상태를 기억 — 캐시 규칙이 200·304 가 아닌 답은 no-store 로
+        self._status = code
+        super().send_response(code, message)
+
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", CP.header(self.path, self._status))
+        if self._etag and self._status in CP.CACHED:
+            self.send_header("ETag", self._etag)
+        self._etag = None
         super().end_headers()
+
+    def send_head(self):
+        """out 정적 파일 — 판 표(ETag = mtime_ns·크기)가 If-None-Match 와 같으면 304. 시각(If-Modified-Since)만 온 물음은 견주지 않는다
+        (초 단위라 같은 초 안에 다시 쓴 화면 파일을 놓친다). 못 읽는 파일·폴더는 SimpleHTTPRequestHandler 그대로(404·목록)."""
+        if "If-Modified-Since" in self.headers:
+            del self.headers["If-Modified-Since"]
+        try:
+            f = self.translate_path(self.path)
+            st = None if os.path.isdir(f) else os.stat(f)
+        except OSError:
+            st = None
+        if st is not None:
+            self._etag = CP.etag(st.st_mtime_ns, st.st_size)
+            if CP.same(self.headers.get("If-None-Match"), self._etag):
+                self.send_response(304)
+                self.end_headers()
+                return None
+        return super().send_head()
 
     def _page(self, sess):
         b = sess.page()
         self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-store"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
     def _given_token(self):                          # 머리글, 없으면 이벤트 흐름의 ?hd=(EventSource 는 머리글을 못 보낸다)
         return self.headers.get("X-HD-Token") or getattr(self, "_query_token", None)

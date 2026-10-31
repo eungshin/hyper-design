@@ -1,6 +1,6 @@
 /* View — 프로젝트 고르기 창(#246 → task 44): 위쪽 줄 '프로젝트'(#pbtn)·아래 탭 바 '+' 가 여는 대화 창 — + 새 프로젝트 · 폴더 열기 · 최근 프로젝트 카드(홈과 같은 모양) · 검색 · 홈에서 모두 보기.
    도우미가 없으면(ctx.api.on 거짓 — file:// 또는 도우미 꺼짐) 단추를 만들지 않고 아무것도 바꾸지 않는다.
-   열 때마다 GET /api/projects → HD.projects.rows/filter(휴지통 빼고 검색) → 카드: 썸네일(없으면 빈 무늬) · 제목 · 언제(ago) · 열림 점 · 지금 표시. '없음' 카드는 회색 '폴더 없음', 누르면 까닭 토스트.
+   열 때마다 GET /api/projects(HD.projectList.fresh — 새로 받아 나눠 쓸 답도 바꿈) → HD.projects.rows/filter(휴지통 빼고 검색) → 카드: 썸네일(없으면 빈 무늬) · 제목 · 언제(ago) · 열림 점 · 지금 표시. '없음' 카드는 회색 '폴더 없음', 누르면 까닭 토스트.
    카드 누르기 → POST /api/open {name} → 받은 url 로 이 탭이 간다(지금 것이면 창만 닫음). 새 프로젝트 → 이름 묻기(기본 '새 프로젝트 N') → POST /api/new {title} → url.
    폴더 열기 → POST /api/pick-folder → {name} 이면 그것을 연다 · {cancel} 은 조용히 · {error}·실패는 토스트. 기다리는 동안 그 카드 aria-busy, 한 번에 하나만.
    보내지 않은 상태 쓰기는 떠날 때(pagehide) view-state-sync 가 keepalive 로 마저 보내고, 못 닿으면 쓰기 대기 표시로 다음에 다시 올린다 — 여기서 따로 하지 않는다.
@@ -107,7 +107,7 @@ function mount(ctx) {
   function load() {
     var my = ++seq;
     rows = null; draw();
-    ctx.api.call('GET', '/api/projects').then(function (res) {
+    HD.projectList.fresh(ctx.api).then(function (res) {
       if (my !== seq || back.hidden) return;
       if (res.status !== 200) throw new Error(res.body && res.body.error || ('도우미 답 ' + res.status));
       var r = P.rows(res.body, window.__hdOut || null);

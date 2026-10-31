@@ -15,6 +15,8 @@
   프로젝트 화면(R34)에도 같은 판단: 세션의 GET /api/state 답 hubStale {sha, since} · 페이지 window.__hdHubStale(registry.stale_info), 그 [다시 켜기] =
   세션 토큰 POST /api/hub/restart(canvas/router.py on_restart → 같은 restart)
 - 주소 = http://127.0.0.1:<port>/?hd=<token>
+- 캐시(보드 전환 S2): Cache-Control 은 세션과 같은 canvas/cache_policy.header 하나(SessionHandler.end_headers 를 물려받음) — 홈 화면·API = no-store ·
+  홈 정적 파일·세션 out 정적 파일 = no-cache(out 은 ETag 304) · 썸네일 = max-age=31536000
 """
 import atexit, json, os, pathlib, re, secrets, signal, subprocess, sys, threading, time, urllib.parse, webbrowser
 from http.server import ThreadingHTTPServer
@@ -119,7 +121,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
     ctx = A.Ctx(hub=True, port=hub_port, after_rows=thumbs.schedule, picker=picker, opener=reg.open, closer=reg.close)
 
     class Handler(R.SessionHandler):
-        _sess, _cache = None, None
+        _sess = None
 
         def __init__(self, *a, **k):
             super().__init__(*a, directory=str(HERE), **k)
@@ -154,13 +156,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
             return self._json(404, {"error": "열려 있지 않은 프로젝트예요: %s — 홈에서 다시 여세요" % name})
 
         # ---------------------------------------------------- 홈
-        def end_headers(self):
-            self.send_header("Cache-Control", self._cache or "no-store")
-            self._cache = None
-            R.SimpleHTTPRequestHandler.end_headers(self)
-
-        def _send(self, code, body, ctype, cache=None):
-            self._cache = cache
+        def _send(self, code, body, ctype):                # Cache-Control = SessionHandler.end_headers(cache_policy — 주소·상태로)
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
@@ -192,7 +188,7 @@ def make_hub(port=PORT, renderer=None, picker=None, token=None, page=None, build
             p = A.thumb_path(name) if name else None
             if p is None or not p.is_file():
                 return self._json(404, {"error": "썸네일이 없어요"})
-            self._send(200, p.read_bytes(), "image/png", cache="max-age=31536000")   # 주소의 ?t= 가 바뀌면 새로 받는다
+            self._send(200, p.read_bytes(), "image/png")      # /thumb/ = max-age=31536000(cache_policy) — 주소의 ?t= 가 바뀌면 새로 받는다
 
         def do_GET(self):
             if not self._host_ok():
