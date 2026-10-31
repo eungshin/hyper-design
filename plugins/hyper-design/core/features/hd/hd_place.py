@@ -2,7 +2,7 @@
 
 화면 = screens.json 의 screens[] {id, file, title, group, purpose}. 자리·크기 = 상태 파일 state 의
   card-pos  {id: {dx, dy, g}} — 그 카드가 제 자리(줄 안 차례로 흐른 자리)에서 옮긴 거리(판 px), g = 줄 이름(canvas contract/card-pos.md)
-  card-size {id: {w, h, preset?}} — CSS px 정수 100~4000(canvas contract/artboard.md)
+  card-size {id: {w, h, preset?}} — CSS px 정수 16~60000(canvas contract/artboard.md)
 놓기(plan):
   줄    = --group | --after 화면의 줄 | (--replace) 있던 줄 | screens 마지막 화면의 줄 | 없음. 새 줄이면 groups[] 끝에 넣는다
   차례  = --after 바로 뒤(그 화면의 상태 변형 '<id>--…' 은 건너뜀 — 빌드가 변형을 원래 화면 바로 뒤에 그린다) | 그 줄의 마지막 화면 뒤 | 끝
@@ -18,7 +18,7 @@ import re
 ID_OK = re.compile(r"^[^/\\:*?\"<>|\s.][^/\\:*?\"<>|\s]*$")   # canvas screen_copy.ID_OK 와 같게(테스트가 본다) — 파일 이름이 될 수 있는 한 조각
 ID_MAX = 120
 TITLE_MAX = 200
-SIZE_MIN, SIZE_MAX = 100, 4000                      # canvas artboard.js MIN·MAX
+SIZE_MIN, SIZE_MAX = 16, 60000                      # canvas artboard.js MIN·MAX (R57 — test_canvas_unit_size_range.py 가 같은지 본다)
 PRESET_RE = re.compile(r"\[\s*'(\w+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*,\s*(\d+)\s*\]")
 SIZE_RE = re.compile(r"^\s*(\d+)\s*[x×X*]\s*(\d+)\s*$")
 AT_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")

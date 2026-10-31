@@ -120,10 +120,10 @@ def test_dialog_checks_input_keys_and_saves_preset(abpage):
     e = empty_spot(pg)
     pg.mouse.click(e["x"], e["y"])
     pg.wait_for_selector("#abNew:not([hidden])")
-    pg.fill("#abW", "50")
+    pg.fill("#abW", "10")
     pg.click("#abMake")
     assert pg.is_visible("#abNew"), "잘못된 값이면 만들지 않는다"
-    assert "100~4000" in pg.text_content("#abErr") and pg.get_attribute("#abW", "aria-invalid") == "true"
+    assert "16~60000" in pg.text_content("#abErr") and pg.get_attribute("#abW", "aria-invalid") == "true"
     pg.fill("#abW", "393")
     pg.focus("#abW")
     pg.keyboard.press("ArrowUp")
@@ -174,9 +174,9 @@ def test_multi_select_inputs_apply_to_all_in_one_step(abpage):
     select(pg, "done", shift=True)
     pg.click('#selbar [data-act="size"]')
     pg.wait_for_selector("#abPop:not([hidden])")
-    pg.fill("#abPW", "99")
+    pg.fill("#abPW", "15")
     pg.click("#abPOk")
-    assert pg.is_visible("#abPop") and "100~4000" in pg.text_content("#abPErr"), "잘못된 값 = 알리고 그대로"
+    assert pg.is_visible("#abPop") and "16~60000" in pg.text_content("#abPErr"), "잘못된 값 = 알리고 그대로"
     pg.fill("#abPW", "1440")
     pg.fill("#abPH", "1024")
     pg.focus("#abPH")
@@ -239,3 +239,37 @@ def test_board_with_phone_tablet_desktop_draws_lines(abpage):
     n = pg.evaluate("document.querySelectorAll('#ar path.ln, #ar path').length")
     assert n >= 2, "home → pay → done 선"
     shot(pg, "board-phone-tablet-desktop.png")
+
+
+def set_size(pg, cid, w, h):
+    pg.keyboard.press("0")
+    pg.wait_for_timeout(200)
+    select(pg, cid)
+    pg.click('#selbar [data-act="size"]')
+    pg.wait_for_selector("#abPop:not([hidden])")
+    pg.fill("#abPW", str(w))
+    pg.fill("#abPH", str(h))
+    pg.click("#abPOk")
+    pg.wait_for_timeout(150)
+
+
+def test_ad_banner_and_detail_page_sizes_are_accepted(abpage):
+    """R57 A: 광고 320×50 · 상세페이지 860×40000 — 받고, 판에 그 크기로 서고, 전체 보기에 겹치지 않고 들어온다."""
+    pg = abpage
+    fresh(pg)
+    set_size(pg, "pay", 320, 50)
+    assert pg.is_hidden("#abPop"), pg.text_content("#abPErr")
+    set_size(pg, "done", 860, 40000)
+    assert pg.is_hidden("#abPop"), pg.text_content("#abPErr")
+    assert {k: (v["w"], v["h"]) for k, v in sizes(pg).items()} == {"pay": (320, 50), "done": (860, 40000)}
+    p, d = phone(pg, "pay"), phone(pg, "done")
+    assert (p["w"], p["h"], p["fw"]) == (320, 50, 320) and (d["w"], d["h"], d["fw"]) == (860, 40000, 860), (p, d)
+    pg.keyboard.press("Escape")
+    pg.keyboard.press("0")
+    pg.wait_for_timeout(400)
+    boxes = pg.evaluate("""[...document.querySelectorAll('#rows .card')].map(c => { const r = c.querySelector('.phone').getBoundingClientRect(); return {id: c.dataset.id, l: r.left, r: r.right, t: r.top, b: r.bottom}; })""")
+    by = {b["id"]: b for b in boxes}
+    assert by["home"]["r"] <= by["pay"]["l"] and by["pay"]["r"] <= by["done"]["l"], boxes
+    pane = pg.evaluate("(() => { const r = document.querySelector('#screens').getBoundingClientRect(); return {t: r.top, b: r.bottom}; })()")
+    assert by["done"]["t"] >= pane["t"] - 1 and by["done"]["b"] <= pane["b"] + 1, ("40000 높이도 전체 보기에 들어옴", by["done"], pane)
+    shot(pg, "r57-board-ad-and-detail.png")

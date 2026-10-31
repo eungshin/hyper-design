@@ -98,7 +98,7 @@ button{font:inherit;color:inherit}
 .glabel{font-size:31px;font-weight:700;margin:0 0 104px;white-space:nowrap;position:relative;z-index:7}   /* 줄 제목은 위 줄 카드의 펼친 설명(.cbody z 6) 위 — 고른 줄 아래 줄 제목도 보이고 눌린다(S1c) */
 .cards{display:flex;gap:84px;align-items:flex-start}
 .card{flex:none;width:var(--card-w,375px);position:relative}
-.phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:var(--card-r,28px);overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
+.phone{position:relative;width:var(--card-w,375px);height:var(--card-h,812px);border-radius:min(var(--card-r,28px), calc(var(--card-h,812px) / 4));overflow:hidden;background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.10)}
 .card.xp{z-index:6}
 .card.xp>:not(.phone):not(.pres){visibility:hidden}
 .phone iframe{display:block;width:var(--card-w,375px);height:var(--card-h,812px);border:0;pointer-events:none;background:#fff}
@@ -140,6 +140,7 @@ svg.ar path.ln.cutting{stroke:var(--ui-danger)!important;stroke-opacity:1!import
 #modal{position:fixed;inset:0;z-index:20;background:rgba(20,20,20,.62);display:flex;flex-direction:column;align-items:center;justify-content:center}
 #modal[hidden]{display:none}
 #modal .box{position:relative;border-radius:8px 8px var(--modal-r,30px) var(--modal-r,30px);overflow:hidden;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}   /* 창 = 제목 막대 + 화면 */
+#mview{position:relative;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;background:#fff}   /* 크게 보기 굴림 칸(R57 — 크기·굴림은 view-modal-zoom) */
 #mbox{position:relative;overflow:hidden;background:#fff}
 /* 크게 보기 제목 막대(H15): 위쪽 줄은 그대로, 화면 제목·닫기는 그 창 위 26px 막대 */
 #modal .mbar{height:26px;display:flex;align-items:center;gap:8px;padding:0 4px 0 12px;background:#3a3a37;color:#f1f1ee;font-size:12px;cursor:default}

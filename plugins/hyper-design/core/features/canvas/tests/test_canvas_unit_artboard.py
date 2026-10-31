@@ -1,6 +1,6 @@
 """카드(아트보드) 크기(task 46) Model — modules/artboard.js 순수 함수 단위 테스트(node). 브라우저 없음.
 
-프리셋 묶음(모바일·태블릿·웹/데스크톱 + 사용자 정의) · 검사(정수 100~4000, 한국어 오류) · 카드마다 크기(없으면 프로젝트 기본) ·
+프리셋 묶음(모바일·태블릿·웹/데스크톱 + 사용자 정의) · 검사(정수 16~60000, 한국어 오류 — R57) · 카드마다 크기(없으면 프로젝트 기본) ·
 방향 바꾸기 · 최근 크기 6개 · 내 프리셋 저장 · 깨진 저장값은 버리고 알림 · 빈 레이아웃 → 화면 승격 때 크기 이어받기 · 요청문 글.
 """
 import json, shutil, subprocess, tempfile
@@ -19,7 +19,7 @@ const A = globalThis.HD.artboard, out = {}, DEF = {w: 375, h: 812};
 out.cats = A.CATS.map(c => c.id);
 out.byName = {};
 A.PRESETS.forEach(p => { out.byName[p.name] = [p.cat, p.w, p.h]; });
-out.check = [A.check(393, 852), A.check('834', '1194'), A.check(99, 800), A.check(400, 4001), A.check(393.5, 852), A.check('', 852), A.check('abc', 852), A.check(null, null)];
+out.check = [A.check(393, 852), A.check('834', '1194'), A.check(15, 800), A.check(400, 60001), A.check(393.5, 852), A.check('', 852), A.check('abc', 852), A.check(null, null)];
 const s0 = {};
 out.ofMissing = A.of(s0, 'pay', DEF);
 const s1 = A.set(s0, ['pay', 'home'], {w: 834, h: 1194, preset: 'iPad Pro 11'}, DEF);
@@ -38,12 +38,12 @@ let r = [];
 out.recent = r;
 const sv1 = A.savePreset([], '  내 태블릿 ', '800', '1280');
 const sv2 = A.savePreset(sv1.saved, '내 태블릿', 900, 1300);
-out.save = [sv1, sv2, A.savePreset([], '', 800, 1280), A.savePreset([], '이름', 50, 1280)];
-out.norm = A.norm({pay: {w: 834, h: 1194, preset: 'iPad Pro 11'}, bad1: {w: 'x', h: 3}, bad2: null, bad3: {w: 99999, h: 800}, ok2: {w: 500, h: 700}});
+out.save = [sv1, sv2, A.savePreset([], '', 800, 1280), A.savePreset([], '이름', 10, 1280)];
+out.norm = A.norm({pay: {w: 834, h: 1194, preset: 'iPad Pro 11'}, bad1: {w: 'x', h: 3}, bad2: null, bad3: {w: 60001, h: 800}, ok2: {w: 500, h: 700}});
 out.normJunk = [A.norm(null), A.norm([1, 2]), A.norm('x')];
 out.prefs = [A.prefs(null), A.prefs({recent: [{w: 393, h: 852}, {w: 'x'}], saved: [{name: 'a', w: 300, h: 300}, {name: '', w: 300, h: 300}, 7]})];
 out.carry = [A.carry({'new-1': {w: 834, h: 1194}}, 'new-1', 'pay'), A.carry({}, 'new-1', 'pay')];
-out.nudge = [A.nudge(393, 'ArrowUp', false), A.nudge(393, 'ArrowDown', true), A.nudge(100, 'ArrowDown', true), A.nudge(3995, 'ArrowUp', true), A.nudge(393, 'a', false), A.nudge('', 'ArrowUp', false)];
+out.nudge = [A.nudge(393, 'ArrowUp', false), A.nudge(393, 'ArrowDown', true), A.nudge(16, 'ArrowDown', true), A.nudge(59995, 'ArrowUp', true), A.nudge(393, 'a', false), A.nudge('', 'ArrowUp', false)];
 out.common = [A.common(s1, ['pay', 'home'], DEF), A.common(s1, ['pay', 'x'], DEF), A.common({}, ['x', 'y'], DEF)];
 out.list = {
   mobile: A.list('mobile', {recent: [], saved: []}).length,
@@ -84,7 +84,7 @@ def test_check_integers_in_range_with_korean_error(out):
     ok1, ok2, small, big, frac, empty, word, none = out["check"]
     assert ok1 == {"ok": True, "w": 393, "h": 852} and ok2 == {"ok": True, "w": 834, "h": 1194}
     for bad in (small, big, frac, empty, word, none):
-        assert bad["ok"] is False and "100" in bad["error"] and "4000" in bad["error"], bad
+        assert bad["ok"] is False and "16~60000" in bad["error"], bad
     assert "너비" in small["error"] and "높이" in big["error"]
 
 
@@ -115,7 +115,7 @@ def test_save_preset(out):
     assert s1["ok"] and s1["saved"] == [{"name": "내 태블릿", "w": 800, "h": 1280}]
     assert s2["ok"] and s2["saved"] == [{"name": "내 태블릿", "w": 900, "h": 1300}], "같은 이름 = 덮어쓰기"
     assert noname["ok"] is False and "이름" in noname["error"]
-    assert small["ok"] is False and "100" in small["error"]
+    assert small["ok"] is False and "16~60000" in small["error"]
 
 
 def test_norm_drops_broken_entries(out):
@@ -137,7 +137,7 @@ def test_carry_moves_draft_size_to_screen(out):
 
 
 def test_nudge_arrow_keys(out):
-    assert out["nudge"] == [394, 383, 100, 4000, None, None]
+    assert out["nudge"] == [394, 383, 16, 60000, None, None]
 
 
 def test_common_and_tab_lists(out):

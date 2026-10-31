@@ -1,1291 +1,1325 @@
 {
-  "about": "조각마다 검토(테스트·책임 게이트) 비용과 그 값어치. review.py 가 이 파일과 runs.json(자동 기록)을 읽어 과한 검토를 찾는다. 조각을 커밋할 때 한 항목을 더한다.",
-  "policy": {
-    "max_full_per_numbered_slice": 1,
-    "full_runs_in_sub_slice": 0,
-    "gate_noise_max_ratio": 1.0,
-    "gate_minutes_per_slice": 10,
-    "repeat_full_within_min": 60,
-    "review_after_slice": "2.2"
+ "about": "조각마다 검토(테스트·책임 게이트) 비용과 그 값어치. review.py 가 이 파일과 runs.json(자동 기록)을 읽어 과한 검토를 찾는다. 조각을 커밋할 때 한 항목을 더한다.",
+ "policy": {
+  "max_full_per_numbered_slice": 1,
+  "full_runs_in_sub_slice": 0,
+  "gate_noise_max_ratio": 1.0,
+  "gate_minutes_per_slice": 10,
+  "repeat_full_within_min": 60,
+  "review_after_slice": "2.2"
+ },
+ "slices": [
+  {
+   "slice": "gate",
+   "commit": "eff89a3",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 0,
+    "minutes": 0.1
+   },
+   "gate": {
+    "checks": 14,
+    "sec": 0.28,
+    "fired": []
+   },
+   "caught": [],
+   "waste": [],
+   "note": "책임 게이트 도입 — 일부러 어긴 사본 3개(Model→ViewModel, View→View, 셸 +2 var +1 function) 모두 잡음"
   },
-  "slices": [
+  {
+   "slice": "E3·E4·E6",
+   "commit": "071a67b",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 8.4
+   },
+   "gate": {
+    "checks": 15,
+    "sec": 0.3,
+    "fired": [
+     {
+      "rule": "shell-ratchet",
+      "verdict": "noise",
+      "minutes": 3,
+      "why": "새 모듈을 붙이는 var EP = HD.viewEdgePan.mount(…) 한 줄을 비대로 셈",
+      "fix": "붙이는 줄은 세지 않게 규칙을 다듬음"
+     }
+    ]
+   },
+   "caught": [
     {
-      "slice": "gate",
-      "commit": "eff89a3",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 0,
-        "minutes": 0.1
-      },
-      "gate": {
-        "checks": 14,
-        "sec": 0.28,
-        "fired": []
-      },
-      "caught": [],
-      "waste": [],
-      "note": "책임 게이트 도입 — 일부러 어긴 사본 3개(Model→ViewModel, View→View, 셸 +2 var +1 function) 모두 잡음"
-    },
-    {
-      "slice": "E3·E4·E6",
-      "commit": "071a67b",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 8.4
-      },
-      "gate": {
-        "checks": 15,
-        "sec": 0.3,
-        "fired": [
-          {
-            "rule": "shell-ratchet",
-            "verdict": "noise",
-            "minutes": 3,
-            "why": "새 모듈을 붙이는 var EP = HD.viewEdgePan.mount(…) 한 줄을 비대로 셈",
-            "fix": "붙이는 줄은 세지 않게 규칙을 다듬음"
-          }
-        ]
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "E3·E4·E6 실패 테스트 3개 먼저(빨강 확인) → 고침"
-        }
-      ],
-      "waste": [],
-      "note": ""
-    },
-    {
-      "slice": "2.5a",
-      "commit": "07d7ccb",
-      "numbered": false,
-      "tests": {
-        "full": 2,
-        "area": 0,
-        "module": 1,
-        "minutes": 24.1
-      },
-      "gate": {
-        "checks": 17,
-        "sec": 0.3,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "트리거 끄는 중 Esc 뒤 놓을 때까지 판이 밀림"
-        },
-        {
-          "by": "full",
-          "what": "삭제한 카드가 연결 강조 상태라 흐려지지 않음(test_pick_cards_selection_bar)"
-        }
-      ],
-      "waste": [
-        {
-          "what": "하위 조각인데 두 번째 전체 실행 + 편집 모듈 실행",
-          "minutes": 15,
-          "fix": "하위 조각은 영역(-m)만, 실패 뒤엔 --lf, 전체는 번호 조각 끝 1회"
-        },
-        {
-          "what": "첫 전체 실행(9분) 대신 영역이면 됐음 — 실패 7개 중 6개가 지운 동작(Shift+클릭·Ctrl+클릭)에 묶인 옛 테스트",
-          "minutes": 6,
-          "fix": "큰 실행 전 바꾼 선택자·키를 tests/ 에서 grep"
-        }
-      ],
-      "note": "test_move_tool_moves_card 4px 흔들림 1회(따로 3회 통과) — 새로고침 직후 자리 재기 타이밍"
-    },
-    {
-      "slice": "2.5b",
-      "commit": "fe0783e",
-      "numbered": false,
-      "tests": {
-        "full": 2,
-        "area": 0,
-        "minutes": 19.2
-      },
-      "gate": {
-        "checks": 18,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "선 굵기 calc 에 단위가 없어 브라우저가 px 를 계산 못 함"
-        },
-        {
-          "by": "full",
-          "what": "선 투명도 transition 이 멈춰 연결 보기에서 다른 선이 흐려지지 않음(옛 test_shift_click_focus 가 잡음)"
-        }
-      ],
-      "waste": [
-        {
-          "what": "하위 조각인데 두 번째 전체 실행",
-          "minutes": 9,
-          "fix": "영역(unit or flow or links or tools) + --lf"
-        },
-        {
-          "what": "첫 전체 실행(10분) 대신 영역이면 됐음 — 실패 5개 중 4개가 지운 #arrows·A 키·안내 문구에 묶인 옛 테스트",
-          "minutes": 6,
-          "fix": "큰 실행 전 grep"
-        }
-      ],
-      "note": "첫 전체 실행이 진짜 버그 1개(transition)도 잡았다 — 전체를 아예 빼면 안 되고, 번호 조각 끝 1회는 남긴다"
-    },
-    {
-      "slice": "2.5d",
-      "commit": "002be95",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 12.5
-      },
-      "gate": {
-        "checks": 18,
-        "sec": 0.6,
-        "fired": [
-          {
-            "rule": "shell-ratchet",
-            "verdict": "real",
-            "minutes": 2,
-            "what": "function 116 > 114 — 선 자르기 맞춤(segX·lnPoints·cutHits)을 선 주인 view-lines.hits 로 옮김(맞는 자리)"
-          },
-          {
-            "rule": "shell-ratchet",
-            "verdict": "noise",
-            "minutes": 1,
-            "what": "var 85 > 84 — TITLES 를 titleOf 넘기기로 바꿈(숫자 맞추기, 구조 이득 없음)"
-          }
-        ]
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "E20·E21 실패 테스트 2개 빨강 확인 뒤 초록"
-        },
-        {
-          "by": "area",
-          "what": "점선 calc 에 단위가 없어 계산된 dasharray 가 숫자가 아님(2.5b 와 같은 종류) → px 단위"
-        }
-      ],
-      "waste": [
-        {
-          "what": "옛 테스트 고친 뒤 영역 1회에서 실패 7개 중 6개가 테스트 쪽(방향마다 태그·배율 따른 굵기·반대 방향 링크·이웃 선 촘촘함·이어진 실패)",
-          "minutes": 4,
-          "fix": "옛 테스트를 고칠 때 고정본 데이터(D.links 양방향)·화면 밖 좌표를 먼저 확인"
-        },
-        {
-          "what": "디버그용 임시 파일이 import * 로 테스트 전체를 끌어와 7분",
-          "minutes": 7,
-          "fix": "디버그는 필요한 픽스처만 import"
-        }
-      ],
-      "note": "선 체계 하나로 합치며 옛 연결 보기 테스트 6개 삭제(cycle·범례 체크·범례 마우스 강조·옆면 출발·차선 태그·틈 칸 태그), 나머지는 같은 선 기준으로 고침"
-    },
-    {
-      "slice": "2.5c",
-      "commit": "b7839a5",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 10.5
-      },
-      "gate": {
-        "checks": 19,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "E13 휴지통·이름 테스트 빨강(버튼 없음) → 초록"
-        }
-      ],
-      "waste": [
-        {
-          "what": "전체 1회의 실패 3개가 모두 테스트 쪽(패널에 이름이 함께 보이게 바꾼 것 · ln_mid 가 판 밖·이웃 선 조건으로 점을 못 찾음)",
-          "minutes": 3,
-          "fix": "좌표를 고르는 헬퍼는 판을 그 점으로 옮긴 뒤 잰다(ln_mid)"
-        }
-      ],
-      "note": "번호 조각 2.5 끝 — 전체 1회(118개 중 115 pass, 3 테스트 쪽) → --lf·묶음 5 pass"
-    },
-    {
-      "slice": "2",
-      "commit": "f230916",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 10.0
-      },
-      "gate": {
-        "checks": 22,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "E5·E8 합격 테스트 빨강(끊기가 메모 목록에 섞임) → 초록"
-        }
-      ],
-      "waste": [
-        {
-          "what": "전체 1회 실패 2개 모두 테스트 쪽(잇기가 반영 대기 패널로 간 것 + 그 연쇄)",
-          "minutes": 1,
-          "fix": "큰 실행 전 grep 에 '#notes' 보이기 확인도 넣기"
-        }
-      ],
-      "note": "번호 조각이고 바뀐 영역이 전체와 거의 같아 영역 실행 없이 전체 1회만. 셸 function 114 → 111, SHELL_MAX 내림"
-    },
-    {
-      "slice": "2.2",
-      "commit": "f230916",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 2,
-        "minutes": 9.5
-      },
-      "gate": {
-        "checks": 23,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "D3·D4 받아들이기 테스트를 먼저 써서(빨강 3개) 일꾼이 계약 그대로 구현 — 첫 회 초록"
-        },
-        {
-          "by": "new-test",
-          "what": "단위 test_single_file_output 이 모듈 목록 빠짐(view-sync)을 잡음 — 예상한 빨강"
-        }
-      ],
-      "waste": [
-        {
-          "what": "브라우저 테스트 2회 재실행: 셸 함수를 전역으로 부름(deleteCards 없음) · 기록 줄 수를 잘못 셈(되돌린 줄은 버려짐)",
-          "minutes": 2,
-          "fix": "새 브라우저 테스트는 기존 테스트의 UI 경로(고르기→Delete·연결 패널 휴지통)를 먼저 grep"
-        },
-        {
-          "what": "일꾼의 브라우저 테스트 1회가 메인의 셸 편집과 겹쳐 시간 초과",
-          "minutes": 1,
-          "fix": "일꾼에게 다른 단계 파일에 기대는 테스트는 마지막에만, 실패해도 보고만"
-        }
-      ],
-      "note": "멀티코드 섞어 쓰기: A(helper.py)만 coder 일꾼(받아들이기 테스트를 메인이 먼저 씀), B·C 는 메인. 일꾼 75k 토큰·5분, 계약 해석 차이 없음."
-    },
-    {
-      "slice": "3",
-      "commit": "1890a72",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 10.5
-      },
-      "gate": {
-        "checks": 23,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "메뉴 합격 테스트를 먼저 써서 빨강 확인 — 100% 누른 뒤 메뉴가 열린 채라 다음 누르기가 닫는 문제를 잡음(100%도 닫기로)"
-        }
-      ],
-      "waste": [
-        {
-          "what": "옛 테스트 정리 스크립트 두 실수: 전환 메뉴 테스트를 지우며 바로 뒤 상수 STROKES_JS 까지 지움, #fit 일괄 치환이 새 테스트 줄까지 바꿈 — 전체 실행에서 2개 실패",
-          "minutes": 1.5,
-          "fix": "테스트 블록 지우기는 다음 def 가 아니라 다음 최상위 이름(def·상수)까지, 일괄 치환 뒤 git diff 로 새 테스트 줄 확인"
-        }
-      ],
-      "note": "영역이 거의 전체(#fit 을 쓰는 테스트가 모든 영역)라 영역 실행 없이 조각 끝 전체 1회 + 실패한 것만 다시."
-    },
-    {
-      "slice": "4",
-      "commit": "ab640eb",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 7
-      },
-      "gate": {
-        "checks": 25,
-        "sec": 0.6,
-        "fired": [
-          {
-            "rule": "layer-table",
-            "verdict": "real",
-            "what": "새 Model layers.js 를 층 표에 등록하라고 막음 — 새 모듈이 층을 밝히게 하는 안내 그대로"
-          }
-        ]
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "레이어 합격 테스트를 먼저 써서 빨강 — 구현 뒤 첫 실행에서 레이어 패널이 고르기(SL)보다 먼저 붙어 페이지가 안 뜨는 것을 잡음"
-        }
-      ],
-      "waste": [
-        {
-          "what": "영역 실행을 시작했다가 번호 조각 끝이라 전체와 겹쳐 멈춤",
-          "minutes": 0.5,
-          "fix": "번호 조각 끝이면 영역을 건너뛰고 바로 전체 1회"
-        },
-        {
-          "what": "새 테스트 도움 함수 이름(card_xy)이 같은 파일의 기존 함수를 덮어 옮기기 테스트 3개 실패",
-          "minutes": 1.5,
-          "fix": "테스트 파일 끝에 함수를 더하기 전에 이름을 grep"
-        }
-      ],
-      "note": "미리보기 그림은 뺌(문서에 기록)."
-    },
-    {
-      "slice": "modal-fix",
-      "commit": "01ea6e2",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 12
-      },
-      "gate": {
-        "checks": 25,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "빈 칸·글자 [닫기] 테스트 빨강 확인, 스크린샷에서 선택 막대가 덮개 위에 뜨는 버그를 더 찾음"
-        }
-      ],
-      "waste": [
-        {
-          "what": "바깥 클릭 테스트가 6회 연속 시간 초과(회당 38초) — 원인을 애니메이션·닫힘 타이밍으로 세 번 잘못 짚고 대기를 덧댐. 실제 원인은 테스트가 고른 '바깥' 점이 좁은 창에서 덮개 밖(HTML)",
-          "minutes": 7,
-          "fix": "시간 초과가 두 번 나면 추측으로 대기를 더하지 말고 먼저 클릭 대상(elementFromPoint·이벤트 기록)을 찍는다"
-        },
-        {
-          "what": "영역 실행 실패 2개가 앞 테스트에 기대는 순서 의존 테스트(test_fit_includes_moved_card_and_drops_stale 등) — 원인 확인에 실행 2회",
-          "minutes": 1,
-          "fix": "순서 의존 테스트 목록을 tracking 에 두고 영역 실행 결과에서 먼저 거른다"
-        }
-      ],
-      "note": "비번호 조각(사용자 버그 신고)."
-    },
-    {
-      "slice": "7a",
-      "commit": "d63cc85",
-      "numbered": true,
-      "budget_minutes": 12,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 10.2
-      },
-      "gate": {
-        "checks": 25,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "합격 테스트 빨강 확인 → 첫 구현에서 초록"
-        }
-      ],
-      "waste": [
-        {
-          "what": "옛 테스트의 #mpick 을 주석 도구로 기계 치환 — 한 줄은 뜻이 반대로 바뀜(판에서 P 는 주석 도구를 고르는 게 맞음) → 그 실패가 같은 페이지의 다음 테스트까지 깨뜨림",
-          "minutes": 0.5,
-          "fix": "지운 요소에 묶인 단언은 치환 전에 '무엇을 지키던 단언인가'를 한 줄씩 읽고 바꾼다"
-        }
-      ],
-      "flaky": [
-        "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 실행에서 '바뀐 카드만 다시 싣는다' 실패, --lf 에서 통과(이번 변경과 무관한 곳)"
-      ],
-      "note": "예산 12분 안. 영역 실행 없이 전체 1회 + --lf."
-    },
-    {
-      "slice": "5",
-      "commit": "(이번)",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 0,
-        "minutes": 11
-      },
-      "gate": {
-        "checks": 27,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "합격 테스트가 제품 버그 2개를 잡음: HEX 칸 초점이 빠질 때 목록을 다시 그려 누르던 연필 클릭이 사라짐, Foundation 탭에서 테마를 못 바꾸는 회귀(위쪽 팔레트 삭제의 부작용)"
-        }
-      ],
-      "waste": [
-        {
-          "what": "도크 PANELS 에 theme 를 더하고도 그 목록을 쓰는 창 메뉴 테스트를 큰 실행 전에 돌리지 않음 — 전체 실행에서 1개 실패(R54 의 grep 단계를 건너뜀)",
-          "minutes": 0.5,
-          "fix": "R54: 바꾼 이름(PANELS·data-w)을 grep → -k 먼저"
-        }
-      ],
-      "profile": {
-        "total_sec": 521,
-        "top": [
-          [
-            "test_undo_redo_card_moves_capped_at_50",
-            213.5
-          ],
-          [
-            "test_context_menu_by_target",
-            18.7
-          ],
-          [
-            "test_hide_screen_and_hidden_list",
-            17.0
-          ],
-          [
-            "test_card_drag_has_no_long_tasks",
-            10.3
-          ],
-          [
-            "test_fit_includes_moved_card_and_drops_stale",
-            9.9
-          ]
-        ],
-        "note": "한 테스트가 전체의 41% — 50단계 제한(순수 리듀서 로직)을 실제 끌기 51번 + Ctrl+Z 60번으로 확인. S3 대상"
-      },
-      "note": "--durations=20 첫 측정(S2). 점검 스크립트 canvas_test.py 의 낡은 확인 2개(위쪽 팔레트 묶음·누르면 크게 보기)도 고침 — audit.py 가 실제 실행에서 부름."
-    },
-    {
-      "slice": "Q2b·Q3",
-      "commit": "(이번)",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 6,
-        "minutes": 14
-      },
-      "gate": {
-        "checks": 33,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "-n 4 영역 실행에서 옛 테스트의 순서 의존이 드러남(v2 page 메모 묶음·epage 옮긴 카드) — 새 테스트 2개로 일꾼 나눔이 바뀌어서. page·epage 를 xdist_group 으로 한 일꾼에, test_undo_redo_card_moves 는 시작할 때 옮긴 자리 키를 비움"
-        }
-      ],
-      "waste": [
-        {
-          "what": "영역 실행을 '어디가 깨지나' 찾기에 4번 씀 — 순서 의존은 같은 영역을 -n 없이 한 번 돌려 비교하면 바로 보였다",
-          "minutes": 6,
-          "fix": "-n 실패가 혼자 돌리면 통과하면 먼저 순서 의존(공유 모듈 페이지)을 의심"
-        }
-      ],
-      "profile": {
-        "total_sec": 118,
-        "top": [
-          [
-            "test_card_drag_has_no_long_tasks",
-            12.7
-          ],
-          [
-            "test_fit_includes_moved_card_and_drops_stale",
-            11.4
-          ],
-          [
-            "test_undo_redo_card_moves",
-            11.3
-          ],
-          [
-            "test_tag_rename_keeps_button_text",
-            11.2
-          ],
-          [
-            "test_helper_canvas_busy_overlay_lifts_on_file_change",
-            9.2
-          ]
-        ],
-        "note": "-n 4 전체 165개"
-      },
-      "note": "Q2b 덮개(busy·view-busy)·Q3 선 끝 손잡이(line-ends·view-line-ends)를 셸에 붙임. gpage 는 묶지 않음 — 묶으면 -m 일부 실행에서 test_v3_main_flow_dashed 가 카메라 자리를 이어받아 깨짐(test_canvas_v2.py 는 이번 소유 밖)"
-    },
-    {
-      "slice": "task7 폴더·정렬 (H17·H18)",
-      "commit": "(이번)",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 1,
-        "minutes": 4
-      },
-      "gate": {
-        "checks": 37,
-        "sec": 0.6,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "폴더 끌어 넣기 테스트: Playwright 마우스 끌기가 긴 레이어 나무 스크롤 때문에 다른 줄(login--done)을 잡음 → 같은 HTML5 끌기 이벤트를 직접 보냄"
-        },
-        {
-          "by": "unit",
-          "what": "도크 정렬 패널 자리 규칙(예전 저장 상태 → 표시 옆)을 일부러 깨서 빨강 확인"
-        }
-      ],
-      "waste": [],
-      "flaky": [
-        "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 -n 4 에서 ConnectionAbortedError(소켓), 혼자 통과. 7a·10-22 전체·10-23 02:00 실행(이번 변경 전)에서도 같은 테스트가 흔들림(이번 변경과 무관)"
-      ],
-      "profile": {
-        "total_sec": 119,
-        "top": [
-          [
-            "test_card_drag_has_no_long_tasks",
-            11.7
-          ],
-          [
-            "test_helper_canvas_busy_overlay_lifts_on_file_change",
-            10.8
-          ],
-          [
-            "test_fit_includes_moved_card_and_drops_stale",
-            10.3
-          ],
-          [
-            "test_v3_main_flow_dashed",
-            10.2
-          ],
-          [
-            "test_undo_redo_card_moves",
-            9.5
-          ]
-        ],
-        "note": "-n 4 전체 200개"
-      },
-      "note": "4단계 연결(셸 boxesOf·moveCards·arrangeCards, 폴더 상태, 정렬 패널 도크). 새 브라우저 테스트 2개, 옛 레이어 테스트의 숨긴 것만 확인을 폴더 줄 빼고로 다짐"
-    },
-    {
-      "slice": "task9 메모 UX (#223~#226)",
-      "commit": "9128386 · ec824c3 · 71930f8 · 3e06a35",
-      "numbered": true,
-      "tests": {
-        "full": 1,
-        "area": 6,
-        "minutes": 14
-      },
-      "gate": {
-        "checks": 40,
-        "sec": 0.6,
-        "fired": [
-          {
-            "rule": "책임(모르는 모듈)",
-            "real": false,
-            "min": 1,
-            "what": "HD.popPlace 이름이 파일 이름(pop-place)과 달라 NS 표에 한 줄 더함"
-          }
-        ]
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "메모 창 크기 비교가 여는 움직임(scale) 중 getBoundingClientRect 를 읽어 어긋남 → View·테스트 모두 offset 값으로"
-        },
-        {
-          "by": "new-test",
-          "what": "배지 테스트가 -n 4 영역 실행에서 앞 테스트가 남긴 도구 상태로 선택 막대를 못 찾음 → 메모 도구(M)로 직접 열고 손 도구로 돌아감"
-        }
-      ],
-      "waste": [],
-      "flaky": [],
-      "profile": {
-        "total_sec": 153,
-        "top": [
-          [
-            "test_layer_folders_group_rename_arrange_unfolder",
-            16.8
-          ],
-          [
-            "test_helper_canvas_busy_overlay_lifts_on_file_change",
-            11.7
-          ],
-          [
-            "test_undo_redo_card_moves",
-            11.4
-          ],
-          [
-            "test_tag_rename_keeps_button_text",
-            11.2
-          ],
-          [
-            "test_fit_includes_moved_card_and_drops_stale",
-            10.8
-          ]
-        ],
-        "note": "-n 4 전체 239개"
-      },
-      "note": "새 모듈 3(pop-place·view-pop-place·view-thread), 빈 레이아웃은 H16 상자 재사용(셸 editLayout), 요청문 줄바꿈은 들여 쓴 다음 줄. 새 브라우저 테스트 4·unit 파일 2"
-    },
-    {
-      "slice": "task17 A2b 한 번 보내기가 말하는 것 (R5·R6·R7)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 1,
-        "area": 1,
-        "minutes": 6
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "빈 레이아웃 알림 규칙을 목적 검사 없이 깨도 unit 이 통과 → '목적만 있는 레이아웃' 경우를 더해 한 번 실패를 확인"
-        }
-      ],
-      "waste": [],
-      "flaky": [],
-      "profile": {
-        "total_sec": 177,
-        "top": [
-          [
-            "test_helper_canvas_busy_overlay_lifts_on_file_change",
-            16.7
-          ],
-          [
-            "test_fit_includes_moved_card_and_drops_stale",
-            13.8
-          ],
-          [
-            "test_helper_canvas_writes_delete_and_link_without_reload",
-            13.4
-          ]
-        ],
-        "note": "-n 4 전체 286개"
-      },
-      "note": "새 모듈 없음: edits.items·emptyLayouts(R5·R6·범위 줄), annotation.SCOPES·scopeOf·scopeWord(R7), 메모 창 #pscope·묶음 .thsc. 옛 메모 출력은 unit 으로 먼저 고정. 여러 요소 메모가 한 항목이 되어 test_multi_select_note 를 고침. unit 파일 1·브라우저 테스트 1"
-    },
-    {
-      "slice": "task48a 스며드는 교체(swap·view-swap, 방금 반영됨 칩)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 5
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "숨긴 iframe 을 붙인 뒤 src 를 주면 about:blank load 가 먼저 와 빈 화면으로 교체 — 스크롤 유지 브라우저 테스트가 잡음(src 먼저)"
-        },
-        {
-          "by": "new-test",
-          "what": "판의 capture click(메모 도구)이 알약 클릭을 먹음 — 미룸 테스트가 잡음(document capture 로 받음)"
-        }
-      ],
-      "waste": [],
-      "flaky": [
-        "busy_app·claim_watch 가 -n 4 area 에서 한 번 깨지고 --lf 로 통과(부하 시간)"
-      ],
-      "note": "R56: test_canvas_helper 두 곳의 즉시 '?v=' 확인을 '그 카드가 새 버전을 싣는다'로 기다리게 고침(교체가 다 그린 뒤에 바뀜)"
-    },
-    {
-      "slice": "task49b 블록 조립(막대 자리·상위·쓴 뒤 따라가기·속성 칸·부품 바꾸기/넣기)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 12
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "apply_edits 가 화면 편집을 모두 거절하면 없는 기록 폴더에 manifest 를 쓰다 FileNotFoundError — unit(허용 밖 속성) 이 잡음, 쓴 것 없으면 커밋 안 함"
-        },
-        {
-          "by": "old-test",
-          "what": "요소 메뉴가 막대 단추 목록을 그대로 돌다 새 단추(상위·속성·부품)에서 MENU 없어 멈춤 — 49a 크게 보기 메뉴 테스트가 잡음"
-        },
-        {
-          "by": "new-test",
-          "what": "막대가 단추를 누르면 셸이 고르기를 풀어 쓴 결과를 따라갈 요소가 없음 — Alt+↓ 두 번 테스트가 잡음(누른 요소를 기억)"
-        }
-      ],
-      "waste": [
-        "Bash heredoc 이 역슬래시 두 개를 하나로 줄여 helper.py 에 날 줄바꿈이 들어감 — 이스케이프가 든 편집은 Edit/Write 로"
-      ],
-      "flaky": [
-        "busy_app 두 개가 area 에서 깨짐 — 48b 작업 중 파일(busy·view-busy·swap) 이 같은 작업 트리에 있어 내 것과 분리 못 함, main 에 알림"
-      ],
-      "note": "R56: 49a unit 4·브라우저 2 단언을 의도대로(막대가 커짐 · 상위·메모는 앱 카드에서도 요청 아님)"
-    },
-    {
-      "slice": "polish-1 요소 막대 자리·크기 + 숨김/잠금 옛 id 정리",
-      "commit": "(이 커밋 + 앞 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 5
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "new-test",
-          "what": "막대가 오른쪽 맞춤 자리(x=39)로 가며 왼쪽 도구 막대 #tools 를 덮음 — 스크린샷으로 보고 unit(avoid 목록) 먼저"
-        },
-        {
-          "by": "old-test",
-          "what": "_bar 가 ⋯ 단추까지 셈 · 좁은 타일에서 [바꾸기] 가 ⋯ 로 넘어가 click 시간 초과 — _act 로 ⋯ 경유"
-        }
-      ],
-      "waste": "area -n 4 에서 test_replace_with_part_swaps_the_element 가 막대가 뜨기 전 8초 초과(부하) — 혼자 두 번 통과",
-      "flaky": [
-        "test_canvas_blocks_b.py::test_replace_with_part_swaps_the_element (-n 4 부하)"
-      ],
-      "note": "둘레 글 상자는 같은 출처 화면(도우미 http)에서만 읽음 — file:// 는 예전 자리 차례"
-    },
-    {
-      "slice": "49c 바로 반영 편집 (그 자리 글자·끌어 옮기기·낙관 반영·같은 내용 교체 생략)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 3,
-        "minutes": 25
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "screenshot",
-          "what": "격자에서 끼울 선이 줄 사이 가로 선으로 그려짐 — line() 줄 끝 규칙 + unit"
-        },
-        {
-          "by": "old-test",
-          "what": "같은 내용 silent 를 모든 교체에 걸어 AI 쓰기(주석만 바뀜)의 겹치기·알약이 사라짐 — 낙관 반영한 틀(data-hd-opt)만"
-        },
-        {
-          "by": "old-test",
-          "what": "글 비우기: 그 자리 고치기에서 아무것도 안 치고 Enter = 그대로 — 테스트가 Backspace 로 지움"
-        }
-      ],
-      "waste": "area -n 4 에서 test_insert_part_below… 한 번 시간 초과(혼자 통과) · 랜덤 포트 4045(ERR_UNSAFE_PORT)로 한 번 실패",
-      "flaky": [
-        "test_canvas_blocks_b.py::test_insert_part_below_writes_a_neutral_skeleton_and_undo_restores (-n 4 부하)"
-      ],
-      "note": "apply_edits 는 한 묶음 안 같은 요소 move 를 하나로 겹쳐 씀 → 끌어 옮기기 k칸 = 쓰기 k번(되돌리기 k줄)"
-    },
-    {
-      "slice": "S1b 대화창 후속 (숨기기·창 메뉴 대화창 · #khint 지움 · 탭 바 아래 왼쪽 · 대화창 받는 곳 칩)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 12
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "screenshot",
-          "what": "1280+도크에서 탭 바가 대화창 앞 186px 로 줄어 둘째 탭이 ◀ ▶ 뒤로 — 탭 바 data-need 로 대화창이 폭을 줄여 줌 + 테스트에 화살표 없음 단언"
-        }
-      ],
-      "waste": "bash heredoc 이 따옴표 많은 파이썬 패치를 못 넘김 → 임시 파일 스크립트로",
-      "flaky": [
-        "test_canvas_instant.py::test_in_place_edit_shows_one_box_not_the_selection_box_over_it (-n 4 부하, 혼자 통과)",
-        "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 통과)"
-      ],
-      "note": "대화창 보이기 설정 = dock.js chat 칸(hd-dock), hint 칸은 없앰. 대화창은 위쪽 #aichip 을 비추고 의도 hd-agent-pick 으로 같은 메뉴를 연다"
-    },
-    {
-      "slice": "49d 지우기 지연 (낙관 지우기 · build_ref 풀어 둔 ref 캐시)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 6
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "probe",
-          "what": "지우기 = 화면이 /api/apply(다시 빌드) 답까지 아무것도 안 보임 — 판 5.5초·크게 보기 8.4초 → 22~26ms"
-        }
-      ],
-      "waste": "probe 도우미 포트 정리(nohup 프로세스 pid 가 표지와 달라 포트 주인으로 끔) · 새 테스트의 파일 글 단언이 화면 안 같은 글 두 번을 못 봄",
-      "flaky": [],
-      "note": "40~50초는 이 사본에서 재현 안 됨 — 서버 쪽 다시 빌드가 거의 전부. 도우미가 빌드 전에 답하기는 47-4"
-    },
-    {
-      "slice": "51-1 줄 제목 남음 (data() 줄 맞추기 · delete_screens 빈 group 빼기)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 5
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "rows.plan 규칙·emptied_groups 가 없어 빨강 → 초록 · 브라우저 테스트는 RW.sync 를 끄면 빨강(로그인 줄이 남음)"
-        }
-      ],
-      "waste": "",
-      "flaky": [
-        "test_canvas_edit.py::test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards (HEAD 셸에서도 혼자 4번 중 3번 실패 — 이 조각과 무관, 51-2 에서 봄)"
-      ],
-      "note": "줄 그리기를 view-rows.js 하나로 빼서 첫 그리기와 data() 가 같은 길. 걷은 줄은 이름별로 떼어 두었다가 되살리기 때 같은 요소를 끼운다"
-    },
-    {
-      "slice": "51-2 Figma 고르기 키 (Enter/Shift+Enter/Tab · 고친 뒤 고른 채 · Alt+클릭 deep)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 2,
-        "minutes": 11
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "browser",
-          "what": "빠르게 Shift+Tab 두 번 = 둘째 키가 첫 답 전에 같은 요소에서 출발해 한 칸만 감 → 답 기다리는 중 키는 줄로(셸이 다시 그리며 hide 가 줄을 비워 pickThen 이 줄을 이어 감)"
-        },
-        {
-          "by": "area",
-          "what": "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards 의 원인 = 그 자리 고치기 Esc 뒤 다음 키가 아직 초점을 가진 틀로 감(HEAD 에서도 4번 중 3번 실패) → palette inlineEnd 가 window.parent.focus() — 4/4 통과"
-        }
-      ],
-      "waste": "51-2 첫 영역 실행이 그 깨짐을 다시 보여 줌(이미 51-1 에서 HEAD 깨짐으로 적어 둔 것)",
-      "flaky": [
-        "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 2/2 통과 — S1b 에 적힌 것과 같음)"
-      ],
-      "note": "Tab 은 끝에서 돈다(Figma). Enter = enterOf(h): textOk 이고 글이 있으면 그 자리 고치기, 아니면 첫 자식. palette 메시지 hd-down·hd-sib → hd-hop, hd-hit-at deep"
-    },
-    {
-      "slice": "51-4 줄 = 섹션 (제목 고르기·이름 바꾸기·Del·줄만 걷기=위 줄 합침 · 레이어 줄 id = 이름)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 13
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "줄만 걷기 차례: 한 줄 화면이 screens.json 에 흩어져 있으면 블록을 위 줄 마지막 화면 뒤에 끼워야 빌드 차례 = 판 차례(테스트 기대를 먼저 잘못 적음)"
-        },
-        {
-          "by": "browser",
-          "what": "고른 줄 카드가 설명을 펼쳐 아래 줄 제목을 덮음(기존 동작) — hover 스크린숏을 위 줄로"
-        }
-      ],
-      "waste": "영역 실행 중 w47-4b 가 modules/live.js 등을 더해 순수성 목록이 달라짐 + 부하 깨짐 4 — 혼자 5/5 통과",
-      "flaky": [
-        "test_canvas_blocks.py 2 · test_canvas_blocks_b.py 1 · test_canvas_edit.py::test_blank_layout_caption_has_name_and_multiline_purpose (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
-      ],
-      "note": "셸 0줄: 등록부 기능 rowHeads + document 의도(hd-row-pick/delete/rename/dissolve, hd-rows-changed)로 레이어 패널 ctx.pick·ctx.del 을 씀. 서버 /api/group-rename · /api/group-dissolve(순수 계획 + 쓰기 한 번 + restore)"
-    },
-    {
-      "slice": "47-5b 받는 곳 고르기 · 에이전트 상태 · 진행 줄 · 새 터미널(캔버스)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 9
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "규칙 10개 각각 부숴서 빨강 확인(메뉴 중복·orphan·away·request.sent 메모 id·받는 곳 진행·via 글·403 설명·reverted·live TYPES·delivery)"
-        },
-        {
-          "by": "browser",
-          "what": "live.js TYPES 에 agent.*·request.sent 가 없어 EventSource 가 새 이벤트를 듣지 않음 — 진행 줄·칩이 안 바뀜"
-        },
-        {
-          "by": "screenshot",
-          "what": "접속한 에이전트(via event)에 보내도 셸 토스트가 '보내지 못해 대기열'·덮개 '대기열' — HD.agents.delivery 로 고침"
-        }
-      ],
-      "waste": "영역 실행 중 다른 일꾼의 bar-place.js 작성 중(FileNotFound) + 부하 깨짐 2(혼자 통과)",
-      "flaky": [
-        "test_canvas_helper.py::test_helper_canvas_writes_delete_and_link_without_reload · test_canvas_instant.py::test_async_apply_whose_build_fails_reverts_the_optimistic_change (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
-      ],
-      "note": "셸 3줄(sendList 의 delivery) + CSS 1줄. 새 기능 presence·spawn 은 등록부 View, 규칙은 Model 4개(agents.menu/delivery · presence · spawn · undo-answer)"
-    },
-    {
-      "slice": "t51-9 판 글 = 고를 수 있는 글 레이어(소개·끝 글·카드 아래 글·DS 카드)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 8
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "규칙 셋 부숴서 빨강 확인(시장 관례 차례 → decisions.json 번호 · 제목 Delete 거절 · story 지우기 = 제목·요약 둘 다)"
-        },
-        {
-          "by": "browser",
-          "what": "보고 재현: V 로 소개를 눌러도 아무것도 안 골라짐(빨강) → 고르기·Delete·되돌리기·그 자리 고치기·카드 글·도우미 없이 반영 대기 초록"
-        },
-        {
-          "by": "area",
-          "what": "손 도구 두 번 누르기로 카드 글을 고친 뒤 Esc 가 카드 고르기를 안 풀었음(caption_note) — 이동 도구에서만 판 글 고르기"
-        }
-      ],
-      "waste": "test_done_notes_archived_then_removed_once 는 HEAD 에서도 혼자 실패(이 조각과 무관)",
-      "flaky": [
-        "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4, 혼자 통과)"
-      ],
-      "note": "셸: 판 글 그리기를 view-board-text 로 빼냄 + BT attach 한 번 + 훅 다섯 줄(data·renderNotes·revert·caption 닫기·layers tree). 서버: session.apply_edits 의 edit 'board' → 순수 board_text.plan"
-    },
-    {
-      "slice": "t51-6 카드 바로 복제(Ctrl+D · 메뉴 [복제] — Figma F19)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 7
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "규칙 일곱 부숴서 빨강 확인(파일 겹침 피하기 · 꼬리 ' 복사' · 원본 바로 뒤 · 입력과 항목 공유 · 앱 거절 · JS 변형 뒤 자리 · JS 계획끼리 id 겹침)"
-        },
-        {
-          "by": "browser",
-          "what": "옛 셸(HEAD)로 두 테스트 빨강(Ctrl+D 에 아무 카드도 안 생김) → 새 셸 초록"
-        },
-        {
-          "by": "area",
-          "what": "카드 메뉴 [복제] 에 Ctrl+D 키 표시를 달아 test_card_menu_full_items 의 정확한 이름 찾기가 깨짐 — ^복제 로"
-        }
-      ],
-      "waste": "",
-      "flaky": [],
-      "note": "셸: CC attach 한 번 + duplicateCards · Ctrl+D 키 · revert 한 줄. 서버: session.apply_edits 의 edit 'clone' → 순수 screen_copy.plan"
-    },
-    {
-      "slice": "R17 시안 A 선택 도구·요소 아이콘 막대·묶은 요소 메뉴",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 8
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "새 test_canvas_unit_elmenu 11개 빨강(icons·menu·keyOf·askText('ai') 없음) → 초록"
-        },
-        {
-          "by": "browser",
-          "what": "막대 높이 32px 이 크게 보기 넓은 창의 안내 글과 타일 사이에 안 들어가 안내 글을 덮음(test_canvas_blocks_clear) → 22px 단추·막대 24px"
-        },
-        {
-          "by": "browser",
-          "what": "요소 메뉴가 길어져 카드 가운데를 덮어 휠이 메뉴 위에서 일어남(test_context_menu_by_target) → 메뉴 밖 판에서 휠"
-        }
-      ],
-      "waste": "",
-      "flaky": [
-        {
-          "test": "test_canvas_text_remove::test_remove_with_helper_writes_the_file_and_undo_restores_it",
-          "note": "-n 4 에서 한 번 실패, 혼자·영역 실행에서 통과"
-        }
-      ],
-      "note": "막대·메뉴 단추를 글이 아니라 data-act 로 고르게 테스트를 바꿈(R56). 셸: openElemMenu 를 blocks.menu 묶음으로 · elemFire(상위·안쪽·속성·부품 = 고른 뒤 BK.fire) · BK.onMenu 한 줄 · blockAct 에 ai"
-    },
-    {
-      "slice": "R19 선택(V) Shift+클릭 여러 요소 고르기 + 대화창 요소 칩 여럿",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 8
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "새 test_canvas_unit_el_pick 5개 — 규칙을 하나씩 깨 모두 빨강 확인(toggle·primary·path 없음·shift·chips)"
-        },
-        {
-          "by": "browser",
-          "what": "같은 화면·같은 글 요소 메모 둘은 요청문 한 항목(no=1,2 + 다른 곳:) — 테스트 기대를 edits.request 형식에 맞춤"
-        }
-      ],
-      "waste": "",
-      "flaky": [],
-      "note": "Shift+클릭 규칙 = el-pick.shift(V · 고른 요소 있음 · 고른 카드 안 · 빈 레이아웃 아님 → 요소, 그 밖 = 카드 E15). 막대·메뉴는 주인(마지막) 하나"
-    },
-    {
-      "slice": "R31 폴더(판 줄) 관리: 제목 폴더 아이콘·폴더만 풀기(Ctrl+Shift+G)·제목 끌기 = 폴더째 옮기기·레이어 끌어 다른 폴더로(/api/group-move)·레이어 두 번 누르기 이름 바꾸기 고침",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 17
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "browser",
-          "what": "K1: 레이어 폴더 이름 두 번 누르기가 이름 바꾸기를 열지 않음 — 첫 누르기 고르기가 도크 연결·정렬 패널을 열어 레이어 줄이 아래로 밀림(빨강 확인 후 고침)"
-        },
-        {
-          "by": "unit",
-          "what": "test_canvas_unit_row_ops 규칙 7개를 하나씩 깨 모두 빨강 확인(drop·assign emptied·titleShift·잠금·키·Python 차례·groups)"
-        },
-        {
-          "by": "unit",
-          "what": "plan_group_move: 같은 객체를 고친 뒤 emptied_groups 를 불러 빈 줄 이름이 안 빠짐 — 옮기기 전 사본으로"
-        }
-      ],
-      "waste": "실제 Chrome 채널이 이 기계에서 load 를 끝내지 않아(오늘) 로컬 실행은 번들 chromium 플러그인(-p, 저장소 밖)으로 돌림. 영역 실행 중 다른 일꾼 부하로 goto 30초 넘김이 잦음",
-      "flaky": [
-        "test_canvas_instant::test_async_apply_whose_build_fails_reverts_the_optimistic_change — 영역 실행·단독 pytest 에서 pageerror 'closest of null' 2번, 같은 본문을 직접 돌린 3번은 통과(원인 미확인)",
-        "test_canvas_busy_app::test_app_card_chip_lifts_on_hmr_or_reload_not_on_first_load · test_canvas_text_remove::test_large_view_text_box_has_remove_element — 영역 실행에서만 실패, 단독 통과"
-      ],
-      "note": "규칙 = modules/row-ops.js(Model) · 제목 끌기 = view-row-drag(View, card-pos move 길) · 다른 폴더로 = view-rows rowHeads 'hd-row-assign' + board_rows.plan_group_move"
-    },
-    {
-      "slice": "R28 대화창: Paseo 에 진짜 이미지(--image) + 모델·생각 깊이·컨텍스트 고리(시안 A)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 24
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "browser",
-          "what": "실패 토스트에 '생각 깊이를 바꾸지 못했어요' 가 두 번 — 서버 까닭을 그대로 쓰게"
-        },
-        {
-          "by": "unit",
-          "what": "attach.js paths 의 split 글이 줄바꿈으로 깨진 것(모듈 순수성 테스트가 먼저 잡음)"
-        }
-      ],
-      "waste": "부하 때 page.goto 30초 넘김 3건(test_canvas_agents 2 · ai_undo 1) — 따로 다시 돌려 통과",
-      "flaky": [
-        "test_canvas_agents.py::test_canvas_does_not_switch_existing_attachment",
-        "test_canvas_agents.py::test_canvas_auto_attaches_then_chip_menu_switches_and_send_goes_to_choice",
-        "test_canvas_ai_undo.py::test_history_row_undo_puts_old_file_back_and_card_swaps"
-      ],
-      "note": "고리는 모르면 숨김(0% 아님). 모델 바꾸기는 CLI 가 없어 보기만"
-    },
-    {
-      "slice": "R50 요소 막대에 기능 고정하기(메뉴 줄 핀 · 막대 오른쪽 클릭 '막대에서 빼기' · prefs elbarPins · 최대 6)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 15
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "unit",
-          "what": "옛 '글자' 숨김 테스트가 새 규칙(꺼진 아이콘)에서 깨짐 — 뜻을 읽고 다시 씀"
-        },
-        {
-          "by": "browser",
-          "what": "꺼진 핀(aria-disabled)은 playwright 가 누르지 않음 — force 로 '눌러도 고정 안 됨'을 확인"
-        }
-      ],
-      "waste": "head 주석의 'HD.blocks = {' 를 끝 표지로 잘못 잡아 blocks.js 를 한 번 되돌림",
-      "flaky": [],
-      "note": "핀은 줄 단추 밖 span[role=button] — '#cmenu button' 목록을 쓰는 옛 테스트를 건드리지 않게"
-    },
-    {
-      "slice": "R55 phase F: Foundation 토큰 고르기·고치기(문서 탭 손·선택, 속성 창, POST /api/token, 되돌리기, 모든 틀 다시 읽기)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 11
-      },
-      "gate": {
-        "checks": 0,
-        "sec": 0,
-        "fired": []
-      },
-      "caught": [
-        {
-          "by": "browser",
-          "what": "손으로 문서를 누른 뒤 V 키가 iframe 에 먹힘 — palette.js 가 hd-key 로 넘기게"
-        },
-        {
-          "by": "browser",
-          "what": "view-read-only CSS 글에 날 줄바꿈이 들어가 셸 스크립트 문법 오류(pageerror)"
-        },
-        {
-          "by": "eye",
-          "what": "도구 막대가 Foundation 견본을 가림 · 글자 줄 속성 창이 오른쪽 도크 밑으로 — 문서 칸 기준 자리로"
-        }
-      ],
-      "waste": "테마 미리 보기가 늘 팔레트 파일(tokens-<slug>.css)이라 tokens.css 저장이 안 보이는 것을 늦게 알아챔 — '@project' 를 더함",
-      "flaky": [],
-      "note": "phase C(컴포넌트)는 readPick·fields 의 종류로 더한다"
-    },
-    {
-      "slice": "memo-state: 움직이는 화면(안내 단계) 메모 — 단계가 바뀌면 점선·번호 숨김, 칩 줄 번호로 그 단계 가기(hdGoto · 클릭 다시 하기)",
-      "commit": "(이 커밋)",
-      "numbered": false,
-      "tests": {
-        "full": 0,
-        "area": 1,
-        "minutes": 16
-      },
-      "gate": {
-        "checks": 1,
-        "sec": 3,
-        "fired": [
-          {
-            "rule": "purity",
-            "real": true,
-            "what": "Model 머리 주석의 window.hdGoto 글자"
-          }
-        ]
-      },
-      "caught": [
-        {
-          "by": "browser",
-          "what": "단계 값만 보던 판 카드: 화면이 시작 전(hdState 없음)이면 '모름'으로 봐 점선이 남음 — null = 다름"
-        },
-        {
-          "by": "browser",
-          "what": "클릭 없이 처음 실린 화면에 단 메모까지 상태를 적어 파일 글 바뀜이 '요소를 찾을 수 없음' 대신 칩이 됨 — 단계 값·클릭 없으면 view 를 적지 않음"
-        },
-        {
-          "by": "eye",
-          "what": "미리보기가 크게 보기 닫기 단추를 가리고 칩이 닫기 옆 — 칩은 제목 뒤, 미리보기는 칩 줄 아래"
-        }
-      ],
-      "waste": "다른 세션이 테스트 잠금을 쥐어 -n 3 실행이 10분 기다리다 끝남(타임아웃) — 잠금 주인 먼저 볼 것",
-      "flaky": [
-        "test_async_apply_whose_build_fails_reverts_the_optimistic_change",
-        "test_drag_whose_async_build_fails_puts_the_order_back"
-      ],
-      "note": "화면 쪽 약속(dataset.hdState·window.hdGoto)은 contract/memo-state.md — 하네스 스킬에는 아직 없음"
+     "by": "new-test",
+     "what": "E3·E4·E6 실패 테스트 3개 먼저(빨강 확인) → 고침"
     }
-  ]
+   ],
+   "waste": [],
+   "note": ""
+  },
+  {
+   "slice": "2.5a",
+   "commit": "07d7ccb",
+   "numbered": false,
+   "tests": {
+    "full": 2,
+    "area": 0,
+    "module": 1,
+    "minutes": 24.1
+   },
+   "gate": {
+    "checks": 17,
+    "sec": 0.3,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "트리거 끄는 중 Esc 뒤 놓을 때까지 판이 밀림"
+    },
+    {
+     "by": "full",
+     "what": "삭제한 카드가 연결 강조 상태라 흐려지지 않음(test_pick_cards_selection_bar)"
+    }
+   ],
+   "waste": [
+    {
+     "what": "하위 조각인데 두 번째 전체 실행 + 편집 모듈 실행",
+     "minutes": 15,
+     "fix": "하위 조각은 영역(-m)만, 실패 뒤엔 --lf, 전체는 번호 조각 끝 1회"
+    },
+    {
+     "what": "첫 전체 실행(9분) 대신 영역이면 됐음 — 실패 7개 중 6개가 지운 동작(Shift+클릭·Ctrl+클릭)에 묶인 옛 테스트",
+     "minutes": 6,
+     "fix": "큰 실행 전 바꾼 선택자·키를 tests/ 에서 grep"
+    }
+   ],
+   "note": "test_move_tool_moves_card 4px 흔들림 1회(따로 3회 통과) — 새로고침 직후 자리 재기 타이밍"
+  },
+  {
+   "slice": "2.5b",
+   "commit": "fe0783e",
+   "numbered": false,
+   "tests": {
+    "full": 2,
+    "area": 0,
+    "minutes": 19.2
+   },
+   "gate": {
+    "checks": 18,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "선 굵기 calc 에 단위가 없어 브라우저가 px 를 계산 못 함"
+    },
+    {
+     "by": "full",
+     "what": "선 투명도 transition 이 멈춰 연결 보기에서 다른 선이 흐려지지 않음(옛 test_shift_click_focus 가 잡음)"
+    }
+   ],
+   "waste": [
+    {
+     "what": "하위 조각인데 두 번째 전체 실행",
+     "minutes": 9,
+     "fix": "영역(unit or flow or links or tools) + --lf"
+    },
+    {
+     "what": "첫 전체 실행(10분) 대신 영역이면 됐음 — 실패 5개 중 4개가 지운 #arrows·A 키·안내 문구에 묶인 옛 테스트",
+     "minutes": 6,
+     "fix": "큰 실행 전 grep"
+    }
+   ],
+   "note": "첫 전체 실행이 진짜 버그 1개(transition)도 잡았다 — 전체를 아예 빼면 안 되고, 번호 조각 끝 1회는 남긴다"
+  },
+  {
+   "slice": "2.5d",
+   "commit": "002be95",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 12.5
+   },
+   "gate": {
+    "checks": 18,
+    "sec": 0.6,
+    "fired": [
+     {
+      "rule": "shell-ratchet",
+      "verdict": "real",
+      "minutes": 2,
+      "what": "function 116 > 114 — 선 자르기 맞춤(segX·lnPoints·cutHits)을 선 주인 view-lines.hits 로 옮김(맞는 자리)"
+     },
+     {
+      "rule": "shell-ratchet",
+      "verdict": "noise",
+      "minutes": 1,
+      "what": "var 85 > 84 — TITLES 를 titleOf 넘기기로 바꿈(숫자 맞추기, 구조 이득 없음)"
+     }
+    ]
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "E20·E21 실패 테스트 2개 빨강 확인 뒤 초록"
+    },
+    {
+     "by": "area",
+     "what": "점선 calc 에 단위가 없어 계산된 dasharray 가 숫자가 아님(2.5b 와 같은 종류) → px 단위"
+    }
+   ],
+   "waste": [
+    {
+     "what": "옛 테스트 고친 뒤 영역 1회에서 실패 7개 중 6개가 테스트 쪽(방향마다 태그·배율 따른 굵기·반대 방향 링크·이웃 선 촘촘함·이어진 실패)",
+     "minutes": 4,
+     "fix": "옛 테스트를 고칠 때 고정본 데이터(D.links 양방향)·화면 밖 좌표를 먼저 확인"
+    },
+    {
+     "what": "디버그용 임시 파일이 import * 로 테스트 전체를 끌어와 7분",
+     "minutes": 7,
+     "fix": "디버그는 필요한 픽스처만 import"
+    }
+   ],
+   "note": "선 체계 하나로 합치며 옛 연결 보기 테스트 6개 삭제(cycle·범례 체크·범례 마우스 강조·옆면 출발·차선 태그·틈 칸 태그), 나머지는 같은 선 기준으로 고침"
+  },
+  {
+   "slice": "2.5c",
+   "commit": "b7839a5",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 10.5
+   },
+   "gate": {
+    "checks": 19,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "E13 휴지통·이름 테스트 빨강(버튼 없음) → 초록"
+    }
+   ],
+   "waste": [
+    {
+     "what": "전체 1회의 실패 3개가 모두 테스트 쪽(패널에 이름이 함께 보이게 바꾼 것 · ln_mid 가 판 밖·이웃 선 조건으로 점을 못 찾음)",
+     "minutes": 3,
+     "fix": "좌표를 고르는 헬퍼는 판을 그 점으로 옮긴 뒤 잰다(ln_mid)"
+    }
+   ],
+   "note": "번호 조각 2.5 끝 — 전체 1회(118개 중 115 pass, 3 테스트 쪽) → --lf·묶음 5 pass"
+  },
+  {
+   "slice": "2",
+   "commit": "f230916",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 10.0
+   },
+   "gate": {
+    "checks": 22,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "E5·E8 합격 테스트 빨강(끊기가 메모 목록에 섞임) → 초록"
+    }
+   ],
+   "waste": [
+    {
+     "what": "전체 1회 실패 2개 모두 테스트 쪽(잇기가 반영 대기 패널로 간 것 + 그 연쇄)",
+     "minutes": 1,
+     "fix": "큰 실행 전 grep 에 '#notes' 보이기 확인도 넣기"
+    }
+   ],
+   "note": "번호 조각이고 바뀐 영역이 전체와 거의 같아 영역 실행 없이 전체 1회만. 셸 function 114 → 111, SHELL_MAX 내림"
+  },
+  {
+   "slice": "2.2",
+   "commit": "f230916",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 2,
+    "minutes": 9.5
+   },
+   "gate": {
+    "checks": 23,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "D3·D4 받아들이기 테스트를 먼저 써서(빨강 3개) 일꾼이 계약 그대로 구현 — 첫 회 초록"
+    },
+    {
+     "by": "new-test",
+     "what": "단위 test_single_file_output 이 모듈 목록 빠짐(view-sync)을 잡음 — 예상한 빨강"
+    }
+   ],
+   "waste": [
+    {
+     "what": "브라우저 테스트 2회 재실행: 셸 함수를 전역으로 부름(deleteCards 없음) · 기록 줄 수를 잘못 셈(되돌린 줄은 버려짐)",
+     "minutes": 2,
+     "fix": "새 브라우저 테스트는 기존 테스트의 UI 경로(고르기→Delete·연결 패널 휴지통)를 먼저 grep"
+    },
+    {
+     "what": "일꾼의 브라우저 테스트 1회가 메인의 셸 편집과 겹쳐 시간 초과",
+     "minutes": 1,
+     "fix": "일꾼에게 다른 단계 파일에 기대는 테스트는 마지막에만, 실패해도 보고만"
+    }
+   ],
+   "note": "멀티코드 섞어 쓰기: A(helper.py)만 coder 일꾼(받아들이기 테스트를 메인이 먼저 씀), B·C 는 메인. 일꾼 75k 토큰·5분, 계약 해석 차이 없음."
+  },
+  {
+   "slice": "3",
+   "commit": "1890a72",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 10.5
+   },
+   "gate": {
+    "checks": 23,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "메뉴 합격 테스트를 먼저 써서 빨강 확인 — 100% 누른 뒤 메뉴가 열린 채라 다음 누르기가 닫는 문제를 잡음(100%도 닫기로)"
+    }
+   ],
+   "waste": [
+    {
+     "what": "옛 테스트 정리 스크립트 두 실수: 전환 메뉴 테스트를 지우며 바로 뒤 상수 STROKES_JS 까지 지움, #fit 일괄 치환이 새 테스트 줄까지 바꿈 — 전체 실행에서 2개 실패",
+     "minutes": 1.5,
+     "fix": "테스트 블록 지우기는 다음 def 가 아니라 다음 최상위 이름(def·상수)까지, 일괄 치환 뒤 git diff 로 새 테스트 줄 확인"
+    }
+   ],
+   "note": "영역이 거의 전체(#fit 을 쓰는 테스트가 모든 영역)라 영역 실행 없이 조각 끝 전체 1회 + 실패한 것만 다시."
+  },
+  {
+   "slice": "4",
+   "commit": "ab640eb",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 7
+   },
+   "gate": {
+    "checks": 25,
+    "sec": 0.6,
+    "fired": [
+     {
+      "rule": "layer-table",
+      "verdict": "real",
+      "what": "새 Model layers.js 를 층 표에 등록하라고 막음 — 새 모듈이 층을 밝히게 하는 안내 그대로"
+     }
+    ]
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "레이어 합격 테스트를 먼저 써서 빨강 — 구현 뒤 첫 실행에서 레이어 패널이 고르기(SL)보다 먼저 붙어 페이지가 안 뜨는 것을 잡음"
+    }
+   ],
+   "waste": [
+    {
+     "what": "영역 실행을 시작했다가 번호 조각 끝이라 전체와 겹쳐 멈춤",
+     "minutes": 0.5,
+     "fix": "번호 조각 끝이면 영역을 건너뛰고 바로 전체 1회"
+    },
+    {
+     "what": "새 테스트 도움 함수 이름(card_xy)이 같은 파일의 기존 함수를 덮어 옮기기 테스트 3개 실패",
+     "minutes": 1.5,
+     "fix": "테스트 파일 끝에 함수를 더하기 전에 이름을 grep"
+    }
+   ],
+   "note": "미리보기 그림은 뺌(문서에 기록)."
+  },
+  {
+   "slice": "modal-fix",
+   "commit": "01ea6e2",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 12
+   },
+   "gate": {
+    "checks": 25,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "빈 칸·글자 [닫기] 테스트 빨강 확인, 스크린샷에서 선택 막대가 덮개 위에 뜨는 버그를 더 찾음"
+    }
+   ],
+   "waste": [
+    {
+     "what": "바깥 클릭 테스트가 6회 연속 시간 초과(회당 38초) — 원인을 애니메이션·닫힘 타이밍으로 세 번 잘못 짚고 대기를 덧댐. 실제 원인은 테스트가 고른 '바깥' 점이 좁은 창에서 덮개 밖(HTML)",
+     "minutes": 7,
+     "fix": "시간 초과가 두 번 나면 추측으로 대기를 더하지 말고 먼저 클릭 대상(elementFromPoint·이벤트 기록)을 찍는다"
+    },
+    {
+     "what": "영역 실행 실패 2개가 앞 테스트에 기대는 순서 의존 테스트(test_fit_includes_moved_card_and_drops_stale 등) — 원인 확인에 실행 2회",
+     "minutes": 1,
+     "fix": "순서 의존 테스트 목록을 tracking 에 두고 영역 실행 결과에서 먼저 거른다"
+    }
+   ],
+   "note": "비번호 조각(사용자 버그 신고)."
+  },
+  {
+   "slice": "7a",
+   "commit": "d63cc85",
+   "numbered": true,
+   "budget_minutes": 12,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 10.2
+   },
+   "gate": {
+    "checks": 25,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "합격 테스트 빨강 확인 → 첫 구현에서 초록"
+    }
+   ],
+   "waste": [
+    {
+     "what": "옛 테스트의 #mpick 을 주석 도구로 기계 치환 — 한 줄은 뜻이 반대로 바뀜(판에서 P 는 주석 도구를 고르는 게 맞음) → 그 실패가 같은 페이지의 다음 테스트까지 깨뜨림",
+     "minutes": 0.5,
+     "fix": "지운 요소에 묶인 단언은 치환 전에 '무엇을 지키던 단언인가'를 한 줄씩 읽고 바꾼다"
+    }
+   ],
+   "flaky": [
+    "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 실행에서 '바뀐 카드만 다시 싣는다' 실패, --lf 에서 통과(이번 변경과 무관한 곳)"
+   ],
+   "note": "예산 12분 안. 영역 실행 없이 전체 1회 + --lf."
+  },
+  {
+   "slice": "5",
+   "commit": "(이번)",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 0,
+    "minutes": 11
+   },
+   "gate": {
+    "checks": 27,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "합격 테스트가 제품 버그 2개를 잡음: HEX 칸 초점이 빠질 때 목록을 다시 그려 누르던 연필 클릭이 사라짐, Foundation 탭에서 테마를 못 바꾸는 회귀(위쪽 팔레트 삭제의 부작용)"
+    }
+   ],
+   "waste": [
+    {
+     "what": "도크 PANELS 에 theme 를 더하고도 그 목록을 쓰는 창 메뉴 테스트를 큰 실행 전에 돌리지 않음 — 전체 실행에서 1개 실패(R54 의 grep 단계를 건너뜀)",
+     "minutes": 0.5,
+     "fix": "R54: 바꾼 이름(PANELS·data-w)을 grep → -k 먼저"
+    }
+   ],
+   "profile": {
+    "total_sec": 521,
+    "top": [
+     [
+      "test_undo_redo_card_moves_capped_at_50",
+      213.5
+     ],
+     [
+      "test_context_menu_by_target",
+      18.7
+     ],
+     [
+      "test_hide_screen_and_hidden_list",
+      17.0
+     ],
+     [
+      "test_card_drag_has_no_long_tasks",
+      10.3
+     ],
+     [
+      "test_fit_includes_moved_card_and_drops_stale",
+      9.9
+     ]
+    ],
+    "note": "한 테스트가 전체의 41% — 50단계 제한(순수 리듀서 로직)을 실제 끌기 51번 + Ctrl+Z 60번으로 확인. S3 대상"
+   },
+   "note": "--durations=20 첫 측정(S2). 점검 스크립트 canvas_test.py 의 낡은 확인 2개(위쪽 팔레트 묶음·누르면 크게 보기)도 고침 — audit.py 가 실제 실행에서 부름."
+  },
+  {
+   "slice": "Q2b·Q3",
+   "commit": "(이번)",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 6,
+    "minutes": 14
+   },
+   "gate": {
+    "checks": 33,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "-n 4 영역 실행에서 옛 테스트의 순서 의존이 드러남(v2 page 메모 묶음·epage 옮긴 카드) — 새 테스트 2개로 일꾼 나눔이 바뀌어서. page·epage 를 xdist_group 으로 한 일꾼에, test_undo_redo_card_moves 는 시작할 때 옮긴 자리 키를 비움"
+    }
+   ],
+   "waste": [
+    {
+     "what": "영역 실행을 '어디가 깨지나' 찾기에 4번 씀 — 순서 의존은 같은 영역을 -n 없이 한 번 돌려 비교하면 바로 보였다",
+     "minutes": 6,
+     "fix": "-n 실패가 혼자 돌리면 통과하면 먼저 순서 의존(공유 모듈 페이지)을 의심"
+    }
+   ],
+   "profile": {
+    "total_sec": 118,
+    "top": [
+     [
+      "test_card_drag_has_no_long_tasks",
+      12.7
+     ],
+     [
+      "test_fit_includes_moved_card_and_drops_stale",
+      11.4
+     ],
+     [
+      "test_undo_redo_card_moves",
+      11.3
+     ],
+     [
+      "test_tag_rename_keeps_button_text",
+      11.2
+     ],
+     [
+      "test_helper_canvas_busy_overlay_lifts_on_file_change",
+      9.2
+     ]
+    ],
+    "note": "-n 4 전체 165개"
+   },
+   "note": "Q2b 덮개(busy·view-busy)·Q3 선 끝 손잡이(line-ends·view-line-ends)를 셸에 붙임. gpage 는 묶지 않음 — 묶으면 -m 일부 실행에서 test_v3_main_flow_dashed 가 카메라 자리를 이어받아 깨짐(test_canvas_v2.py 는 이번 소유 밖)"
+  },
+  {
+   "slice": "task7 폴더·정렬 (H17·H18)",
+   "commit": "(이번)",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 1,
+    "minutes": 4
+   },
+   "gate": {
+    "checks": 37,
+    "sec": 0.6,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "폴더 끌어 넣기 테스트: Playwright 마우스 끌기가 긴 레이어 나무 스크롤 때문에 다른 줄(login--done)을 잡음 → 같은 HTML5 끌기 이벤트를 직접 보냄"
+    },
+    {
+     "by": "unit",
+     "what": "도크 정렬 패널 자리 규칙(예전 저장 상태 → 표시 옆)을 일부러 깨서 빨강 확인"
+    }
+   ],
+   "waste": [],
+   "flaky": [
+    "test_helper_server_applies_from_canvas_and_falls_back_to_copy — 전체 -n 4 에서 ConnectionAbortedError(소켓), 혼자 통과. 7a·10-22 전체·10-23 02:00 실행(이번 변경 전)에서도 같은 테스트가 흔들림(이번 변경과 무관)"
+   ],
+   "profile": {
+    "total_sec": 119,
+    "top": [
+     [
+      "test_card_drag_has_no_long_tasks",
+      11.7
+     ],
+     [
+      "test_helper_canvas_busy_overlay_lifts_on_file_change",
+      10.8
+     ],
+     [
+      "test_fit_includes_moved_card_and_drops_stale",
+      10.3
+     ],
+     [
+      "test_v3_main_flow_dashed",
+      10.2
+     ],
+     [
+      "test_undo_redo_card_moves",
+      9.5
+     ]
+    ],
+    "note": "-n 4 전체 200개"
+   },
+   "note": "4단계 연결(셸 boxesOf·moveCards·arrangeCards, 폴더 상태, 정렬 패널 도크). 새 브라우저 테스트 2개, 옛 레이어 테스트의 숨긴 것만 확인을 폴더 줄 빼고로 다짐"
+  },
+  {
+   "slice": "task9 메모 UX (#223~#226)",
+   "commit": "9128386 · ec824c3 · 71930f8 · 3e06a35",
+   "numbered": true,
+   "tests": {
+    "full": 1,
+    "area": 6,
+    "minutes": 14
+   },
+   "gate": {
+    "checks": 40,
+    "sec": 0.6,
+    "fired": [
+     {
+      "rule": "책임(모르는 모듈)",
+      "real": false,
+      "min": 1,
+      "what": "HD.popPlace 이름이 파일 이름(pop-place)과 달라 NS 표에 한 줄 더함"
+     }
+    ]
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "메모 창 크기 비교가 여는 움직임(scale) 중 getBoundingClientRect 를 읽어 어긋남 → View·테스트 모두 offset 값으로"
+    },
+    {
+     "by": "new-test",
+     "what": "배지 테스트가 -n 4 영역 실행에서 앞 테스트가 남긴 도구 상태로 선택 막대를 못 찾음 → 메모 도구(M)로 직접 열고 손 도구로 돌아감"
+    }
+   ],
+   "waste": [],
+   "flaky": [],
+   "profile": {
+    "total_sec": 153,
+    "top": [
+     [
+      "test_layer_folders_group_rename_arrange_unfolder",
+      16.8
+     ],
+     [
+      "test_helper_canvas_busy_overlay_lifts_on_file_change",
+      11.7
+     ],
+     [
+      "test_undo_redo_card_moves",
+      11.4
+     ],
+     [
+      "test_tag_rename_keeps_button_text",
+      11.2
+     ],
+     [
+      "test_fit_includes_moved_card_and_drops_stale",
+      10.8
+     ]
+    ],
+    "note": "-n 4 전체 239개"
+   },
+   "note": "새 모듈 3(pop-place·view-pop-place·view-thread), 빈 레이아웃은 H16 상자 재사용(셸 editLayout), 요청문 줄바꿈은 들여 쓴 다음 줄. 새 브라우저 테스트 4·unit 파일 2"
+  },
+  {
+   "slice": "task17 A2b 한 번 보내기가 말하는 것 (R5·R6·R7)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 1,
+    "area": 1,
+    "minutes": 6
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "빈 레이아웃 알림 규칙을 목적 검사 없이 깨도 unit 이 통과 → '목적만 있는 레이아웃' 경우를 더해 한 번 실패를 확인"
+    }
+   ],
+   "waste": [],
+   "flaky": [],
+   "profile": {
+    "total_sec": 177,
+    "top": [
+     [
+      "test_helper_canvas_busy_overlay_lifts_on_file_change",
+      16.7
+     ],
+     [
+      "test_fit_includes_moved_card_and_drops_stale",
+      13.8
+     ],
+     [
+      "test_helper_canvas_writes_delete_and_link_without_reload",
+      13.4
+     ]
+    ],
+    "note": "-n 4 전체 286개"
+   },
+   "note": "새 모듈 없음: edits.items·emptyLayouts(R5·R6·범위 줄), annotation.SCOPES·scopeOf·scopeWord(R7), 메모 창 #pscope·묶음 .thsc. 옛 메모 출력은 unit 으로 먼저 고정. 여러 요소 메모가 한 항목이 되어 test_multi_select_note 를 고침. unit 파일 1·브라우저 테스트 1"
+  },
+  {
+   "slice": "task48a 스며드는 교체(swap·view-swap, 방금 반영됨 칩)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 5
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "숨긴 iframe 을 붙인 뒤 src 를 주면 about:blank load 가 먼저 와 빈 화면으로 교체 — 스크롤 유지 브라우저 테스트가 잡음(src 먼저)"
+    },
+    {
+     "by": "new-test",
+     "what": "판의 capture click(메모 도구)이 알약 클릭을 먹음 — 미룸 테스트가 잡음(document capture 로 받음)"
+    }
+   ],
+   "waste": [],
+   "flaky": [
+    "busy_app·claim_watch 가 -n 4 area 에서 한 번 깨지고 --lf 로 통과(부하 시간)"
+   ],
+   "note": "R56: test_canvas_helper 두 곳의 즉시 '?v=' 확인을 '그 카드가 새 버전을 싣는다'로 기다리게 고침(교체가 다 그린 뒤에 바뀜)"
+  },
+  {
+   "slice": "task49b 블록 조립(막대 자리·상위·쓴 뒤 따라가기·속성 칸·부품 바꾸기/넣기)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 12
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "apply_edits 가 화면 편집을 모두 거절하면 없는 기록 폴더에 manifest 를 쓰다 FileNotFoundError — unit(허용 밖 속성) 이 잡음, 쓴 것 없으면 커밋 안 함"
+    },
+    {
+     "by": "old-test",
+     "what": "요소 메뉴가 막대 단추 목록을 그대로 돌다 새 단추(상위·속성·부품)에서 MENU 없어 멈춤 — 49a 크게 보기 메뉴 테스트가 잡음"
+    },
+    {
+     "by": "new-test",
+     "what": "막대가 단추를 누르면 셸이 고르기를 풀어 쓴 결과를 따라갈 요소가 없음 — Alt+↓ 두 번 테스트가 잡음(누른 요소를 기억)"
+    }
+   ],
+   "waste": [
+    "Bash heredoc 이 역슬래시 두 개를 하나로 줄여 helper.py 에 날 줄바꿈이 들어감 — 이스케이프가 든 편집은 Edit/Write 로"
+   ],
+   "flaky": [
+    "busy_app 두 개가 area 에서 깨짐 — 48b 작업 중 파일(busy·view-busy·swap) 이 같은 작업 트리에 있어 내 것과 분리 못 함, main 에 알림"
+   ],
+   "note": "R56: 49a unit 4·브라우저 2 단언을 의도대로(막대가 커짐 · 상위·메모는 앱 카드에서도 요청 아님)"
+  },
+  {
+   "slice": "polish-1 요소 막대 자리·크기 + 숨김/잠금 옛 id 정리",
+   "commit": "(이 커밋 + 앞 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 5
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "new-test",
+     "what": "막대가 오른쪽 맞춤 자리(x=39)로 가며 왼쪽 도구 막대 #tools 를 덮음 — 스크린샷으로 보고 unit(avoid 목록) 먼저"
+    },
+    {
+     "by": "old-test",
+     "what": "_bar 가 ⋯ 단추까지 셈 · 좁은 타일에서 [바꾸기] 가 ⋯ 로 넘어가 click 시간 초과 — _act 로 ⋯ 경유"
+    }
+   ],
+   "waste": "area -n 4 에서 test_replace_with_part_swaps_the_element 가 막대가 뜨기 전 8초 초과(부하) — 혼자 두 번 통과",
+   "flaky": [
+    "test_canvas_blocks_b.py::test_replace_with_part_swaps_the_element (-n 4 부하)"
+   ],
+   "note": "둘레 글 상자는 같은 출처 화면(도우미 http)에서만 읽음 — file:// 는 예전 자리 차례"
+  },
+  {
+   "slice": "49c 바로 반영 편집 (그 자리 글자·끌어 옮기기·낙관 반영·같은 내용 교체 생략)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 3,
+    "minutes": 25
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "screenshot",
+     "what": "격자에서 끼울 선이 줄 사이 가로 선으로 그려짐 — line() 줄 끝 규칙 + unit"
+    },
+    {
+     "by": "old-test",
+     "what": "같은 내용 silent 를 모든 교체에 걸어 AI 쓰기(주석만 바뀜)의 겹치기·알약이 사라짐 — 낙관 반영한 틀(data-hd-opt)만"
+    },
+    {
+     "by": "old-test",
+     "what": "글 비우기: 그 자리 고치기에서 아무것도 안 치고 Enter = 그대로 — 테스트가 Backspace 로 지움"
+    }
+   ],
+   "waste": "area -n 4 에서 test_insert_part_below… 한 번 시간 초과(혼자 통과) · 랜덤 포트 4045(ERR_UNSAFE_PORT)로 한 번 실패",
+   "flaky": [
+    "test_canvas_blocks_b.py::test_insert_part_below_writes_a_neutral_skeleton_and_undo_restores (-n 4 부하)"
+   ],
+   "note": "apply_edits 는 한 묶음 안 같은 요소 move 를 하나로 겹쳐 씀 → 끌어 옮기기 k칸 = 쓰기 k번(되돌리기 k줄)"
+  },
+  {
+   "slice": "S1b 대화창 후속 (숨기기·창 메뉴 대화창 · #khint 지움 · 탭 바 아래 왼쪽 · 대화창 받는 곳 칩)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 12
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "screenshot",
+     "what": "1280+도크에서 탭 바가 대화창 앞 186px 로 줄어 둘째 탭이 ◀ ▶ 뒤로 — 탭 바 data-need 로 대화창이 폭을 줄여 줌 + 테스트에 화살표 없음 단언"
+    }
+   ],
+   "waste": "bash heredoc 이 따옴표 많은 파이썬 패치를 못 넘김 → 임시 파일 스크립트로",
+   "flaky": [
+    "test_canvas_instant.py::test_in_place_edit_shows_one_box_not_the_selection_box_over_it (-n 4 부하, 혼자 통과)",
+    "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 통과)"
+   ],
+   "note": "대화창 보이기 설정 = dock.js chat 칸(hd-dock), hint 칸은 없앰. 대화창은 위쪽 #aichip 을 비추고 의도 hd-agent-pick 으로 같은 메뉴를 연다"
+  },
+  {
+   "slice": "49d 지우기 지연 (낙관 지우기 · build_ref 풀어 둔 ref 캐시)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 6
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "probe",
+     "what": "지우기 = 화면이 /api/apply(다시 빌드) 답까지 아무것도 안 보임 — 판 5.5초·크게 보기 8.4초 → 22~26ms"
+    }
+   ],
+   "waste": "probe 도우미 포트 정리(nohup 프로세스 pid 가 표지와 달라 포트 주인으로 끔) · 새 테스트의 파일 글 단언이 화면 안 같은 글 두 번을 못 봄",
+   "flaky": [],
+   "note": "40~50초는 이 사본에서 재현 안 됨 — 서버 쪽 다시 빌드가 거의 전부. 도우미가 빌드 전에 답하기는 47-4"
+  },
+  {
+   "slice": "51-1 줄 제목 남음 (data() 줄 맞추기 · delete_screens 빈 group 빼기)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 5
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "rows.plan 규칙·emptied_groups 가 없어 빨강 → 초록 · 브라우저 테스트는 RW.sync 를 끄면 빨강(로그인 줄이 남음)"
+    }
+   ],
+   "waste": "",
+   "flaky": [
+    "test_canvas_edit.py::test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards (HEAD 셸에서도 혼자 4번 중 3번 실패 — 이 조각과 무관, 51-2 에서 봄)"
+   ],
+   "note": "줄 그리기를 view-rows.js 하나로 빼서 첫 그리기와 data() 가 같은 길. 걷은 줄은 이름별로 떼어 두었다가 되살리기 때 같은 요소를 끼운다"
+  },
+  {
+   "slice": "51-2 Figma 고르기 키 (Enter/Shift+Enter/Tab · 고친 뒤 고른 채 · Alt+클릭 deep)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 2,
+    "minutes": 11
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "빠르게 Shift+Tab 두 번 = 둘째 키가 첫 답 전에 같은 요소에서 출발해 한 칸만 감 → 답 기다리는 중 키는 줄로(셸이 다시 그리며 hide 가 줄을 비워 pickThen 이 줄을 이어 감)"
+    },
+    {
+     "by": "area",
+     "what": "test_shortcuts_work_after_closing_text_box_and_selbar_hugs_cards 의 원인 = 그 자리 고치기 Esc 뒤 다음 키가 아직 초점을 가진 틀로 감(HEAD 에서도 4번 중 3번 실패) → palette inlineEnd 가 window.parent.focus() — 4/4 통과"
+    }
+   ],
+   "waste": "51-2 첫 영역 실행이 그 깨짐을 다시 보여 줌(이미 51-1 에서 HEAD 깨짐으로 적어 둔 것)",
+   "flaky": [
+    "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4 부하, 혼자 2/2 통과 — S1b 에 적힌 것과 같음)"
+   ],
+   "note": "Tab 은 끝에서 돈다(Figma). Enter = enterOf(h): textOk 이고 글이 있으면 그 자리 고치기, 아니면 첫 자식. palette 메시지 hd-down·hd-sib → hd-hop, hd-hit-at deep"
+  },
+  {
+   "slice": "51-4 줄 = 섹션 (제목 고르기·이름 바꾸기·Del·줄만 걷기=위 줄 합침 · 레이어 줄 id = 이름)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 13
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "줄만 걷기 차례: 한 줄 화면이 screens.json 에 흩어져 있으면 블록을 위 줄 마지막 화면 뒤에 끼워야 빌드 차례 = 판 차례(테스트 기대를 먼저 잘못 적음)"
+    },
+    {
+     "by": "browser",
+     "what": "고른 줄 카드가 설명을 펼쳐 아래 줄 제목을 덮음(기존 동작) — hover 스크린숏을 위 줄로"
+    }
+   ],
+   "waste": "영역 실행 중 w47-4b 가 modules/live.js 등을 더해 순수성 목록이 달라짐 + 부하 깨짐 4 — 혼자 5/5 통과",
+   "flaky": [
+    "test_canvas_blocks.py 2 · test_canvas_blocks_b.py 1 · test_canvas_edit.py::test_blank_layout_caption_has_name_and_multiline_purpose (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
+   ],
+   "note": "셸 0줄: 등록부 기능 rowHeads + document 의도(hd-row-pick/delete/rename/dissolve, hd-rows-changed)로 레이어 패널 ctx.pick·ctx.del 을 씀. 서버 /api/group-rename · /api/group-dissolve(순수 계획 + 쓰기 한 번 + restore)"
+  },
+  {
+   "slice": "47-5b 받는 곳 고르기 · 에이전트 상태 · 진행 줄 · 새 터미널(캔버스)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 9
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "규칙 10개 각각 부숴서 빨강 확인(메뉴 중복·orphan·away·request.sent 메모 id·받는 곳 진행·via 글·403 설명·reverted·live TYPES·delivery)"
+    },
+    {
+     "by": "browser",
+     "what": "live.js TYPES 에 agent.*·request.sent 가 없어 EventSource 가 새 이벤트를 듣지 않음 — 진행 줄·칩이 안 바뀜"
+    },
+    {
+     "by": "screenshot",
+     "what": "접속한 에이전트(via event)에 보내도 셸 토스트가 '보내지 못해 대기열'·덮개 '대기열' — HD.agents.delivery 로 고침"
+    }
+   ],
+   "waste": "영역 실행 중 다른 일꾼의 bar-place.js 작성 중(FileNotFound) + 부하 깨짐 2(혼자 통과)",
+   "flaky": [
+    "test_canvas_helper.py::test_helper_canvas_writes_delete_and_link_without_reload · test_canvas_instant.py::test_async_apply_whose_build_fails_reverts_the_optimistic_change (-n 4 + 다른 일꾼 작업 중, 혼자 통과)"
+   ],
+   "note": "셸 3줄(sendList 의 delivery) + CSS 1줄. 새 기능 presence·spawn 은 등록부 View, 규칙은 Model 4개(agents.menu/delivery · presence · spawn · undo-answer)"
+  },
+  {
+   "slice": "t51-9 판 글 = 고를 수 있는 글 레이어(소개·끝 글·카드 아래 글·DS 카드)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 8
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "규칙 셋 부숴서 빨강 확인(시장 관례 차례 → decisions.json 번호 · 제목 Delete 거절 · story 지우기 = 제목·요약 둘 다)"
+    },
+    {
+     "by": "browser",
+     "what": "보고 재현: V 로 소개를 눌러도 아무것도 안 골라짐(빨강) → 고르기·Delete·되돌리기·그 자리 고치기·카드 글·도우미 없이 반영 대기 초록"
+    },
+    {
+     "by": "area",
+     "what": "손 도구 두 번 누르기로 카드 글을 고친 뒤 Esc 가 카드 고르기를 안 풀었음(caption_note) — 이동 도구에서만 판 글 고르기"
+    }
+   ],
+   "waste": "test_done_notes_archived_then_removed_once 는 HEAD 에서도 혼자 실패(이 조각과 무관)",
+   "flaky": [
+    "test_canvas_helper.py::test_helper_written_edit_is_not_requeued_when_reload_fails (-n 4, 혼자 통과)"
+   ],
+   "note": "셸: 판 글 그리기를 view-board-text 로 빼냄 + BT attach 한 번 + 훅 다섯 줄(data·renderNotes·revert·caption 닫기·layers tree). 서버: session.apply_edits 의 edit 'board' → 순수 board_text.plan"
+  },
+  {
+   "slice": "t51-6 카드 바로 복제(Ctrl+D · 메뉴 [복제] — Figma F19)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 7
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "규칙 일곱 부숴서 빨강 확인(파일 겹침 피하기 · 꼬리 ' 복사' · 원본 바로 뒤 · 입력과 항목 공유 · 앱 거절 · JS 변형 뒤 자리 · JS 계획끼리 id 겹침)"
+    },
+    {
+     "by": "browser",
+     "what": "옛 셸(HEAD)로 두 테스트 빨강(Ctrl+D 에 아무 카드도 안 생김) → 새 셸 초록"
+    },
+    {
+     "by": "area",
+     "what": "카드 메뉴 [복제] 에 Ctrl+D 키 표시를 달아 test_card_menu_full_items 의 정확한 이름 찾기가 깨짐 — ^복제 로"
+    }
+   ],
+   "waste": "",
+   "flaky": [],
+   "note": "셸: CC attach 한 번 + duplicateCards · Ctrl+D 키 · revert 한 줄. 서버: session.apply_edits 의 edit 'clone' → 순수 screen_copy.plan"
+  },
+  {
+   "slice": "R17 시안 A 선택 도구·요소 아이콘 막대·묶은 요소 메뉴",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 8
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "새 test_canvas_unit_elmenu 11개 빨강(icons·menu·keyOf·askText('ai') 없음) → 초록"
+    },
+    {
+     "by": "browser",
+     "what": "막대 높이 32px 이 크게 보기 넓은 창의 안내 글과 타일 사이에 안 들어가 안내 글을 덮음(test_canvas_blocks_clear) → 22px 단추·막대 24px"
+    },
+    {
+     "by": "browser",
+     "what": "요소 메뉴가 길어져 카드 가운데를 덮어 휠이 메뉴 위에서 일어남(test_context_menu_by_target) → 메뉴 밖 판에서 휠"
+    }
+   ],
+   "waste": "",
+   "flaky": [
+    {
+     "test": "test_canvas_text_remove::test_remove_with_helper_writes_the_file_and_undo_restores_it",
+     "note": "-n 4 에서 한 번 실패, 혼자·영역 실행에서 통과"
+    }
+   ],
+   "note": "막대·메뉴 단추를 글이 아니라 data-act 로 고르게 테스트를 바꿈(R56). 셸: openElemMenu 를 blocks.menu 묶음으로 · elemFire(상위·안쪽·속성·부품 = 고른 뒤 BK.fire) · BK.onMenu 한 줄 · blockAct 에 ai"
+  },
+  {
+   "slice": "R19 선택(V) Shift+클릭 여러 요소 고르기 + 대화창 요소 칩 여럿",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 8
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "새 test_canvas_unit_el_pick 5개 — 규칙을 하나씩 깨 모두 빨강 확인(toggle·primary·path 없음·shift·chips)"
+    },
+    {
+     "by": "browser",
+     "what": "같은 화면·같은 글 요소 메모 둘은 요청문 한 항목(no=1,2 + 다른 곳:) — 테스트 기대를 edits.request 형식에 맞춤"
+    }
+   ],
+   "waste": "",
+   "flaky": [],
+   "note": "Shift+클릭 규칙 = el-pick.shift(V · 고른 요소 있음 · 고른 카드 안 · 빈 레이아웃 아님 → 요소, 그 밖 = 카드 E15). 막대·메뉴는 주인(마지막) 하나"
+  },
+  {
+   "slice": "R31 폴더(판 줄) 관리: 제목 폴더 아이콘·폴더만 풀기(Ctrl+Shift+G)·제목 끌기 = 폴더째 옮기기·레이어 끌어 다른 폴더로(/api/group-move)·레이어 두 번 누르기 이름 바꾸기 고침",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 17
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "K1: 레이어 폴더 이름 두 번 누르기가 이름 바꾸기를 열지 않음 — 첫 누르기 고르기가 도크 연결·정렬 패널을 열어 레이어 줄이 아래로 밀림(빨강 확인 후 고침)"
+    },
+    {
+     "by": "unit",
+     "what": "test_canvas_unit_row_ops 규칙 7개를 하나씩 깨 모두 빨강 확인(drop·assign emptied·titleShift·잠금·키·Python 차례·groups)"
+    },
+    {
+     "by": "unit",
+     "what": "plan_group_move: 같은 객체를 고친 뒤 emptied_groups 를 불러 빈 줄 이름이 안 빠짐 — 옮기기 전 사본으로"
+    }
+   ],
+   "waste": "실제 Chrome 채널이 이 기계에서 load 를 끝내지 않아(오늘) 로컬 실행은 번들 chromium 플러그인(-p, 저장소 밖)으로 돌림. 영역 실행 중 다른 일꾼 부하로 goto 30초 넘김이 잦음",
+   "flaky": [
+    "test_canvas_instant::test_async_apply_whose_build_fails_reverts_the_optimistic_change — 영역 실행·단독 pytest 에서 pageerror 'closest of null' 2번, 같은 본문을 직접 돌린 3번은 통과(원인 미확인)",
+    "test_canvas_busy_app::test_app_card_chip_lifts_on_hmr_or_reload_not_on_first_load · test_canvas_text_remove::test_large_view_text_box_has_remove_element — 영역 실행에서만 실패, 단독 통과"
+   ],
+   "note": "규칙 = modules/row-ops.js(Model) · 제목 끌기 = view-row-drag(View, card-pos move 길) · 다른 폴더로 = view-rows rowHeads 'hd-row-assign' + board_rows.plan_group_move"
+  },
+  {
+   "slice": "R28 대화창: Paseo 에 진짜 이미지(--image) + 모델·생각 깊이·컨텍스트 고리(시안 A)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 24
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "실패 토스트에 '생각 깊이를 바꾸지 못했어요' 가 두 번 — 서버 까닭을 그대로 쓰게"
+    },
+    {
+     "by": "unit",
+     "what": "attach.js paths 의 split 글이 줄바꿈으로 깨진 것(모듈 순수성 테스트가 먼저 잡음)"
+    }
+   ],
+   "waste": "부하 때 page.goto 30초 넘김 3건(test_canvas_agents 2 · ai_undo 1) — 따로 다시 돌려 통과",
+   "flaky": [
+    "test_canvas_agents.py::test_canvas_does_not_switch_existing_attachment",
+    "test_canvas_agents.py::test_canvas_auto_attaches_then_chip_menu_switches_and_send_goes_to_choice",
+    "test_canvas_ai_undo.py::test_history_row_undo_puts_old_file_back_and_card_swaps"
+   ],
+   "note": "고리는 모르면 숨김(0% 아님). 모델 바꾸기는 CLI 가 없어 보기만"
+  },
+  {
+   "slice": "R50 요소 막대에 기능 고정하기(메뉴 줄 핀 · 막대 오른쪽 클릭 '막대에서 빼기' · prefs elbarPins · 최대 6)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 15
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "unit",
+     "what": "옛 '글자' 숨김 테스트가 새 규칙(꺼진 아이콘)에서 깨짐 — 뜻을 읽고 다시 씀"
+    },
+    {
+     "by": "browser",
+     "what": "꺼진 핀(aria-disabled)은 playwright 가 누르지 않음 — force 로 '눌러도 고정 안 됨'을 확인"
+    }
+   ],
+   "waste": "head 주석의 'HD.blocks = {' 를 끝 표지로 잘못 잡아 blocks.js 를 한 번 되돌림",
+   "flaky": [],
+   "note": "핀은 줄 단추 밖 span[role=button] — '#cmenu button' 목록을 쓰는 옛 테스트를 건드리지 않게"
+  },
+  {
+   "slice": "R55 phase F: Foundation 토큰 고르기·고치기(문서 탭 손·선택, 속성 창, POST /api/token, 되돌리기, 모든 틀 다시 읽기)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 11
+   },
+   "gate": {
+    "checks": 0,
+    "sec": 0,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "손으로 문서를 누른 뒤 V 키가 iframe 에 먹힘 — palette.js 가 hd-key 로 넘기게"
+    },
+    {
+     "by": "browser",
+     "what": "view-read-only CSS 글에 날 줄바꿈이 들어가 셸 스크립트 문법 오류(pageerror)"
+    },
+    {
+     "by": "eye",
+     "what": "도구 막대가 Foundation 견본을 가림 · 글자 줄 속성 창이 오른쪽 도크 밑으로 — 문서 칸 기준 자리로"
+    }
+   ],
+   "waste": "테마 미리 보기가 늘 팔레트 파일(tokens-<slug>.css)이라 tokens.css 저장이 안 보이는 것을 늦게 알아챔 — '@project' 를 더함",
+   "flaky": [],
+   "note": "phase C(컴포넌트)는 readPick·fields 의 종류로 더한다"
+  },
+  {
+   "slice": "memo-state: 움직이는 화면(안내 단계) 메모 — 단계가 바뀌면 점선·번호 숨김, 칩 줄 번호로 그 단계 가기(hdGoto · 클릭 다시 하기)",
+   "commit": "(이 커밋)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 16
+   },
+   "gate": {
+    "checks": 1,
+    "sec": 3,
+    "fired": [
+     {
+      "rule": "purity",
+      "real": true,
+      "what": "Model 머리 주석의 window.hdGoto 글자"
+     }
+    ]
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "단계 값만 보던 판 카드: 화면이 시작 전(hdState 없음)이면 '모름'으로 봐 점선이 남음 — null = 다름"
+    },
+    {
+     "by": "browser",
+     "what": "클릭 없이 처음 실린 화면에 단 메모까지 상태를 적어 파일 글 바뀜이 '요소를 찾을 수 없음' 대신 칩이 됨 — 단계 값·클릭 없으면 view 를 적지 않음"
+    },
+    {
+     "by": "eye",
+     "what": "미리보기가 크게 보기 닫기 단추를 가리고 칩이 닫기 옆 — 칩은 제목 뒤, 미리보기는 칩 줄 아래"
+    }
+   ],
+   "waste": "다른 세션이 테스트 잠금을 쥐어 -n 3 실행이 10분 기다리다 끝남(타임아웃) — 잠금 주인 먼저 볼 것",
+   "flaky": [
+    "test_async_apply_whose_build_fails_reverts_the_optimistic_change",
+    "test_drag_whose_async_build_fails_puts_the_order_back"
+   ],
+   "note": "화면 쪽 약속(dataset.hdState·window.hdGoto)은 contract/memo-state.md — 하네스 스킬에는 아직 없음"
+  },
+  {
+   "slice": "R57: card size 16~60000 · card-size from elsewhere in place (LIVE) · large-view zoom (fit width, scroll, Ctrl+wheel at cursor, Ctrl+=/-/0, chip)",
+   "commit": "(this commit)",
+   "numbered": false,
+   "tests": {
+    "full": 0,
+    "area": 1,
+    "minutes": 11
+   },
+   "gate": {
+    "checks": 1,
+    "sec": 13,
+    "fired": []
+   },
+   "caught": [
+    {
+     "by": "browser",
+     "what": "window height read before the floating chat grew a chip row: zoom-at-cursor drifted 4px; fixed by re-measuring on chat ResizeObserver"
+    },
+    {
+     "by": "eye",
+     "what": "element bar clamped to the whole overlay sat over the tool bar at 200%; its view is now the visible #mview"
+    },
+    {
+     "by": "eye",
+     "what": "320x50 card became a pill (28px radius); card radius now min(r, h/4)"
+    }
+   ],
+   "waste": "this machine's mimetypes registry read takes ~40s, so helper page loads time out; worked around with a scratch sitecustomize (PYTHONPATH), not in the repo",
+   "flaky": [
+    "test_drag_whose_async_build_fails_puts_the_order_back (also fails without R57 C)",
+    "test_async_apply_whose_build_fails_reverts_the_optimistic_change"
+   ]
+  }
+ ]
 }
