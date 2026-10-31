@@ -11,6 +11,7 @@
      cardPos(view-card-pos api: at·put·place·move·group) · locked(id) · lines()(끄는 중 선 다시) — R31 폴더째 옮기기 ·
      selected() → 고른 카드 id 목록 · picked() → 고른 요소 {screen, h, app}|null(요소 막대) · pickedAll() → 판에서 고른 요소 모두 [{screen, h, app}](고른 차례, 마지막 = 막대, R19) · sendNotes(list) → 메모를 더하고 바로 보내기(보내는 중이면 false, S1 대화창) · boardNotes() → 고른 판 메모 [{id, text, x, y, w, h}](판 좌표, R25 대화창 노트 칩 — 읽기만) · boardLinks() → 판 메모 선 map(R47, 없으면 {} — 읽기만)
      · dock{state(), dispatch(a, quiet?), absent(), render()} — 도크 배치(dock.js) 읽기·의도(R53 대화 창 붙이기·떼기 — 배치의 주인은 view-dock)
+     · focus(ids, maxZ?) — 그 카드들로 판 옮기기(fitCards, maxZ 없으면 지금 배율보다 크게는 안 함)
      · api{on, call(method, path, body)} · reload(ids, opt?{stamp, echo}) — 그 카드들을 교체 길로 다시 싣기(실시간 알림이 같은 쓰기를 이미 실었으면 건너뜀, echo = 되살리기 notify 의 메아리 한 번 먹기 — 47-4b) */
 (function () {
 'use strict';
