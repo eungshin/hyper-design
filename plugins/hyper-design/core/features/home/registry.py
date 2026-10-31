@@ -14,6 +14,9 @@
   R34: 같은 판단을 프로젝트 화면에도 — stale_info() = code_stamp.hub_stale(뜬 도장, 지금 도장, 뜬 시각) → 세션의 hub_stale(GET /api/state 의 hubStale ·
   페이지의 window.__hdHubStale). 지금 도장(git)은 STALE_TTL 초에 한 번만 잰다(2초 읽기마다 git 을 부르지 않게). restarter() = 프로젝트 화면의
   [다시 켜기](세션 토큰 POST /api/hub/restart — 홈 화면과 같은 spawn_restart).
+- 지금 도장 재기는 한 자리(보드 전환 S1): current_code(max_age) = 이 허브의 기억 하나(잰 시각 · 값) — STAMP_TTL(2초) 안이면 git 을 다시 부르지 않는다.
+  열기(open) · 세션 페이지(page 의 code) · 옛 코드 칩(stale_info, STALE_TTL) 이 같은 기억을 쓴다 → 전환 한 번에 git rev-parse 한 번.
+  커밋 뒤 2초 안 전환은 옛 도장으로 볼 수 있다(다음 전환에서 바로잡힘). 규칙은 stamp_fresh(순수 — 시계를 넘겨받는다).
 """
 import json, os, pathlib, sys, threading, time, urllib.parse
 from http.server import ThreadingHTTPServer
@@ -31,6 +34,12 @@ import session as S  # noqa: E402
 
 BUILD_REF = CANVAS / "build_ref.py"
 STALE_TTL = 30.0                                     # 프로젝트 화면의 '허브 옛 코드' 판단 — 지금 도장을 이만큼마다 한 번 잰다
+STAMP_TTL = 2.0                                      # 열기 · 페이지 — 이 안에 다시 재면 기억한 도장(전환 한 번에 git 한 번)
+
+
+def stamp_fresh(taken, now, ttl):
+    """잰 시각 taken 의 도장을 now 에 다시 써도 되나 — ttl 초 안(0 <= now-taken < ttl). 잰 적 없음 · 시계가 뒤로 감 = 아니(다시 잰다)."""
+    return taken is not None and 0 <= now - taken < ttl
 
 
 def ref_build(out):                                  # 허브의 다시 빌드 = hd open 과 같은 build_ref(저장소면 git HEAD 코드, #278)
@@ -52,9 +61,10 @@ class ProjectRegistry:
     def __init__(self, hub_port, hub_url, picker=None, paseo=None, build=None, after_rows=None, restarter=None):
         self.hub_port, self.hub_url, self.picker, self.paseo = hub_port, hub_url, picker, paseo
         self.build, self.after_rows, self.restarter = build or ref_build, after_rows, restarter
-        self.code = C.code_stamp()                   # 이 허브 프로세스가 뜬 코드 도장
+        self.clock = time.monotonic                  # 도장 기억의 시계(테스트가 바꿔 끼움)
+        self._probe, self._probe_lock = None, threading.Lock()   # (잰 때 clock, 지금 도장) — current_code 의 기억 하나
+        self.code = self.current_code()              # 이 허브 프로세스가 뜬 코드 도장
         self.started = C.now()                       # 이 허브가 뜬 시각(프로젝트 화면 칩의 '켠 시각')
-        self._probe, self._probe_lock = None, threading.Lock()   # (잰 때 monotonic, 지금 도장) — STALE_TTL 동안 다시 쓴다
         self.sessions = {}
         self.lock = threading.RLock()
 
@@ -83,18 +93,22 @@ class ProjectRegistry:
                 "port": self.hub_port(), "agent": sess.queue.agent, "started": sess.started, "prefix": prefix(sess.name), "hub": True,
                 "code": self.code}
 
+    def current_code(self, max_age=STAMP_TTL, now=None):
+        """지금 코드 도장 | None — 허브가 재는 유일한 곳. 기억이 max_age 초 안이면 그것(git 을 부르지 않음), 아니면 재고 기억한다.
+        자물쇠 안에서 잰다 — 같이 온 요청(열기 · 페이지)이 따로 재지 않게."""
+        t = self.clock() if now is None else now
+        with self._probe_lock:
+            if self._probe is None or not stamp_fresh(self._probe[0], t, max_age):
+                self._probe = (t, C.code_stamp())
+            return self._probe[1]
+
     def stale(self, current=None):
         """이 허브가 옛 코드로 떠 있나(지금 도장을 모르면 아니라고)."""
-        return CS.stale(self.code, C.code_stamp() if current is None else current)
+        return CS.stale(self.code, self.current_code() if current is None else current)
 
     def stale_info(self, now=None):
-        """프로젝트 화면에 실을 판단 → {sha, since} | None(새것 · 지금 도장을 모름). 지금 도장은 STALE_TTL 마다 한 번만 잰다."""
-        t = time.monotonic() if now is None else now
-        with self._probe_lock:
-            if self._probe is None or t - self._probe[0] >= STALE_TTL:
-                self._probe = (t, C.code_stamp())
-            current = self._probe[1]
-        return CS.hub_stale(self.code, current, self.started)
+        """프로젝트 화면에 실을 판단 → {sha, since} | None(새것 · 지금 도장을 모름). 지금 도장은 STALE_TTL 안이면 기억한 것(열기·페이지와 같은 기억)."""
+        return CS.hub_stale(self.code, self.current_code(STALE_TTL, now), self.started)
 
     def _noticed(self, m, current):
         return dict(m, notice=CS.HUB_NOTICE) if self.stale(current) else m
@@ -111,7 +125,7 @@ class ProjectRegistry:
 
     def open(self, target, agent=None):
         e, o = C.resolve(target)
-        current = C.code_stamp()
+        current = self.current_code()                # 바로 뒤 page() 도 이 기억을 쓴다(전환 한 번에 git 한 번)
         with self.lock:
             sess = self._by_out(o)
             if sess is not None:
@@ -135,7 +149,7 @@ class ProjectRegistry:
 
     def _start(self, name, out, agent):
         sess = S.ProjectSession(out, agent=agent, paseo=self.paseo, build=self.build, name=name,
-                                code=lambda: C.code_stamp()).open()   # name = 이벤트의 project · code = 페이지를 줄 때 견줄 지금 도장
+                                code=self.current_code).open()   # name = 이벤트의 project · code = 페이지를 줄 때 견줄 지금 도장
         sess.name, sess.started = name, C.now()
         sess.hub_stale = self.stale_info             # R34 프로젝트 화면의 '허브 옛 코드' 칩(GET /api/state · 페이지)
         sess.router = R.Router(home_ctx=self.ctx(sess), on_stop=lambda: threading.Thread(target=self.close, args=(name,), daemon=True).start(),
