@@ -301,10 +301,7 @@ function home() {                                  // 첫 카메라(R27 F03): �
   var narrow = pane.clientWidth < 600, top = firstRowTop();
   tx = narrow ? 12 - LEFT * z : Math.max(24, toolEdge() + 16) - contentLeft * z;   // 폰: 화면 줄이 바로 보이게 통로는 화면 밖으로 · 넓으면 도구 막대 오른쪽부터(F17)
   ty = top == null ? 0 : Math.min(0, 20 - top * z); apply();
-  homeCam = {z: z, tx: tx, ty: ty};
 }
-var homeCam = null;
-function rehome() { if (homeCam && z === homeCam.z && tx === homeCam.tx && ty === homeCam.ty) home(); }   // 글꼴·줄 높이가 늦게 바뀌어 첫 줄이 움직였으면 — 아직 아무도 판을 옮기지 않았을 때만 다시
 function fit() {
   var e = toolEdge(), g = e ? Math.max(0, e + 8 - 16) : 0;   // 떠 있는 도구 막대 자리는 비운다(왼쪽 도크로 판이 좁아지면 맨 왼쪽 내용이 그 밑에 깔렸다, S3)
   var ex = CP.extent(contentLeft), pw = pane.clientWidth - g, ph = pane.clientHeight;
@@ -1424,17 +1421,21 @@ CP.load();                                          // 빈 레이아웃 카드�
 pruneFolders(); LY.render();                       // 빈 레이아웃 카드까지 그린 뒤에 없는 화면 id 를 버린다
 if (PR) PR.check();                                // AI 가 답한 빈 레이아웃이 있고 그 화면이 이제 데이터에 있으면 그 자리로(새로고침 뒤)
 drawArrows();
-home();
+home();                                             // 첫 카메라는 한 번 — 뒤에 글꼴·줄 높이가 바뀌면 CAM 이 눈앞 내용을 제자리에(다시 맞추지 않음, U2 F1a)
+var CAM = HD.viewCameraAnchor.mount({stage: stage, rowsEl: rowsEl, pane: pane, busy: function () { return !!(drag && drag.moved); },
+                                   getView: function () { return {z: z, tx: tx, ty: ty}; }, setView: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }});
 LC.visible();
 var hashTab = (location.hash || '').slice(1);
 if (hashTab === 'foundation' || hashTab === 'components') showTab(hashTab);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); drawArrows(); rehome(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { RW.space(); CAM.keep(); drawArrows(); });
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () { RW.space(); CAM.keep(); drawArrows(); });   // ready 는 바깥 글꼴 CSS 가 오기 전에 풀리기도 한다 — 실제로 글꼴이 바뀐 뒤 줄 사이를 다시 재야 다음 메모 더하기·지우기 때 한꺼번에 바뀌지 않는다
 if (window.ResizeObserver) {                       // 글꼴·토큰이 늦게 와서 줄 높이가 바뀌면 화살표를 다시
   var roRaf = 0, roH = 0;
   new ResizeObserver(function () {
     if (rowsEl.offsetHeight === roH) return;
     RW.space(); roH = rowsEl.offsetHeight;          // 줄 높이가 바뀌면(카드 크기·글꼴) 줄 사이도 다시(t51-8)
-    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(function () { drawArrows(); rehome(); });
+    CAM.keep();                                      // 줄 사이를 바꾼 같은 프레임에 눈앞 내용 제자리(한 프레임 튐 없이)
+    cancelAnimationFrame(roRaf); roRaf = requestAnimationFrame(function () { drawArrows(); });
   }).observe(rowsEl);
 }
 window.__hdReady = performance.now();

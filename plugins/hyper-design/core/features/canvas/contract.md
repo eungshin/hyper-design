@@ -28,7 +28,7 @@ python3 $SK/features/canvas/helper.py <out> [--paseo-agent ID]   # 로컬 도우
 - 쓰는 곳은 `hd parts --rebuild` 하나(hd/contract.md '앱 부품'). 도우미·캔버스는 읽기만 하고 빌드하지 않는다. 틀린 항목은 건너뛰고 `[hd] parts.json …` 한 줄, 깨진 파일은 한 줄 뒤 부품 없음(projects.json 과 같은 규칙)
 
 ## 구조
-- `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
+- `modules/` — 판의 선·고른 화면 안 연결·편집·도크. 선은 `view-lines` 하나뿐(E20 A: 고르면 같은 선이 진해짐, 번호 = 출발 화면마다), `view-links` 는 고른 화면 안(버튼 테두리·번호·소켓·패널 줄 목록)만, `view-link-panel` 이 연결 패널(줄마다 이름·휴지통). Model(`graph`·`route`·`camera`·`camera-anchor`·`style`·`edits`) / ViewModel(`prefs`·`tools`·`dock`·`selection`) / View(`view-links`·`view-motion`·`view-camera-anchor`·`view-dock`·`view-edge-pan`·`view-select`·`view-lines`·`motion.css`)
 - 기능별 규칙은 `contract/<기능>.md`(파일 하나 = 기능 하나 — 구조 규칙과 '고치면 돌릴 것' 줄). 목록은 그 폴더 자체다(여기에 줄을 더하지 않는다). 모듈 머리 주석이 아니라 파일로 둔 까닭: 규칙이 Model·View·셸에 걸치고, 머리 주석은 한 줄 책임 + API 만 말한다
 - 새 기능은 `canvas_template.html` 밖 모듈로 만들고 템플릿에는 붙이는 줄만 둔다(스트랭글러 — 맞닿는 기존 덩어리는 그 조각에서 같이 빼낸다). 판 바깥 UI 색은 `:root`의 `--ui-*`(무채색)만 쓴다
 - 기능 등록부 `features`(ViewModel) — View 가 읽힐 때 `HD.feature(이름, {needs, mount(ctx)})` 로 등록하고, 셸은 기존 mount 들 뒤에서 `HD.mountAll(ctx)` 를 한 번 부른다(공통 ctx 칸은 `modules/features.js` 머리 주석). `needs` 칸이 없거나 mount 가 던지면 그 기능만 빠지고 `[hd]` console.error + 토스트, 나머지는 붙는다. 기존 mount 는 그 자리에 둔다(스트랭글러) — 지금 등록부로 붙는 것: `agents` · `aiUndo` · `artboard` · `blocks` · `chat` · `dsCard` · `home` · `parts` · `popPlace` · `presence` · `projects` · `promote` · `readOnly` · `rowHeads` · `spawn` · `swap` · `tabs`(목록의 진실은 `modules/` 의 `HD.feature(` — 여기는 참고)
@@ -108,6 +108,7 @@ unit 은 I/O 가 없다: git·하위 프로세스 빌드·HTTP 서버가 드는 
 | `modules/viewport.js` · `view-viewport.js`(창 나누기·동시 스크롤 · 카메라 계산 zoomAt·fit) | `unit or menu or input` |
 | `helper.py` · `modules/view-sync.js`(화면 파일에 바로 쓰기: 잇기·끊기·삭제·되살리기·바뀐 카드만 다시·모드 칩) | `unit or helper` |
 | `modules/camera.js` · `view-motion.js` · `motion.css` | `unit or motion` |
+| `modules/camera-anchor.js` · `view-camera-anchor.js` · 셸 `home`(첫 카메라 · 눈앞 내용 제자리, U2) | `contract/camera.md` 의 줄 |
 | `modules/view-edge-pan.js` (끄는 중 가장자리 판 밀기) | `unit or tools or input` |
 | `modules/selection.js` · `view-select.js` (고른 카드: 누르기 = 고르기 + 연결 강조, Shift = 여러 장) | `unit or tools or input or links` |
 | `canvas_template.html` 이동·확대·입력 | `input` |
