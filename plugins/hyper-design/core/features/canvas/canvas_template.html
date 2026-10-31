@@ -1347,7 +1347,7 @@ var FT = HD.mountAll({$: $, $$: $$, esc: esc, toast: function (m, u, ms) { toast
   frameLoaded: frameLoaded,
   selected: function () { return SL.ids(); },
   modalScreen: function () { return modal.hidden ? null : mscreen; },   // 크게 보기로 연 화면 — 대화창 칩(10-29)
-  focus: function (ids) { fitCards(ids, z); },
+  focus: function (ids, maxZ) { fitCards(ids, maxZ || z); },   // maxZ 없으면 지금보다 크게는 안 함 · 쓰는 화면 보기(R58)는 100% 까지
   dock: {state: function () { return VD.state(); }, dispatch: function (a, quiet) { VD.dispatch(a, quiet); }, absent: function () { return VD.absent(); }, render: function () { VD.render(); }},   // 도크 배치(대화 창 붙이기·떼기, R53 — 의도만)     // 그 카드들로 판을 옮긴다(지금보다 크게는 안 함) — 대화 턴 누르기(S3)
   view: {get: function () { return {z: z, tx: tx, ty: ty}; }, set: function (nz, ntx, nty) { z = nz; tx = ntx; ty = nty; apply(); }, pane: pane},   // 카메라(S5 만드는 중 틀 따라가기)
   refresh: function (ids) { VS.refresh(ids || [], 'f' + Date.now()); },   // 새 화면 파일이 생겼을 때 판 데이터 다시(S5)

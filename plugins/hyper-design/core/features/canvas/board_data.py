@@ -6,11 +6,14 @@ build_canvas(빌드 CLI)와 session(도우미 /api/data)이 함께 쓴다. 화�
 오류 탐지: 깨진 JSON · 못 읽는 tokens.css 는 멈추지 않고 기본값으로, stderr 에 '경고:' 한 줄. 없는 화면 파일은 링크 없음([]).
 """
 import json
+import os
+import pathlib
 import re
 import sys
 
 import code_stamp as CS  # 데이터 도장 모양(순수 — input_stamp)
 import links
+import usage_map  # 부품 쓰는 화면 지도(순수, R58)
 
 SCALE, CARD, MODAL, RADIUS = 0.72, {"w": 375, "h": 812}, {"w": 390, "h": 844}, 28   # surface.json이 없을 때(폰)
 
@@ -55,6 +58,33 @@ def screen_links(out, card, ids):
         if to and to != card["id"] and to in ids:
             res.append({"to": to, "text": text})
     return res
+
+
+def specimens_path():
+    """부품 견본 파일 — build_canvas.SPECIMENS 와 같은 규칙(환경변수 HD_SPECIMENS, 없으면 플러그인 foundation/specimens.html). 부를 때마다 읽는다."""
+    return pathlib.Path(os.environ.get("HD_SPECIMENS") or pathlib.Path(__file__).resolve().parents[2] / "foundation" / "specimens.html")
+
+
+def usage(out, cards):
+    """부품 쓰는 화면 지도(R58) → {견본 key: [화면 id]}(cards = 판 차례). 견본 파일 없음·앱 카드(개발 서버)·없는 화면 파일 = 빠짐(경고 없음).
+    못 읽는 견본 파일은 stderr '경고:' 한 줄 뒤 {}."""
+    sp = specimens_path()
+    if not sp.exists():
+        return {}
+    try:
+        keys = usage_map.spec_keys(sp.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"경고: {sp.name} 읽기 실패 — 부품 쓰는 화면 없이 ({e})", file=sys.stderr)
+        return {}
+    screens = []
+    for c in cards:
+        if is_dev_url(c["file"]):
+            continue
+        try:
+            screens.append((c["id"], usage_map.classes((out / c["file"]).read_text(encoding="utf-8", errors="ignore"))))
+        except OSError:
+            continue
+    return usage_map.usage(keys, screens)
 
 
 def root_vars(css):
@@ -159,5 +189,6 @@ def index_data(out, m):
     data = {"title": m.get("title") or "전체 화면 한눈에 보기", "scale": scale, "card": card_sz, "modal": modal_sz, "radius": radius,
             "story": m.get("story") or None, "people": [{"name": p.get("name", ""), "why": p.get("why", ""), "win": p.get("win", ""), "core": bool(p.get("core")),
                                                      "wants": [w.get("q", "") for w in (p.get("wants") or [])][:5]} for p in (m.get("people") or [])[:4]], "decisions": decisions, "stage": m.get("stage") or "", "pending": m.get("pending_states") or 0, "rows": data_rows, "arrows": arrows, "links": links,
-            "palettes": pal, "credits": credits if isinstance(credits, list) else [], "tokens": tokens}
+            "palettes": pal, "credits": credits if isinstance(credits, list) else [], "tokens": tokens,
+            "usage": usage(out, [c for r in data_rows for c in r["screens"]])}
     return data

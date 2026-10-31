@@ -12,6 +12,7 @@
    같은 창에 규칙마다 줄(바탕·변형 먼저, 상태 규칙은 '상태' 아래 누를 때·못 누를 때…, 다른 부품도 부르는 목록 = '버튼·칩 함께 바뀌어요').
    칸 = 쉬운 속성 이름 + 같은 묶음 토큰 목록(#dsList — 색 점·값 미리 보기 + 쉬운 이름). 고르면 POST /api/component → 모든 틀 components.css 다시 읽기 ·
    기록 한 줄 '부품 바꾸기 <부품> <속성>'. 자유 값은 없다(사용자 결정 — 값은 Foundation 탭에서만).
+   부품 창 머리 '쓰는 화면 N'(R58): 수는 의도 'hd-usage-count' 로 묻고, 누르면 의도 'hd-usage-show' {key, title}(판 강조는 view-usage).
    상태(이 View 만): 문서 탭 도구 tool · 지금 탭 · 고른 토큰·부품 pick · 부품 칸 part · 경고한 탭.
    HD.feature('dsEdit', {needs: ['$', '$$', 'toast', 'warn', 'api', 'record']}) → {tab(name), tool(t), current() → {tab, tool, pick}} — 셸 showTab·setTool 이 한 줄씩 부른다 */
 (function () {
@@ -62,6 +63,8 @@ var CSS = ['foundation', 'components'].map(function (t) {
   '.di-rad{flex:none;width:14px;height:14px;border:1.5px solid #6b6b66;border-right:0;border-bottom:0;box-sizing:border-box}' +
   '.di-v{flex:none;font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:#8a8a85}' +
   '#dsInsp .di-empty{margin:8px 12px;color:#8a8a85}' +
+  '#dsInsp .di-use{flex:none;height:22px;padding:0 8px;border:1px solid #e3e3df;border-radius:999px;background:#fff;color:#6b6b66;font:500 11px/20px system-ui,-apple-system,"Pretendard",sans-serif;cursor:pointer;white-space:nowrap}' +
+  '#dsInsp .di-use:hover{color:#1c1c1c;border-color:#b5b5b0}' +   // 쓰는 화면 N(R58) — 누르면 판에서 그 화면들
   '#dsList{position:fixed;z-index:25;min-width:220px;max-width:300px;max-height:320px;overflow:auto;box-sizing:border-box;background:#fff;border:1px solid var(--ui-line,#e3e3df);border-radius:8px;' +
     'box-shadow:0 10px 28px rgba(0,0,0,.18);padding:4px;font:12px/1.3 system-ui,-apple-system,"Pretendard",sans-serif;color:#1c1c1c}#dsList[hidden]{display:none}' +
   '#dsList [role="option"]{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:5px;cursor:pointer;outline:0}' +
@@ -230,8 +233,11 @@ function mount(ctx) {
   function openPart(p) {
     pick = p; fields = []; part = null; hideList();
     box.classList.add('part');
+    var uq = new CustomEvent('hd-usage-count', {detail: {key: p.part.key, n: 0}}); document.dispatchEvent(uq);   // 쓰는 화면 수(R58) — 지도의 주인은 view-usage
+    var nUse = +uq.detail.n || 0;
     box.innerHTML = '<div class="di-head"><span class="di-title"><b>' + esc(p.part.title || p.label || '부품') + '</b><code>.' + esc(p.part.classes.join('.')) + '</code></span>' +
-      '<button type="button" class="di-x" aria-label="닫기" title="닫기 (Esc)">×</button></div><div class="di-body"><p class="di-empty">규칙을 읽는 중…</p></div><p class="di-msg" role="status"></p>';
+      (nUse ? '<button type="button" class="di-use" title="판에서 이 부품을 쓰는 화면 보기">' + esc(HD.usage.label(nUse)) + '</button>' : '') +
+      '<button type="button" class="di-x"" aria-label="닫기" title="닫기 (Esc)">×</button></div><div class="di-body"><p class="di-empty">규칙을 읽는 중…</p></div><p class="di-msg" role="status"></p>';
     box.hidden = false; place();
     loadPart(p, false);
   }
@@ -341,6 +347,10 @@ function mount(ctx) {
   });
   box.addEventListener('click', function (e) {
     if (e.target.closest('.di-x')) { close(); return; }
+    if (e.target.closest('.di-use') && pick && pick.part) {   // 쓰는 화면 보기(R58) — 의도만, 판 강조는 view-usage
+      var k = pick.part.key, t = pick.part.title; close();
+      document.dispatchEvent(new CustomEvent('hd-usage-show', {detail: {key: k, title: t}})); return;
+    }
     var b = e.target.closest('.di-tok'); if (b) { if (!list.hidden && listAt && listAt.btn === b) hideList(); else showList(b); }
   });
   list.addEventListener('click', function (e) { var o = e.target.closest('[role="option"]'); if (o) choose(o.dataset.name); });
