@@ -114,7 +114,7 @@ def gym_data():
         html = (out / "index.html").read_text(encoding="utf-8")
         m = re.search(r'<script id="hd-data" type="application/json">(.*?)</script>', html, re.S)
         assert m, "hd-data 없음"
-        D = json.loads(m.group(1).replace("<\\!--", "<!--"))
+        D = json.loads(m.group(1))                     # hd-data 는 그대로 JSON(page_fill.data_json — 예전 `<\!--` 이스케이프는 JSON 이 아니었다)
         screens = json.loads((out / "screens.json").read_text(encoding="utf-8"))
         assert "<!-- hd-modules -->" not in html and (out / "hd-shell.js").is_file() and (out / "hd-shell.css").is_file()
         shell = {"js": (out / "hd-shell.js").read_text(encoding="utf-8"), "css": (out / "hd-shell.css").read_text(encoding="utf-8")}
