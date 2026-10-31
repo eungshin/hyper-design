@@ -10,6 +10,8 @@
   자리  = --at DX,DY(제 자리에서 옮긴 거리) | --after 화면의 옮긴 거리(그 옆에 붙어 보이게) | (--replace) 그대로 | 없음(제 자리)
   크기  = --size | --after 화면의 크기 | (--replace) 그대로 | 그 줄 화면들이 가장 많이 쓴 크기 | 없음(프로젝트 기본)
   거절  = PlaceError(한국어 한 줄) — 쓰인 id(--replace 없이) · 없는 --after · 다른 줄의 --after · 잘못된 id/크기/자리 · 쓰인 파일
+여러 장(plan_many, W10 F2): 첫 장 = 받은 선택, 둘째부터 = 바로 앞 화면 옆(--after 규칙) · 상태 몸통 하나(state_patch_many) ·
+  SETTLE 은 새 화면에 card-pos 를 쓸 때만(settle_needed) · 위치 인자 풀이(split_add_args — 옛 'file <캔버스>' 모양)
 """
 import re
 
@@ -308,6 +310,72 @@ def state_patch(state, sid, pos, size):
             cur[sid] = v
         patch[name] = cur
     return patch
+
+
+# ---------------------------------------------------------------- hd add 여러 장(W10 F2)
+HTML_EXT = (".html", ".htm")
+
+
+def split_add_args(args, to=None, is_file=lambda p: False):
+    """hd add 위치 인자 → (파일 목록, 대상 | None, 옛 모양인가). 대상은 --to 로 받는다.
+    옛 모양(`hd add a.html <이름|out>`, 하위 호환): --to 가 없고 둘 이상이며 마지막이 있는 파일도 .html 도 아니면 그것이 대상.
+    is_file(경로) → bool 은 부르는 쪽이 건넨다(여기는 파일을 보지 않는다)."""
+    args = list(args)
+    if to is not None or len(args) < 2:
+        return args, to, False
+    last = args[-1]
+    if is_file(last) or last.lower().endswith(HTML_EXT):
+        return args, None, False
+    return args[:-1], last, True
+
+
+def check_batch(sources, sid=None, title=None):
+    """여러 장에 쓸 수 없는 선택(--id · --title — 화면마다 다른 값)을 막는다."""
+    if len(sources) > 1 and (sid is not None or title is not None):
+        raise PlaceError("--id · --title 은 한 장일 때만 써요(%d장 받음) — 여러 장이면 id = 파일 이름, 제목 = <title>" % len(sources))
+
+
+def state_patch_many(state, places):
+    """[(sid, pos, size)] → PUT /api/state 의 state 몸통 하나(state_patch 를 차례로 접음 — 이름마다 통째 값) | {}."""
+    cur, patch = dict(state) if isinstance(state, dict) else {}, {}
+    for sid, pos, size in places:
+        p = state_patch(cur, sid, pos, size)
+        cur.update(p)
+        patch.update(p)
+    return patch
+
+
+def plan_many(data, state, items, group=None, purpose=None, after=None, at=None, size=None, replace=False):
+    """여러 장 놓기 계획 → {data: 새 screens.json, plans: [plan 결과 차례로], patch: 상태 몸통 하나}.
+      items = [{sid, title?, html_title?, files?}] — files = 그 화면의 겹치는 파일(plan 의 files)
+      첫 장 = 받은 선택 그대로(--after · --at) · 둘째부터 = --after · --at 를 줬으면 바로 앞 화면 옆(plan 의 --after 규칙: 같은 줄 · 같은
+      옮긴 거리 · 같은 크기), 아니면 같은 선택(줄 끝). 이미 있는 화면을 바꾸는(--replace) 것은 제자리. 같은 id 두 번 = PlaceError."""
+    seen, plans, prev = set(), [], None
+    cur_data, cur_state = data, dict(state) if isinstance(state, dict) else {}
+    chain = after is not None or at is not None
+    for k, it in enumerate(items):
+        sid = it["sid"]
+        if sid in seen:
+            raise PlaceError("같은 화면 id 가 두 번 있어요: %s — 파일 이름을 바꾸거나 한 장씩 넣으세요" % sid)
+        seen.add(sid)
+        exists = sid in {s.get("id") for s in screens_of(cur_data)}
+        if k == 0:
+            a, t = after, at
+        else:
+            a, t = (prev if chain and not (replace and exists) else None), None
+        pl = plan(cur_data, cur_state, sid, title=it.get("title"), group=group, purpose=purpose, after=a, at=t, size=size,
+                  replace=replace, files=it.get("files") or (), html_title=it.get("html_title"))
+        cur_state.update(state_patch(cur_state, sid, pl["pos"], pl["size"]))
+        cur_data, prev = pl["data"], sid
+        plans.append(pl)
+    return {"data": cur_data, "plans": plans,
+            "patch": state_patch_many(state, [(pl["entry"]["id"], pl["pos"], pl["size"]) for pl in plans])}
+
+
+def settle_needed(plans):
+    """자리를 쓰기 전 캔버스가 판 데이터를 다시 받을 틈(SETTLE)이 드나 — 새 화면에 card-pos 를 쓸 때만.
+    까닭: 캔버스(view-card-pos load → rows.cleanPos)는 모르는 화면의 자리를 버리고 되쓴다. 있던 화면·크기만은 그런 일이 없다."""
+    return any(not pl["replaced"] and isinstance(pl["pos"], dict) for pl in plans)
 
 
 def asset_rel(src_dir_parts, asset_parts):

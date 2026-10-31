@@ -19,7 +19,7 @@ python $SK/features/hd/hd.py wait [<name|path>] [--timeout S] [--json]
 python $SK/features/hd/hd.py claim <screen> [<name|path>] [--note TEXT] [--by ID] [--json]
 python $SK/features/hd/hd.py release <screen> [<name|path>] [--json]
 python $SK/features/hd/hd.py screens [<name|path>] [--json]   # 화면 목록 · 자리 · 크기
-python $SK/features/hd/hd.py add <file.html> [<name|path>] [--id ID] [--title T] [--group G] [--purpose P] [--after ID | --at DX,DY] [--size Desktop|WxH] [--asset PATH …] [--replace] [--json]
+python $SK/features/hd/hd.py add <file.html> [<file.html> …] [--to <name|path>] [--id ID] [--title T] [--group G] [--purpose P] [--after ID | --at DX,DY] [--size Desktop|WxH] [--asset PATH …] [--replace] [--json]
 python $SK/features/hd/hd.py parts [--check [<file>] | --rebuild [<file>]] [<name|path>] [--json]   # 앱 부품(out/parts.json) 보기 · 다시 빌드
 python $SK/features/hd/hd.py locate <주소…|-> [--json]   # 캔버스 '주소 복사'(R30) 줄 → 화면 파일 · 요소 경로 · 지금 바깥 HTML(읽기만)
 python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--shortcut [--desktop DIR]] [--json]   # 홈 허브 · 바탕 화면 바로 가기 — home/contract.md
@@ -27,7 +27,7 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 설치(전역 R52): `~/.claude/tools/hd/hd.cmd`·`hd`(sh) 가 이 파일을 부르는 얇은 감싸개, 사용법은 `~/.claude/commands/hd.md`(필요할 때만 읽힘).
 
 ## 입력
-- 떠 있는 표지 `<HD_HOME | ~/.hyper-design>/active/<pid>.json` = `{pid, project, out, url, token, port, agent, started, code}`(`code` = 그 도우미가 뜬 코드 도장, 47-7 — 옛 도우미는 없음 = 옛것) — `canvas/helper.py` 가 시작 때 쓰고 정상 종료(atexit · Ctrl+C · SIGTERM · SIGBREAK) 때 지운다. 강제 종료로 남은 표지는 읽는 쪽이 1초 핑(`GET /api/state`)으로 거른다(지우지 않음). `project` = out 폴더 이름이 `out` 이면 그 위 폴더 이름, 아니면 out 이름
+- 떠 있는 표지 `<HD_HOME | ~/.hyper-design>/active/<pid>.json` = `{pid, project, out, url, token, port, agent, started, code}`(`code` = 그 도우미가 뜬 코드 도장, 47-7 — 옛 도우미는 없음 = 옛것) — `canvas/helper.py` 가 시작 때 쓰고 정상 종료(atexit · Ctrl+C · SIGTERM · SIGBREAK) 때 지운다. 강제 종료로 남은 표지는 읽는 쪽이 거른다(지우지 않음): pid 가 죽었으면 묻지 않고(Win32 API — tasklist 는 못 쓸 때만), 살아 있으면 핑(`GET /api/state`, 3초 · 시간 넘김만 한 번 더 · 그래도 늦으면 `[hd]` 한 줄 뒤 없는 것으로 — 허브 `/v1/sessions` 도 같게, W10). 127.0.0.1 http 만 쓰므로 여는 길에 HTTPS 처리기를 두지 않는다(인증서 저장소 읽기 약 1.3초 없음). `project` = out 폴더 이름이 `out` 이면 그 위 폴더 이름, 아니면 out 이름
 - `<out>/.hd-canvas.json`(canvas `contract.md` 상태 파일) — 읽기만. `state.notes` 와 `state.note-seq`
 - `<out>/screens.json` — 반영됨 `screens` 의 id 검사
 - 프로젝트 목록 `<HD_HOME | ~/.hyper-design>/projects.json` = `{version:1, projects:[{name, out, kind:'run', created, last_opened, title?, starred?, trashed?}]}` — **링크만**(새 칸은 선택 — Home 의 제목·별표·휴지통, 규칙 `hd_projects.update`·`forget_trashed`, home/contract.md)(out 이 어디 있는지). 상태는 `<out>/.hd-canvas.json` 에 이미 있으므로 복사하지 않는다. 주인 = `hd_client`(임시 파일 + `os.replace`); `helper.py` 는 시작 때 그 out 이 없으면 `hd_client.register` 로 넣는다. 깨진 파일은 `projects.json.corrupt-<시각>` 으로 옮기고 `[hd]` 한 줄 + 빈 목록. 모양이 틀린 항목 하나는 건너뛰고 `[hd]` 한 줄(파일은 그대로)
@@ -62,13 +62,14 @@ python $SK/features/hd/hd.py home [--no-browser] [--port N] [--restart] [--short
 - 도우미는 화면 파일을 1초마다 지켜본다(`GET /api/files?since=N` → `{seq, changed}`) — 캔버스는 바뀐 카드만 다시 싣는다(canvas `contract/busy.md`)
 
 ## 화면 넣기 (hd screens · hd add) — 규칙 `hd_place`(Model), 길 `hd_sdk/place.py`
-- 대상: 인자 없으면 떠 있는 캔버스 하나 · 이름(표지·저장한 이름) · out 경로 — 떠 있지 않으면 파일만으로(목록에 넣지 않음, `Hub.target`)
+- 대상: 인자 없으면 떠 있는 캔버스 하나 · 이름(표지·저장한 이름) · out 경로 — 떠 있지 않으면 파일만으로(목록에 넣지 않음, `Hub.target`). `hd add` 는 `--to` 로(위치 인자는 모두 파일). 옛 모양 `hd add a.html <이름|out>` = `--to` 가 없고 마지막 위치 인자가 있는 파일도 `.html` 도 아니면 대상 — 대상을 찾은 뒤 `[hd]` 한 줄(`hd_place.split_add_args`)
 - `hd screens` = screens.json 차례의 줄 `id · 제목 · 파일 · 자리 +dx,+dy · W×H(프리셋)`, 줄(group) 머리 아래. 자리 = 상태 `card-pos` 의 옮긴 거리(그 카드 제 자리에서, 판 px — 다른 줄 값은 캔버스처럼 버림), 크기 = `card-size`
 - `hd add`: 모두 검사한 뒤에만 쓴다(틀리면 한 줄 오류·종료 1·아무것도 안 씀 — 없는 파일 · 모르는 캔버스 · 없는 `--after` · 쓰인 id(`--replace` 없이) · 쓰인 파일 · 틀린 크기/자리). 화면 파일 = out 의 `<id>.html`(이미 out 안 파일이면 복사 없이 등록), `--asset` = 화면 폴더 안이면 그 상대 경로·아니면 이름만(다른 내용의 같은 파일은 `--replace` 없이 거절). id 기본 = 파일 이름, 제목 기본 = `<title>` | id
+- 여러 장(`hd add a.html b.html …`, W10 F2): 모두 검사 → 화면 파일들 · screens.json 한 번 → `POST /api/apply` 한 번(title 편집 N개 = `screen.written` 한 번) → 상태 PUT 한 번(rev 한 번). 자리는 첫 장 기준(`--at`·`--after`), 둘째부터 바로 앞 화면 옆(`--after` 규칙), 바꾸는(`--replace`) 화면은 제자리(`hd_place.plan_many`). `--id`·`--title` 은 한 장일 때만, 같은 id 두 번은 거절, `--asset` 상대 경로는 첫 화면 폴더 기준
 - 놓기: 줄 = `--group` | `--after` 의 줄 | 마지막 화면의 줄(새 줄이면 groups 끝에) · 차례 = `--after` 바로 뒤(상태 변형 `<id>--…` 건너뜀) | 그 줄 끝 — 줄 안 카드는 흐르니 빈 자리 = 줄 끝 · 자리 = `--at DX,DY`(옮긴 거리) | `--after` 의 옮긴 거리 · 크기 = `--size`(프리셋 표 = canvas `modules/artboard.js` 를 읽음) | `--after` 의 크기 | 그 줄이 가장 많이 쓴 크기
 - 상태 파일은 도우미로만: 자리·크기 = `PUT /api/state {rev, state:{card-pos?, card-size?}}`(409 면 다시 읽고 3번까지). 도우미가 없으면 `--at`·`--size` 는 거절(띄우는 명령과 함께), 저절로 고른 값은 `[hd]` 한 줄로 건너뜀
-- 열린 캔버스에 보이기: `POST /api/apply` 의 title 편집 하나(같은 값 — 캔버스 기록에 한 단계로 남음) → `screen.written`(by human) → 캔버스가 `/api/data` 로 판을 다시 받아 새 줄·카드를 그림(새로고침 없음) → `HD_ADD_SETTLE`(기본 1.5)초 뒤 자리·크기 PUT(캔버스가 새 카드를 알기 전에 card-pos 를 받으면 `cleanPos` 가 버리므로). 도우미가 없으면 `hd_client.build`(build_ref.py, hd open 과 같은 길)
-- `--json`: `screens` → `{project, out, helper, title, groups, screens:[{id, title, group, file, purpose, pos:{dx,dy}|null, size:{w,h,preset?}|null}]}` · `add` → `{project, out, id, file, title, group, after, replaced, group_added, assets, live, state_rev, skipped, pos, size}`
+- 열린 캔버스에 보이기: `POST /api/apply` 의 title 편집 하나(같은 값 — 캔버스 기록에 한 단계로 남음) → `screen.written`(by human) → 캔버스가 `/api/data` 로 판을 다시 받아 새 줄·카드를 그림(새로고침 없음) → 자리·크기 PUT. 새 화면에 card-pos 를 쓸 때만 그 전에 `HD_ADD_SETTLE`(기본 1.5)초 쉰다(캔버스가 새 카드를 알기 전에 card-pos 를 받으면 `cleanPos` 가 버리고 되쓰므로 — `hd_place.settle_needed`; 있던 화면·크기만이면 쉬지 않음). 도우미가 없으면 `hd_client.build`(build_ref.py, hd open 과 같은 길)
+- `--json`: `screens` → `{project, out, helper, title, groups, screens:[{id, title, group, file, purpose, pos:{dx,dy}|null, size:{w,h,preset?}|null}]}` · `add` → `{project, out, id, file, title, group, after, replaced, group_added, assets, live, state_rev, skipped, pos, size}`(한 장) · `{project, out, live, state_rev, skipped, assets, screens:[{id, file, title, group, after, replaced, group_added, pos, size}]}`(여러 장)
 
 ## 앱 부품 (hd parts, R30) — 규칙 `canvas/part_stamp`, 읽기·재기 `canvas/parts_file`, 명령 `hd_parts`
 - 대상 고르기는 `hd screens` 와 같음(`Hub.target` — 떠 있지 않아도 out 경로·저장한 이름). `--check`(기본) = 읽기만: 줄마다 `<file> · 낡음|최신|모름[ · 미커밋 변경 포함] · 빌드 <시각>[ · 지금 미커밋 변경 포함]`, 머리 줄에 낡은 수와 다시 빌드 명령. `--check <file>` = 그 부품만(out 상대 경로 · 파일 이름 · 확장자 뺀 이름), 없으면 한 줄 오류·종료 1. `--check`/`--rebuild` 뒤 값 하나만 있고 그것이 out 경로·저장한 이름이면 대상으로 읽는다

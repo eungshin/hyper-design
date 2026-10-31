@@ -134,6 +134,11 @@ class Project:
         from . import place
         return place.add(self, src, **opts)
 
+    def add_many(self, srcs, **opts):
+        """HTML 화면 여러 장을 한 번에(hd add a b c) — place.add_many: screens.json 한 번 · apply 한 번 · 상태 쓰기 한 번(W10 F2)."""
+        from . import place
+        return place.add_many(self, srcs, **opts)
+
     # ------------------------------------------------------------ 쓰기(늘 서버로)
     def reply(self, ref, reply):
         """메모에 답 하나. ref = '<screen>#<no>' | 메모 id. 규칙(hd_model.check_reply)으로 먼저 보고 POST /api/reply → {rev, status, note, screen}."""
