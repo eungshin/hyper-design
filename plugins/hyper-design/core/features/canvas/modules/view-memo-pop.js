@@ -222,11 +222,11 @@ function mount(ctx) {
     var at = -1; NS.list().forEach(function (x, i) { if (x.id === id) at = i; });
     if (at < 0) { ctx.toast('그 메모가 없어요 — 이미 지워졌어요'); return; }
     var n = NS.list()[at];
-    var drop = function () { NS.remove(function (x) { return x.id === id; }); if (editing === id) hide(true); ctx.save(); };
+    var saved = true, drop = function () { NS.remove(function (x) { return x.id === id; }); if (editing === id) hide(true); saved = ctx.save() !== false; };
     drop();
     ctx.record({label: n.edit ? '편집 빼기' : '메모 지우기', redo: drop,
                 undo: function () { var l = NS.list().slice(); l.splice(Math.min(at, l.length), 0, n); NS.set(l); ctx.save(); }});
-    ctx.toast(n.edit ? '편집을 뺐어요' : '메모를 지웠어요', true);   // F14 — 카드 지우기처럼 [되돌리기]
+    if (saved) ctx.toast(n.edit ? '편집을 뺐어요' : '메모를 지웠어요', true);   // F14 — 카드 지우기처럼 [되돌리기] · 저장 실패면 그 경고를 덮지 않는다
   }
   function reply(ids, kind, label) {                  // 사람 답(완료 = 확인 · 다시 열기 = 다시, 보내기 전으로) — 메모 안 n.replies 에 덧붙임, 되돌리기 한 단계
     var at = new Date().toISOString(), hit = ids.map(function (id) { return NS.find(id); }).filter(Boolean);
